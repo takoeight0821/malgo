@@ -1,0 +1,74 @@
+name: haskell-deps-update
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Weekly Monday 04:00 UTC
+  workflow_dispatch:
+
+jobs:
+  bump-lower-bounds:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update lower bounds in package.yaml (>= constraints)
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed=0
+          latest_version() {
+            pkg="$1"
+            curl -fsSL "https://hackage.haskell.org/package/$pkg/preferred.json" | \
+              python3 -c 'import sys,json;d=json.load(sys.stdin);pref=d.get("preferred-versions",[]);print(pref[-1] if pref else "")' || true
+          }
+          while IFS= read -r line; do
+            if echo "$line" | grep -qE '^\s*-\s*[a-zA-Z0-9_-]+\s*>='; then
+              pkg=$(echo "$line" | sed -E 's/^\s*-\s*([a-zA-Z0-9_-]+).*/\1/')
+              cur=$(echo "$line" | sed -E 's/.*>=\s*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+              [ -z "$cur" ] && continue
+              latest=$(latest_version "$pkg")
+              [ -z "$latest" ] && continue
+              major_cur=${cur%%.*}
+              major_latest=${latest%%.*}
+              if [ "$major_cur" = "$major_latest" ] && [ "$latest" != "$cur" ]; then
+                echo "Updating $pkg lower bound: $cur -> $latest"
+                sed -i -E "s/^([[:space:]]*-[[:space:]]*$pkg[[:space:]]*>=[[:space:]]*)$cur/\1$latest/" package.yaml
+                changed=1
+              fi
+            fi
+          done < package.yaml
+          if [ "$changed" -eq 0 ]; then
+            echo "No lower bound updates needed"
+          fi
+
+      - name: Regenerate Cabal file via hpack
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y cabal-install
+          cabal update
+          cabal install hpack --installdir "$HOME/.local/bin" --overwrite-policy=always
+          export PATH="$HOME/.local/bin:$PATH"
+          hpack
+
+      - name: Create PR with updated dependencies
+        uses: ./.github/actions/create-update-pr
+        with:
+          branch-name: automation/haskell-bounds-bump
+          commit-message: "chore(haskell): bump lower bounds to latest minor/patch"
+          pr-title: "chore(haskell): bump lower bounds to latest minor/patch"
+          pr-body: |
+            Automated update of lower bounds for packages with >= constraints within the same major version.
+            
+            - Regenerated malgo.cabal via hpack
+            - CI will validate the build
+          labels: "dependencies,haskell"
+          files: "package.yaml malgo.cabal"
+          github-token: ${{ github.token }}

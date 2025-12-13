@@ -1,0 +1,64 @@
+name: "Create Update PR"
+description: "Common workflow to commit changes, push branch, and open/update PR"
+inputs:
+  branch-name:
+    description: "Name of the branch to create/update"
+    required: true
+  commit-message:
+    description: "Git commit message"
+    required: true
+  pr-title:
+    description: "Pull request title"
+    required: true
+  pr-body:
+    description: "Pull request body"
+    required: true
+  labels:
+    description: "Comma-separated labels to add to PR"
+    required: false
+    default: "dependencies"
+  files:
+    description: "Files to git add (space-separated)"
+    required: true
+  github-token:
+    description: "GitHub token for PR creation"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure git
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+    - name: Create branch and commit
+      shell: bash
+      run: |
+        set -euo pipefail
+        git checkout -B "${{ inputs.branch-name }}"
+        if git diff --quiet; then
+          echo "No changes detected; exiting." && exit 0
+        fi
+        git add ${{ inputs.files }}
+        git commit -m "${{ inputs.commit-message }}"
+        git push --set-upstream origin "${{ inputs.branch-name }}" --force
+
+    - name: Open or update pull request
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        IFS=',' read -ra LABELS <<< "${{ inputs.labels }}"
+        label_args=""
+        for label in "${LABELS[@]}"; do
+          label_args="$label_args --label $(echo $label | xargs)"
+        done
+        gh pr create \
+          --title "${{ inputs.pr-title }}" \
+          --body "${{ inputs.pr-body }}" \
+          --head "${{ inputs.branch-name }}" \
+          --base "${GITHUB_REF_NAME}" \
+          $label_args || true

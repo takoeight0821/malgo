@@ -174,3 +174,19 @@ Run these with `mise run <task>`:
 - `changelog` — Generate the changelog using `git-chglog`.
 
 See `mise.toml` for more details and customization.
+
+## Release Workflow
+
+- **Labels:** Use PR labels `breaking`, `feat`, `fix` following Conventional Commits to drive semantic version bumps.
+- **Auto-labeling:** PRs are auto-labeled from commit messages via CI.
+- **Release PR:** On pushes to `master`, CI computes the next version, creates a draft GitHub Release, and opens a `release/vX.Y.Z` PR.
+- **Publish:** Merging a `release/*` PR to `master` tags the commit and publishes the GitHub Release.
+- **Notes:** Releases use generated notes; excluded labels: `skip-changelog`, `duplicate`, `invalid`.
+
+To create labels via GitHub CLI:
+
+```bash
+gh label create breaking --description "Major version bump (breaking change)" --color D93F0B
+gh label create feat --description "Minor version bump (feature)" --color 0E8A16
+gh label create fix --description "Patch version bump (fix)" --color FBCA04
+```

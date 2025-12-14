@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0](https://github.com/takoeight0821/malgo/compare/v2.2.1...v3.0.0) (2025-12-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **nix:** remove outdated checkout action version
+
+### chore
+
+* **nix:** remove outdated checkout action version ([dd9e429](https://github.com/takoeight0821/malgo/commit/dd9e429136bc31774d3d28843a4f7271b88c72e2))
+
 ## [2.2.1](https://github.com/malgo-lang/malgo/compare/v2.2.0...v2.2.1) (2025-11-15)
 
 

@@ -4,6 +4,7 @@
 module Malgo.Sequent.Eval (Value (..), EvalError (..), Env (..), emptyEnv, Handlers (..), evalProgram, EvalPass (..)) where
 
 import Control.Exception (Exception)
+import Data.IntMap.Strict qualified as IntMap
 import Data.Map qualified as Map
 import Data.Maybe (fromJust, isJust)
 import Data.Text qualified as T
@@ -100,28 +101,55 @@ data Handlers = Handlers
   }
 
 data Env = Env
-  { parent :: Maybe Env,
-    bindings :: Map Name Value
+  { localBindings :: !(IntMap.IntMap Value), -- Internal/Temporal IDs (high frequency)
+    externalBindings :: !(Map Name Value) -- External IDs (low frequency)
   }
   deriving stock (Show)
 
+-- | Extract integer key from Name for IntMap lookup
+-- Returns Nothing for External IDs
+nameToIntKey :: Name -> Maybe Int
+nameToIntKey Id {sort = Internal n} = Just n
+nameToIntKey Id {sort = Temporal n} = Just n
+nameToIntKey Id {sort = External} = Nothing
+{-# INLINE nameToIntKey #-}
+
 emptyEnv :: Env
-emptyEnv = Env Nothing mempty
+emptyEnv = Env IntMap.empty Map.empty
 
 extendEnv :: Name -> Value -> Env -> Env
-extendEnv name value env = env {bindings = Map.insert name value env.bindings}
+extendEnv name value env = case nameToIntKey name of
+  Just key -> env {localBindings = IntMap.insert key value env.localBindings}
+  Nothing -> env {externalBindings = Map.insert name value env.externalBindings}
+{-# INLINE extendEnv #-}
 
 extendEnv' :: [(Name, Value)] -> Env -> Env
-extendEnv' bindings env = env {bindings = foldr (uncurry Map.insert) env.bindings bindings}
+extendEnv' pairs env =
+  let (locals, externals) = partitionBindings pairs
+   in env
+        { localBindings = foldr (uncurry IntMap.insert) env.localBindings locals,
+          externalBindings = foldr (uncurry Map.insert) env.externalBindings externals
+        }
+  where
+    partitionBindings :: [(Name, Value)] -> ([(Int, Value)], [(Name, Value)])
+    partitionBindings = foldr classify ([], [])
+      where
+        classify (n, v) (ls, es) = case nameToIntKey n of
+          Just key -> ((key, v) : ls, es)
+          Nothing -> (ls, (n, v) : es)
+{-# INLINE extendEnv' #-}
 
 lookupEnv :: (Error EvalError :> es, Reader Env :> es) => Range -> Name -> Eff es Value
 lookupEnv range name = do
   env <- ask @Env
-  case Map.lookup name env.bindings of
-    Just value -> pure value
-    Nothing -> case env.parent of
-      Just env' -> local (const env') $ lookupEnv range name
+  case nameToIntKey name of
+    Just key -> case IntMap.lookup key env.localBindings of
+      Just value -> pure value
       Nothing -> throwError (UndefinedVariable range name)
+    Nothing -> case Map.lookup name env.externalBindings of
+      Just value -> pure value
+      Nothing -> throwError (UndefinedVariable range name)
+{-# INLINE lookupEnv #-}
 
 jump :: (Error EvalError :> es, Reader Toplevels :> es, Reader Env :> es, Reader Handlers :> es, IOE :> es) => Range -> Name -> Value -> Eff es ()
 jump range name value = do
@@ -173,6 +201,7 @@ evalStatement (Invoke range name consumer) = do
   covalue <- lookupEnv range consumer
   local (extendEnv return covalue) do
     evalStatement statement
+{-# INLINE evalStatement #-}
 
 evalProducer :: (Error EvalError :> es, Reader Env :> es) => Producer -> Eff es Value
 evalProducer (Var range name) = lookupEnv range name
@@ -187,6 +216,7 @@ evalProducer (Lambda _ parameters statement) = do
 evalProducer (Object _ fields) = do
   env <- ask @Env
   pure $ Record env fields
+{-# INLINE evalProducer #-}
 
 evalConsumer :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Consumer -> Value -> Eff es ()
 evalConsumer (Label range label) given = do
@@ -225,29 +255,77 @@ evalConsumer (Select range branches) given = go branches
         Just bindings -> do
           local (extendEnv' bindings) $ evalStatement statement
         Nothing -> go rest
+{-# INLINE evalConsumer #-}
+
+-- | Difference list for O(1) append
+type DList a = [a] -> [a]
+
+emptyDList :: DList a
+emptyDList = \x -> x
+{-# INLINE emptyDList #-}
+
+singletonDList :: a -> DList a
+singletonDList x = (x :)
+{-# INLINE singletonDList #-}
+
+appendDList :: DList a -> DList a -> DList a
+appendDList = (.)
+{-# INLINE appendDList #-}
+
+dlistToList :: DList a -> [a]
+dlistToList dl = dl []
+{-# INLINE dlistToList #-}
 
 match :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Pattern -> Value -> Eff es (Maybe [(Name, Value)])
-match (PVar _ name) value = pure $ Just [(name, value)]
-match (PLiteral _ literal) (Immediate literal') | literal == literal' = pure $ Just []
-match (Destruct _ tag patterns) (Struct tag' values) | tag == tag' = do
-  bindings <- zipWithM match patterns values
-  if all isJust bindings
-    then pure $ Just $ concatMap fromJust bindings
-    else pure Nothing
-match (Expand _ patterns) (Record env fields) = local (const env) do
-  let pairs = Map.intersectionWith (,) patterns fields
-  pairs <- for pairs \(pattern, (return, statement)) -> do
-    -- If the evaluation of `statement` finishes normally, the last consumer will be `Label range return`.
-    -- By setting `return` to `Finish`, `eval statement` will return the value of the last producer.
-    ref <- newIORef Nothing
-    local (extendEnv return (Consumer $ writeIORef ref . Just)) do
-      _ <- evalStatement statement
-      value <- readIORef ref
-      match pattern $ fromJust value
-  if all isJust pairs
-    then pure $ Just $ concatMap fromJust pairs
-    else pure Nothing
-match _ _ = pure Nothing
+match pat val = fmap dlistToList <$> matchDL pat val
+{-# INLINE match #-}
+
+-- | Single-pass pattern matching using difference lists
+matchDL :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Pattern -> Value -> Eff es (Maybe (DList (Name, Value)))
+matchDL (PVar _ name) value = pure $ Just $ singletonDList (name, value)
+matchDL (PLiteral _ literal) (Immediate literal')
+  | literal == literal' = pure $ Just emptyDList
+  | otherwise = pure Nothing
+matchDL (Destruct _ tag patterns) (Struct tag' values)
+  | tag == tag' = matchMany patterns values
+  | otherwise = pure Nothing
+matchDL (Expand _ patterns) (Record env fields) = local (const env) do
+  let pairs = Map.toList $ Map.intersectionWith (,) patterns fields
+  matchExpand pairs
+matchDL _ _ = pure Nothing
+
+-- | Match multiple patterns against values (single pass with early return)
+matchMany :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => [Pattern] -> [Value] -> Eff es (Maybe (DList (Name, Value)))
+matchMany [] [] = pure $ Just emptyDList
+matchMany (p : ps) (v : vs) = do
+  result <- matchDL p v
+  case result of
+    Nothing -> pure Nothing -- Early return on failure
+    Just bindings -> do
+      rest <- matchMany ps vs
+      pure $ appendDList bindings <$> rest
+matchMany _ _ = pure Nothing -- Length mismatch
+{-# INLINE matchMany #-}
+
+-- | Match expand patterns (for records)
+matchExpand :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => [(Text, (Pattern, (Name, Statement)))] -> Eff es (Maybe (DList (Name, Value)))
+matchExpand [] = pure $ Just emptyDList
+matchExpand ((_, (pattern, (return, statement))) : rest) = do
+  -- Evaluate the statement and capture result via IORef
+  ref <- newIORef Nothing
+  local (extendEnv return (Consumer $ writeIORef ref . Just)) do
+    _ <- evalStatement statement
+    value <- readIORef ref
+    case value of
+      Nothing -> pure Nothing
+      Just v -> do
+        result <- matchDL pattern v
+        case result of
+          Nothing -> pure Nothing -- Early return
+          Just bindings -> do
+            restResult <- matchExpand rest
+            pure $ appendDList bindings <$> restResult
+{-# INLINE matchExpand #-}
 
 -- | Convert any Value to a Text representation for printing
 valueToText :: Value -> Text

@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from branch name
+        id: extract-version
+        run: |
+          branch_name="${{ github.event.pull_request.head.ref }}"
+          version="${branch_name#release/}"
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ steps.extract-version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.extract-version.outputs.version }}
+        run: |
+          draft_exists=$(gh release view "$VERSION" --json isDraft --jq '.isDraft' || echo "false")
+          if [ "$draft_exists" = "true" ]; then
+            gh release edit "$VERSION" --draft=false
+          else
+            previous_tag=$(git tag -l | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 2 | head -n 1)
+            if [ -z "$previous_tag" ]; then
+              gh release create "$VERSION" --title "Release $VERSION" --generate-notes
+            else
+              gh release create "$VERSION" --title "Release $VERSION" --generate-notes --notes-start-tag "$previous_tag"
+            fi
+          fi

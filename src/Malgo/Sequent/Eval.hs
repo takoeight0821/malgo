@@ -55,6 +55,7 @@ data Value where
   Struct :: Tag -> [Value] -> Value
   Function :: Env -> [Name] -> Statement -> Value
   Record :: Env -> Map Text (Name, Statement) -> Value
+  Codata :: Env -> [(Text, [Name], Statement)] -> Value
   Consumer ::
     ( forall es.
       ( Error EvalError :> es,
@@ -76,6 +77,8 @@ instance Show Value where
   showsPrec d (Record _env fields) =
     let fields' = fmap (\(name, statement) -> (name, sShow @_ @String statement)) fields
      in showParen (d > 10) $ showString "Record <env> " . showsPrec 11 fields'
+  showsPrec d (Codata _env branches) =
+    showParen (d > 10) $ showString "Codata <env> " . showsPrec 11 (map (\(n, vs, _) -> (n, vs)) branches)
   showsPrec d (Consumer _) = showParen (d > 10) $ showString "Consumer <consumer>"
 
 instance Eq Value where
@@ -199,6 +202,10 @@ evalProgram (Program {definitions}) = do
     Nothing -> pure () -- No main function
 
 evalStatement :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Statement -> Eff es ()
+evalStatement (Cut (Mu _ name stmt) consumer) = do
+  consumerValue <- lookupEnv (range stmt) consumer
+  local (extendEnv name consumerValue)
+    $ evalStatement stmt
 evalStatement (Cut producer consumer) = do
   value <- evalProducer producer
   jump (range producer) consumer value
@@ -216,12 +223,26 @@ evalStatement (Invoke range name consumer) = do
   covalue <- lookupEnv range consumer
   local (extendEnv return covalue) do
     evalStatement statement
-evalStatement (ExternalCall _ _ _ _) = error "not yet evaluable: ExternalCall"
-evalStatement (BinOp _ _ _ _ _) = error "not yet evaluable: BinOp"
-evalStatement (Ifz _ _ _ _) = error "not yet evaluable: Ifz"
+evalStatement (ExternalCall range name producers consumer) = do
+  values <- traverse evalProducer producers
+  result <- fetchPrimitive name range values
+  jump range consumer result
+evalStatement (BinOp range op lhs rhs consumer) = do
+  lhsVal <- evalProducer lhs
+  rhsVal <- evalProducer rhs
+  result <- fetchPrimitive op range [lhsVal, rhsVal]
+  jump range consumer result
+evalStatement (Ifz _ cond thenBranch elseBranch) = do
+  condVal <- evalProducer cond
+  case condVal of
+    Immediate (Int32 0) -> evalStatement thenBranch
+    Immediate (Int64 0) -> evalStatement thenBranch
+    Immediate (Float 0) -> evalStatement thenBranch
+    Immediate (Double 0) -> evalStatement thenBranch
+    _ -> evalStatement elseBranch
 {-# INLINE evalStatement #-}
 
-evalProducer :: (Error EvalError :> es, Reader Env :> es) => Producer -> Eff es Value
+evalProducer :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Producer -> Eff es Value
 evalProducer (Var range name) = lookupEnv range name
 evalProducer (Literal _ literal) = pure $ Immediate literal
 evalProducer (Construct range tag producers consumers) = do
@@ -234,8 +255,14 @@ evalProducer (Lambda _ parameters statement) = do
 evalProducer (Object _ fields) = do
   env <- ask @Env
   pure $ Record env fields
-evalProducer (Mu _ _ _) = error "not yet evaluable: Mu"
-evalProducer (Cocase _ _) = error "not yet evaluable: Cocase"
+evalProducer (Mu _ name stmt) = do
+  ref <- newIORef (Struct Tuple [])
+  local (extendEnv name (Consumer $ \v -> writeIORef ref v))
+    $ evalStatement stmt
+  readIORef ref
+evalProducer (Cocase _ branches) = do
+  env <- ask @Env
+  pure $ Codata env branches
 {-# INLINE evalProducer #-}
 
 evalConsumer :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Consumer -> Value -> Eff es ()
@@ -266,7 +293,18 @@ evalConsumer (Then _ name statement) given = do
   local (extendEnv name given) do
     evalStatement statement
 evalConsumer (Finish _) _ = pure ()
-evalConsumer (Destructor _ _ _ _) _ = error "not yet evaluable: Destructor"
+evalConsumer (Destructor range dName producers returnName) given = do
+  case given of
+    Codata env branches -> do
+      case find (\(n, _, _) -> n == dName) branches of
+        Just (_, vars, body) -> do
+          prodValues <- traverse evalProducer producers
+          retConsumer <- lookupEnv range returnName
+          let allValues = prodValues <> [retConsumer]
+          local (const $ extendEnv' (zip vars allValues) env)
+            $ evalStatement body
+        Nothing -> throwError $ NoSuchField range dName given
+    _ -> throwError $ NoMatch range given
 evalConsumer (Select range branches) given = go branches
   where
     go [] = throwError $ NoMatch range given
@@ -362,6 +400,7 @@ valueToText (Struct (Tag name) []) = name
 valueToText (Struct (Tag name) values) = name <> "(" <> T.intercalate ", " (map valueToText values) <> ")"
 valueToText (Function {}) = "<function>"
 valueToText (Record {}) = "<record>"
+valueToText (Codata {}) = "<codata>"
 valueToText (Consumer _) = "<consumer>"
 
 fetchPrimitive :: (Error EvalError :> es, Reader Handlers :> es, IOE :> es) => Text -> Range -> [Value] -> Eff es Value

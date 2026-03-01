@@ -1,14 +1,29 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Malgo.Sequent.Eval (Value (..), EvalError (..), Env (..), emptyEnv, Handlers (..), evalProgram, EvalPass (..)) where
+module Malgo.Sequent.Eval
+  ( Value (..),
+    EvalError (..),
+    Env (..),
+    emptyEnv,
+    extendEnv,
+    extendEnv',
+    lookupEnv,
+    Handlers (..),
+    evalProgram,
+    EvalPass (..),
+    Toplevels,
+    fetchPrimitive,
+    valueToText,
+    match,
+  )
+where
 
 import Control.Exception (Exception)
 import Data.IntMap.Strict qualified as IntMap
 import Data.Map qualified as Map
-import Data.Maybe (fromJust, isJust)
+import Data.Maybe (fromJust)
 import Data.Text qualified as T
-import Data.Traversable (for)
 import Effectful
 import Effectful.Error.Static
 import Effectful.Reader.Static
@@ -201,6 +216,9 @@ evalStatement (Invoke range name consumer) = do
   covalue <- lookupEnv range consumer
   local (extendEnv return covalue) do
     evalStatement statement
+evalStatement (ExternalCall _ _ _ _) = error "not yet evaluable: ExternalCall"
+evalStatement (BinOp _ _ _ _ _) = error "not yet evaluable: BinOp"
+evalStatement (Ifz _ _ _ _) = error "not yet evaluable: Ifz"
 {-# INLINE evalStatement #-}
 
 evalProducer :: (Error EvalError :> es, Reader Env :> es) => Producer -> Eff es Value
@@ -216,6 +234,8 @@ evalProducer (Lambda _ parameters statement) = do
 evalProducer (Object _ fields) = do
   env <- ask @Env
   pure $ Record env fields
+evalProducer (Mu _ _ _) = error "not yet evaluable: Mu"
+evalProducer (Cocase _ _) = error "not yet evaluable: Cocase"
 {-# INLINE evalProducer #-}
 
 evalConsumer :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Consumer -> Value -> Eff es ()
@@ -246,6 +266,7 @@ evalConsumer (Then _ name statement) given = do
   local (extendEnv name given) do
     evalStatement statement
 evalConsumer (Finish _) _ = pure ()
+evalConsumer (Destructor _ _ _ _) _ = error "not yet evaluable: Destructor"
 evalConsumer (Select range branches) given = go branches
   where
     go [] = throwError $ NoMatch range given
@@ -380,6 +401,37 @@ fetchPrimitive "malgo_print" = \cases
     putTextTo stdout text
     pure $ Struct Tuple []
   range values -> throwError $ InvalidArguments range "malgo_print" values
+fetchPrimitive "malgo_str_len" = \cases
+  _ [Immediate (String s)] -> pure $ Immediate $ Int64 $ fromIntegral $ T.length s
+  range values -> throwError $ InvalidArguments range "malgo_str_len" values
+fetchPrimitive "malgo_str_at" = \cases
+  range [Immediate (String s), Immediate (Int64 i)] ->
+    let idx = fromIntegral i
+     in if idx >= 0 && idx < T.length s
+          then pure $ Immediate $ Char $ T.index s idx
+          else throwError $ InvalidArguments range "malgo_str_at" [Immediate (String s), Immediate (Int64 i)]
+  range values -> throwError $ InvalidArguments range "malgo_str_at" values
+fetchPrimitive "malgo_str_sub" = \cases
+  _ [Immediate (String s), Immediate (Int64 start), Immediate (Int64 len)] ->
+    pure $ Immediate $ String $ T.take (fromIntegral len) $ T.drop (fromIntegral start) s
+  range values -> throwError $ InvalidArguments range "malgo_str_sub" values
+fetchPrimitive "malgo_str_to_int" = \cases
+  range [Immediate (String s)] -> case reads (T.unpack s) of
+    [(n, "")] -> pure $ Immediate $ Int64 n
+    _ -> throwError $ InvalidArguments range "malgo_str_to_int" [Immediate (String s)]
+  range values -> throwError $ InvalidArguments range "malgo_str_to_int" values
+fetchPrimitive "malgo_int_to_str" = \cases
+  _ [Immediate (Int64 n)] -> pure $ Immediate $ String $ T.pack $ show n
+  range values -> throwError $ InvalidArguments range "malgo_int_to_str" values
+fetchPrimitive "malgo_rune_to_str" = \cases
+  _ [Immediate (Char c)] -> pure $ Immediate $ String $ T.singleton c
+  range values -> throwError $ InvalidArguments range "malgo_rune_to_str" values
+fetchPrimitive "malgo_int_to_rune" = \cases
+  _ [Immediate (Int64 n)] -> pure $ Immediate $ Char $ toEnum $ fromIntegral n
+  range values -> throwError $ InvalidArguments range "malgo_int_to_rune" values
+fetchPrimitive "malgo_rune_to_int" = \cases
+  _ [Immediate (Char c)] -> pure $ Immediate $ Int64 $ fromIntegral $ fromEnum c
+  range values -> throwError $ InvalidArguments range "malgo_rune_to_int" values
 fetchPrimitive name = \range values -> throwError $ PrimitiveNotImplemented range name values
 
 getContents :: (IOE :> es, Reader Handlers :> es) => Eff es Text

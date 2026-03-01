@@ -284,4 +284,306 @@
                 (i)
                 (seq (do (apply printString (parens (apply toStringInt64 i)))))))))
       (sig print (-> a (tuple)))
-      (def print (fn ((clause (x) (seq (do (apply malgo_print x)))))))))
+      (def print (fn ((clause (x) (seq (do (apply malgo_print x)))))))
+      (sig null (-> (app List (a)) Bool))
+      (def
+         null
+         (fn ((clause (Nil) (seq (do True))) (clause (_) (seq (do False))))))
+      (sig length (-> (app List (a)) Int32))
+      (def
+         length
+         (fn
+            ((clause (Nil) (seq (do (int32 0))))
+               (clause
+                  ((con Cons (_ xs)))
+                  (seq
+                     (do
+                        (apply
+                           (apply addInt32 (int32 1))
+                           (parens (apply length xs)))))))))
+      (sig reverse (-> (app List (a)) (app List (a))))
+      (def
+         reverse
+         (fn ((clause (xs) (seq (do (apply (apply reverseAcc xs) Nil)))))))
+      (sig reverseAcc (-> (app List (a)) (-> (app List (a)) (app List (a)))))
+      (def
+         reverseAcc
+         (fn
+            ((clause (Nil acc) (seq (do acc)))
+               (clause
+                  ((con Cons (x xs)) acc)
+                  (seq
+                     (do
+                        (apply
+                           (apply reverseAcc xs)
+                           (parens (apply (apply Cons x) acc)))))))))
+      (sig filter (-> (-> a Bool) (-> (app List (a)) (app List (a)))))
+      (def
+         filter
+         (fn
+            ((clause (_ Nil) (seq (do Nil)))
+               (clause
+                  (pred (con Cons (x xs)))
+                  (seq
+                     (do
+                        (apply
+                           (apply
+                              (apply if (parens (apply pred x)))
+                              (fn
+                                 ((clause
+                                     (_)
+                                     (seq
+                                        (do
+                                           (apply
+                                              (apply Cons x)
+                                              (parens
+                                                 (apply (apply filter pred) xs)))))))))
+                           (fn
+                              ((clause
+                                  (_)
+                                  (seq (do (apply (apply filter pred) xs)))))))))))))
+      (sig zip (-> (app List (a)) (-> (app List (b)) (app List ((tuple a b))))))
+      (def
+         zip
+         (fn
+            ((clause (Nil _) (seq (do Nil)))
+               (clause (_ Nil) (seq (do Nil)))
+               (clause
+                  ((con Cons (x xs)) (con Cons (y ys)))
+                  (seq
+                     (do
+                        (apply
+                           (apply Cons (tuple x y))
+                           (parens (apply (apply zip xs) ys)))))))))
+      (sig
+         zipWith
+         (->
+            (-> a (-> b c))
+            (-> (app List (a)) (-> (app List (b)) (app List (c))))))
+      (def
+         zipWith
+         (fn
+            ((clause (_ Nil _) (seq (do Nil)))
+               (clause (_ _ Nil) (seq (do Nil)))
+               (clause
+                  (f (con Cons (x xs)) (con Cons (y ys)))
+                  (seq
+                     (do
+                        (apply
+                           (apply Cons (parens (apply (apply f x) y)))
+                           (parens (apply (apply (apply zipWith f) xs) ys)))))))))
+      (sig replicate (-> Int32 (-> a (app List (a)))))
+      (def
+         replicate
+         (fn
+            ((clause
+                (n x)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply
+                               if
+                               (parens (apply (apply leInt32 n) (int32 0))))
+                            (fn ((clause (_) (seq (do Nil))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply Cons x)
+                                         (parens
+                                            (apply
+                                               (apply
+                                                  replicate
+                                                  (parens
+                                                     (apply
+                                                        (apply subInt32 n)
+                                                        (int32 1))))
+                                               x)))))))))))))))
+      (sig any (-> (-> a Bool) (-> (app List (a)) Bool)))
+      (def
+         any
+         (fn
+            ((clause (_ Nil) (seq (do False)))
+               (clause
+                  (pred (con Cons (x xs)))
+                  (seq
+                     (do
+                        (apply
+                           (apply
+                              (apply if (parens (apply pred x)))
+                              (fn ((clause (_) (seq (do True))))))
+                           (fn
+                              ((clause (_) (seq (do (apply (apply any pred) xs)))))))))))))
+      (sig all (-> (-> a Bool) (-> (app List (a)) Bool)))
+      (def
+         all
+         (fn
+            ((clause (_ Nil) (seq (do True)))
+               (clause
+                  (pred (con Cons (x xs)))
+                  (seq
+                     (do
+                        (apply
+                           (apply
+                              (apply if (parens (apply pred x)))
+                              (fn
+                                 ((clause
+                                     (_)
+                                     (seq (do (apply (apply all pred) xs)))))))
+                           (fn ((clause (_) (seq (do False))))))))))))
+      (sig foldr (-> (-> a (-> b b)) (-> b (-> (app List (a)) b))))
+      (def
+         foldr
+         (fn
+            ((clause (_ z Nil) (seq (do z)))
+               (clause
+                  (f z (con Cons (x xs)))
+                  (seq
+                     (do
+                        (apply
+                           (apply f x)
+                           (parens (apply (apply (apply foldr f) z) xs)))))))))
+      (sig append (-> (app List (a)) (-> (app List (a)) (app List (a)))))
+      (def
+         append
+         (fn
+            ((clause (Nil ys) (seq (do ys)))
+               (clause
+                  ((con Cons (x xs)) ys)
+                  (seq
+                     (do
+                        (apply
+                           (apply Cons x)
+                           (parens (apply (apply append xs) ys)))))))))
+      (sig concatList (-> (app List ((app List (a)))) (app List (a))))
+      (def
+         concatList
+         (fn
+            ((clause (Nil) (seq (do Nil)))
+               (clause
+                  ((con Cons (xs xss)))
+                  (seq
+                     (do
+                        (apply (apply append xs) (parens (apply concatList xss)))))))))
+      (sig take (-> Int32 (-> (app List (a)) (app List (a)))))
+      (def
+         take
+         (fn
+            ((clause
+                (n xs)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply
+                               if
+                               (parens (apply (apply leInt32 n) (int32 0))))
+                            (fn ((clause (_) (seq (do Nil))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply case xs)
+                                         (fn
+                                            ((clause (Nil) (seq (do Nil)))
+                                               (clause
+                                                  ((con Cons (x rest)))
+                                                  (seq
+                                                     (do
+                                                        (apply
+                                                           (apply Cons x)
+                                                           (parens
+                                                              (apply
+                                                                 (apply
+                                                                    take
+                                                                    (parens
+                                                                       (apply
+                                                                          (apply
+                                                                             subInt32
+                                                                             n)
+                                                                          (int32
+                                                                             1))))
+                                                                 rest)))))))))))))))))))))
+      (sig drop (-> Int32 (-> (app List (a)) (app List (a)))))
+      (def
+         drop
+         (fn
+            ((clause
+                (n xs)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply
+                               if
+                               (parens (apply (apply leInt32 n) (int32 0))))
+                            (fn ((clause (_) (seq (do xs))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply case xs)
+                                         (fn
+                                            ((clause (Nil) (seq (do Nil)))
+                                               (clause
+                                                  ((con Cons (_ rest)))
+                                                  (seq
+                                                     (do
+                                                        (apply
+                                                           (apply
+                                                              drop
+                                                              (parens
+                                                                 (apply
+                                                                    (apply
+                                                                       subInt32
+                                                                       n)
+                                                                    (int32 1))))
+                                                           rest)))))))))))))))))))
+      (sig abs (-> Int32 Int32))
+      (def
+         abs
+         (fn
+            ((clause
+                (n)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply
+                               if
+                               (parens (apply (apply ltInt32 n) (int32 0))))
+                            (fn ((clause (_) (seq (do (apply negInt32 n)))))))
+                         (fn ((clause (_) (seq (do n))))))))))))
+      (sig max (-> Int32 (-> Int32 Int32)))
+      (def
+         max
+         (fn
+            ((clause
+                (x y)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (parens (apply (apply gtInt32 x) y)))
+                            (fn ((clause (_) (seq (do x))))))
+                         (fn ((clause (_) (seq (do y))))))))))))
+      (sig min (-> Int32 (-> Int32 Int32)))
+      (def
+         min
+         (fn
+            ((clause
+                (x y)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (parens (apply (apply ltInt32 x) y)))
+                            (fn ((clause (_) (seq (do x))))))
+                         (fn ((clause (_) (seq (do y))))))))))))))

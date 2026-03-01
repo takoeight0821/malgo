@@ -1,0 +1,73 @@
+(module
+   "test/testcases/malgo/HigherOrder.mlg"
+   ((import "runtime/malgo/Builtin.mlg" all)
+      (import "runtime/malgo/Prelude.mlg" all)
+      (infix left 6 +)
+      (def + (fn ((clause (x y) (seq (do (apply (apply addInt32 x) y)))))))
+      (infix left 7 *)
+      (def * (fn ((clause (x y) (seq (do (apply (apply mulInt32 x) y)))))))
+      (sig apply (-> (-> a b) (-> a b)))
+      (def apply (fn ((clause (f x) (seq (do (apply f x)))))))
+      (sig flip (-> (-> a (-> b c)) (-> b (-> a c))))
+      (def flip (fn ((clause (f x y) (seq (do (apply (apply f y) x)))))))
+      (def
+         main
+         (fn
+            ((clause
+                (_)
+                (seq
+                   (do (apply putStr (string "apply (+1) 41 = ")))
+                   (do
+                      (apply
+                         putStrLn
+                         (parens
+                            (apply
+                               toStringInt32
+                               (parens
+                                  (apply
+                                     (apply
+                                        apply
+                                        (fn
+                                           ((clause
+                                               (x)
+                                               (seq (do (opapp + x (int32 1))))))))
+                                     (int32 41)))))))
+                   (do (apply putStr (string "flip sub 3 10 = ")))
+                   (do
+                      (apply
+                         putStrLn
+                         (parens
+                            (apply
+                               toStringInt32
+                               (parens
+                                  (apply
+                                     (apply (apply flip subInt32) (int32 3))
+                                     (int32 10)))))))
+                   (do (apply putStr (string "const 42 99 = ")))
+                   (do
+                      (apply
+                         putStrLn
+                         (parens
+                            (apply
+                               toStringInt32
+                               (parens
+                                  (apply (apply const (int32 42)) (int32 99)))))))
+                   (do (apply putStr (string "42 |> (+1) |> (*2) = ")))
+                   (do
+                      (opapp
+                         |>
+                         (opapp
+                            |>
+                            (opapp
+                               |>
+                               (opapp
+                                  |>
+                                  (int32 42)
+                                  (fn
+                                     ((clause
+                                         (x)
+                                         (seq (do (opapp + x (int32 1))))))))
+                               (fn
+                                  ((clause (x) (seq (do (opapp * x (int32 2))))))))
+                            toStringInt32)
+                         putStrLn)))))))))

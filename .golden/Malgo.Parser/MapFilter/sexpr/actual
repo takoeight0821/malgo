@@ -1,0 +1,97 @@
+(module
+   "test/testcases/malgo/MapFilter.mlg"
+   ((import "runtime/malgo/Builtin.mlg" all)
+      (import "runtime/malgo/Prelude.mlg" all)
+      (infix left 6 +)
+      (def + (fn ((clause (x y) (seq (do (apply (apply addInt32 x) y)))))))
+      (infix left 7 *)
+      (def * (fn ((clause (x y) (seq (do (apply (apply mulInt32 x) y)))))))
+      (sig showList (-> (app List (Int32)) String))
+      (def
+         showList
+         (fn
+            ((clause (Nil) (seq (do (string "[]"))))
+               (clause
+                  (xs)
+                  (seq
+                     (do
+                        (apply
+                           (apply appendString (string "["))
+                           (parens (apply showTail xs)))))))))
+      (sig showTail (-> (app List (Int32)) String))
+      (def
+         showTail
+         (fn
+            ((clause (Nil) (seq (do (string "]"))))
+               (clause
+                  ((con Cons (x Nil)))
+                  (seq
+                     (do
+                        (apply
+                           (apply appendString (parens (apply toStringInt32 x)))
+                           (string "]")))))
+               (clause
+                  ((con Cons (x xs)))
+                  (seq
+                     (do
+                        (apply
+                           (apply appendString (parens (apply toStringInt32 x)))
+                           (parens
+                              (apply
+                                 (apply appendString (string ", "))
+                                 (parens (apply showTail xs)))))))))))
+      (def
+         main
+         (fn
+            ((clause
+                (_)
+                (seq
+                   (let
+                      xs
+                      (list (int32 1) (int32 2) (int32 3) (int32 4) (int32 5)))
+                   (let
+                      doubled
+                      (apply
+                         (apply
+                            mapList
+                            (fn ((clause (x) (seq (do (opapp * x (int32 2))))))))
+                         xs))
+                   (do (apply putStr (string "map (*2) [1..5] = ")))
+                   (do (apply putStrLn (parens (apply showList doubled))))
+                   (let
+                      odds
+                      (apply
+                         (apply
+                            filter
+                            (fn
+                               ((clause
+                                   (x)
+                                   (seq
+                                      (do
+                                         (apply
+                                            not
+                                            (parens
+                                               (apply
+                                                  (apply
+                                                     eqInt32
+                                                     (parens
+                                                        (apply
+                                                           (apply modInt32 x)
+                                                           (int32 2))))
+                                                  (int32 0))))))))))
+                         xs))
+                   (do (apply putStr (string "filter odd [1..5] = ")))
+                   (do (apply putStrLn (parens (apply showList odds))))
+                   (let total (apply (apply (apply foldl addInt32) (int32 0)) xs))
+                   (do (apply putStr (string "sum [1..5] = ")))
+                   (do (apply putStrLn (parens (apply toStringInt32 total))))
+                   (do (apply putStr (string "length [1..5] = ")))
+                   (do
+                      (apply
+                         putStrLn
+                         (parens (apply toStringInt32 (parens (apply length xs))))))
+                   (do (apply putStr (string "reverse [1..5] = ")))
+                   (do
+                      (apply
+                         putStrLn
+                         (parens (apply showList (parens (apply reverse xs)))))))))))))

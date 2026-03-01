@@ -2,8 +2,10 @@ module Malgo.Parser.CStyle (parseCStyle) where
 
 import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
 import Control.Monad.Trans (lift)
+import Data.Char (isUpper)
 import Data.List.NonEmpty qualified as NE
 import Data.List.NonEmpty qualified as NonEmpty
+import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Effectful (Eff, IOE, type (:>))
 import Malgo.Features (Features)
@@ -13,6 +15,7 @@ import Malgo.Parser.Core
     captureRange,
     decimal,
     ident,
+    identContinue,
     lexeme,
     manyUnaryOp,
     operator,
@@ -26,7 +29,7 @@ import Malgo.Parser.Core
 import Malgo.Prelude
 import Malgo.Syntax
 import Malgo.Syntax.Extension
-import Text.Megaparsec hiding (optional, parse)
+import Text.Megaparsec hiding (Label, optional, parse)
 import Text.Megaparsec.Char hiding (space)
 import Text.Megaparsec.Char.Lexer qualified as L
 
@@ -225,12 +228,9 @@ pTyApp = captureRange do
 
 -- | pAtomType parses an atomic type.
 --
--- > atomType = tyVar
--- >          | tyTuple
--- >          | tyRecord
--- >          | tyBlock
+-- > atomType = tyBottom | tyTilde | tyVar | tyTuple | tyRecord | tyVariant | tyBlock | tyCStyleTuple
 pAtomType :: Parser es (Type (Malgo Parse))
-pAtomType = choice [pTyVar, pTyTuple, try pTyRecord, try pTyBlock, pTyCStyleTuple]
+pAtomType = choice [try pTyBottom, pTyTilde, pTyVar, pTyTuple, try pTyRecord, pTyVariant, try pTyBlock, pTyCStyleTuple]
 
 -- | pTyVar parses a type variable.
 --
@@ -251,19 +251,60 @@ pTyTuple = captureRange do
     [ty] -> ty
     _ -> TyTuple range tys
 
--- | pTyRecord parses a record type.
+-- | pTyRecord parses a record type with optional row tail.
 --
--- > tyRecord = "{" ident "=" type ("," ident "=" type)* "}" ;
+-- > tyRecord = "{" field ("," field)* ["|" type] "}" ;
+-- > field = ident ":" type ;
 pTyRecord :: Parser es (Type (Malgo Parse))
 pTyRecord = captureRange do
-  fields <- between (symbol "{") (symbol "}") $ sepEndBy1 pField (symbol ",")
-  pure $ \range -> TyRecord range fields
+  (fields, rowTail) <- between (symbol "{") (symbol "}") do
+    fields <- sepEndBy1 pField (symbol ",")
+    rowTail <- optional (reservedOperator "|" >> pType)
+    pure (fields, rowTail)
+  pure $ \range -> TyRecord range fields rowTail
   where
     pField = do
       field <- ident
       reservedOperator ":"
       value <- pType
       pure (field, value)
+
+-- | pTyBottom parses the bottom type.
+--
+-- > tyBottom = "_|_" ;
+pTyBottom :: Parser es (Type (Malgo Parse))
+pTyBottom = captureRange do
+  lexeme (string "_|_" <* notFollowedBy identContinue)
+  pure $ \range -> TyBottom range
+
+-- | pTyTilde parses a tilde (covalue) type.
+--
+-- > tyTilde = "~" atomType ;
+pTyTilde :: Parser es (Type (Malgo Parse))
+pTyTilde = captureRange do
+  reservedOperator "~"
+  ty <- pAtomType
+  pure $ \range -> TyTilde range ty
+
+-- | pTyVariant parses a variant type with optional row tail.
+--
+-- > tyVariant = "[" case ("|" case)* ["|" type] "]" ;
+-- > case = UPPER_IDENT atomType* ;
+pTyVariant :: Parser es (Type (Malgo Parse))
+pTyVariant = captureRange do
+  between (symbol "[") (symbol "]") do
+    first <- pVariantCase
+    rest <- many (try (reservedOperator "|" *> pVariantCase))
+    rowTail <- optional (reservedOperator "|" *> pType)
+    pure $ \range -> TyVariant range (first : rest) rowTail
+  where
+    pVariantCase = do
+      name <- try do
+        n <- ident
+        guard (not (T.null n) && isUpper (T.head n))
+        pure n
+      args <- many pAtomType
+      pure (name, args)
 
 -- | pTyCStyleTuple parses C-style tuple types with braces
 -- > tyCStyleTuple = "{" type ("," type)* "}"
@@ -336,7 +377,9 @@ pApply =
 pAtom :: (Features :> es) => Parser es (Expr (Malgo Parse))
 pAtom =
   choice
-    [ pLiteral,
+    [ pLabel,
+      pGoto,
+      pLiteral,
       pVariable,
       try pTuple,
       try pRecord,
@@ -344,6 +387,29 @@ pAtom =
       pList,
       pSeq
     ]
+
+-- | pLabel parses a label expression.
+--
+-- > label = "label" ident expr ;
+pLabel :: (Features :> es) => Parser es (Expr (Malgo Parse))
+pLabel = captureRange do
+  reserved "label"
+  name <- ident
+  body <- pExpr
+  pure $ \range -> Label range name body
+
+-- | pGoto parses a goto expression.
+--
+-- > goto = "goto" "(" expr "," expr ")" ;
+pGoto :: (Features :> es) => Parser es (Expr (Malgo Parse))
+pGoto = captureRange do
+  reserved "goto"
+  (value, lbl) <- between (symbol "(") (symbol ")") do
+    value <- pExpr
+    symbol ","
+    lbl <- pExpr
+    pure (value, lbl)
+  pure $ \range -> Goto range value lbl
 
 -- | pTuple parses C-style tuple syntax with braces
 -- > tuple = "{" expr ("," expr)+ "}" | "{" "}"

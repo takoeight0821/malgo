@@ -106,6 +106,8 @@ fromExpr (S.Ann _ expr _) = fromExpr expr
 fromExpr (S.Seq _ stmts) = fromStmts stmts
 fromExpr (S.Parens _ expr) = fromExpr expr
 fromExpr (S.Codata range coclauses) = fromCoClauses range coclauses
+fromExpr (S.Label _ _ _) = error "not yet translatable: label"
+fromExpr (S.Goto _ _ _) = error "not yet translatable: goto"
 
 fromStmts :: (State Uniq :> es, Reader ModuleName :> es, Error ToFunError :> es) => NonEmpty (S.Stmt (Malgo Rename)) -> Eff es F.Expr
 fromStmts (NoBind _ expr :| []) = fromExpr expr

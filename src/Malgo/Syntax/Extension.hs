@@ -32,6 +32,8 @@ module Malgo.Syntax.Extension
     XSeq,
     XParens,
     XCodata,
+    XLabel,
+    XGoto,
     ForallExpX,
     XClause,
     ForallClauseX,
@@ -58,6 +60,9 @@ module Malgo.Syntax.Extension
     XTyTuple,
     XTyRecord,
     XTyBlock,
+    XTyBottom,
+    XTyTilde,
+    XTyVariant,
     ForallTypeX,
     XScDef,
     XScSig,
@@ -215,6 +220,12 @@ type family XParens x where
 type family XCodata x where
   XCodata (Malgo x) = SimpleX x
 
+type family XLabel x where
+  XLabel (Malgo x) = SimpleX x
+
+type family XGoto x where
+  XGoto (Malgo x) = SimpleX x
+
 type ForallExpX (c :: K.Type -> Constraint) x =
   ( c (XVar x),
     c (XCon x),
@@ -231,7 +242,9 @@ type ForallExpX (c :: K.Type -> Constraint) x =
     c (XAnn x),
     c (XSeq x),
     c (XParens x),
-    c (XCodata x)
+    c (XCodata x),
+    c (XLabel x),
+    c (XGoto x)
   )
 
 -- * Clause Extensions
@@ -320,8 +333,17 @@ type family XTyBlock x where
   XTyBlock (Malgo Parse) = SimpleX Parse
   XTyBlock (Malgo _) = Void
 
+type family XTyBottom x where
+  XTyBottom (Malgo _) = SimpleX Parse
+
+type family XTyTilde x where
+  XTyTilde (Malgo _) = SimpleX Parse
+
+type family XTyVariant x where
+  XTyVariant (Malgo _) = SimpleX Parse
+
 type ForallTypeX (c :: K.Type -> Constraint) x =
-  (c (XTyApp x), c (XTyVar x), c (XTyCon x), c (XTyArr x), c (XTyTuple x), c (XTyRecord x), c (XTyBlock x))
+  (c (XTyApp x), c (XTyVar x), c (XTyCon x), c (XTyArr x), c (XTyTuple x), c (XTyRecord x), c (XTyBlock x), c (XTyBottom x), c (XTyTilde x), c (XTyVariant x))
 
 -- * Decl Extensions
 

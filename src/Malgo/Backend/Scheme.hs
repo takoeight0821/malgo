@@ -77,8 +77,24 @@ compileProducer (Join.Lambda _ names body) =
         [] -> "(lambda () " <> bodyStr <> ")"
         [x] -> "(lambda (" <> x <> ") " <> bodyStr <> ")"
         _ -> "(lambda (" <> T.intercalate " " nameStrs <> ") " <> bodyStr <> ")"
-compileProducer (Join.Mu _ _ _) = error "not yet translatable to Scheme: Mu"
-compileProducer (Join.Cocase _ _) = error "not yet translatable to Scheme: Cocase"
+compileProducer (Join.Mu _ name stmt) =
+  let nameStr = mangleId name
+      bodyStr = compileStatement stmt
+   in "(lambda (" <> nameStr <> ") " <> bodyStr <> ")"
+compileProducer (Join.Cocase _ branches) =
+  let branchStrs = map compileCocaseBranch branches
+   in "(lambda (%dtor . %args) (cond "
+        <> T.intercalate " " branchStrs
+        <> " (else (error 'cocase \"no matching destructor\"))))"
+  where
+    compileCocaseBranch (dName, vars, body) =
+      let mangledName = mangleText dName
+          bodyStr = compileStatement body
+          bindings = zipWith (\v i -> "(" <> mangleId v <> " (list-ref %args " <> convertString (show i) <> "))") vars [0 :: Int ..]
+       in "((eq? %dtor '" <> mangledName <> ") "
+            <> if null bindings
+              then bodyStr <> ")"
+              else "(let (" <> T.intercalate " " bindings <> ") " <> bodyStr <> "))"
 compileProducer (Join.Object _ fields) =
   let fieldStrs = map compileField (Map.toList fields)
    in "(list " <> T.intercalate " " fieldStrs <> ")"
@@ -120,7 +136,12 @@ compileConsumer (Join.Then _ name body) =
       bodyStr = compileStatement body
    in "(lambda (" <> nameStr <> ") " <> bodyStr <> ")"
 compileConsumer (Join.Finish _) = "malgo-finish"
-compileConsumer (Join.Destructor _ _ _ _) = error "not yet translatable to Scheme: Destructor"
+compileConsumer (Join.Destructor _ dName producers returnName) =
+  let mangledName = mangleText dName
+      prodStrs = map compileProducer producers
+      retStr = mangleId returnName
+      argList = concatArgs prodStrs <> " " <> retStr
+   in "(lambda (%cocase) (%cocase '" <> mangledName <> argList <> "))"
 compileConsumer (Join.Select _ branches) =
   let branchStrs = map compileBranch branches
    in "(lambda (%v) (cond " <> T.intercalate " " branchStrs <> " (else (error 'select \"no matching branch\"))))"
@@ -181,9 +202,20 @@ compileStatement (Join.Invoke _ name returnName) =
   let nameStr = mangleId name
       retStr = mangleId returnName
    in "(" <> nameStr <> " " <> retStr <> ")"
-compileStatement (Join.ExternalCall _ _ _ _) = error "not yet translatable to Scheme: ExternalCall"
-compileStatement (Join.BinOp _ _ _ _ _) = error "not yet translatable to Scheme: BinOp"
-compileStatement (Join.Ifz _ _ _ _) = error "not yet translatable to Scheme: Ifz"
+compileStatement (Join.ExternalCall _ name producers returnName) =
+  let prodStrs = map compileProducer producers
+      retStr = mangleId returnName
+   in compilePrimitive name prodStrs retStr
+compileStatement (Join.BinOp _ op lhs rhs returnName) =
+  let lhsStr = compileProducer lhs
+      rhsStr = compileProducer rhs
+      retStr = mangleId returnName
+   in compilePrimitive op [lhsStr, rhsStr] retStr
+compileStatement (Join.Ifz _ cond thenBranch elseBranch) =
+  let condStr = compileProducer cond
+      thenStr = compileStatement thenBranch
+      elseStr = compileStatement elseBranch
+   in "(if (eqv? " <> condStr <> " 0) " <> thenStr <> " " <> elseStr <> ")"
 
 -- | Compile a primitive operation.
 compilePrimitive :: Text -> [Text] -> Text -> Text

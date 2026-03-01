@@ -56,7 +56,7 @@ setupPrelude =
     Driver.compile preludePath
 
 flag :: Flag
-flag = Flag {noOptimize = False, lambdaLift = False, debugMode = False, testMode = True}
+flag = Flag {noOptimize = False, lambdaLift = False, debugMode = False, testMode = True, target = TargetEval, evalMode = EvalSmallStep, useInfer = False}
 
 golden ::
   -- | Test description

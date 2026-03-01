@@ -32,6 +32,8 @@ filterKnownPragmas = filter isKnownPragma
     isKnownPragma pragma =
       pragma
         == "c-style-apply"
+        || pragma
+        == "malgo-2025"
         || "experimental-"
         `T.isPrefixOf` pragma
 

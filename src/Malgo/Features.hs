@@ -14,6 +14,7 @@ module Malgo.Features
     addFeatures,
     runFeatures,
     parseFeatures,
+    isMalgo2025Enabled,
   )
 where
 
@@ -26,6 +27,7 @@ import Malgo.Prelude
 -- | Feature definition
 data Feature
   = CStyleApply
+  | Malgo2025
   | Experimental String
   deriving stock (Eq, Ord, Show)
 
@@ -69,5 +71,10 @@ parseFeatures = FeatureFlags . Set.fromList . map (parseFeature . convertString)
   where
     parseFeature :: String -> Feature
     parseFeature "c-style-apply" = CStyleApply
+    parseFeature "malgo-2025" = Malgo2025
     parseFeature ('e' : 'x' : 'p' : 'e' : 'r' : 'i' : 'm' : 'e' : 'n' : 't' : 'a' : 'l' : '-' : name) = Experimental name
     parseFeature name = error $ "Unknown feature: " <> name
+
+-- | Check if the Malgo2025 feature is enabled
+isMalgo2025Enabled :: (Features :> es) => Eff es Bool
+isMalgo2025Enabled = hasFeature Malgo2025

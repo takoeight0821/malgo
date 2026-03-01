@@ -1,0 +1,58 @@
+(module
+   "test/testcases/malgo/CodataE2E.mlg"
+   ((import "runtime/malgo/Builtin.mlg" all)
+      (import "runtime/malgo/Prelude.mlg" all)
+      (type Pair (a b) (record (fst a) (snd b)))
+      (def
+         mkPair
+         (codata
+            ((project (apply (apply # x) y) "fst") x)
+            ((project (apply (apply # x) y) "snd") y)))
+      (type Stream (a) (record (head a) (tail (app Stream (a)))))
+      (def
+         nats
+         (codata
+            ((project (apply # n) "head") n)
+            ((project (apply # n) "tail")
+               (apply nats (apply (apply addInt32 n) (int32 1))))))
+      (def
+         constStream
+         (codata
+            ((project (apply # x) "head") x)
+            ((project (apply # x) "tail") (apply constStream x))))
+      (def
+         main
+         (fn
+            ((clause
+                (_)
+                (seq
+                   (let p (apply (apply mkPair (int32 10)) (int32 20)))
+                   (do
+                      (apply printString (apply toStringInt32 (project p "fst"))))
+                   (do (apply printString (string ",")))
+                   (do
+                      (apply printString (apply toStringInt32 (project p "snd"))))
+                   (do (apply printString (string ";")))
+                   (do
+                      (apply
+                         printString
+                         (apply
+                            toStringInt32
+                            (project
+                               (project
+                                  (project
+                                     (project (apply nats (int32 0)) "tail")
+                                     "tail")
+                                  "tail")
+                               "head"))))
+                   (do (apply printString (string ";")))
+                   (do
+                      (apply
+                         printString
+                         (apply
+                            toStringInt32
+                            (project
+                               (project
+                                  (project (apply constStream (int32 99)) "tail")
+                                  "tail")
+                               "head")))))))))))

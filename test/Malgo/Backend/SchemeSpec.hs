@@ -171,3 +171,102 @@ spec = do
           result = T.unpack $ compileToScheme program
       result `shouldContain` "cond"
       result `shouldContain` "equal?"
+
+    it "compiles Mu expressions" do
+      let mainId = mkExternalId "main"
+          retId = mkTemporalId "ret" 0
+          kId = mkTemporalId "k" 0
+          muBody = Join.Cut (Join.Literal dummyRange (Int32 7)) kId
+          mu = Join.Mu dummyRange kId muBody
+          body = Join.Cut mu retId
+          program =
+            Join.Program
+              { definitions = [(dummyRange, mainId, retId, body)],
+                dependencies = []
+              }
+          result = T.unpack $ compileToScheme program
+      result `shouldContain` "lambda"
+      result `shouldContain` "7"
+
+    it "compiles Cocase expressions" do
+      let mainId = mkExternalId "main"
+          retId = mkTemporalId "ret" 0
+          kId = mkTemporalId "k" 0
+          branch1Body = Join.Cut (Join.Literal dummyRange (Int32 1)) kId
+          branch2Body = Join.Cut (Join.Literal dummyRange (Int32 2)) kId
+          cocase = Join.Cocase dummyRange [("head", [kId], branch1Body), ("tail", [kId], branch2Body)]
+          body = Join.Cut cocase retId
+          program =
+            Join.Program
+              { definitions = [(dummyRange, mainId, retId, body)],
+                dependencies = []
+              }
+          result = T.unpack $ compileToScheme program
+      result `shouldContain` "cond"
+      result `shouldContain` "'head"
+      result `shouldContain` "'tail"
+
+    it "compiles Destructor consumers" do
+      let mainId = mkExternalId "main"
+          retId = mkTemporalId "ret" 0
+          kId = mkTemporalId "k" 0
+          dtor = Join.Destructor dummyRange "head" [] kId
+          joinName = mkTemporalId "dtor" 0
+          cocaseBody = Join.Cut (Join.Literal dummyRange (Int32 42)) kId
+          cocase = Join.Cocase dummyRange [("head", [kId], cocaseBody)]
+          body = Join.Join dummyRange joinName dtor (Join.Cut cocase joinName)
+          program =
+            Join.Program
+              { definitions = [(dummyRange, mainId, retId, body)],
+                dependencies = []
+              }
+          result = T.unpack $ compileToScheme program
+      result `shouldContain` "'head"
+      result `shouldContain` "cocase"
+
+    it "compiles ExternalCall statements" do
+      let mainId = mkExternalId "main"
+          retId = mkTemporalId "ret" 0
+          body = Join.ExternalCall dummyRange "putstr" [Join.Literal dummyRange (String "hi")] retId
+          program =
+            Join.Program
+              { definitions = [(dummyRange, mainId, retId, body)],
+                dependencies = []
+              }
+          result = T.unpack $ compileToScheme program
+      result `shouldContain` "display"
+      result `shouldContain` "hi"
+
+    it "compiles BinOp statements" do
+      let mainId = mkExternalId "main"
+          retId = mkTemporalId "ret" 0
+          lhs = Join.Literal dummyRange (Int32 3)
+          rhs = Join.Literal dummyRange (Int32 4)
+          body = Join.BinOp dummyRange "add_i32" lhs rhs retId
+          program =
+            Join.Program
+              { definitions = [(dummyRange, mainId, retId, body)],
+                dependencies = []
+              }
+          result = T.unpack $ compileToScheme program
+      result `shouldContain` "+"
+      result `shouldContain` "3"
+      result `shouldContain` "4"
+
+    it "compiles Ifz statements" do
+      let mainId = mkExternalId "main"
+          retId = mkTemporalId "ret" 0
+          cond = Join.Literal dummyRange (Int32 0)
+          thenBranch = Join.Cut (Join.Literal dummyRange (String "zero")) retId
+          elseBranch = Join.Cut (Join.Literal dummyRange (String "nonzero")) retId
+          body = Join.Ifz dummyRange cond thenBranch elseBranch
+          program =
+            Join.Program
+              { definitions = [(dummyRange, mainId, retId, body)],
+                dependencies = []
+              }
+          result = T.unpack $ compileToScheme program
+      result `shouldContain` "eqv?"
+      result `shouldContain` "0"
+      result `shouldContain` "zero"
+      result `shouldContain` "nonzero"

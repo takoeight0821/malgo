@@ -1,0 +1,41 @@
+#c-style-apply
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- Codata E2E: comprehensive codata/copattern tests
+
+-- 1. Simple codata with multiple destructors
+type Pair(a, b) = { fst: a, snd: b }
+
+def mkPair = {
+  #(x, y).fst -> x,
+  #(x, y).snd -> y
+}
+
+-- 2. Infinite stream codata (recursive)
+type Stream(a) = { head: a, tail: Stream(a) }
+
+def nats = {
+  #(n).head -> n,
+  #(n).tail -> nats(addInt32(n, 1))
+}
+
+-- 3. Codata with argument patterns
+def constStream = {
+  #(x).head -> x,
+  #(x).tail -> constStream(x)
+}
+
+def main = { (_) ->
+  -- Test 1: pair destructors
+  let p = mkPair(10, 20);
+  printString(toStringInt32(p.fst));
+  printString(",");
+  printString(toStringInt32(p.snd));
+  printString(";");
+  -- Test 2: recursive stream
+  printString(toStringInt32(nats(0).tail.tail.tail.head));
+  printString(";");
+  -- Test 3: const stream
+  printString(toStringInt32(constStream(99).tail.tail.head))
+}

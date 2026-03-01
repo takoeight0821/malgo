@@ -91,7 +91,9 @@ compileProducer (Join.Cocase _ branches) =
       let mangledName = mangleText dName
           bodyStr = compileStatement body
           bindings = zipWith (\v i -> "(" <> mangleId v <> " (list-ref %args " <> convertString (show i) <> "))") vars [0 :: Int ..]
-       in "((eq? %dtor '" <> mangledName <> ") "
+       in "((eq? %dtor '"
+            <> mangledName
+            <> ") "
             <> if null bindings
               then bodyStr <> ")"
               else "(let (" <> T.intercalate " " bindings <> ") " <> bodyStr <> "))"

@@ -83,8 +83,8 @@ evalStatement ::
   Eff es Value
 evalStatement ref (Cut (Mu _ name stmt) consumer) = do
   consumerValue <- lookupEnv (range stmt) consumer
-  local (extendEnv name consumerValue) $
-    evalStatement ref stmt
+  local (extendEnv name consumerValue)
+    $ evalStatement ref stmt
 evalStatement ref (Cut producer consumer) = do
   value <- evalProducer producer
   applyConsumer ref (range producer) consumer value
@@ -235,8 +235,8 @@ applyConsumerDirect ref (Destructor range dName producers returnName) given = do
           prodValues <- traverse evalProducer producers
           retConsumer <- lookupEnv range returnName
           let allValues = prodValues <> [retConsumer]
-          local (const $ extendEnv' (zip vars allValues) env) $
-            evalStatement ref body
+          local (const $ extendEnv' (zip vars allValues) env)
+            $ evalStatement ref body
         Nothing -> throwError $ NoSuchField range dName given
     _ -> throwError $ NoMatch range given
 applyConsumerDirect ref (Select r branches) given = go branches

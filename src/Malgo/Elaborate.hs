@@ -86,6 +86,8 @@ elabExpr (Record pos kvs) = Record pos <$> traverse (\(k, v) -> (k,) <$> elabExp
 elabExpr (Ann pos e t) = (\e' -> Ann pos e' t) <$> elabExpr e
 elabExpr (Seq pos stmts) = Seq pos <$> traverse elabStmt stmts
 elabExpr (Parens pos e) = Parens pos <$> elabExpr e
+elabExpr (Label pos name body) = Label pos name <$> elabExpr body
+elabExpr (Goto pos value label) = Goto pos <$> elabExpr value <*> elabExpr label
 elabExpr (Codata pos coclauses) = elabCodata pos coclauses
 
 elabClause ::

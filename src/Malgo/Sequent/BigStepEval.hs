@@ -31,7 +31,7 @@ import Malgo.Sequent.Eval
     lookupEnv,
     match,
   )
-import Malgo.Sequent.Fun (Name, Tag (..))
+import Malgo.Sequent.Fun (Literal (..), Name, Tag (..))
 
 data BigStepEvalPass = BigStepEvalPass
 
@@ -81,6 +81,10 @@ evalStatement ::
   ResultRef ->
   Statement ->
   Eff es Value
+evalStatement ref (Cut (Mu _ name stmt) consumer) = do
+  consumerValue <- lookupEnv (range stmt) consumer
+  local (extendEnv name consumerValue) $
+    evalStatement ref stmt
 evalStatement ref (Cut producer consumer) = do
   value <- evalProducer producer
   applyConsumer ref (range producer) consumer value
@@ -101,14 +105,31 @@ evalStatement ref (Invoke r name consumer) = do
       local (extendEnv ret covalue) do
         evalStatement ref statement
     Nothing -> throwError (UndefinedVariable r name)
-evalStatement _ (ExternalCall _ _ _ _) = error "not yet evaluable: ExternalCall"
-evalStatement _ (BinOp _ _ _ _ _) = error "not yet evaluable: BinOp"
-evalStatement _ (Ifz _ _ _ _) = error "not yet evaluable: Ifz"
+evalStatement ref (ExternalCall range name producers consumer) = do
+  values <- traverse evalProducer producers
+  result <- fetchPrimitive name range values
+  applyConsumer ref range consumer result
+evalStatement ref (BinOp range op lhs rhs consumer) = do
+  lhsVal <- evalProducer lhs
+  rhsVal <- evalProducer rhs
+  result <- fetchPrimitive op range [lhsVal, rhsVal]
+  applyConsumer ref range consumer result
+evalStatement ref (Ifz _ cond thenBranch elseBranch) = do
+  condVal <- evalProducer cond
+  case condVal of
+    Immediate (Int32 0) -> evalStatement ref thenBranch
+    Immediate (Int64 0) -> evalStatement ref thenBranch
+    Immediate (Float 0) -> evalStatement ref thenBranch
+    Immediate (Double 0) -> evalStatement ref thenBranch
+    _ -> evalStatement ref elseBranch
 
 -- | Evaluate a producer to a value.
 evalProducer ::
   ( Error EvalError :> es,
-    Reader Env :> es
+    Reader Env :> es,
+    Reader Toplevels :> es,
+    Reader Handlers :> es,
+    IOE :> es
   ) =>
   Producer ->
   Eff es Value
@@ -124,8 +145,13 @@ evalProducer (Lambda _ parameters statement) = do
 evalProducer (Object _ fields) = do
   env <- ask @Env
   pure $ Record env fields
-evalProducer (Mu _ _ _) = error "not yet evaluable: Mu"
-evalProducer (Cocase _ _) = error "not yet evaluable: Cocase"
+evalProducer (Mu _ name stmt) = do
+  ref <- newIORef (Struct Tuple [])
+  local (extendEnv name (Consumer $ \v -> writeIORef ref v))
+    $ evalStatement ref stmt
+evalProducer (Cocase _ branches) = do
+  env <- ask @Env
+  pure $ Codata env branches
 
 -- | Create a Consumer value that writes its result to the shared ResultRef.
 mkConsumerValue ::
@@ -201,7 +227,18 @@ applyConsumerDirect ref (Then _ name statement) given = do
   local (extendEnv name given) do
     evalStatement ref statement
 applyConsumerDirect _ (Finish _) given = pure given
-applyConsumerDirect _ (Destructor _ _ _ _) _ = error "not yet evaluable: Destructor"
+applyConsumerDirect ref (Destructor range dName producers returnName) given = do
+  case given of
+    Codata env branches -> do
+      case find (\(n, _, _) -> n == dName) branches of
+        Just (_, vars, body) -> do
+          prodValues <- traverse evalProducer producers
+          retConsumer <- lookupEnv range returnName
+          let allValues = prodValues <> [retConsumer]
+          local (const $ extendEnv' (zip vars allValues) env) $
+            evalStatement ref body
+        Nothing -> throwError $ NoSuchField range dName given
+    _ -> throwError $ NoMatch range given
 applyConsumerDirect ref (Select r branches) given = go branches
   where
     go [] = throwError $ NoMatch r given

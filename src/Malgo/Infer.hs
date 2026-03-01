@@ -333,9 +333,10 @@ surfaceTypeToTy (TyTuple _ ts) = TTuple (map surfaceTypeToTy ts)
 surfaceTypeToTy (TyRecord _ fields rowTail) =
   TRecord (map (second surfaceTypeToTy) fields) (surfaceTypeToTy <$> rowTail)
 surfaceTypeToTy (TyBlock pos _) = absurd pos
-surfaceTypeToTy (TyBottom _) = error "not yet implemented: bottom type in type inference"
-surfaceTypeToTy (TyTilde _ _) = error "not yet implemented: tilde type in type inference"
-surfaceTypeToTy (TyVariant _ _ _) = error "not yet implemented: variant type in type inference"
+surfaceTypeToTy (TyBottom _) = TBottom
+surfaceTypeToTy (TyTilde _ t) = surfaceTypeToTy t
+surfaceTypeToTy (TyVariant _ cases rowTail) =
+  TVariant (map (second (map surfaceTypeToTy)) cases) (surfaceTypeToTy <$> rowTail)
 
 -- | Convert an Id to a variable name for internal types
 idToVarName :: Id -> T.Text

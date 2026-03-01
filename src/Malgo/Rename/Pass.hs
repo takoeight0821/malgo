@@ -211,8 +211,12 @@ rnExpr (Ann pos e t) = Ann pos <$> rnExpr e <*> rnType t
 rnExpr (Seq pos ss) = Seq pos <$> rnStmts ss
 rnExpr (Parens pos e) = Parens pos <$> rnExpr e
 rnExpr (Codata pos clauses) = Codata pos <$> traverse rnCoClause clauses
-rnExpr (Label _ _ _) = error "not yet implemented: label"
-rnExpr (Goto _ _ _) = error "not yet implemented: goto"
+rnExpr (Label pos name body) = do
+  name' <- resolveName name
+  local (insertVarIdent [(name, Qualified Implicit name')])
+    $ Label pos name'
+    <$> rnExpr body
+rnExpr (Goto pos value label) = Goto pos <$> rnExpr value <*> rnExpr label
 
 -- | Renamed identifier corresponding Boxed literals.
 lookupBox :: (Reader RnEnv :> es, Error RenameError :> es) => Range -> Literal x -> Eff es Id
@@ -234,8 +238,8 @@ rnType (TyTuple pos ts) = TyTuple pos <$> traverse rnType ts
 rnType (TyRecord pos kts rowTail) = TyRecord pos <$> traverse (bitraverse pure rnType) kts <*> traverse rnType rowTail
 rnType (TyBlock pos t) = TyArr pos (TyTuple pos []) <$> rnType t
 rnType (TyBottom pos) = pure $ TyBottom pos
-rnType (TyTilde _ _) = error "not yet implemented: tilde type"
-rnType (TyVariant _ _ _) = error "not yet implemented: variant type"
+rnType (TyTilde pos t) = TyTilde pos <$> rnType t
+rnType (TyVariant pos cases rowTail) = TyVariant pos <$> traverse (bitraverse pure (traverse rnType)) cases <*> traverse rnType rowTail
 
 -- | Rename a clause.
 rnClause ::

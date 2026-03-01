@@ -53,7 +53,6 @@ toStatement (Select range scrutinee branches) consumer = do
   branches <- traverse (convertBranch consumer) branches
   toStatement scrutinee (C.Select range branches)
 toStatement (Invoke range name) consumer = pure $ C.Invoke range name consumer
-toStatement (Fix _ _ _) _ = error "not yet translated: Fix in toStatement"
 toStatement expr consumer = do
   expr' <- toProducer expr
   pure $ Cut expr' consumer
@@ -90,7 +89,10 @@ toProducer producer@(Select range _ _) = do
 toProducer producer@(Invoke range _) = do
   return <- newTemporalId "return"
   Do range return <$> toStatement producer (C.Label range return)
-toProducer (Fix _ _ _) = error "not yet translated: Fix in toProducer"
+toProducer (Fix range _name expr) = do
+  return <- newTemporalId "return"
+  body <- toStatement expr (C.Label range return)
+  pure $ C.Mu range return body
 
 convertBranch :: (State Uniq :> es, Reader ModuleName :> es) => C.Consumer -> Branch -> Eff es C.Branch
 convertBranch consumer (Branch range pattern body) = do

@@ -371,7 +371,9 @@ fetchPrimitive "malgo_unsafe_cast" = \cases
 fetchPrimitive name | "malgo_add_" `T.isPrefixOf` name = binary name addValue
 fetchPrimitive name | "malgo_sub_" `T.isPrefixOf` name = binary name subValue
 fetchPrimitive name | "malgo_mul_" `T.isPrefixOf` name = binary name mulValue
--- TODO: add "malgo_div_" and "malgo_mod_"
+fetchPrimitive name | "malgo_div_" `T.isPrefixOf` name = binary name divValue
+fetchPrimitive name | "malgo_mod_" `T.isPrefixOf` name = binary name modValue
+fetchPrimitive name | "malgo_neg_" `T.isPrefixOf` name = unary name negValue
 fetchPrimitive name | "malgo_eq_" `T.isPrefixOf` name = binary name eqValue
 fetchPrimitive name | "malgo_ne_" `T.isPrefixOf` name = binary name neValue
 fetchPrimitive name | "malgo_lt_" `T.isPrefixOf` name = binary name ltValue
@@ -389,11 +391,37 @@ fetchPrimitive "malgo_newline" = \_ _ -> do
   Handlers {stdout} <- ask @Handlers
   liftIO $ stdout '\n'
   pure $ Struct Tuple []
+fetchPrimitive "malgo_print_char" = \cases
+  _ [Immediate (Char c)] -> do
+    Handlers {stdout} <- ask @Handlers
+    liftIO $ stdout c
+    pure $ Struct Tuple []
+  range values -> throwError $ InvalidArguments range "malgo_print_char" values
 fetchPrimitive "malgo_get_contents" = \_ _ -> do
   Immediate . String <$> getContents
 fetchPrimitive "malgo_string_append" = \cases
   _ [Immediate (String a), Immediate (String b)] -> pure $ Immediate $ String $ a <> b
   range values -> throwError $ InvalidArguments range "malgo_string_append" values
+fetchPrimitive "malgo_string_length" = \cases
+  _ [Immediate (String s)] -> pure $ Immediate $ Int64 $ fromIntegral $ T.length s
+  range values -> throwError $ InvalidArguments range "malgo_string_length" values
+fetchPrimitive "malgo_string_at" = \cases
+  range [Immediate (Int64 i), Immediate (String s)] ->
+    let idx = fromIntegral i
+     in if idx >= 0 && idx < T.length s
+          then pure $ Immediate $ Char $ T.index s idx
+          else throwError $ InvalidArguments range "malgo_string_at" [Immediate (Int64 i), Immediate (String s)]
+  range values -> throwError $ InvalidArguments range "malgo_string_at" values
+fetchPrimitive "malgo_string_cons" = \cases
+  _ [Immediate (Char c), Immediate (String s)] -> pure $ Immediate $ String $ T.cons c s
+  range values -> throwError $ InvalidArguments range "malgo_string_cons" values
+fetchPrimitive "malgo_substring" = \cases
+  _ [Immediate (String s), Immediate (Int64 start), Immediate (Int64 end)] ->
+    pure $ Immediate $ String $ T.take (fromIntegral (end - start)) $ T.drop (fromIntegral start) s
+  range values -> throwError $ InvalidArguments range "malgo_substring" values
+fetchPrimitive "malgo_string_reverse" = \cases
+  _ [Immediate (String s)] -> pure $ Immediate $ String $ T.reverse s
+  range values -> throwError $ InvalidArguments range "malgo_string_reverse" values
 fetchPrimitive "malgo_print" = \cases
   _ [value] -> do
     Handlers {stdout} <- ask @Handlers
@@ -480,6 +508,29 @@ mulValue _ (Immediate (Int64 a)) (Immediate (Int64 b)) = pure $ Immediate $ Int6
 mulValue _ (Immediate (Float a)) (Immediate (Float b)) = pure $ Immediate $ Float $ a * b
 mulValue _ (Immediate (Double a)) (Immediate (Double b)) = pure $ Immediate $ Double $ a * b
 mulValue range a b = throwError $ InvalidArguments range "malgo_mul" [a, b]
+
+divValue :: (Error EvalError :> es) => Range -> Value -> Value -> Eff es Value
+divValue _ (Immediate (Int32 a)) (Immediate (Int32 b)) = pure $ Immediate $ Int32 $ a `div` b
+divValue _ (Immediate (Int64 a)) (Immediate (Int64 b)) = pure $ Immediate $ Int64 $ a `div` b
+divValue _ (Immediate (Float a)) (Immediate (Float b)) = pure $ Immediate $ Float $ a / b
+divValue _ (Immediate (Double a)) (Immediate (Double b)) = pure $ Immediate $ Double $ a / b
+divValue range a b = throwError $ InvalidArguments range "malgo_div" [a, b]
+
+modValue :: (Error EvalError :> es) => Range -> Value -> Value -> Eff es Value
+modValue _ (Immediate (Int32 a)) (Immediate (Int32 b)) = pure $ Immediate $ Int32 $ a `mod` b
+modValue _ (Immediate (Int64 a)) (Immediate (Int64 b)) = pure $ Immediate $ Int64 $ a `mod` b
+modValue range a b = throwError $ InvalidArguments range "malgo_mod" [a, b]
+
+unary :: (Error EvalError :> es) => Text -> (Range -> Value -> Eff es Value) -> Range -> [Value] -> Eff es Value
+unary _ f range [a] = f range a
+unary name _ range values = throwError $ InvalidArguments range name values
+
+negValue :: (Error EvalError :> es) => Range -> Value -> Eff es Value
+negValue _ (Immediate (Int32 a)) = pure $ Immediate $ Int32 $ negate a
+negValue _ (Immediate (Int64 a)) = pure $ Immediate $ Int64 $ negate a
+negValue _ (Immediate (Float a)) = pure $ Immediate $ Float $ negate a
+negValue _ (Immediate (Double a)) = pure $ Immediate $ Double $ negate a
+negValue range a = throwError $ InvalidArguments range "malgo_neg" [a]
 
 eqValue :: Range -> Value -> Value -> Eff es Value
 eqValue _ v1 v2 = if v1 == v2 then pure $ Immediate $ Int32 1 else pure $ Immediate $ Int32 0

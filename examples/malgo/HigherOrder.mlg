@@ -1,0 +1,59 @@
+module {..} = import "../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../runtime/malgo/Prelude.mlg"
+
+infixl 6 (+)
+def (+) = { x y -> addInt32 x y }
+
+infixl 7 (*)
+def (*) = { x y -> mulInt32 x y }
+
+def compose : (b -> c) -> (a -> b) -> a -> c
+def compose = { f g x -> f (g x) }
+
+def twice : (a -> a) -> a -> a
+def twice = { f x -> f (f x) }
+
+def showList : List Int32 -> String
+def showList =
+  { Nil -> "[]",
+    (Cons x Nil) -> appendString "[" (appendString (toStringInt32 x) "]"),
+    (Cons x xs) -> appendString "[" (appendString (toStringInt32 x) (appendString ", " (showListTail xs)))
+  }
+
+def showListTail : List Int32 -> String
+def showListTail =
+  { Nil -> "]",
+    (Cons x Nil) -> appendString (toStringInt32 x) "]",
+    (Cons x xs) -> appendString (toStringInt32 x) (appendString ", " (showListTail xs))
+  }
+
+def main = {
+  -- compose: double then add 1
+  let double = { x -> x * 2 };
+  let inc = { x -> x + 1 };
+  let doubleInc = compose inc double;
+  putStr "doubleInc 5 = ";
+  putStrLn (toStringInt32 (doubleInc 5));
+
+  -- twice: apply double twice
+  putStr "twice double 3 = ";
+  putStrLn (toStringInt32 (twice double 3));
+
+  -- map, filter, foldl combined
+  let xs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  let evens = filter { x -> eqInt32 (modInt32 x 2) 0 } xs;
+  let doubled = mapList double evens;
+  let total = foldl addInt32 0 doubled;
+  putStr "sum of doubled evens [1..10] = ";
+  putStrLn (toStringInt32 total);
+
+  -- reverse
+  putStr "reverse [1,2,3,4,5] = ";
+  putStrLn (showList (reverse [1, 2, 3, 4, 5]));
+
+  -- zipWith
+  let as = [1, 2, 3];
+  let bs = [10, 20, 30];
+  putStr "zipWith (+) [1,2,3] [10,20,30] = ";
+  putStrLn (showList (zipWith addInt32 as bs))
+}

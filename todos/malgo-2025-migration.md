@@ -33,13 +33,15 @@ ziku (Lean 4) の全機能を malgo (Haskell) に移植する。Phase 1 の並�
 - [x] package.yaml: 全新モジュールの exposed-modules 整理 (source-dirs: src で自動)
 - [x] ビルド・テスト通過確認 (832 tests, 0 failures)
 
-## Phase 3: Stub 実装の実体化
+## Phase 3: Stub 実装の実体化 (完了)
 
-- [ ] Rename/Pass.hs: Label/Goto の実際の rename 実装
-- [ ] ToFun.hs: Label/Goto → Fun IR 翻訳実装
-- [ ] ToCore.hs: Fix → Core IR 翻訳実装
-- [ ] Eval.hs: Mu/Cocase/Destructor/ExternalCall/BinOp/Ifz の評価実装
-- [ ] BigStepEval.hs: 同上の評価実装
+- [x] Rename/Pass.hs: Label/Goto の実際の rename 実装 (050c605f)
+- [x] Infer.hs: TyBottom/TyTilde/TyVariant の型変換実装 (050c605f)
+- [x] ToFun.hs: Label/Goto → Fun IR 翻訳実装 (fee2c96b)
+- [x] ToCore.hs: Fix → Core IR 翻訳実装 (fee2c96b)
+- [x] Eval.hs: Mu/Cocase/Destructor/ExternalCall/BinOp/Ifz の評価実装 (8d1fa54d)
+- [x] BigStepEval.hs: 同上の評価実装 (e043bfb5)
+- [x] Scheme.hs: Mu/Cocase/Destructor/ExternalCall/BinOp/Ifz の Scheme コード生成実装 (89e218ef)
 
 ## Phase 4: 新構文を使ったテスト・サンプル
 

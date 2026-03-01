@@ -16,24 +16,22 @@ ziku (Lean 4) の全機能を malgo (Haskell) に移植する。Phase 1 の並�
 
 ## Phase 2: 統合作業
 
-現状: ビルド成功、832 テスト中 24 失敗。
+現状: ビルド成功、832 テスト中 0 失敗。
 
-### テスト修正 (24 failures)
-- [ ] Fib/FibCopattern の zipWith 重複名エラー修正 (14 件: Elaborate, Rename, ToFun, ToCore)
-  - `Rename/Pass.hs:444` で `Duplicate name: 'zipWith'` — Prelude に追加された zipWith と Fib.mlg 内の定義が衝突
-- [ ] BigStepEval 新テストケース失敗修正 (ArithInt32, StringOps, MapFilter — 未実装プリミティブ)
-- [ ] Eval 新テストケース失敗修正 (ArithInt32, StringOps, MapFilter — 未実装プリミティブ)
+### テスト修正 (完了)
+- [x] Fib/FibCopattern の zipWith 重複名エラー修正 (14 件: Elaborate, Rename, ToFun, ToCore)
+- [x] BigStepEval 新テストケース失敗修正 (ArithInt32, StringOps, MapFilter)
+- [x] Eval 新テストケース失敗修正 (ArithInt32, StringOps, MapFilter)
 
-### パイプライン統合 (Driver.hs)
-- [ ] ElaboratePass をパイプラインに組み込み
-- [ ] InferPass をパイプラインに組み込み (オプショナル、フラグ制御)
-- [ ] SchemePass をパイプラインに組み込み (`--target scheme` フラグ)
-- [ ] BigStepEvalPass をパイプラインに組み込み (`--eval-mode bigstep` フラグ)
+### パイプライン統合 (Driver.hs) (完了)
+- [x] ElaboratePass をパイプラインに組み込み (#malgo-2025 pragma で自動有効化)
+- [x] InferPass をパイプラインに組み込み (`--infer` フラグ)
+- [x] SchemePass をパイプラインに組み込み (`--target scheme` フラグ)
+- [x] BigStepEvalPass をパイプラインに組み込み (`--eval-mode bigstep` フラグ)
 
-### 品質確認
-- [ ] package.yaml: 全新モジュールの exposed-modules 整理
-- [ ] Ormolu フォーマット確認
-- [ ] PR 作成
+### 品質確認 (完了)
+- [x] package.yaml: 全新モジュールの exposed-modules 整理 (source-dirs: src で自動)
+- [x] ビルド・テスト通過確認 (832 tests, 0 failures)
 
 ## Phase 3: Stub 実装の実体化
 

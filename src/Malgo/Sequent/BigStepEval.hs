@@ -28,6 +28,7 @@ import Malgo.Sequent.Eval
     extendEnv,
     extendEnv',
     fetchPrimitive,
+    isZeroValue,
     lookupEnv,
     match,
   )
@@ -116,12 +117,9 @@ evalStatement ref (BinOp range op lhs rhs consumer) = do
   applyConsumer ref range consumer result
 evalStatement ref (Ifz _ cond thenBranch elseBranch) = do
   condVal <- evalProducer cond
-  case condVal of
-    Immediate (Int32 0) -> evalStatement ref thenBranch
-    Immediate (Int64 0) -> evalStatement ref thenBranch
-    Immediate (Float 0) -> evalStatement ref thenBranch
-    Immediate (Double 0) -> evalStatement ref thenBranch
-    _ -> evalStatement ref elseBranch
+  if isZeroValue condVal
+    then evalStatement ref thenBranch
+    else evalStatement ref elseBranch
 
 -- | Evaluate a producer to a value.
 evalProducer ::

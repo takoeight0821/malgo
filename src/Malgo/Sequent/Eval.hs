@@ -16,6 +16,7 @@ module Malgo.Sequent.Eval
     fetchPrimitive,
     valueToText,
     match,
+    isZeroValue,
   )
 where
 
@@ -234,12 +235,9 @@ evalStatement (BinOp range op lhs rhs consumer) = do
   jump range consumer result
 evalStatement (Ifz _ cond thenBranch elseBranch) = do
   condVal <- evalProducer cond
-  case condVal of
-    Immediate (Int32 0) -> evalStatement thenBranch
-    Immediate (Int64 0) -> evalStatement thenBranch
-    Immediate (Float 0) -> evalStatement thenBranch
-    Immediate (Double 0) -> evalStatement thenBranch
-    _ -> evalStatement elseBranch
+  if isZeroValue condVal
+    then evalStatement thenBranch
+    else evalStatement elseBranch
 {-# INLINE evalStatement #-}
 
 evalProducer :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Producer -> Eff es Value
@@ -403,6 +401,13 @@ valueToText (Record {}) = "<record>"
 valueToText (Codata {}) = "<codata>"
 valueToText (Consumer _) = "<consumer>"
 
+isZeroValue :: Value -> Bool
+isZeroValue (Immediate (Int32 0)) = True
+isZeroValue (Immediate (Int64 0)) = True
+isZeroValue (Immediate (Float 0)) = True
+isZeroValue (Immediate (Double 0)) = True
+isZeroValue _ = False
+
 fetchPrimitive :: (Error EvalError :> es, Reader Handlers :> es, IOE :> es) => Text -> Range -> [Value] -> Eff es Value
 fetchPrimitive "malgo_unsafe_cast" = \cases
   _ [value] -> pure value
@@ -468,15 +473,10 @@ fetchPrimitive "malgo_print" = \cases
     putTextTo stdout text
     pure $ Struct Tuple []
   range values -> throwError $ InvalidArguments range "malgo_print" values
-fetchPrimitive "malgo_str_len" = \cases
-  _ [Immediate (String s)] -> pure $ Immediate $ Int64 $ fromIntegral $ T.length s
-  range values -> throwError $ InvalidArguments range "malgo_str_len" values
+fetchPrimitive "malgo_str_len" = fetchPrimitive "malgo_string_length"
 fetchPrimitive "malgo_str_at" = \cases
   range [Immediate (String s), Immediate (Int64 i)] ->
-    let idx = fromIntegral i
-     in if idx >= 0 && idx < T.length s
-          then pure $ Immediate $ Char $ T.index s idx
-          else throwError $ InvalidArguments range "malgo_str_at" [Immediate (String s), Immediate (Int64 i)]
+    fetchPrimitive "malgo_string_at" range [Immediate (Int64 i), Immediate (String s)]
   range values -> throwError $ InvalidArguments range "malgo_str_at" values
 fetchPrimitive "malgo_str_sub" = \cases
   _ [Immediate (String s), Immediate (Int64 start), Immediate (Int64 len)] ->

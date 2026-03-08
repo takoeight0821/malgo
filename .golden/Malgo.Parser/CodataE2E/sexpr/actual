@@ -21,6 +21,27 @@
             ((project (apply # x) "head") x)
             ((project (apply # x) "tail") (apply constStream x))))
       (def
+         streamZipWith
+         (codata
+            ((project (apply (apply (apply # f) xs) ys) "head")
+               (apply (apply f (project xs "head")) (project ys "head")))
+            ((project (apply (apply (apply # f) xs) ys) "tail")
+               (apply
+                  (apply (apply streamZipWith f) (project xs "tail"))
+                  (project ys "tail")))))
+      (def
+         fib
+         (codata
+            ((project # "head") (int32 1))
+            ((project (project # "tail") "head") (int32 1))
+            ((project (project # "tail") "tail")
+               (apply
+                  (apply (apply streamZipWith addInt32) fib)
+                  (project fib "tail")))))
+      (def
+         drop2
+         (fn ((clause (xs) (seq (do (project (project xs "tail") "tail")))))))
+      (def
          main
          (fn
             ((clause
@@ -55,4 +76,34 @@
                                (project
                                   (project (apply constStream (int32 99)) "tail")
                                   "tail")
+                               "head"))))
+                   (do (apply printString (string ";")))
+                   (do
+                      (apply
+                         printString
+                         (apply
+                            toStringInt32
+                            (project
+                               (project
+                                  (project
+                                     (project
+                                        (project (project fib "tail") "tail")
+                                        "tail")
+                                     "tail")
+                                  "tail")
+                               "head"))))
+                   (do (apply printString (string ";")))
+                   (do
+                      (apply
+                         printString
+                         (apply
+                            toStringInt32
+                            (project
+                               (apply
+                                  drop2
+                                  (apply
+                                     (apply
+                                        (apply streamZipWith addInt32)
+                                        (apply nats (int32 3)))
+                                     (apply constStream (int32 10))))
                                "head")))))))))))

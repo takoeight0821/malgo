@@ -33,10 +33,7 @@
                (clause
                   (f z (con Cons (x xs)))
                   (seq
-                     (do
-                        (apply
-                           (apply (apply foldl f) (parens (apply (apply f z) x)))
-                           xs)))))))
+                     (do (apply (apply (apply foldl f) (apply (apply f z) x)) xs)))))))
       (sig mapList (-> (-> a b) (-> (app List (a)) (app List (b)))))
       (def
          mapList
@@ -47,8 +44,8 @@
                   (seq
                      (do
                         (apply
-                           (apply Cons (parens (apply f x)))
-                           (parens (apply (apply mapList f) xs)))))))))
+                           (apply Cons (apply f x))
+                           (apply (apply mapList f) xs))))))))
       (sig listToString (-> (app List (Char)) String))
       (def
          listToString
@@ -56,11 +53,7 @@
             ((clause (Nil) (seq (do (string ""))))
                (clause
                   ((con Cons (c cs)))
-                  (seq
-                     (do
-                        (apply
-                           (apply consString c)
-                           (parens (apply listToString cs)))))))))
+                  (seq (do (apply (apply consString c) (apply listToString cs))))))))
       (sig headString (-> String (app Maybe (Char))))
       (def
          headString
@@ -71,9 +64,7 @@
                    (do
                       (apply
                          (apply
-                            (apply
-                               if
-                               (parens (apply (apply eqString str) (string ""))))
+                            (apply if (apply (apply eqString str) (string "")))
                             (fn ((clause (_) (seq (do Nothing))))))
                          (fn
                             ((clause
@@ -82,8 +73,7 @@
                                    (do
                                       (apply
                                          Just
-                                         (parens
-                                            (apply (apply atString (int64 0)) str)))))))))))))))
+                                         (apply (apply atString (int64 0)) str))))))))))))))
       (sig tailString (-> String String))
       (def
          tailString
@@ -94,9 +84,7 @@
                    (do
                       (apply
                          (apply
-                            (apply
-                               if
-                               (parens (apply (apply eqString str) (string ""))))
+                            (apply if (apply (apply eqString str) (string "")))
                             (fn ((clause (_) (seq (do str))))))
                          (fn
                             ((clause
@@ -105,7 +93,7 @@
                                    (do
                                       (apply
                                          (apply (apply substring str) (int64 1))
-                                         (parens (apply lengthString str)))))))))))))))
+                                         (apply lengthString str))))))))))))))
       (def
          takeWhileString
          (fn
@@ -114,7 +102,7 @@
                 (seq
                    (do
                       (apply
-                         (apply case (parens (apply headString str)))
+                         (apply case (apply headString str))
                          (fn
                             ((clause (Nothing) (seq (do str)))
                                (clause
@@ -123,7 +111,7 @@
                                      (do
                                         (apply
                                            (apply
-                                              (apply if (parens (apply pred c)))
+                                              (apply if (apply pred c))
                                               (fn
                                                  ((clause
                                                      (_)
@@ -131,15 +119,13 @@
                                                         (do
                                                            (apply
                                                               (apply consString c)
-                                                              (parens
+                                                              (apply
                                                                  (apply
-                                                                    (apply
-                                                                       takeWhileString
-                                                                       pred)
-                                                                    (parens
-                                                                       (apply
-                                                                          tailString
-                                                                          str)))))))))))
+                                                                    takeWhileString
+                                                                    pred)
+                                                                 (apply
+                                                                    tailString
+                                                                    str)))))))))
                                            (fn
                                               ((clause (_) (seq (do (string "")))))))))))))))))))
       (def
@@ -150,7 +136,7 @@
                 (seq
                    (do
                       (apply
-                         (apply case (parens (apply headString str)))
+                         (apply case (apply headString str))
                          (fn
                             ((clause (Nothing) (seq (do str)))
                                (clause
@@ -159,7 +145,7 @@
                                      (do
                                         (apply
                                            (apply
-                                              (apply if (parens (apply pred c)))
+                                              (apply if (apply pred c))
                                               (fn
                                                  ((clause
                                                      (_)
@@ -169,10 +155,9 @@
                                                               (apply
                                                                  dropWhileString
                                                                  pred)
-                                                              (parens
-                                                                 (apply
-                                                                    tailString
-                                                                    str)))))))))
+                                                              (apply
+                                                                 tailString
+                                                                 str))))))))
                                            (fn ((clause (_) (seq (do str))))))))))))))))))
       (sig concatString (-> (app List (String)) String))
       (def
@@ -182,10 +167,7 @@
                (clause
                   ((con Cons (x xs)))
                   (seq
-                     (do
-                        (apply
-                           (apply appendString x)
-                           (parens (apply concatString xs)))))))))
+                     (do (apply (apply appendString x) (apply concatString xs))))))))
       (sig punctuate (-> a (-> (app List (a)) (app List (a)))))
       (def
          punctuate
@@ -200,10 +182,9 @@
                      (do
                         (apply
                            (apply Cons x)
-                           (parens
-                              (apply
-                                 (apply Cons sep)
-                                 (parens (apply (apply punctuate sep) xs)))))))))))
+                           (apply
+                              (apply Cons sep)
+                              (apply (apply punctuate sep) xs)))))))))
       (sig isWhiteSpace (-> Char Bool))
       (def
          isWhiteSpace
@@ -220,10 +201,7 @@
          (fn
             ((clause
                 (f g)
-                (seq
-                   (do
-                      (fn
-                         ((clause (x) (seq (do (apply f (parens (apply g x))))))))))))))
+                (seq (do (fn ((clause (x) (seq (do (apply f (apply g x)))))))))))))
       (infix left 0 |>)
       (sig |> (-> a (-> (-> a b) b)))
       (def |> (fn ((clause (x f) (seq (do (apply f x)))))))
@@ -273,16 +251,12 @@
       (def
          printInt32
          (fn
-            ((clause
-                (i)
-                (seq (do (apply printString (parens (apply toStringInt32 i)))))))))
+            ((clause (i) (seq (do (apply printString (apply toStringInt32 i))))))))
       (sig printInt64 (-> Int64 (tuple)))
       (def
          printInt64
          (fn
-            ((clause
-                (i)
-                (seq (do (apply printString (parens (apply toStringInt64 i)))))))))
+            ((clause (i) (seq (do (apply printString (apply toStringInt64 i))))))))
       (sig print (-> a (tuple)))
       (def print (fn ((clause (x) (seq (do (apply malgo_print x)))))))
       (sig null (-> (app List (a)) Bool))
@@ -296,11 +270,7 @@
             ((clause (Nil) (seq (do (int32 0))))
                (clause
                   ((con Cons (_ xs)))
-                  (seq
-                     (do
-                        (apply
-                           (apply addInt32 (int32 1))
-                           (parens (apply length xs)))))))))
+                  (seq (do (apply (apply addInt32 (int32 1)) (apply length xs))))))))
       (sig reverse (-> (app List (a)) (app List (a))))
       (def
          reverse
@@ -313,10 +283,7 @@
                (clause
                   ((con Cons (x xs)) acc)
                   (seq
-                     (do
-                        (apply
-                           (apply reverseAcc xs)
-                           (parens (apply (apply Cons x) acc)))))))))
+                     (do (apply (apply reverseAcc xs) (apply (apply Cons x) acc))))))))
       (sig filter (-> (-> a Bool) (-> (app List (a)) (app List (a)))))
       (def
          filter
@@ -328,7 +295,7 @@
                      (do
                         (apply
                            (apply
-                              (apply if (parens (apply pred x)))
+                              (apply if (apply pred x))
                               (fn
                                  ((clause
                                      (_)
@@ -336,8 +303,7 @@
                                         (do
                                            (apply
                                               (apply Cons x)
-                                              (parens
-                                                 (apply (apply filter pred) xs)))))))))
+                                              (apply (apply filter pred) xs))))))))
                            (fn
                               ((clause
                                   (_)
@@ -352,9 +318,7 @@
                   ((con Cons (x xs)) (con Cons (y ys)))
                   (seq
                      (do
-                        (apply
-                           (apply Cons (tuple x y))
-                           (parens (apply (apply zip xs) ys)))))))))
+                        (apply (apply Cons (tuple x y)) (apply (apply zip xs) ys))))))))
       (sig
          zipWith
          (->
@@ -370,8 +334,8 @@
                   (seq
                      (do
                         (apply
-                           (apply Cons (parens (apply (apply f x) y)))
-                           (parens (apply (apply (apply zipWith f) xs) ys)))))))))
+                           (apply Cons (apply (apply f x) y))
+                           (apply (apply (apply zipWith f) xs) ys))))))))
       (sig replicate (-> Int32 (-> a (app List (a)))))
       (def
          replicate
@@ -382,9 +346,7 @@
                    (do
                       (apply
                          (apply
-                            (apply
-                               if
-                               (parens (apply (apply leInt32 n) (int32 0))))
+                            (apply if (apply (apply leInt32 n) (int32 0)))
                             (fn ((clause (_) (seq (do Nil))))))
                          (fn
                             ((clause
@@ -393,15 +355,13 @@
                                    (do
                                       (apply
                                          (apply Cons x)
-                                         (parens
+                                         (apply
                                             (apply
+                                               replicate
                                                (apply
-                                                  replicate
-                                                  (parens
-                                                     (apply
-                                                        (apply subInt32 n)
-                                                        (int32 1))))
-                                               x)))))))))))))))
+                                                  (apply subInt32 n)
+                                                  (int32 1)))
+                                            x))))))))))))))
       (sig any (-> (-> a Bool) (-> (app List (a)) Bool)))
       (def
          any
@@ -413,7 +373,7 @@
                      (do
                         (apply
                            (apply
-                              (apply if (parens (apply pred x)))
+                              (apply if (apply pred x))
                               (fn ((clause (_) (seq (do True))))))
                            (fn
                               ((clause (_) (seq (do (apply (apply any pred) xs)))))))))))))
@@ -428,7 +388,7 @@
                      (do
                         (apply
                            (apply
-                              (apply if (parens (apply pred x)))
+                              (apply if (apply pred x))
                               (fn
                                  ((clause
                                      (_)
@@ -442,10 +402,7 @@
                (clause
                   (f z (con Cons (x xs)))
                   (seq
-                     (do
-                        (apply
-                           (apply f x)
-                           (parens (apply (apply (apply foldr f) z) xs)))))))))
+                     (do (apply (apply f x) (apply (apply (apply foldr f) z) xs))))))))
       (sig append (-> (app List (a)) (-> (app List (a)) (app List (a)))))
       (def
          append
@@ -453,11 +410,7 @@
             ((clause (Nil ys) (seq (do ys)))
                (clause
                   ((con Cons (x xs)) ys)
-                  (seq
-                     (do
-                        (apply
-                           (apply Cons x)
-                           (parens (apply (apply append xs) ys)))))))))
+                  (seq (do (apply (apply Cons x) (apply (apply append xs) ys))))))))
       (sig concatList (-> (app List ((app List (a)))) (app List (a))))
       (def
          concatList
@@ -465,9 +418,7 @@
             ((clause (Nil) (seq (do Nil)))
                (clause
                   ((con Cons (xs xss)))
-                  (seq
-                     (do
-                        (apply (apply append xs) (parens (apply concatList xss)))))))))
+                  (seq (do (apply (apply append xs) (apply concatList xss))))))))
       (sig take (-> Int32 (-> (app List (a)) (app List (a)))))
       (def
          take
@@ -478,9 +429,7 @@
                    (do
                       (apply
                          (apply
-                            (apply
-                               if
-                               (parens (apply (apply leInt32 n) (int32 0))))
+                            (apply if (apply (apply leInt32 n) (int32 0)))
                             (fn ((clause (_) (seq (do Nil))))))
                          (fn
                             ((clause
@@ -497,18 +446,15 @@
                                                      (do
                                                         (apply
                                                            (apply Cons x)
-                                                           (parens
+                                                           (apply
                                                               (apply
+                                                                 take
                                                                  (apply
-                                                                    take
-                                                                    (parens
-                                                                       (apply
-                                                                          (apply
-                                                                             subInt32
-                                                                             n)
-                                                                          (int32
-                                                                             1))))
-                                                                 rest)))))))))))))))))))))
+                                                                    (apply
+                                                                       subInt32
+                                                                       n)
+                                                                    (int32 1)))
+                                                              rest))))))))))))))))))))
       (sig drop (-> Int32 (-> (app List (a)) (app List (a)))))
       (def
          drop
@@ -519,9 +465,7 @@
                    (do
                       (apply
                          (apply
-                            (apply
-                               if
-                               (parens (apply (apply leInt32 n) (int32 0))))
+                            (apply if (apply (apply leInt32 n) (int32 0)))
                             (fn ((clause (_) (seq (do xs))))))
                          (fn
                             ((clause
@@ -539,12 +483,11 @@
                                                         (apply
                                                            (apply
                                                               drop
-                                                              (parens
+                                                              (apply
                                                                  (apply
-                                                                    (apply
-                                                                       subInt32
-                                                                       n)
-                                                                    (int32 1))))
+                                                                    subInt32
+                                                                    n)
+                                                                 (int32 1)))
                                                            rest)))))))))))))))))))
       (sig abs (-> Int32 Int32))
       (def
@@ -556,9 +499,7 @@
                    (do
                       (apply
                          (apply
-                            (apply
-                               if
-                               (parens (apply (apply ltInt32 n) (int32 0))))
+                            (apply if (apply (apply ltInt32 n) (int32 0)))
                             (fn ((clause (_) (seq (do (apply negInt32 n)))))))
                          (fn ((clause (_) (seq (do n))))))))))))
       (sig max (-> Int32 (-> Int32 Int32)))
@@ -571,7 +512,7 @@
                    (do
                       (apply
                          (apply
-                            (apply if (parens (apply (apply gtInt32 x) y)))
+                            (apply if (apply (apply gtInt32 x) y))
                             (fn ((clause (_) (seq (do x))))))
                          (fn ((clause (_) (seq (do y))))))))))))
       (sig min (-> Int32 (-> Int32 Int32)))
@@ -584,6 +525,6 @@
                    (do
                       (apply
                          (apply
-                            (apply if (parens (apply (apply ltInt32 x) y)))
+                            (apply if (apply (apply ltInt32 x) y))
                             (fn ((clause (_) (seq (do x))))))
                          (fn ((clause (_) (seq (do y))))))))))))))

@@ -1,13 +1,25 @@
 module Malgo.Backend.SchemeSpec (spec) where
 
+import Data.ByteString qualified as BS
 import Data.Map qualified as Map
 import Data.Text qualified as T
+import Effectful.Reader.Static (runReader)
 import Malgo.Backend.Scheme
 import Malgo.Id
 import Malgo.Module (ModuleName (..))
+import Malgo.Monad (runMalgoM)
+import Malgo.Parser (ParserPass (..))
+import Malgo.Pass (runCompileError, runPass)
 import Malgo.Prelude
+import Malgo.Rename (RenamePass (..), genBuiltinRnEnv)
+import Malgo.Sequent.Core.Flat (flatProgram)
 import Malgo.Sequent.Core.Join qualified as Join
 import Malgo.Sequent.Fun (Literal (..), Pattern (..), Tag (..))
+import Malgo.Sequent.ToCore (toCore)
+import Malgo.Sequent.ToFun (ToFunPass (..))
+import Malgo.Syntax (Module (..))
+import Malgo.TestUtils (flag, testcaseDir)
+import System.FilePath ((</>))
 import Test.Hspec
 import Text.Megaparsec.Pos (initialPos)
 
@@ -270,3 +282,28 @@ spec = do
       result `shouldContain` "0"
       result `shouldContain` "zero"
       result `shouldContain` "nonzero"
+
+  describe "compileToScheme e2e (.mlg -> Join -> Scheme)" do
+    it "compiles Test2.mlg through the parser/lowering pipeline" do
+      result <- compileTestcaseToScheme "Test2.mlg"
+      result `shouldContain` "Test2_dot_mlg_dot_rtob"
+      result `shouldContain` "(eq? (car %v) 'R)"
+      result `shouldContain` "\"OK\""
+
+    it "compiles HelloBoxed.mlg with constructor wrapping and calls" do
+      result <- compileTestcaseToScheme "HelloBoxed.mlg"
+      result `shouldContain` "HelloBoxed_dot_mlg_dot_main"
+      result `shouldContain` "HelloBoxed_dot_mlg_dot_putStrLn"
+      result `shouldContain` "\"Hello, world\""
+
+compileTestcaseToScheme :: FilePath -> IO String
+compileTestcaseToScheme testcase = do
+  let srcPath = testcaseDir </> testcase
+  src <- convertString <$> BS.readFile srcPath
+  runMalgoM flag $ runCompileError do
+    parsed <- runPass ParserPass (srcPath, src)
+    rnEnv <- genBuiltinRnEnv
+    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
+    fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
+    program <- runReader renamed.moduleName $ toCore fun >>= flatProgram >>= Join.joinProgram
+    pure $ T.unpack $ compileToScheme program

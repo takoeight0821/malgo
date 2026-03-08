@@ -1,0 +1,69 @@
+module {..} = import "../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../runtime/malgo/Prelude.mlg"
+
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+
+def insert : Int32 -> Tree Int32 -> Tree Int32
+def insert = { x tree ->
+  case tree {
+    Leaf -> Node Leaf x Leaf,
+    (Node left val right) ->
+      if (ltInt32 x val)
+        { Node (insert x left) val right }
+        { if (gtInt32 x val)
+            { Node left val (insert x right) }
+            { Node left val right }
+        }
+  }
+}
+
+def member : Int32 -> Tree Int32 -> Bool
+def member = { x tree ->
+  case tree {
+    Leaf -> False,
+    (Node left val right) ->
+      if (eqInt32 x val)
+        { True }
+        { if (ltInt32 x val)
+            { member x left }
+            { member x right }
+        }
+  }
+}
+
+def inorder : Tree Int32 -> List Int32
+def inorder = {
+  Leaf -> Nil,
+  (Node left val right) -> append (inorder left) (Cons val (inorder right))
+}
+
+def showList : List Int32 -> String
+def showList =
+  { Nil -> "",
+    (Cons x Nil) -> toStringInt32 x,
+    (Cons x xs) -> appendString (toStringInt32 x) (appendString " " (showList xs))
+  }
+
+def main = {
+  let tree = Leaf;
+  let tree = insert 5 tree;
+  let tree = insert 3 tree;
+  let tree = insert 7 tree;
+  let tree = insert 1 tree;
+  let tree = insert 4 tree;
+  let tree = insert 6 tree;
+  let tree = insert 9 tree;
+
+  putStr "Inorder: ";
+  putStrLn (showList (inorder tree));
+
+  putStr "member 4: ";
+  if (member 4 tree)
+    { putStrLn "True" }
+    { putStrLn "False" };
+
+  putStr "member 8: ";
+  if (member 8 tree)
+    { putStrLn "True" }
+    { putStrLn "False" }
+}

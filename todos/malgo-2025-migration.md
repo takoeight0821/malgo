@@ -45,8 +45,9 @@ ziku (Lean 4) の全機能を malgo (Haskell) に移植する。Phase 1 の並�
 
 ## Phase 4: 新構文を使ったテスト・サンプル
 
-- [ ] label/goto を使ったテストケース作成
-- [ ] bottom 型/tilde 型を使ったテストケース作成
-- [ ] 行多相型を使ったテストケース作成
-- [ ] コデータ型 (Elaborate 経由) の E2E テスト
-- [ ] Scheme バックエンド出力の検証テスト
+- [x] label/goto を使ったテストケース作成（強化）
+- [x] bottom 型/tilde 型を使ったテストケース作成（強化）
+- [x] 行多相型を使ったテストケース作成（強化）
+- [x] コデータ型 (Elaborate 経由) の E2E テスト（強化）
+- [x] Scheme バックエンド出力の E2E 検証テスト
+- [x] パーサ移行方針を段階的な統合移行へ変更（暫定で regular/c-style 互換を維持）

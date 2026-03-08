@@ -1,10 +1,9 @@
-#c-style-apply
+#malgo-2025
 module {..} = import "../../../runtime/malgo/Builtin.mlg"
 module {..} = import "../../../runtime/malgo/Prelude.mlg"
 
--- Codata E2E: comprehensive codata/copattern tests
+-- Codata E2E in unified parser mode.
 
--- 1. Simple codata with multiple destructors
 type Pair(a, b) = { fst: a, snd: b }
 
 def mkPair = {
@@ -17,25 +16,40 @@ type Stream(a) = { head: a, tail: Stream(a) }
 
 def nats = {
   #(n).head -> n,
-  #(n).tail -> nats(addInt32(n, 1))
+  #(n).tail -> nats (addInt32(n, 1))
 }
 
--- 3. Codata with argument patterns
 def constStream = {
   #(x).head -> x,
   #(x).tail -> constStream(x)
 }
 
-def main = { (_) ->
-  -- Test 1: pair destructors
+def streamZipWith = {
+  #(f, xs, ys).head -> f(xs.head, ys.head),
+  #(f, xs, ys).tail -> streamZipWith(f, xs.tail, ys.tail)
+}
+
+def fib = {
+  #.head -> 1,
+  #.tail.head -> 1,
+  #.tail.tail -> streamZipWith(addInt32, fib, fib.tail)
+}
+
+def drop2 = { xs ->
+  xs.tail.tail
+}
+
+def main = { _ ->
   let p = mkPair(10, 20);
   printString(toStringInt32(p.fst));
   printString(",");
-  printString(toStringInt32(p.snd));
+  printString (toStringInt32 (p.snd));
   printString(";");
-  -- Test 2: recursive stream
-  printString(toStringInt32(nats(0).tail.tail.tail.head));
+  printString (toStringInt32 (nats(0).tail.tail.tail.head));
   printString(";");
-  -- Test 3: const stream
-  printString(toStringInt32(constStream(99).tail.tail.head))
+  printString(toStringInt32(constStream(99).tail.tail.head));
+  printString(";");
+  printString(toStringInt32(fib.tail.tail.tail.tail.tail.head));
+  printString(";");
+  printString(toStringInt32(drop2(streamZipWith(addInt32, nats(3), constStream(10))).head))
 }

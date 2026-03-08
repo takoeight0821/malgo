@@ -1,17 +1,28 @@
+#malgo-2025
 module {..} = import "../../../runtime/malgo/Builtin.mlg"
 module {..} = import "../../../runtime/malgo/Prelude.mlg"
 
--- Test bottom type (_|_) and tilde type (~T) annotations
--- These are parsed and passed through the pipeline
-
--- A function annotated with bottom type in a type signature
+-- Bottom/tilde type syntax in unified parser mode.
 def absurd : _|_ -> a
-def absurd = { x -> absurd x }
+def absurd = { x -> absurd(x) }
 
--- A function using tilde type annotation
 def id_tilde : ~Int64# -> ~Int64#
-def id_tilde = { x -> x }
+def id_tilde = { (x) -> x }
+
+def compose_tilde : (~Int64# -> ~Int64#) -> ~Int64# -> ~Int64#
+def compose_tilde = { (f) -> { (x) -> f(id_tilde(x)) } }
+
+def id_tilde_bottom : ~(_|_) -> ~(_|_)
+def id_tilde_bottom = { (x) -> x }
+
+def id_tilde_pair : ~(Int64#, ~Int64#) -> ~(Int64#, ~Int64#)
+def id_tilde_pair = { (x) -> x }
+
+def apply_bottom_tilde : (_|_ -> ~Int64#) -> _|_ -> ~Int64#
+def apply_bottom_tilde = { (f) -> { (x) -> f(x) } }
 
 def main = { (_) ->
+  let keep = id_tilde(7i64#);
+  let keep2 = compose_tilde(id_tilde)(keep);
   putStr (String# "bottom-tilde-ok"#)
 }

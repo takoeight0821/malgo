@@ -1,11 +1,34 @@
+#malgo-2025
 module {..} = import "../../../runtime/malgo/Builtin.mlg"
 
--- label/goto syntax test
--- label creates a continuation capture (mu in sequent calculus)
--- label k body ≡ mu k. body (captures current continuation as k)
+def printI64 = { x ->
+  printString# (toStringInt64# x)
+}
 
--- Test 1: label captures continuation and returns value directly
+-- Continuation-capture shape (covered by parser/IR-stage goldens).
+def captureContinuationShape = { x -> label k goto(x, k) }
+
+-- Nested non-local control shape across labels.
+def nestedNonLocalShape = { x ->
+  label exit (
+    label inner (
+      goto(x, exit)
+    )
+  )
+}
+
+-- Evaluated goto path in current runtime semantics (target is a function value).
+def viaFunctionGoto = { x ->
+  goto(x, { y -> y })
+}
+
+-- Evaluated label path.
+def passThroughLabel = { x ->
+  label k x
+}
+
 def main = {
-  printString# (toStringInt64#
-    (label k 42i64#))
+  printI64 (passThroughLabel 6i64#);
+  printI64 (viaFunctionGoto 7i64#);
+  printI64 (label k 8i64#)
 }

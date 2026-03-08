@@ -1,20 +1,46 @@
+#malgo-2025
 module {..} = import "../../../runtime/malgo/Builtin.mlg"
 module {..} = import "../../../runtime/malgo/Prelude.mlg"
 
--- Test row-polymorphic type annotations
--- Record: { field: Type | rowVar }
--- Variant: [Con Type | rowVar]
-
--- Row-polymorphic record type: extract a field from any record with "x"
+-- Row-polymorphic record/variant checks in unified parser mode.
 def getX : { x: Int64# | r } -> Int64#
 def getX = { rec -> rec.x }
 
--- Variant type annotation with data definition
+def sumXY : { x: Int64#, y: Int64# | r } -> Int64#
+def sumXY = { rec -> addInt64# (rec.x) (rec.y) }
+
 data Option a = Some a | None
 
-def handleVal : [Some Int64# | r] -> Int64#
-def handleVal = { (Some x) -> x }
+def handleSome : [Some Int64# | r] -> Int64#
+def handleSome = { (Some x) -> x }
+
+def handleOption : Int64# -> [Some Int64# | None | r] -> Int64#
+def handleOption =
+  { fallback (Some x) -> x,
+    fallback None -> fallback }
+
+def wideRecord : { x: Int64#, y: Int64# }
+def wideRecord = { x = 20i64#, y = 99i64# }
+
+def someOrNone : [Some Int64# | None]
+def someOrNone = Some 30i64#
 
 def main = { (_) ->
-  printString# (toStringInt64# (getX { x = 10i64# }))
+  let fromNarrowRecord = getX({ x = 10i64# });
+  let fromWideRecord = getX(wideRecord);
+  let fromWiderRecord = sumXY({ x = 1i64#, y = 2i64#, z = 3i64# });
+  let fromClosedVariant = handleSome someOrNone;
+  let fromOpenVariant = handleOption 7i64# someOrNone;
+  let fallbackFromNone = handleOption 7i64# None;
+  let total =
+    addInt64#
+      fromNarrowRecord
+      (addInt64#
+        fromWideRecord
+        (addInt64#
+          fromWiderRecord
+          (addInt64#
+            fromClosedVariant
+            (addInt64# fromOpenVariant fallbackFromNone))));
+  printString# (toStringInt64# total)
 }

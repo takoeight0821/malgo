@@ -162,6 +162,7 @@ This project uses [mise](https://github.com/jdx/mise) for managing development t
 - **go** (for changelog generation)
 - **watchexec** (for file watching)
 - **git-chglog** (for changelog generation)
+- **Recommended versions for this repository:** GHC 9.12.2, cabal-install 3.16.1.0, HLS 2.13.0.0
 
 ### Common Tasks
 Run these with `mise run <task>`:

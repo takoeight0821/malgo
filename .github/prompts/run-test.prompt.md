@@ -73,7 +73,7 @@ tools: ["codebase"]
 9. **Constraints**
 
 - Do **not** modify non-Haskell files.
-- Assume GHC 9.12 and cabal-install 3.16; note if the fix depends on other versions.
+- Assume GHC 9.14 and cabal-install 3.16; note if the fix depends on other versions.
 - Keep the report under 500 lines; link to full log if larger.
 
 10. **Finish**

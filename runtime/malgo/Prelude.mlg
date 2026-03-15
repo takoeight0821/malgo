@@ -15,10 +15,10 @@ def case = { x f -> f x }
 
 -- Tuple functions
 def fst : (a, b) -> a
-def fst = { (a, b) -> a }
+def fst = { {a, b} -> a }
 
 def snd : (a, b) -> b
-def snd = { (a, b) -> b }
+def snd = { {a, b} -> b }
 
 -- optional value
 data Maybe a = Nothing | Just a
@@ -166,3 +166,129 @@ def printInt64 = { i -> printString (toStringInt64 i) }
 
 def print : a -> ()
 def print = { x -> malgo_print x }
+
+-- List utilities
+
+def null : List a -> Bool
+def null =
+  { Nil -> True,
+    _ -> False
+  }
+
+def length : List a -> Int32
+def length =
+  { Nil -> 0,
+    (Cons _ xs) -> addInt32 1 (length xs)
+  }
+
+def reverse : List a -> List a
+def reverse = { xs -> reverseAcc xs Nil }
+
+def reverseAcc : List a -> List a -> List a
+def reverseAcc =
+  { Nil acc -> acc,
+    (Cons x xs) acc -> reverseAcc xs (Cons x acc)
+  }
+
+def filter : (a -> Bool) -> List a -> List a
+def filter =
+  { _ Nil -> Nil,
+    pred (Cons x xs) ->
+      if (pred x)
+        { Cons x (filter pred xs) }
+        { filter pred xs }
+  }
+
+def zip : List a -> List b -> List (a, b)
+def zip =
+  { Nil _ -> Nil,
+    _ Nil -> Nil,
+    (Cons x xs) (Cons y ys) -> Cons((x, y), zip xs ys)
+  }
+
+def zipWith : (a -> b -> c) -> List a -> List b -> List c
+def zipWith =
+  { _ Nil _ -> Nil,
+    _ _ Nil -> Nil,
+    f (Cons x xs) (Cons y ys) -> Cons (f x y) (zipWith f xs ys)
+  }
+
+def replicate : Int32 -> a -> List a
+def replicate = { n x ->
+  if (leInt32 n 0)
+    { Nil }
+    { Cons x (replicate (subInt32 n 1) x) }
+}
+
+def any : (a -> Bool) -> List a -> Bool
+def any =
+  { _ Nil -> False,
+    pred (Cons x xs) ->
+      if (pred x) { True } { any pred xs }
+  }
+
+def all : (a -> Bool) -> List a -> Bool
+def all =
+  { _ Nil -> True,
+    pred (Cons x xs) ->
+      if (pred x) { all pred xs } { False }
+  }
+
+def foldr : (a -> b -> b) -> b -> List a -> b
+def foldr =
+  { _ z Nil -> z,
+    f z (Cons x xs) -> f x (foldr f z xs)
+  }
+
+def append : List a -> List a -> List a
+def append =
+  { Nil ys -> ys,
+    (Cons x xs) ys -> Cons x (append xs ys)
+  }
+
+def concatList : List (List a) -> List a
+def concatList =
+  { Nil -> Nil,
+    (Cons xs xss) -> append xs (concatList xss)
+  }
+
+def take : Int32 -> List a -> List a
+def take = { n xs ->
+  if (leInt32 n 0)
+    { Nil }
+    { case xs {
+        Nil -> Nil,
+        (Cons x rest) -> Cons x (take (subInt32 n 1) rest)
+      }
+    }
+}
+
+def drop : Int32 -> List a -> List a
+def drop = { n xs ->
+  if (leInt32 n 0)
+    { xs }
+    { case xs {
+        Nil -> Nil,
+        (Cons _ rest) -> drop (subInt32 n 1) rest
+      }
+    }
+}
+
+-- Numeric utilities
+
+def abs : Int32 -> Int32
+def abs = { n ->
+  if (ltInt32 n 0)
+    { negInt32 n }
+    { n }
+}
+
+def max : Int32 -> Int32 -> Int32
+def max = { x y ->
+  if (gtInt32 x y) { x } { y }
+}
+
+def min : Int32 -> Int32 -> Int32
+def min = { x y ->
+  if (ltInt32 x y) { x } { y }
+}

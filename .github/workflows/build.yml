@@ -21,20 +21,34 @@ jobs:
 
       - name: Cache GHCup
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        id: ghcup-cache
         with:
           path: ~/.ghcup
           key: ${{ runner.os }}-ghcup-${{ matrix.ghc-version }}
 
       - name: Set up GHC ${{ matrix.ghc-version }}
+        if: steps.ghcup-cache.outputs.cache-hit != 'true'
         uses: haskell-actions/setup@82e8b5066385702e477d9dc98f287070493e8abd # v2.8.2
         id: setup
         with:
           ghc-version: ${{ matrix.ghc-version }}
-          # Defaults, added for clarity:
           cabal-version: 'latest'
           cabal-update: true
 
+      - name: Restore GHC from cache
+        if: steps.ghcup-cache.outputs.cache-hit == 'true'
+        run: |
+          echo "$HOME/.ghcup/bin" >> "$GITHUB_PATH"
+          echo "ghc-version=$(ghc --numeric-version)" >> "$GITHUB_OUTPUT"
+          echo "cabal-version=$(cabal --numeric-version)" >> "$GITHUB_OUTPUT"
+          echo "cabal-store=$(cabal path -z --store-dir 2>/dev/null || echo "$HOME/.cabal/store")" >> "$GITHUB_OUTPUT"
+          cabal update
+        id: setup-cached
+
       - name: Configure the build
+        env:
+          GHC_VERSION: ${{ steps.setup.outputs.ghc-version || steps.setup-cached.outputs.ghc-version }}
+          CABAL_VERSION: ${{ steps.setup.outputs.cabal-version || steps.setup-cached.outputs.cabal-version }}
         run: |
           cabal configure --enable-tests --enable-benchmarks --disable-documentation
           cabal build all --dry-run
@@ -44,24 +58,21 @@ jobs:
         uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         id: cache
         env:
-          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version || steps.setup-cached.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version || steps.setup-cached.outputs.cabal-version }}
         with:
-          path: ${{ steps.setup.outputs.cabal-store }}
+          path: ${{ steps.setup.outputs.cabal-store || steps.setup-cached.outputs.cabal-store }}
           key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
           restore-keys: ${{ env.key }}-
 
       - name: Install dependencies
-        # If we had an exact cache hit, the dependencies will be up to date.
         if: steps.cache.outputs.cache-hit != 'true'
         run: cabal build all --only-dependencies
 
-      # Cache dependencies already here, so that we do not have to rebuild them should the subsequent steps fail.
       - name: Save cached dependencies
         uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        # If we had an exact cache hit, trying to save the cache would error because of key clash.
         if: steps.cache.outputs.cache-hit != 'true'
         with:
-          path: ${{ steps.setup.outputs.cabal-store }}
+          path: ${{ steps.setup.outputs.cabal-store || steps.setup-cached.outputs.cabal-store }}
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
       - name: Build

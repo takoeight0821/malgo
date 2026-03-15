@@ -14,7 +14,10 @@ data EvalOpt = EvalOpt
   { srcPath :: FilePath,
     noOptimize :: Bool,
     lambdaLift :: Bool,
-    debugMode :: Bool
+    debugMode :: Bool,
+    target :: Target,
+    evalMode :: EvalMode,
+    useInfer :: Bool
   }
 
 main :: IO ()
@@ -28,8 +31,37 @@ main = do
             { Flag.noOptimize = opt.noOptimize,
               Flag.lambdaLift = opt.lambdaLift,
               Flag.debugMode = opt.debugMode,
-              Flag.testMode = False
+              Flag.testMode = False,
+              Flag.target = opt.target,
+              Flag.evalMode = opt.evalMode,
+              Flag.useInfer = opt.useInfer
             }
+
+targetOpt :: Parser Target
+targetOpt =
+  option
+    (eitherReader parseTarget)
+    ( long "target"
+        <> value TargetEval
+        <> help "Compilation target: eval (default) or scheme"
+    )
+  where
+    parseTarget "eval" = Right TargetEval
+    parseTarget "scheme" = Right TargetScheme
+    parseTarget t = Left $ "Unknown target: " <> t
+
+evalModeOpt :: Parser EvalMode
+evalModeOpt =
+  option
+    (eitherReader parseEvalMode)
+    ( long "eval-mode"
+        <> value EvalSmallStep
+        <> help "Evaluation mode: smallstep (default) or bigstep"
+    )
+  where
+    parseEvalMode "smallstep" = Right EvalSmallStep
+    parseEvalMode "bigstep" = Right EvalBigStep
+    parseEvalMode m = Left $ "Unknown eval-mode: " <> m
 
 evalOpt :: Parser EvalOpt
 evalOpt =
@@ -38,6 +70,9 @@ evalOpt =
       <*> switch (long "no-opt")
       <*> switch (long "lambdalift")
       <*> switch (long "debug-mode")
+      <*> targetOpt
+      <*> evalModeOpt
+      <*> switch (long "infer" <> help "Run type inference pass")
   )
     <**> helper
 

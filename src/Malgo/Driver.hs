@@ -9,13 +9,17 @@ import Effectful
 import Effectful.Error.Static (Error)
 import Effectful.Reader.Static
 import Effectful.State.Static.Local
+import Malgo.Backend.Scheme (SchemePass (..))
+import Malgo.Elaborate (ElaboratePass (..))
 import Malgo.Features
+import Malgo.Infer (InferPass (..))
 import Malgo.Interface (Interface, buildInterface)
 import Malgo.Module
 import Malgo.Parser (ParserPass (..))
 import Malgo.Pass (CompileError, Pass (..), runCompileError)
 import Malgo.Prelude
 import Malgo.Rename
+import Malgo.Sequent.BigStepEval (BigStepEvalPass (..))
 import Malgo.Sequent.Core.Flat (FlatPass (..))
 import Malgo.Sequent.Core.Join (JoinPass (..))
 import Malgo.Sequent.Core.Join qualified as Join
@@ -51,7 +55,8 @@ compileToCore ::
     IOE :> es,
     State (Map ModuleName Interface) :> es,
     State Uniq :> es,
-    Workspace :> es
+    Workspace :> es,
+    Features :> es
   ) =>
   ArtifactPath ->
   Syntax.Module (Malgo Parse) ->
@@ -75,6 +80,8 @@ compileToCore srcPath parsedAst = do
 
 generateSequent ::
   ( IOE :> es,
+    Reader Flag :> es,
+    Features :> es,
     State Uniq :> es,
     Workspace :> es,
     Error CompileError :> es
@@ -84,8 +91,18 @@ generateSequent ::
   Syntax.Module (Malgo Rename) ->
   Eff es Join.Program
 generateSequent srcPath rnState Syntax.Module {..} = do
+  flags <- ask @Flag
+  malgo2025 <- isMalgo2025Enabled
   program <- runReader moduleName do
-    runPass ToFunPass moduleDefinition
+    bindGroup <-
+      if malgo2025
+        then runPass ElaboratePass moduleDefinition
+        else pure moduleDefinition
+    bindGroup' <-
+      if flags.useInfer
+        then runPass InferPass bindGroup
+        else pure bindGroup
+    runPass ToFunPass bindGroup'
       >>= runPass ToCorePass
       >>= runPass FlatPass
       >>= runPass JoinPass
@@ -114,18 +131,27 @@ compileFromAST ::
     IOE :> es,
     State (Map ModuleName Interface) :> es,
     State Uniq :> es,
-    Workspace :> es
+    Workspace :> es,
+    Features :> es
   ) =>
   ArtifactPath ->
   Syntax.Module (Malgo Parse) ->
   Eff es ()
 compileFromAST srcPath parsedAst = do
+  flags <- ask @Flag
   let moduleName = parsedAst.moduleName
   core <- compileToCore srcPath parsedAst
-  let stdin = fmap Just getChar `catch` \(_ :: IOException) -> pure Nothing
-  let stdout = putChar
-  let stderr = hPutChar IO.stderr
-  runPass EvalPass (moduleName, Handlers {..}, core)
+  case flags.target of
+    TargetScheme -> do
+      schemeCode <- runPass SchemePass core
+      liftIO $ putStr $ convertString schemeCode
+    TargetEval -> do
+      let stdin = fmap Just getChar `catch` \(_ :: IOException) -> pure Nothing
+      let stdout = putChar
+      let stderr = hPutChar IO.stderr
+      case flags.evalMode of
+        EvalBigStep -> runPass BigStepEvalPass (moduleName, Handlers {..}, core)
+        EvalSmallStep -> runPass EvalPass (moduleName, Handlers {..}, core)
 
 -- | Read the source file and parse it, then compile.
 compile ::

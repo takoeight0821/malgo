@@ -111,8 +111,11 @@ data Type x
   | TyCon (XTyCon x) (XId x)
   | TyArr (XTyArr x) (Type x) (Type x)
   | TyTuple (XTyTuple x) [Type x]
-  | TyRecord (XTyRecord x) [(Text, Type x)]
+  | TyRecord (XTyRecord x) [(Text, Type x)] (Maybe (Type x))
   | TyBlock (XTyBlock x) (Type x)
+  | TyBottom (XTyBottom x)
+  | TyTilde (XTyTilde x) (Type x)
+  | TyVariant (XTyVariant x) [(Text, [Type x])] (Maybe (Type x))
 
 deriving stock instance (ForallTypeX Eq x, Eq (XId x)) => Eq (Type x)
 
@@ -124,8 +127,13 @@ instance (ToSExpr (XId x)) => ToSExpr (Type x) where
   toSExpr (TyCon _ c) = toSExpr c
   toSExpr (TyArr _ t1 t2) = S.L ["->", toSExpr t1, toSExpr t2]
   toSExpr (TyTuple _ ts) = S.L $ "tuple" : map toSExpr ts
-  toSExpr (TyRecord _ kvs) = S.L $ "record" : map (\(k, v) -> S.L [toSExpr k, toSExpr v]) kvs
+  toSExpr (TyRecord _ kvs rowTail) =
+    S.L $ "record" : map (\(k, v) -> S.L [toSExpr k, toSExpr v]) kvs <> maybe [] (\r -> [S.L ["row", toSExpr r]]) rowTail
   toSExpr (TyBlock _ t) = S.L ["block", toSExpr t]
+  toSExpr (TyBottom _) = S.A $ S.Symbol "_|_"
+  toSExpr (TyTilde _ t) = S.L ["~", toSExpr t]
+  toSExpr (TyVariant _ cases rowTail) =
+    S.L $ "variant" : map (\(k, ts) -> S.L (toSExpr k : map toSExpr ts)) cases <> maybe [] (\r -> [S.L ["row", toSExpr r]]) rowTail
 
 instance (Pretty (XId x)) => Pretty (Type x) where
   pretty (TyApp _ t ts) = sexpr $ ["app", pretty t] <> map pretty ts
@@ -133,8 +141,11 @@ instance (Pretty (XId x)) => Pretty (Type x) where
   pretty (TyCon _ c) = pretty c
   pretty (TyArr _ t1 t2) = sexpr ["->", pretty t1, pretty t2]
   pretty (TyTuple _ ts) = sexpr $ "tuple" : map pretty ts
-  pretty (TyRecord _ kvs) = sexpr $ "record" : map (\(k, v) -> sexpr [pretty k, pretty v]) kvs
+  pretty (TyRecord _ kvs rowTail) = sexpr $ "record" : map (\(k, v) -> sexpr [pretty k, pretty v]) kvs <> maybe [] (\r -> [sexpr ["row", pretty r]]) rowTail
   pretty (TyBlock _ t) = sexpr ["block", pretty t]
+  pretty (TyBottom _) = "_|_"
+  pretty (TyTilde _ t) = sexpr ["~", pretty t]
+  pretty (TyVariant _ cases rowTail) = sexpr $ "variant" : map (\(k, ts) -> sexpr (pretty k : map pretty ts)) cases <> maybe [] (\r -> [sexpr ["row", pretty r]]) rowTail
 
 -- * Expression
 
@@ -153,6 +164,8 @@ data Expr x
   | Seq (XSeq x) (NonEmpty (Stmt x))
   | Parens (XParens x) (Expr x)
   | Codata (XCodata x) [(CoPat x, Expr x)]
+  | Label (XLabel x) (XId x) (Expr x)
+  | Goto (XGoto x) (Expr x) (Expr x)
 
 deriving stock instance (ForallExpX Eq x, ForallClauseX Eq x, ForallPatX Eq x, ForallCoPatX Eq x, ForallStmtX Eq x, ForallTypeX Eq x, Eq (XId x)) => Eq (Expr x)
 
@@ -173,6 +186,8 @@ instance (ToSExpr (XId x)) => ToSExpr (Expr x) where
   toSExpr (Seq _ ss) = S.L $ "seq" : map toSExpr (NE.toList ss)
   toSExpr (Parens _ e) = S.L ["parens", toSExpr e]
   toSExpr (Codata _ clauses) = S.L $ "codata" : map (\(cp, e) -> S.L [toSExpr cp, toSExpr e]) clauses
+  toSExpr (Label _ name body) = S.L ["label", toSExpr name, toSExpr body]
+  toSExpr (Goto _ value label) = S.L ["goto", toSExpr value, toSExpr label]
 
 instance (Pretty (XId x)) => Pretty (Expr x) where
   pretty (Var _ id) = pretty id
@@ -189,6 +204,8 @@ instance (Pretty (XId x)) => Pretty (Expr x) where
   pretty (Seq _ ss) = sexpr $ "seq" : map pretty (toList ss)
   pretty (Parens _ e) = sexpr ["parens", pretty e]
   pretty (Codata _ clauses) = sexpr $ "codata" : map (\(cp, e) -> sexpr [pretty cp, pretty e]) clauses
+  pretty (Label _ name body) = sexpr ["label", pretty name, pretty body]
+  pretty (Goto _ value label) = sexpr ["goto", pretty value, pretty label]
 
 instance (ForallExpX HasRange x) => HasRange (Expr x) where
   range (Var x _) = range x
@@ -205,6 +222,8 @@ instance (ForallExpX HasRange x) => HasRange (Expr x) where
   range (Seq x _) = range x
   range (Parens x _) = range x
   range (Codata x _) = range x
+  range (Label x _ _) = range x
+  range (Goto x _ _) = range x
 
 freevars :: (Ord (XId x)) => Expr x -> Set (XId x)
 freevars (Var _ v) = Set.singleton v
@@ -241,6 +260,8 @@ freevars (Codata _ clauses) = foldMap freevarsClause clauses
   where
     freevarsClause :: (Ord (XId x)) => (CoPat x, Expr x) -> Set (XId x)
     freevarsClause (_, e) = freevars e
+freevars (Label _ name body) = Set.delete name (freevars body)
+freevars (Goto _ value label) = freevars value <> freevars label
 
 -- * Stmt
 

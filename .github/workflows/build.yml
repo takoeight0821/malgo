@@ -12,25 +12,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc-version: ['9.12', '9.10', '9.8']
+        ghc-version: ['9.12', '9.10']
 
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - name: Remove cabal.project.freeze
         run: rm -f cabal.project.freeze
 
-      - name: Set up GHC ${{ matrix.ghc-version }}
-        uses: haskell-actions/setup@82e8b5066385702e477d9dc98f287070493e8abd # v2.8.2
-        id: setup
+      - name: Set up GHCup
+        uses: haskell/ghcup-setup@2860d0b41e2c5aa7d005bcbc2bd2506a09557ed8 # v1.2.2
+        id: ghcup
+
+      - name: Cache GHCup
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
-          ghc-version: ${{ matrix.ghc-version }}
-          # Defaults, added for clarity:
-          cabal-version: 'latest'
-          cabal-update: true
+          path: ${{ steps.ghcup.outputs.basedir }}
+          key: ${{ runner.os }}-ghcup-v2-${{ matrix.ghc-version }}
+
+      - name: Install GHC and cabal
+        id: setup
+        run: |
+          ghcup install ghc ${{ matrix.ghc-version }} --set
+          ghcup install cabal latest --set
+          cabal update
+          echo "cabal-store=$(cabal path -z --store-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Configure the build
         run: |
-          cabal configure --enable-tests --enable-benchmarks --disable-documentation
+          cabal configure --enable-tests --disable-documentation
           cabal build all --dry-run
         # The last step generates dist-newstyle/cache/plan.json for the cache key.
 
@@ -38,21 +47,18 @@ jobs:
         uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         id: cache
         env:
-          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-cabal
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
           restore-keys: ${{ env.key }}-
 
       - name: Install dependencies
-        # If we had an exact cache hit, the dependencies will be up to date.
         if: steps.cache.outputs.cache-hit != 'true'
         run: cabal build all --only-dependencies
 
-      # Cache dependencies already here, so that we do not have to rebuild them should the subsequent steps fail.
       - name: Save cached dependencies
         uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        # If we had an exact cache hit, trying to save the cache would error because of key clash.
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.setup.outputs.cabal-store }}

@@ -89,6 +89,9 @@ toProducer producer@(Select range _ _) = do
 toProducer producer@(Invoke range _) = do
   return <- newTemporalId "return"
   Do range return <$> toStatement producer (C.Label range return)
+toProducer (Fix range name expr) = do
+  body <- toStatement expr (C.Label range name)
+  pure $ C.Mu range name body
 
 convertBranch :: (State Uniq :> es, Reader ModuleName :> es) => C.Consumer -> Branch -> Eff es C.Branch
 convertBranch consumer (Branch range pattern body) = do

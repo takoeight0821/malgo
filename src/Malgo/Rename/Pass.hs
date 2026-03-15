@@ -149,8 +149,11 @@ getTyVars (TyVar _ v)
   | otherwise = pure $ Set.singleton v
 getTyVars (TyArr _ t1 t2) = getTyVars t1 <> getTyVars t2
 getTyVars (TyTuple _ ts) = mconcat $ map getTyVars ts
-getTyVars (TyRecord _ kvs) = mconcat $ map (getTyVars . snd) kvs
+getTyVars (TyRecord _ kvs rowTail) = mconcat (map (getTyVars . snd) kvs) <> maybe (pure mempty) getTyVars rowTail
 getTyVars (TyBlock _ t) = getTyVars t
+getTyVars (TyBottom _) = pure mempty
+getTyVars (TyTilde _ t) = getTyVars t
+getTyVars (TyVariant _ cases rowTail) = mconcat (map (foldMap getTyVars . snd) cases) <> maybe (pure mempty) getTyVars rowTail
 
 -- | Rename a expression.
 -- In addition to name resolution, OpApp recombination based on infix declarations is also performed.
@@ -208,6 +211,12 @@ rnExpr (Ann pos e t) = Ann pos <$> rnExpr e <*> rnType t
 rnExpr (Seq pos ss) = Seq pos <$> rnStmts ss
 rnExpr (Parens pos e) = Parens pos <$> rnExpr e
 rnExpr (Codata pos clauses) = Codata pos <$> traverse rnCoClause clauses
+rnExpr (Label pos name body) = do
+  name' <- resolveName name
+  local (insertVarIdent [(name, Qualified Implicit name')])
+    $ Label pos name'
+    <$> rnExpr body
+rnExpr (Goto pos value label) = Goto pos <$> rnExpr value <*> rnExpr label
 
 -- | Renamed identifier corresponding Boxed literals.
 lookupBox :: (Reader RnEnv :> es, Error RenameError :> es) => Range -> Literal x -> Eff es Id
@@ -226,8 +235,11 @@ rnType (TyVar pos x)
   | otherwise = TyVar pos <$> lookupTypeName pos x
 rnType (TyArr pos t1 t2) = TyArr pos <$> rnType t1 <*> rnType t2
 rnType (TyTuple pos ts) = TyTuple pos <$> traverse rnType ts
-rnType (TyRecord pos kts) = TyRecord pos <$> traverse (bitraverse pure rnType) kts
+rnType (TyRecord pos kts rowTail) = TyRecord pos <$> traverse (bitraverse pure rnType) kts <*> traverse rnType rowTail
 rnType (TyBlock pos t) = TyArr pos (TyTuple pos []) <$> rnType t
+rnType (TyBottom pos) = pure $ TyBottom pos
+rnType (TyTilde pos t) = TyTilde pos <$> rnType t
+rnType (TyVariant pos cases rowTail) = TyVariant pos <$> traverse (bitraverse pure (traverse rnType)) cases <*> traverse rnType rowTail
 
 -- | Rename a clause.
 rnClause ::

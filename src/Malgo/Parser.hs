@@ -28,6 +28,6 @@ instance Pass ParserPass where
       Left err -> throwError err
       Right result -> pure result
 
--- | parse a module using the modular parser system with pragma-based routing
+-- | parse a module using the unified parser entrypoint with pragma feature extraction
 parse :: (IOE :> es, Workspace :> es, Features :> es) => FilePath -> TL.Text -> Eff es (Either (ParseErrorBundle TL.Text Void) (Module (Malgo Parse)))
 parse = parseWithWrapper

@@ -95,11 +95,13 @@ reservedKeywords =
     "exists",
     "forall",
     "foreign",
+    "goto",
     "impl",
     "import",
     "infix",
     "infixl",
     "infixr",
+    "label",
     "let",
     "type",
     "module",
@@ -123,7 +125,7 @@ anyReservedOperator :: Parser es ()
 anyReservedOperator = choice $ map (try . reservedOperator) reservedOperators
 
 reservedOperators :: [TL.Text]
-reservedOperators = ["=>", "=", ":", "|", "->", ";", ".", ",", "!", "#|", "|#"]
+reservedOperators = ["=>", "=", ":", "|", "->", ";", ".", ",", "!", "#|", "|#", "~"]
 
 -- * Combinators
 

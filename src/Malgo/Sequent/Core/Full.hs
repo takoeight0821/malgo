@@ -37,6 +37,8 @@ data Producer where
   Lambda :: Range -> [Name] -> Statement -> Producer
   Object :: Range -> Map Text (Name, Statement) -> Producer
   Do :: Range -> Name -> Statement -> Producer
+  Mu :: Range -> Name -> Statement -> Producer
+  Cocase :: Range -> [(Text, [Name], Statement)] -> Producer
 
 deriving stock instance Show Producer
 
@@ -53,6 +55,8 @@ instance HasRange Producer where
   range (Lambda range _ _) = range
   range (Object range _) = range
   range (Do range _ _) = range
+  range (Mu range _ _) = range
+  range (Cocase range _) = range
 
 instance ToSExpr Producer where
   toSExpr (Var _ name) = toSExpr name
@@ -62,6 +66,9 @@ instance ToSExpr Producer where
   toSExpr (Lambda _ names statement) = S.L [S.A "lambda", S.L $ map toSExpr names, toSExpr statement]
   toSExpr (Object _ kvs) = S.L $ map (\(k, v) -> S.L [toSExpr k, toSExpr v]) $ Map.toList kvs
   toSExpr (Do _ name statement) = S.L [S.A "do", toSExpr name, toSExpr statement]
+  toSExpr (Mu _ name statement) = S.L [S.A "mu", toSExpr name, toSExpr statement]
+  toSExpr (Cocase _ branches) =
+    S.L $ S.A "cocase" : map (\(d, vars, s) -> S.L [toSExpr d, S.L $ map toSExpr vars, toSExpr s]) branches
 
 data Consumer where
   Label :: Range -> Name -> Consumer
@@ -70,6 +77,7 @@ data Consumer where
   Then :: Range -> Name -> Statement -> Consumer
   Finish :: Range -> Consumer
   Select :: Range -> [Branch] -> Consumer
+  Destructor :: Range -> Text -> [Producer] -> Consumer -> Consumer
 
 deriving stock instance Show Consumer
 
@@ -86,11 +94,16 @@ instance ToSExpr Consumer where
   toSExpr (Then _ name statement) = S.L [S.A "then", toSExpr name, toSExpr statement]
   toSExpr (Finish _) = S.A "finish"
   toSExpr (Select _ branches) = S.L $ S.A "select" : map toSExpr branches
+  toSExpr (Destructor _ name producers consumer) =
+    S.L [S.A "destructor", toSExpr name, S.L $ map toSExpr producers, toSExpr consumer]
 
 data Statement where
   Cut :: Producer -> Consumer -> Statement
   Primitive :: Range -> Text -> [Producer] -> Consumer -> Statement
   Invoke :: Range -> Name -> Consumer -> Statement
+  ExternalCall :: Range -> Text -> [Producer] -> Consumer -> Statement
+  BinOp :: Range -> Text -> Producer -> Producer -> Consumer -> Statement
+  Ifz :: Range -> Producer -> Statement -> Statement -> Statement
 
 deriving stock instance (Show Consumer) => Show Statement
 
@@ -104,12 +117,21 @@ instance HasRange Statement where
   range (Cut producer _) = range producer
   range (Primitive range _ _ _) = range
   range (Invoke range _ _) = range
+  range (ExternalCall range _ _ _) = range
+  range (BinOp range _ _ _ _) = range
+  range (Ifz range _ _ _) = range
 
 instance ToSExpr Statement where
   toSExpr (Cut producer consumer) = S.L ["cut", toSExpr producer, toSExpr consumer]
   toSExpr (Primitive _ name producers consumer) =
     S.L [S.A "prim", toSExpr name, S.L $ map toSExpr producers, toSExpr consumer]
   toSExpr (Invoke _ name consumer) = S.L ["invoke", toSExpr name, toSExpr consumer]
+  toSExpr (ExternalCall _ name producers consumer) =
+    S.L [S.A "external-call", toSExpr name, S.L $ map toSExpr producers, toSExpr consumer]
+  toSExpr (BinOp _ op lhs rhs consumer) =
+    S.L [S.A "binop", toSExpr op, toSExpr lhs, toSExpr rhs, toSExpr consumer]
+  toSExpr (Ifz _ cond then_ else_) =
+    S.L [S.A "ifz", toSExpr cond, toSExpr then_, toSExpr else_]
 
 data Branch = Branch
   { range :: Range,

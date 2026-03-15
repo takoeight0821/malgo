@@ -1,14 +1,30 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Malgo.Sequent.Eval (Value (..), EvalError (..), Env (..), emptyEnv, Handlers (..), evalProgram, EvalPass (..)) where
+module Malgo.Sequent.Eval
+  ( Value (..),
+    EvalError (..),
+    Env (..),
+    emptyEnv,
+    extendEnv,
+    extendEnv',
+    lookupEnv,
+    Handlers (..),
+    evalProgram,
+    EvalPass (..),
+    Toplevels,
+    fetchPrimitive,
+    valueToText,
+    match,
+    isZeroValue,
+  )
+where
 
 import Control.Exception (Exception)
 import Data.IntMap.Strict qualified as IntMap
 import Data.Map qualified as Map
-import Data.Maybe (fromJust, isJust)
+import Data.Maybe (fromJust)
 import Data.Text qualified as T
-import Data.Traversable (for)
 import Effectful
 import Effectful.Error.Static
 import Effectful.Reader.Static
@@ -40,6 +56,7 @@ data Value where
   Struct :: Tag -> [Value] -> Value
   Function :: Env -> [Name] -> Statement -> Value
   Record :: Env -> Map Text (Name, Statement) -> Value
+  Codata :: Env -> [(Text, [Name], Statement)] -> Value
   Consumer ::
     ( forall es.
       ( Error EvalError :> es,
@@ -61,6 +78,8 @@ instance Show Value where
   showsPrec d (Record _env fields) =
     let fields' = fmap (\(name, statement) -> (name, sShow @_ @String statement)) fields
      in showParen (d > 10) $ showString "Record <env> " . showsPrec 11 fields'
+  showsPrec d (Codata _env branches) =
+    showParen (d > 10) $ showString "Codata <env> " . showsPrec 11 (map (\(n, vs, _) -> (n, vs)) branches)
   showsPrec d (Consumer _) = showParen (d > 10) $ showString "Consumer <consumer>"
 
 instance Eq Value where
@@ -184,6 +203,10 @@ evalProgram (Program {definitions}) = do
     Nothing -> pure () -- No main function
 
 evalStatement :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Statement -> Eff es ()
+evalStatement (Cut (Mu _ name stmt) consumer) = do
+  consumerValue <- lookupEnv (range stmt) consumer
+  local (extendEnv name consumerValue)
+    $ evalStatement stmt
 evalStatement (Cut producer consumer) = do
   value <- evalProducer producer
   jump (range producer) consumer value
@@ -201,9 +224,23 @@ evalStatement (Invoke range name consumer) = do
   covalue <- lookupEnv range consumer
   local (extendEnv return covalue) do
     evalStatement statement
+evalStatement (ExternalCall range name producers consumer) = do
+  values <- traverse evalProducer producers
+  result <- fetchPrimitive name range values
+  jump range consumer result
+evalStatement (BinOp range op lhs rhs consumer) = do
+  lhsVal <- evalProducer lhs
+  rhsVal <- evalProducer rhs
+  result <- fetchPrimitive op range [lhsVal, rhsVal]
+  jump range consumer result
+evalStatement (Ifz _ cond thenBranch elseBranch) = do
+  condVal <- evalProducer cond
+  if isZeroValue condVal
+    then evalStatement thenBranch
+    else evalStatement elseBranch
 {-# INLINE evalStatement #-}
 
-evalProducer :: (Error EvalError :> es, Reader Env :> es) => Producer -> Eff es Value
+evalProducer :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Producer -> Eff es Value
 evalProducer (Var range name) = lookupEnv range name
 evalProducer (Literal _ literal) = pure $ Immediate literal
 evalProducer (Construct range tag producers consumers) = do
@@ -216,6 +253,14 @@ evalProducer (Lambda _ parameters statement) = do
 evalProducer (Object _ fields) = do
   env <- ask @Env
   pure $ Record env fields
+evalProducer (Mu _ name stmt) = do
+  ref <- newIORef (Struct Tuple [])
+  local (extendEnv name (Consumer $ \v -> writeIORef ref v))
+    $ evalStatement stmt
+  readIORef ref
+evalProducer (Cocase _ branches) = do
+  env <- ask @Env
+  pure $ Codata env branches
 {-# INLINE evalProducer #-}
 
 evalConsumer :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Consumer -> Value -> Eff es ()
@@ -246,6 +291,18 @@ evalConsumer (Then _ name statement) given = do
   local (extendEnv name given) do
     evalStatement statement
 evalConsumer (Finish _) _ = pure ()
+evalConsumer (Destructor range dName producers returnName) given = do
+  case given of
+    Codata env branches -> do
+      case find (\(n, _, _) -> n == dName) branches of
+        Just (_, vars, body) -> do
+          prodValues <- traverse evalProducer producers
+          retConsumer <- lookupEnv range returnName
+          let allValues = prodValues <> [retConsumer]
+          local (const $ extendEnv' (zip vars allValues) env)
+            $ evalStatement body
+        Nothing -> throwError $ NoSuchField range dName given
+    _ -> throwError $ NoMatch range given
 evalConsumer (Select range branches) given = go branches
   where
     go [] = throwError $ NoMatch range given
@@ -341,7 +398,15 @@ valueToText (Struct (Tag name) []) = name
 valueToText (Struct (Tag name) values) = name <> "(" <> T.intercalate ", " (map valueToText values) <> ")"
 valueToText (Function {}) = "<function>"
 valueToText (Record {}) = "<record>"
+valueToText (Codata {}) = "<codata>"
 valueToText (Consumer _) = "<consumer>"
+
+isZeroValue :: Value -> Bool
+isZeroValue (Immediate (Int32 0)) = True
+isZeroValue (Immediate (Int64 0)) = True
+isZeroValue (Immediate (Float 0)) = True
+isZeroValue (Immediate (Double 0)) = True
+isZeroValue _ = False
 
 fetchPrimitive :: (Error EvalError :> es, Reader Handlers :> es, IOE :> es) => Text -> Range -> [Value] -> Eff es Value
 fetchPrimitive "malgo_unsafe_cast" = \cases
@@ -350,7 +415,9 @@ fetchPrimitive "malgo_unsafe_cast" = \cases
 fetchPrimitive name | "malgo_add_" `T.isPrefixOf` name = binary name addValue
 fetchPrimitive name | "malgo_sub_" `T.isPrefixOf` name = binary name subValue
 fetchPrimitive name | "malgo_mul_" `T.isPrefixOf` name = binary name mulValue
--- TODO: add "malgo_div_" and "malgo_mod_"
+fetchPrimitive name | "malgo_div_" `T.isPrefixOf` name = binary name divValue
+fetchPrimitive name | "malgo_mod_" `T.isPrefixOf` name = binary name modValue
+fetchPrimitive name | "malgo_neg_" `T.isPrefixOf` name = unary name negValue
 fetchPrimitive name | "malgo_eq_" `T.isPrefixOf` name = binary name eqValue
 fetchPrimitive name | "malgo_ne_" `T.isPrefixOf` name = binary name neValue
 fetchPrimitive name | "malgo_lt_" `T.isPrefixOf` name = binary name ltValue
@@ -368,11 +435,37 @@ fetchPrimitive "malgo_newline" = \_ _ -> do
   Handlers {stdout} <- ask @Handlers
   liftIO $ stdout '\n'
   pure $ Struct Tuple []
+fetchPrimitive "malgo_print_char" = \cases
+  _ [Immediate (Char c)] -> do
+    Handlers {stdout} <- ask @Handlers
+    liftIO $ stdout c
+    pure $ Struct Tuple []
+  range values -> throwError $ InvalidArguments range "malgo_print_char" values
 fetchPrimitive "malgo_get_contents" = \_ _ -> do
   Immediate . String <$> getContents
 fetchPrimitive "malgo_string_append" = \cases
   _ [Immediate (String a), Immediate (String b)] -> pure $ Immediate $ String $ a <> b
   range values -> throwError $ InvalidArguments range "malgo_string_append" values
+fetchPrimitive "malgo_string_length" = \cases
+  _ [Immediate (String s)] -> pure $ Immediate $ Int64 $ fromIntegral $ T.length s
+  range values -> throwError $ InvalidArguments range "malgo_string_length" values
+fetchPrimitive "malgo_string_at" = \cases
+  range [Immediate (Int64 i), Immediate (String s)] ->
+    let idx = fromIntegral i
+     in if idx >= 0 && idx < T.length s
+          then pure $ Immediate $ Char $ T.index s idx
+          else throwError $ InvalidArguments range "malgo_string_at" [Immediate (Int64 i), Immediate (String s)]
+  range values -> throwError $ InvalidArguments range "malgo_string_at" values
+fetchPrimitive "malgo_string_cons" = \cases
+  _ [Immediate (Char c), Immediate (String s)] -> pure $ Immediate $ String $ T.cons c s
+  range values -> throwError $ InvalidArguments range "malgo_string_cons" values
+fetchPrimitive "malgo_substring" = \cases
+  _ [Immediate (String s), Immediate (Int64 start), Immediate (Int64 end)] ->
+    pure $ Immediate $ String $ T.take (fromIntegral (end - start)) $ T.drop (fromIntegral start) s
+  range values -> throwError $ InvalidArguments range "malgo_substring" values
+fetchPrimitive "malgo_string_reverse" = \cases
+  _ [Immediate (String s)] -> pure $ Immediate $ String $ T.reverse s
+  range values -> throwError $ InvalidArguments range "malgo_string_reverse" values
 fetchPrimitive "malgo_print" = \cases
   _ [value] -> do
     Handlers {stdout} <- ask @Handlers
@@ -380,6 +473,32 @@ fetchPrimitive "malgo_print" = \cases
     putTextTo stdout text
     pure $ Struct Tuple []
   range values -> throwError $ InvalidArguments range "malgo_print" values
+fetchPrimitive "malgo_str_len" = fetchPrimitive "malgo_string_length"
+fetchPrimitive "malgo_str_at" = \cases
+  range [Immediate (String s), Immediate (Int64 i)] ->
+    fetchPrimitive "malgo_string_at" range [Immediate (Int64 i), Immediate (String s)]
+  range values -> throwError $ InvalidArguments range "malgo_str_at" values
+fetchPrimitive "malgo_str_sub" = \cases
+  _ [Immediate (String s), Immediate (Int64 start), Immediate (Int64 len)] ->
+    pure $ Immediate $ String $ T.take (fromIntegral len) $ T.drop (fromIntegral start) s
+  range values -> throwError $ InvalidArguments range "malgo_str_sub" values
+fetchPrimitive "malgo_str_to_int" = \cases
+  range [Immediate (String s)] -> case reads (T.unpack s) of
+    [(n, "")] -> pure $ Immediate $ Int64 n
+    _ -> throwError $ InvalidArguments range "malgo_str_to_int" [Immediate (String s)]
+  range values -> throwError $ InvalidArguments range "malgo_str_to_int" values
+fetchPrimitive "malgo_int_to_str" = \cases
+  _ [Immediate (Int64 n)] -> pure $ Immediate $ String $ T.pack $ show n
+  range values -> throwError $ InvalidArguments range "malgo_int_to_str" values
+fetchPrimitive "malgo_rune_to_str" = \cases
+  _ [Immediate (Char c)] -> pure $ Immediate $ String $ T.singleton c
+  range values -> throwError $ InvalidArguments range "malgo_rune_to_str" values
+fetchPrimitive "malgo_int_to_rune" = \cases
+  _ [Immediate (Int64 n)] -> pure $ Immediate $ Char $ toEnum $ fromIntegral n
+  range values -> throwError $ InvalidArguments range "malgo_int_to_rune" values
+fetchPrimitive "malgo_rune_to_int" = \cases
+  _ [Immediate (Char c)] -> pure $ Immediate $ Int64 $ fromIntegral $ fromEnum c
+  range values -> throwError $ InvalidArguments range "malgo_rune_to_int" values
 fetchPrimitive name = \range values -> throwError $ PrimitiveNotImplemented range name values
 
 getContents :: (IOE :> es, Reader Handlers :> es) => Eff es Text
@@ -428,6 +547,29 @@ mulValue _ (Immediate (Int64 a)) (Immediate (Int64 b)) = pure $ Immediate $ Int6
 mulValue _ (Immediate (Float a)) (Immediate (Float b)) = pure $ Immediate $ Float $ a * b
 mulValue _ (Immediate (Double a)) (Immediate (Double b)) = pure $ Immediate $ Double $ a * b
 mulValue range a b = throwError $ InvalidArguments range "malgo_mul" [a, b]
+
+divValue :: (Error EvalError :> es) => Range -> Value -> Value -> Eff es Value
+divValue _ (Immediate (Int32 a)) (Immediate (Int32 b)) = pure $ Immediate $ Int32 $ a `div` b
+divValue _ (Immediate (Int64 a)) (Immediate (Int64 b)) = pure $ Immediate $ Int64 $ a `div` b
+divValue _ (Immediate (Float a)) (Immediate (Float b)) = pure $ Immediate $ Float $ a / b
+divValue _ (Immediate (Double a)) (Immediate (Double b)) = pure $ Immediate $ Double $ a / b
+divValue range a b = throwError $ InvalidArguments range "malgo_div" [a, b]
+
+modValue :: (Error EvalError :> es) => Range -> Value -> Value -> Eff es Value
+modValue _ (Immediate (Int32 a)) (Immediate (Int32 b)) = pure $ Immediate $ Int32 $ a `mod` b
+modValue _ (Immediate (Int64 a)) (Immediate (Int64 b)) = pure $ Immediate $ Int64 $ a `mod` b
+modValue range a b = throwError $ InvalidArguments range "malgo_mod" [a, b]
+
+unary :: (Error EvalError :> es) => Text -> (Range -> Value -> Eff es Value) -> Range -> [Value] -> Eff es Value
+unary _ f range [a] = f range a
+unary name _ range values = throwError $ InvalidArguments range name values
+
+negValue :: (Error EvalError :> es) => Range -> Value -> Eff es Value
+negValue _ (Immediate (Int32 a)) = pure $ Immediate $ Int32 $ negate a
+negValue _ (Immediate (Int64 a)) = pure $ Immediate $ Int64 $ negate a
+negValue _ (Immediate (Float a)) = pure $ Immediate $ Float $ negate a
+negValue _ (Immediate (Double a)) = pure $ Immediate $ Double $ negate a
+negValue range a = throwError $ InvalidArguments range "malgo_neg" [a]
 
 eqValue :: Range -> Value -> Value -> Eff es Value
 eqValue _ v1 v2 = if v1 == v2 then pure $ Immediate $ Int32 1 else pure $ Immediate $ Int32 0

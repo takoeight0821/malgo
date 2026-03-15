@@ -16,6 +16,7 @@ import Control.Lens
 import Data.Map qualified as Map
 import Data.SCargot.Repr.Basic qualified as S
 import Data.Store (Store)
+import Data.Traversable (for)
 import Effectful
 import Effectful.Reader.Static (Reader)
 import Effectful.State.Static.Local
@@ -67,6 +68,20 @@ joinStatement (Flat.Primitive range name producers return) = do
 joinStatement (Flat.Invoke range name return) = do
   return <- joinConsumer return
   pure $ Invoke range name return
+joinStatement (Flat.ExternalCall range name producers return) = do
+  producers <- traverse joinProducer producers
+  return <- joinConsumer return
+  pure $ ExternalCall range name producers return
+joinStatement (Flat.BinOp range op lhs rhs return) = do
+  lhs <- joinProducer lhs
+  rhs <- joinProducer rhs
+  return <- joinConsumer return
+  pure $ BinOp range op lhs rhs return
+joinStatement (Flat.Ifz range cond then_ else_) = do
+  cond <- joinProducer cond
+  then_ <- runJoin $ joinStatement then_
+  else_ <- runJoin $ joinStatement else_
+  pure $ Ifz range cond then_ else_
 
 joinProducer :: (State Uniq :> es, Reader ModuleName :> es, Writer (Endo Statement) :> es) => Flat.Producer -> Eff es Producer
 joinProducer (Flat.Var range name) = pure $ Var range name
@@ -81,6 +96,14 @@ joinProducer (Flat.Lambda range names statement) = do
 joinProducer (Flat.Object range fields) = do
   fields <- traverseOf (traverse . _2) (runJoin . joinStatement) fields
   pure $ Object range fields
+joinProducer (Flat.Mu range name statement) = do
+  statement <- runJoin $ joinStatement statement
+  pure $ Mu range name statement
+joinProducer (Flat.Cocase range branches) = do
+  branches <- for branches \(d, vars, s) -> do
+    s' <- runJoin $ joinStatement s
+    pure (d, vars, s')
+  pure $ Cocase range branches
 
 joinConsumer :: (State Uniq :> es, Reader ModuleName :> es, Writer (Endo Statement) :> es) => Flat.Consumer -> Eff es Name
 joinConsumer (Flat.Label _ name) = pure name
@@ -98,6 +121,10 @@ joinConsumer (Flat.Finish range) = tellJoin range "finish" $ Finish range
 joinConsumer (Flat.Select range branches) = do
   branches <- traverse joinBranch branches
   tellJoin range "select" $ Select range branches
+joinConsumer (Flat.Destructor range name producers return) = do
+  producers <- traverse joinProducer producers
+  return <- joinConsumer return
+  tellJoin range "destructor" $ Destructor range name producers return
 
 joinConsumer' :: (State Uniq :> es, Reader ModuleName :> es, Writer (Endo Statement) :> es) => Flat.Consumer -> Eff es Consumer
 joinConsumer' (Flat.Label range name) = pure (Label range name)
@@ -115,6 +142,10 @@ joinConsumer' (Flat.Finish range) = pure $ Finish range
 joinConsumer' (Flat.Select range branches) = do
   branches <- traverse joinBranch branches
   pure $ Select range branches
+joinConsumer' (Flat.Destructor range name producers return) = do
+  producers <- traverse joinProducer producers
+  return <- joinConsumer return
+  pure $ Destructor range name producers return
 
 joinBranch :: (State Uniq :> es, Reader ModuleName :> es) => Flat.Branch -> Eff es Branch
 joinBranch (Flat.Branch range pattern statement) = do
@@ -144,6 +175,8 @@ data Producer where
   Construct :: Range -> Tag -> [Producer] -> [Name] -> Producer
   Lambda :: Range -> [Name] -> Statement -> Producer
   Object :: Range -> Map Text (Name, Statement) -> Producer
+  Mu :: Range -> Name -> Statement -> Producer
+  Cocase :: Range -> [(Text, [Name], Statement)] -> Producer
 
 deriving stock instance Show Producer
 
@@ -159,6 +192,8 @@ instance HasRange Producer where
   range (Construct range _ _ _) = range
   range (Lambda range _ _) = range
   range (Object range _) = range
+  range (Mu range _ _) = range
+  range (Cocase range _) = range
 
 instance ToSExpr Producer where
   toSExpr (Var _ name) = toSExpr name
@@ -167,6 +202,9 @@ instance ToSExpr Producer where
     S.L [S.A "construct", toSExpr tag, S.L $ map toSExpr producers, S.L $ map toSExpr consumers]
   toSExpr (Lambda _ names statement) = S.L [S.A "lambda", S.L $ map toSExpr names, toSExpr statement]
   toSExpr (Object _ kvs) = S.L $ map (\(k, v) -> S.L [toSExpr k, toSExpr v]) $ Map.toList kvs
+  toSExpr (Mu _ name statement) = S.L [S.A "mu", toSExpr name, toSExpr statement]
+  toSExpr (Cocase _ branches) =
+    S.L $ S.A "cocase" : map (\(d, vars, s) -> S.L [toSExpr d, S.L $ map toSExpr vars, toSExpr s]) branches
 
 data Consumer where
   Label :: Range -> Name -> Consumer
@@ -175,6 +213,7 @@ data Consumer where
   Then :: Range -> Name -> Statement -> Consumer
   Finish :: Range -> Consumer
   Select :: Range -> [Branch] -> Consumer
+  Destructor :: Range -> Text -> [Producer] -> Name -> Consumer
 
 deriving stock instance Show Consumer
 
@@ -191,12 +230,17 @@ instance ToSExpr Consumer where
   toSExpr (Then _ name statement) = S.L [S.A "then", toSExpr name, toSExpr statement]
   toSExpr (Finish _) = S.A "finish"
   toSExpr (Select _ branches) = S.L $ S.A "select" : map toSExpr branches
+  toSExpr (Destructor _ name producers consumer) =
+    S.L [S.A "destructor", toSExpr name, S.L $ map toSExpr producers, toSExpr consumer]
 
 data Statement where
   Cut :: Producer -> Name -> Statement
   Join :: Range -> Name -> Consumer -> Statement -> Statement
   Primitive :: Range -> Text -> [Producer] -> Name -> Statement
   Invoke :: Range -> Name -> Name -> Statement
+  ExternalCall :: Range -> Text -> [Producer] -> Name -> Statement
+  BinOp :: Range -> Text -> Producer -> Producer -> Name -> Statement
+  Ifz :: Range -> Producer -> Statement -> Statement -> Statement
 
 deriving stock instance Show Statement
 
@@ -211,6 +255,9 @@ instance HasRange Statement where
   range (Join x _ _ _) = range x
   range (Primitive range _ _ _) = range
   range (Invoke range _ _) = range
+  range (ExternalCall range _ _ _) = range
+  range (BinOp range _ _ _ _) = range
+  range (Ifz range _ _ _) = range
 
 instance ToSExpr Statement where
   toSExpr (Cut producer consumer) = S.L ["cut", toSExpr producer, toSExpr consumer]
@@ -218,6 +265,12 @@ instance ToSExpr Statement where
   toSExpr (Primitive _ name producers consumer) =
     S.L [S.A "prim", toSExpr name, S.L $ map toSExpr producers, toSExpr consumer]
   toSExpr (Invoke _ name consumer) = S.L ["invoke", toSExpr name, toSExpr consumer]
+  toSExpr (ExternalCall _ name producers consumer) =
+    S.L [S.A "external-call", toSExpr name, S.L $ map toSExpr producers, toSExpr consumer]
+  toSExpr (BinOp _ op lhs rhs consumer) =
+    S.L [S.A "binop", toSExpr op, toSExpr lhs, toSExpr rhs, toSExpr consumer]
+  toSExpr (Ifz _ cond then_ else_) =
+    S.L [S.A "ifz", toSExpr cond, toSExpr then_, toSExpr else_]
 
 data Branch = Branch
   { range :: Range,

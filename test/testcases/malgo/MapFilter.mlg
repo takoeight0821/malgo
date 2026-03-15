@@ -1,0 +1,48 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+infixl 6 (+)
+def (+) = { x y -> addInt32 x y }
+
+infixl 7 (*)
+def (*) = { x y -> mulInt32 x y }
+
+def showList : List Int32 -> String
+def showList =
+  { Nil -> "[]",
+    xs -> appendString "[" (showTail xs)
+  }
+
+def showTail : List Int32 -> String
+def showTail =
+  { Nil -> "]",
+    (Cons x Nil) -> appendString (toStringInt32 x) "]",
+    (Cons x xs) -> appendString (toStringInt32 x) (appendString ", " (showTail xs))
+  }
+
+def main = {
+  let xs = [1, 2, 3, 4, 5];
+
+  -- map: double each element
+  let doubled = mapList { x -> x * 2 } xs;
+  putStr "map (*2) [1..5] = ";
+  putStrLn (showList doubled);
+
+  -- filter: keep odds
+  let odds = filter { x -> not (eqInt32 (modInt32 x 2) 0) } xs;
+  putStr "filter odd [1..5] = ";
+  putStrLn (showList odds);
+
+  -- foldl: sum
+  let total = foldl addInt32 0 xs;
+  putStr "sum [1..5] = ";
+  putStrLn (toStringInt32 total);
+
+  -- length
+  putStr "length [1..5] = ";
+  putStrLn (toStringInt32 (length xs));
+
+  -- reverse
+  putStr "reverse [1..5] = ";
+  putStrLn (showList (reverse xs))
+}

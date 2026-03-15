@@ -1,0 +1,55 @@
+module {..} = import "../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../runtime/malgo/Prelude.mlg"
+
+infix 4 (==)
+def (==) = { x y -> eqInt64 x y }
+
+infixl 6 (+)
+def (+) = { x y -> addInt64 x y }
+
+infixl 6 (-)
+def (-) = { x y -> subInt64 x y }
+
+infixl 7 (*)
+def (*) = { x y -> mulInt64 x y }
+
+infixl 7 (/)
+def (/) = { x y -> divInt64 x y }
+
+infixl 7 (%)
+def (%) = { x y -> modInt64 x y }
+
+def collatzStep : Int64 -> Int64
+def collatzStep = { n ->
+  if (n % 2i64 == 0i64)
+    { n / 2i64 }
+    { n * 3i64 + 1i64 }
+}
+
+def collatzLength : Int64 -> Int64
+def collatzLength = { n ->
+  if (n == 1i64)
+    { 0i64 }
+    { 1i64 + collatzLength (collatzStep n) }
+}
+
+def collatzSequence : Int64 -> List Int64
+def collatzSequence = { n ->
+  if (n == 1i64)
+    { [1i64] }
+    { Cons n (collatzSequence (collatzStep n)) }
+}
+
+def showInt64List : List Int64 -> String
+def showInt64List =
+  { Nil -> "",
+    (Cons x Nil) -> toStringInt64 x,
+    (Cons x xs) -> appendString (toStringInt64 x) (appendString " -> " (showInt64List xs))
+  }
+
+def main = {
+  putStr "Collatz(27): ";
+  putStrLn (showInt64List (collatzSequence 27i64));
+  putStr "Length: ";
+  putStrLn (toStringInt64 (collatzLength 27i64))
+}

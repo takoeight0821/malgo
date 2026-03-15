@@ -6,24 +6,19 @@ import Effectful (Eff, IOE, type (:>))
 import Malgo.Features (Features, addFeatures, parseFeatures)
 import Malgo.Module (Workspace)
 import Malgo.Parser.CStyle (parseCStyle)
-import Malgo.Parser.Regular (parseRegular)
 import Malgo.Prelude
 import Malgo.Syntax
 import Malgo.Syntax.Extension
 import Text.Megaparsec (ParseErrorBundle)
 
--- | parseWithWrapper detects pragmas and routes to appropriate parser
+-- | parseWithWrapper extracts pragma features and parses with the unified parser entrypoint.
 parseWithWrapper :: (IOE :> es, Workspace :> es, Features :> es) => FilePath -> TL.Text -> Eff es (Either (ParseErrorBundle TL.Text Void) (Module (Malgo Parse)))
 parseWithWrapper srcPath text = do
   let pragmas = extractPragmas text
   let knownPragmas = filterKnownPragmas pragmas
   let features = parseFeatures knownPragmas
   addFeatures features
-
-  -- Check if #c-style-apply pragma is present
-  if "c-style-apply" `elem` pragmas
-    then parseCStyle srcPath text
-    else parseRegular srcPath text
+  parseCStyle srcPath text
 
 -- | Filter out unknown pragmas to avoid parse errors
 filterKnownPragmas :: [Text] -> [Text]
@@ -32,6 +27,8 @@ filterKnownPragmas = filter isKnownPragma
     isKnownPragma pragma =
       pragma
         == "c-style-apply"
+        || pragma
+        == "malgo-2025"
         || "experimental-"
         `T.isPrefixOf` pragma
 

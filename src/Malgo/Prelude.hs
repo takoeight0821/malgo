@@ -78,6 +78,8 @@ module Malgo.Prelude
 
     -- * Flag
     Flag (..),
+    Target (..),
+    EvalMode (..),
 
     -- * Range
     Range (..),
@@ -232,11 +234,22 @@ modifyIORef ref f = liftIO $ IORef.modifyIORef ref f
 writeIORef :: (MonadIO m) => IORef a -> a -> m ()
 writeIORef ref a = liftIO $ IORef.writeIORef ref a
 
+-- | Compilation target backend.
+data Target = TargetEval | TargetScheme
+  deriving stock (Eq, Show)
+
+-- | Evaluation mode (small-step CPS or big-step).
+data EvalMode = EvalSmallStep | EvalBigStep
+  deriving stock (Eq, Show)
+
 data Flag = Flag
   { noOptimize :: Bool,
     lambdaLift :: Bool,
     debugMode :: Bool,
-    testMode :: Bool
+    testMode :: Bool,
+    target :: Target,
+    evalMode :: EvalMode,
+    useInfer :: Bool
   }
 
 instance Hashable Megaparsec.Pos

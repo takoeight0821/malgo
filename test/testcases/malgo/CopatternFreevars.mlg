@@ -1,0 +1,23 @@
+#malgo-2025
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- Test that freevars correctly handles copattern bindings.
+-- The variable `x` in `#(x)` should be bound, not free.
+-- This tests that makeBindGroup's dependency analysis is correct
+-- when codata with apply patterns shadows outer variables.
+
+type Stream(a) = { head: a, tail: Stream(a) }
+
+def x = 100
+
+def mkStream = {
+  #(x).head -> x,
+  #(x).tail -> mkStream(x)
+}
+
+def main = { _ ->
+  printString(toStringInt32(mkStream(42).head));
+  printString(",");
+  printString(toStringInt32(mkStream(42).tail.head))
+}

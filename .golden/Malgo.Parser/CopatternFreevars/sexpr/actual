@@ -1,0 +1,32 @@
+(module
+   "test/testcases/malgo/CopatternFreevars.mlg"
+   ((import "runtime/malgo/Builtin.mlg" all)
+      (import "runtime/malgo/Prelude.mlg" all)
+      (type Stream (a) (record (head a) (tail (app Stream (a)))))
+      (def x (int32 100))
+      (def
+         mkStream
+         (codata
+            ((project (apply # x) "head") x)
+            ((project (apply # x) "tail") (apply mkStream x))))
+      (def
+         main
+         (fn
+            ((clause
+                (_)
+                (seq
+                   (do
+                      (apply
+                         printString
+                         (apply
+                            toStringInt32
+                            (project (apply mkStream (int32 42)) "head"))))
+                   (do (apply printString (string ",")))
+                   (do
+                      (apply
+                         printString
+                         (apply
+                            toStringInt32
+                            (project
+                               (project (apply mkStream (int32 42)) "tail")
+                               "head")))))))))))

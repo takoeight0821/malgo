@@ -259,7 +259,19 @@ freevars (Parens _ e) = freevars e
 freevars (Codata _ clauses) = foldMap freevarsClause clauses
   where
     freevarsClause :: (Ord (XId x)) => (CoPat x, Expr x) -> Set (XId x)
-    freevarsClause (_, e) = freevars e
+    freevarsClause (copat, e) = freevars e Set.\\ copatBoundVars copat
+    copatBoundVars :: (Ord (XId x)) => CoPat x -> Set (XId x)
+    copatBoundVars (HoleP _) = mempty
+    copatBoundVars (ApplyP _ cp pat) = copatBoundVars cp <> patBoundVars pat
+    copatBoundVars (ProjectP _ cp _) = copatBoundVars cp
+    patBoundVars :: (Ord (XId x)) => Pat x -> Set (XId x)
+    patBoundVars (VarP _ x) = Set.singleton x
+    patBoundVars (ConP _ _ ps) = foldMap patBoundVars ps
+    patBoundVars (TupleP _ ps) = foldMap patBoundVars ps
+    patBoundVars (RecordP _ kps) = foldMap (patBoundVars . snd) kps
+    patBoundVars (ListP _ ps) = foldMap patBoundVars ps
+    patBoundVars UnboxedP {} = mempty
+    patBoundVars BoxedP {} = mempty
 freevars (Label _ name body) = Set.delete name (freevars body)
 freevars (Goto _ value label) = freevars value <> freevars label
 

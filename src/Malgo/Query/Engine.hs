@@ -90,11 +90,14 @@ handleFetch db = \case
         -- Re-inject QueryDB so RenamePass can call loadInterface for imports.
         result@(_, rnState) <- runQueryDB db $ runPass RenamePass (parsedAst, rnEnv)
         liftIO $ modifyIORef db.cacheRenamedModule $ Map.insert modName result
-        -- Build and persist the interface
-        srcPath <- getModulePath modName
+        -- Build and persist the interface (best-effort: skip save if path is unavailable,
+        -- e.g. for in-memory LSP sources whose paths lie outside the workspace root).
         let inf = buildInterface modName rnState
-        save srcPath ".mlgi" (ViaStore inf)
         liftIO $ modifyIORef db.cacheModuleInterface $ Map.insert modName inf
+        mSrcPath <- tryGetModulePath modName
+        case mSrcPath of
+          Just srcPath -> save srcPath ".mlgi" (ViaStore inf)
+          Nothing -> pure ()
         pure result
   ModuleInterface modName -> do
     cache <- liftIO $ readIORef db.cacheModuleInterface
@@ -166,7 +169,7 @@ tryLoadInterfaceFromDisk modName = do
         else pure Nothing
 
 -- | Try to get the ArtifactPath for a module, returning 'Nothing' if not found.
-tryGetModulePath :: (IOE :> es, Workspace :> es) => ModuleName -> Eff es (Maybe ArtifactPath)
+tryGetModulePath :: (IOE :> es) => ModuleName -> Eff es (Maybe ArtifactPath)
 tryGetModulePath modName = do
   result <- liftIO $ try @SomeException $ do
     runEff $ runWorkspaceOnPwd do

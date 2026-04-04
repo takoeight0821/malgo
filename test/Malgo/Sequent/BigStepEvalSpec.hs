@@ -1,4 +1,4 @@
-module Malgo.Sequent.BigStepEvalSpec (spec) where
+module Malgo.Sequent.BigStepEvalSpec (specWith) where
 
 import Control.Exception (SomeException, try)
 import Effectful
@@ -17,24 +17,21 @@ import System.Directory
 import System.FilePath
 import Test.Hspec
 
-spec :: Spec
-spec = parallel do
-  (builtin, prelude) <- runIO do
-    builtin <- setupEvalBuiltin
-    prelude <- setupEvalPrelude
-    pure (builtin, prelude)
+specWith :: ArtifactPath -> ArtifactPath -> Spec
+specWith builtin prelude = parallel do
   testcases <- runIO do
     files <- listDirectory testcaseDir
     pure $ filter (isExtensionOf "mlg") files
 
   describe "golden" do
     for_ testcases \testcase -> do
-      golden (takeBaseName testcase) (driveBigStepEval builtin prelude (testcaseDir </> testcase))
+      (moduleName, program) <- runIO $ compileTestCase builtin prelude (testcaseDir </> testcase)
+      golden (takeBaseName testcase) $ runEval bigStepEvalProgram moduleName program
 
   describe "consistency" do
     for_ testcases \testcase -> do
+      (moduleName, program) <- runIO $ compileTestCase builtin prelude (testcaseDir </> testcase)
       it (takeBaseName testcase <> " matches small-step") do
-        (moduleName, program) <- compileTestCase builtin prelude (testcaseDir </> testcase)
         smallStepResult <- try @SomeException $ runEval evalProgram moduleName program
         bigStepResult <- try @SomeException $ runEval bigStepEvalProgram moduleName program
         case (smallStepResult, bigStepResult) of
@@ -69,9 +66,3 @@ runEval evaluator moduleName program = do
       Left (_, err) -> error $ show err
       Right _ -> do
         readIORef stdoutBuilder
-
--- | Run big-step evaluator on a test case and capture stdout.
-driveBigStepEval :: ArtifactPath -> ArtifactPath -> FilePath -> IO String
-driveBigStepEval builtinName preludeName srcPath = do
-  (moduleName, program) <- compileTestCase builtinName preludeName srcPath
-  runEval bigStepEvalProgram moduleName program

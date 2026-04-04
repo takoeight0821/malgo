@@ -1,4 +1,4 @@
-module Malgo.Sequent.EvalSpec (spec) where
+module Malgo.Sequent.EvalSpec (specWith) where
 
 import Effectful.Error.Static (runError)
 import Effectful.Reader.Static (runReader)
@@ -12,12 +12,8 @@ import System.Directory
 import System.FilePath
 import Test.Hspec
 
-spec :: Spec
-spec = parallel do
-  (builtin, prelude) <- runIO do
-    builtin <- setupEvalBuiltin
-    prelude <- setupEvalPrelude
-    pure (builtin, prelude)
+specWith :: ArtifactPath -> ArtifactPath -> Spec
+specWith builtin prelude = parallel do
   testcases <- runIO do
     files <- listDirectory testcaseDir
     pure $ filter (isExtensionOf "mlg") files

@@ -27,7 +27,7 @@ spec = parallel do
 driveElaborate :: FilePath -> IO String
 driveElaborate srcPath = do
   src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError do
+  runMalgoM flag $ runCompileError $ withFreshQueryDB do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (Module modName def, _) <- runPass RenamePass (parsed, rnEnv)

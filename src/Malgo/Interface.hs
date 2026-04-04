@@ -3,7 +3,7 @@
 module Malgo.Interface
   ( Interface (..),
     buildInterface,
-    loadInterface,
+    loadInterfaceFromDisk,
     externalFromInterface,
     exportedIdentList,
     exportedTypeIdentList,
@@ -13,7 +13,6 @@ where
 import Data.Map.Strict qualified as Map
 import Data.Store (Store)
 import Effectful (Eff, IOE, (:>))
-import Effectful.State.Static.Local (State, get, modify)
 import GHC.Records (HasField)
 import Malgo.Id
 import Malgo.Module
@@ -70,17 +69,14 @@ exportedTypeIdentList ::
   [k]
 exportedTypeIdentList inf = inf.exportedTypeIdentList
 
-loadInterface ::
+-- | Load the interface for a module directly from disk, bypassing any query cache.
+-- Use 'loadInterface' (from 'Malgo.Query.Engine') in code that runs inside 'runQueryDB'.
+loadInterfaceFromDisk ::
   (HasCallStack) =>
-  (IOE :> es, Workspace :> es, State (Map ModuleName Interface) :> es) =>
+  (IOE :> es, Workspace :> es) =>
   ModuleName ->
   Eff es Interface
-loadInterface modName = do
-  interfaces <- get
-  case Map.lookup modName interfaces of
-    Just interface -> pure interface
-    Nothing -> do
-      modPath <- getModulePath modName
-      ViaStore interface <- load modPath ".mlgi"
-      modify $ Map.insert modName interface
-      pure interface
+loadInterfaceFromDisk modName = do
+  modPath <- getModulePath modName
+  ViaStore interface <- load modPath ".mlgi"
+  pure interface

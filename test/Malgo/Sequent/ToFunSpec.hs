@@ -32,7 +32,7 @@ spec = parallel do
 driveToFun :: FilePath -> IO String
 driveToFun srcPath = do
   src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError do
+  runMalgoM flag $ runCompileError $ withFreshQueryDB do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)

@@ -17,6 +17,7 @@ import Malgo.Interface
 import Malgo.Module
 import Malgo.Pass (Pass (..))
 import Malgo.Prelude hiding (All)
+import Malgo.Query (QueryDB, loadInterface)
 import Malgo.Rename.RnEnv
 import Malgo.Rename.RnState as RnState
 import Malgo.Syntax
@@ -31,7 +32,7 @@ instance Pass RenamePass where
   type ErrorType RenamePass = RenameError
   type
     Effects RenamePass es =
-      ( State (Map ModuleName Interface) :> es,
+      ( QueryDB :> es,
         State Uniq :> es,
         IOE :> es,
         Reader Flag :> es,
@@ -47,7 +48,7 @@ rnDecls ::
   ( Reader ModuleName :> es,
     Reader RnEnv :> es,
     State RnState :> es,
-    State (Map ModuleName Interface) :> es,
+    QueryDB :> es,
     State Uniq :> es,
     IOE :> es,
     Reader Flag :> es,
@@ -70,7 +71,7 @@ rnDecls ds = do
 -- The infix declaration is assumed to have already been interpreted and registered in RnState.
 rnDecl ::
   ( State RnState :> es,
-    State (Map ModuleName Interface) :> es,
+    QueryDB :> es,
     State Uniq :> es,
     Reader RnEnv :> es,
     Reader ModuleName :> es,
@@ -438,7 +439,7 @@ mkOpApp pos2 fix2 op2 (OpApp (pos1, fix1) op1 e11 e12) e2
 mkOpApp pos fix op e1 e2 = pure $ OpApp (pos, fix) op e1 e2
 
 -- | Generate toplevel environment.
-genToplevelEnv :: (IOE :> es, Reader ModuleName :> es, State (Map ModuleName Interface) :> es, Workspace :> es, Error RenameError :> es) => [Decl (Malgo Parse)] -> RnEnv -> Eff es RnEnv
+genToplevelEnv :: (IOE :> es, Reader ModuleName :> es, QueryDB :> es, Workspace :> es, Error RenameError :> es) => [Decl (Malgo Parse)] -> RnEnv -> Eff es RnEnv
 genToplevelEnv (ds :: [Decl (Malgo Parse)]) env = do
   execState env (traverse aux ds)
   where

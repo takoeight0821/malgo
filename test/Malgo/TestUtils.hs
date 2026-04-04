@@ -16,20 +16,27 @@ module Malgo.TestUtils
     setupEvalBuiltin,
     setupEvalPrelude,
     compileTestCase,
+    withFreshQueryDB,
   )
 where
 
 import Data.ByteString qualified as BS
 import Data.Text.Lazy qualified as TL
 import Effectful
-import Effectful.Reader.Static (runReader)
+import Effectful.Error.Static (Error)
+import Effectful.Reader.Static (Reader, runReader)
+import Effectful.State.Static.Local (State)
 import GHC.Stack (CallStack, prettyCallStack)
 import Malgo.Driver qualified as Driver
+import Malgo.Features (Features)
 import Malgo.Module
 import Malgo.Monad
 import Malgo.Parser (ParserPass (..), parse)
-import Malgo.Pass (runCompileError, runPass)
+import Malgo.Pass (CompileError, runCompileError, runPass)
 import Malgo.Prelude
+import Malgo.Query (QueryDB, fetch)
+import Malgo.Query.Database (newDatabase)
+import Malgo.Query.Engine (runQueryDB)
 import Malgo.Rename
 import Malgo.Rename.RnEnv qualified as RnEnv
 import Malgo.Sequent.Core.Flat (flatProgram)
@@ -128,7 +135,8 @@ saveCore moduleName program = do
 setupEvalBuiltin :: IO ArtifactPath
 setupEvalBuiltin = do
   src <- convertString <$> BS.readFile builtinPath
-  runMalgoM flag $ runCompileError do
+  db <- newDatabase
+  runMalgoM flag $ runCompileError $ runQueryDB db do
     parsed <- runPass ParserPass (builtinPath, src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)
@@ -140,7 +148,8 @@ setupEvalBuiltin = do
 setupEvalPrelude :: IO ArtifactPath
 setupEvalPrelude = do
   src <- convertString <$> BS.readFile preludePath
-  runMalgoM flag $ runCompileError do
+  db <- newDatabase
+  runMalgoM flag $ runCompileError $ runQueryDB db do
     parsed <- runPass ParserPass (preludePath, src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)
@@ -152,7 +161,8 @@ setupEvalPrelude = do
 compileTestCase :: ArtifactPath -> ArtifactPath -> FilePath -> IO (ModuleName, Program)
 compileTestCase builtinName preludeName srcPath = do
   src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError do
+  db <- newDatabase
+  runMalgoM flag $ runCompileError $ runQueryDB db do
     parsed <-
       parse srcPath src >>= \case
         Left err -> error $ show err
@@ -167,3 +177,19 @@ compileTestCase builtinName preludeName srcPath = do
 
     let linked = Program {definitions = builtin <> prelude <> program, dependencies = []}
     pure (renamed.moduleName, linked)
+
+-- | Wrap an action requiring 'QueryDB' with a fresh database.
+-- Convenient for tests that call 'runPass RenamePass' directly.
+withFreshQueryDB ::
+  ( Reader Flag :> es,
+    State Uniq :> es,
+    IOE :> es,
+    Workspace :> es,
+    Features :> es,
+    Error CompileError :> es
+  ) =>
+  Eff (QueryDB : es) a ->
+  Eff es a
+withFreshQueryDB action = do
+  db <- liftIO newDatabase
+  runQueryDB db action

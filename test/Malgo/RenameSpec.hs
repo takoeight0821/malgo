@@ -36,7 +36,7 @@ spec = parallel do
 driveRename :: FilePath -> IO String
 driveRename srcPath = do
   src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError do
+  runMalgoM flag $ runCompileError $ withFreshQueryDB do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)
@@ -45,7 +45,7 @@ driveRename srcPath = do
 driveErrorRename :: FilePath -> IO String
 driveErrorRename srcPath = do
   src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError do
+  runMalgoM flag $ runCompileError $ withFreshQueryDB do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     fmap show (runPass RenamePass (parsed, rnEnv))
@@ -54,7 +54,7 @@ driveErrorRename srcPath = do
 driveRenameSExpr :: FilePath -> IO String
 driveRenameSExpr srcPath = do
   src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError do
+  runMalgoM flag $ runCompileError $ withFreshQueryDB do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)

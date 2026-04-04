@@ -18,7 +18,7 @@ import Malgo.Sequent.Fun (Literal (..), Pattern (..), Tag (..))
 import Malgo.Sequent.ToCore (toCore)
 import Malgo.Sequent.ToFun (ToFunPass (..))
 import Malgo.Syntax (Module (..))
-import Malgo.TestUtils (flag, testcaseDir)
+import Malgo.TestUtils (flag, testcaseDir, withFreshQueryDB)
 import System.FilePath ((</>))
 import Test.Hspec
 import Text.Megaparsec.Pos (initialPos)
@@ -300,7 +300,7 @@ compileTestcaseToScheme :: FilePath -> IO String
 compileTestcaseToScheme testcase = do
   let srcPath = testcaseDir </> testcase
   src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError do
+  runMalgoM flag $ runCompileError $ withFreshQueryDB do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)

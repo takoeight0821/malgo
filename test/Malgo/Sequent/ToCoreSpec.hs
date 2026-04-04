@@ -41,7 +41,7 @@ spec = parallel do
 driveToCore :: FilePath -> IO String
 driveToCore srcPath = do
   src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError do
+  runMalgoM flag $ runCompileError $ withFreshQueryDB do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)
@@ -52,7 +52,7 @@ driveToCore srcPath = do
 driveFlat :: FilePath -> IO String
 driveFlat srcPath = do
   src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError do
+  runMalgoM flag $ runCompileError $ withFreshQueryDB do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)
@@ -63,7 +63,7 @@ driveFlat srcPath = do
 driveJoin :: FilePath -> IO String
 driveJoin srcPath = do
   src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError do
+  runMalgoM flag $ runCompileError $ withFreshQueryDB do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)

@@ -5,6 +5,9 @@ on:
   pull_request:
     branches: [main, master]
 
+env:
+  GHCUP_INSTALL_BASE_PREFIX: /home/runner
+
 jobs:
   build:
     name: GHC ${{ matrix.ghc-version }}
@@ -27,17 +30,24 @@ jobs:
           done
 
       - name: Cache GHC
+        id: cache-ghc
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: /usr/local/.ghcup
+          path: /home/runner/.ghcup
           key: ${{ runner.os }}-ghcup-${{ matrix.ghc-version }}
 
-      - uses: haskell-actions/setup@de26526e12bc780fb9d384c1fb61c0bf02e3a40d # v2.10.4
-        id: setup
-        with:
-          ghc-version: ${{ matrix.ghc-version }}
-          cabal-version: latest
-          cabal-update: true
+      - name: Install GHC and cabal
+        if: steps.cache-ghc.outputs.cache-hit != 'true'
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
+          ghcup install ghc ${{ matrix.ghc-version }} --set
+          ghcup install cabal latest --set
+
+      - name: Set up PATH
+        run: echo "/home/runner/.ghcup/bin" >> "$GITHUB_PATH"
+
+      - name: Update package index
+        run: cabal update
 
       - name: Configure the build
         run: cabal configure --enable-tests --disable-documentation
@@ -45,7 +55,7 @@ jobs:
       - name: Cache cabal store
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ steps.setup.outputs.cabal-store }}
+          path: /home/runner/.cabal/store
           key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-store-${{ hashFiles('cabal.project.freeze') }}
           restore-keys: |
             ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-store-

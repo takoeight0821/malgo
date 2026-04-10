@@ -1,7 +1,6 @@
 -- | Name resolution and simple desugar transformation
 module Malgo.Rename.Pass (RenamePass (..)) where
 
-import Control.Lens (view, _2)
 import Data.List (intersect)
 import Data.List.Extra (anySame, disjoint)
 import Data.List.NonEmpty qualified as NE
@@ -12,6 +11,7 @@ import Effectful (Eff, IOE, (:>))
 import Effectful.Error.Static
 import Effectful.Reader.Static (Reader, ask, asks, local, runReader)
 import Effectful.State.Static.Local (State, execState, get, gets, modify, put, runState)
+import Lens.Micro (_2)
 import Malgo.Id
 import Malgo.Interface
 import Malgo.Module
@@ -382,11 +382,14 @@ rnStmts (With x _ _ :| []) = errorOn x "`with` statement cannnot appear in the l
 -- | Convert infix declarations to a Map. Infix for an undefined identifier is an error.
 infixDecls :: (Reader RnEnv :> es, Error RenameError :> es) => [Decl (Malgo Parse)] -> Eff es (Map RnId (Assoc, Int))
 infixDecls ds =
-  foldMapM ?? ds $ \case
-    (Infix pos assoc order name) -> do
-      name' <- lookupVarName pos name
-      pure $ Map.singleton name' (assoc, order)
-    _ -> pure mempty
+  foldMapM
+    ( \case
+        (Infix pos assoc order name) -> do
+          name' <- lookupVarName pos name
+          pure $ Map.singleton name' (assoc, order)
+        _ -> pure mempty
+    )
+    ds
 
 -- | OpApp recombination.
 -- Every OpApp in 'Malgo Parse' is treated as left associative.

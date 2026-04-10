@@ -3,7 +3,6 @@
 module Malgo.Sequent.ToFun (toFun, ToFunPass (..)) where
 
 import Control.Exception
-import Control.Lens (traverseOf, _2)
 import Data.List (partition)
 import Data.Map qualified as Map
 import Data.Traversable (for)
@@ -11,6 +10,7 @@ import Effectful
 import Effectful.Error.Static (Error, throwError)
 import Effectful.Reader.Static (Reader)
 import Effectful.State.Static.Local (State)
+import Lens.Micro (traverseOf, _2)
 import Malgo.Id
 import Malgo.Module
 import Malgo.Pass

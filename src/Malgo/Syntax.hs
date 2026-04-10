@@ -11,13 +11,6 @@ module Malgo.Syntax
     Pat (..),
     CoPat (..),
     CoClause,
-    _VarP,
-    _ConP,
-    _TupleP,
-    _RecordP,
-    _ListP,
-    _UnboxedP,
-    _BoxedP,
     Decl (..),
     ParsedDefinitions (..),
     BindGroup (..),
@@ -39,11 +32,12 @@ module Malgo.Syntax
   )
 where
 
-import Control.Lens (makeLenses, makePrisms, view, (^.), _2)
 import Data.Graph (flattenSCC, stronglyConnComp)
 import Data.List.NonEmpty qualified as NE
 import Data.SCargot.Repr.Basic qualified as S
 import Data.Set qualified as Set
+import Lens.Micro ((^.), _2)
+import Lens.Micro.TH (makeLenses)
 import Malgo.Module
 import Malgo.Prelude hiding (All)
 import Malgo.SExpr (ToSExpr (..))
@@ -353,8 +347,6 @@ instance (Pretty (XId x)) => Pretty (Pat x) where
   pretty (ListP _ ps) = sexpr $ "list" : map pretty ps
   pretty (UnboxedP _ l) = sexpr ["unboxed", pretty l]
   pretty (BoxedP _ l) = sexpr ["boxed", pretty l]
-
-makePrisms ''Pat
 
 -- * Declaration
 

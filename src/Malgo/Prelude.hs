@@ -7,7 +7,7 @@
 module Malgo.Prelude
   ( -- * Reexports
     module Control.Arrow,
-    module Control.Lens,
+    module Lens.Micro,
     module Control.Monad,
     module Control.Monad.Extra,
     module Control.Monad.IO.Class,
@@ -56,6 +56,9 @@ module Malgo.Prelude
     asumMap,
     PrettyShow (..),
 
+    -- * Lens utilities
+    view,
+
     -- * Lift IO functions
 
     -- ** Show
@@ -84,8 +87,6 @@ module Malgo.Prelude
     -- * Range
     Range (..),
     HasRange (..),
-    HasStart (..),
-    HasEnd (..),
     errorOn,
     warningOn,
 
@@ -97,8 +98,6 @@ where
 
 import Control.Applicative
 import Control.Arrow ((<<<), (>>>))
-import Control.Lens (ASetter, over, (??))
-import Control.Lens.TH
 import Control.Monad
 import Control.Monad.Extra (ifM)
 import Control.Monad.IO.Class
@@ -113,6 +112,7 @@ import Data.Foldable
 import Data.Foldable.Extra
 import Data.Function (applyWhen, fix, on, (&))
 import Data.Functor
+import Data.Functor.Const (Const (..), getConst)
 import Data.Hashable (Hashable)
 import Data.IORef (IORef)
 import Data.IORef qualified as IORef
@@ -138,6 +138,8 @@ import Effectful.State.Static.Local (State, state)
 import GHC.Exts (sortWith)
 import GHC.Generics (Generic)
 import GHC.Stack (HasCallStack)
+import Lens.Micro (ASetter, Getting, over)
+import Lens.Micro.TH
 import Prettyprinter
 import Prettyprinter.Render.String (renderString)
 import Prettyprinter.Render.Text (hPutDoc, renderStrict)
@@ -179,6 +181,10 @@ foldMapM f =
         pure $! mappend acc w
     )
     mempty
+
+view :: Getting a s a -> s -> a
+view l s = getConst (l Const s)
+{-# INLINE view #-}
 
 replaceOf :: (Eq b) => ASetter s t b b -> b -> b -> s -> t
 replaceOf l x x' = over l (\v -> if v == x then x' else v)
@@ -293,8 +299,6 @@ instance Pretty Range where
       <> pretty (unPos (sourceLine end))
       <> ", column "
       <> pretty (unPos (sourceColumn end))
-
-makeFieldsNoPrefix ''Range
 
 errorOn :: (MonadIO m, Pretty a) => a -> Doc ann -> m b
 errorOn range x = do

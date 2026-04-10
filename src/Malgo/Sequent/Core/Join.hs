@@ -12,7 +12,6 @@ module Malgo.Sequent.Core.Join
   )
 where
 
-import Control.Lens
 import Data.Map qualified as Map
 import Data.SCargot.Repr.Basic qualified as S
 import Data.Store (Store)
@@ -21,6 +20,7 @@ import Effectful
 import Effectful.Reader.Static (Reader)
 import Effectful.State.Static.Local
 import Effectful.Writer.Static.Local
+import Lens.Micro (traverseOf, _2)
 import Malgo.Id
 import Malgo.Module
 import Malgo.Pass

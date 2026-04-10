@@ -13,7 +13,6 @@ module Malgo.Sequent.Core.Flat
   )
 where
 
-import Control.Lens (traverseOf, _2)
 import Data.Map qualified as Map
 import Data.SCargot.Repr.Basic qualified as S
 import Data.Store (Store)
@@ -21,6 +20,7 @@ import Data.Traversable (for)
 import Effectful
 import Effectful.Reader.Static (Reader)
 import Effectful.State.Static.Local (State)
+import Lens.Micro (traverseOf, _2)
 import Malgo.Id
 import Malgo.Module (ModuleName, Resource, ViaStore (..))
 import Malgo.Pass

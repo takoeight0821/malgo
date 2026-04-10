@@ -38,16 +38,19 @@ jobs:
 
       - name: Install GHC and cabal
         if: steps.cache-ghc.outputs.cache-hit != 'true'
+        env:
+          BOOTSTRAP_HASKELL_NONINTERACTIVE: 1
+          BOOTSTRAP_HASKELL_MINIMAL: 1
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
-          ghcup install ghc ${{ matrix.ghc-version }} --set
-          ghcup install cabal latest --set
+          /home/runner/.ghcup/bin/ghcup install ghc ${{ matrix.ghc-version }} --set
+          /home/runner/.ghcup/bin/ghcup install cabal latest --set
 
       - name: Set up PATH
         run: echo "/home/runner/.ghcup/bin" >> "$GITHUB_PATH"
 
       - name: Update package index
-        run: cabal update
+        run: /home/runner/.ghcup/bin/cabal update
 
       - name: Configure the build
         run: cabal configure --enable-tests --disable-documentation

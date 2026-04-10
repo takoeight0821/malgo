@@ -31,14 +31,13 @@ import Malgo.Driver qualified as Driver
 import Malgo.Features (Features)
 import Malgo.Module
 import Malgo.Monad
-import Malgo.Parser (ParserPass (..), parse)
+import Malgo.Parser (ParserPass (..))
 import Malgo.Pass (CompileError, runCompileError, runPass)
 import Malgo.Prelude
-import Malgo.Query (QueryDB, fetch)
+import Malgo.Query (QueryDB)
 import Malgo.Query.Database (newDatabase)
 import Malgo.Query.Engine (runQueryDB)
 import Malgo.Rename
-import Malgo.Rename.RnEnv qualified as RnEnv
 import Malgo.Sequent.Core.Flat (flatProgram)
 import Malgo.Sequent.Core.Join (Program (..), joinProgram)
 import Malgo.Sequent.ToCore (toCore)
@@ -133,24 +132,20 @@ saveCore moduleName program = do
   save modulePath ".sqt" program
 
 setupEvalBuiltin :: IO ArtifactPath
-setupEvalBuiltin = do
-  src <- convertString <$> BS.readFile builtinPath
-  db <- newDatabase
-  runMalgoM flag $ runCompileError $ runQueryDB db do
-    parsed <- runPass ParserPass (builtinPath, src)
-    rnEnv <- genBuiltinRnEnv
-    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
-    program <- runReader renamed.moduleName $ toCore fun >>= flatProgram >>= joinProgram
-    saveCore renamed.moduleName program
-    getModulePath renamed.moduleName
+setupEvalBuiltin = setupEvalModule builtinPath
 
 setupEvalPrelude :: IO ArtifactPath
-setupEvalPrelude = do
-  src <- convertString <$> BS.readFile preludePath
+setupEvalPrelude = setupEvalModule preludePath
+
+setupEvalModule :: FilePath -> IO ArtifactPath
+setupEvalModule srcPath = do
+  src <- BS.readFile srcPath
   db <- newDatabase
   runMalgoM flag $ runCompileError $ runQueryDB db do
-    parsed <- runPass ParserPass (preludePath, src)
+    pwd <- pwdPath
+    srcModulePath <- parseArtifactPath pwd srcPath
+    save srcModulePath ".mlg" src
+    parsed <- runPass ParserPass (srcPath, convertString src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)
     fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
@@ -160,14 +155,14 @@ setupEvalPrelude = do
 
 compileTestCase :: ArtifactPath -> ArtifactPath -> FilePath -> IO (ModuleName, Program)
 compileTestCase builtinName preludeName srcPath = do
-  src <- convertString <$> BS.readFile srcPath
+  src <- BS.readFile srcPath
   db <- newDatabase
   runMalgoM flag $ runCompileError $ runQueryDB db do
-    parsed <-
-      parse srcPath src >>= \case
-        Left err -> error $ show err
-        Right parsed -> pure parsed
-    rnEnv <- RnEnv.genBuiltinRnEnv
+    pwd <- pwdPath
+    srcModulePath <- parseArtifactPath pwd srcPath
+    save srcModulePath ".mlg" src
+    parsed <- runPass ParserPass (srcPath, convertString src)
+    rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)
     fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
     Program {definitions = program} <- runReader renamed.moduleName $ toCore fun >>= flatProgram >>= joinProgram

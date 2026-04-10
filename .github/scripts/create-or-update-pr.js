@@ -36,6 +36,22 @@ try {
   exec(`git checkout -b ${branchName}`);
   exec(`git commit --allow-empty -m "chore(release): prepare ${version}"`);
 
+  const staleReleasePrs = exec(
+    `gh pr list --base ${baseBranch} --state open --json number,headRefName --jq '[.[] | select(.headRefName | startswith("release/")) | select(.headRefName != "${branchName}")]'`,
+    { silent: true, ignoreError: true }
+  );
+  let stalePrs = [];
+  try {
+    stalePrs = staleReleasePrs ? JSON.parse(staleReleasePrs) : [];
+  } catch (_) {
+    console.log('Warning: failed to parse stale release PR list, skipping cleanup');
+  }
+  for (const pr of stalePrs) {
+    console.log(`Closing stale release PR #${pr.number} (${pr.headRefName})`);
+    exec(`gh pr close ${pr.number} --comment "Superseded by release ${version}"`, { ignoreError: true });
+    exec(`git push origin --delete ${pr.headRefName}`, { ignoreError: true });
+  }
+
   const existingPr = exec(
     `gh pr list --head ${branchName} --base ${baseBranch} --json number --jq '.[0].number'`,
     { silent: true, ignoreError: true }

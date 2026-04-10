@@ -17,10 +17,9 @@ module Malgo.Id
 where
 
 import Data.Aeson (FromJSON, ToJSON)
+import Data.Binary (Binary)
 import Data.Data (Data)
 import Data.SCargot.Repr.Basic qualified as S
-import Data.Store ()
-import Data.Store.TH
 import Effectful (Eff, (:>))
 import Effectful.Reader.Static (Reader, ask)
 import Effectful.State.Static.Local (State)
@@ -44,7 +43,7 @@ data IdSort
   deriving anyclass (Hashable, ToJSON, FromJSON)
   deriving (Pretty) via PrettyShow IdSort
 
-makeStore ''IdSort
+instance Binary IdSort
 
 data Id = Id
   { name :: Text,
@@ -64,7 +63,7 @@ instance S.ToSExpr Id where
   toSExpr Id {name, moduleName, sort = Internal uniq} = S.A $ S.Symbol $ "#" <> moduleNameDigest moduleName <> "." <> name <> "_" <> convertString (show uniq)
   toSExpr Id {name, moduleName, sort = Temporal uniq} = S.A $ S.Symbol $ "$" <> moduleNameDigest moduleName <> "." <> name <> "_" <> convertString (show uniq)
 
-makeStore ''Id
+instance Binary Id
 
 data Meta a = Meta
   { meta :: a,
@@ -82,7 +81,7 @@ instance Pretty (Meta a) where
 instance S.ToSExpr (Meta a) where
   toSExpr Meta {id} = S.toSExpr id
 
-makeStore ''Meta
+instance (Binary a) => Binary (Meta a)
 
 idToText :: Id -> Text
 idToText Id {name, moduleName, sort = External} = moduleNameToString moduleName <> "." <> name

@@ -4,10 +4,11 @@ module Malgo.Query.Engine
 where
 
 import Control.Exception (SomeException, try)
+import Data.Binary (Binary, decode)
 import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as BSL
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
-import Data.Store (decodeEx)
 import Data.Text.Lazy qualified as TL
 import Data.Traversable (for)
 import Effectful
@@ -96,7 +97,7 @@ handleFetch db = \case
         liftIO $ modifyIORef db.cacheModuleInterface $ Map.insert modName inf
         mSrcPath <- tryGetModulePath modName
         case mSrcPath of
-          Just srcPath -> save srcPath ".mlgi" (ViaStore inf)
+          Just srcPath -> save srcPath ".mlgi" (ViaBinary inf)
           Nothing -> pure ()
         pure result
   ModuleInterface modName -> do
@@ -136,7 +137,7 @@ handleFetch db = \case
             >>= runPass ToCorePass
             >>= runPass FlatPass
             >>= runPass JoinPass
-        save srcPath ".sqt" (ViaStore program)
+        save srcPath ".sqt" (ViaBinary program)
         linked <- linkDeps rnState.dependencies program
         liftIO $ modifyIORef db.cacheLinkedProgram $ Map.insert modName linked
         pure linked
@@ -165,7 +166,7 @@ tryLoadInterfaceFromDisk modName = do
       if exists
         then do
           content <- liftIO $ BS.readFile $ toFilePath targetPath
-          pure $ Just $ decodeEx content
+          pure $ Just $ decode $ BSL.fromStrict content
         else pure Nothing
 
 -- | Try to get the ArtifactPath for a module, returning 'Nothing' if not found.
@@ -181,7 +182,7 @@ linkDeps :: (Workspace :> es, IOE :> es) => Set ModuleName -> Join.Program -> Ef
 linkDeps dependencies program = do
   deps <- for (Set.toList dependencies) \dep -> do
     path <- getModulePath dep
-    ViaStore x <- load path ".sqt"
+    ViaBinary x <- load path ".sqt"
     pure x
   pure
     $ Join.Program

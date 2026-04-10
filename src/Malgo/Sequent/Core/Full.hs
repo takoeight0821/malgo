@@ -11,9 +11,9 @@ module Malgo.Sequent.Core.Full
   )
 where
 
+import Data.Binary (Binary)
 import Data.Map qualified as Map
 import Data.SCargot.Repr.Basic qualified as S
-import Data.Store
 import Malgo.Module
 import Malgo.Prelude
 import Malgo.SExpr hiding (Char, Double, Float, String)
@@ -24,8 +24,8 @@ data Program = Program
     dependencies :: [ModuleName]
   }
   deriving stock (Show, Generic)
-  deriving anyclass (Store)
-  deriving (Resource) via (ViaStore Program)
+  deriving anyclass (Binary)
+  deriving (Resource) via (ViaBinary Program)
 
 instance ToSExpr Program where
   toSExpr (Program defs dependencies) = S.L $ map (\(_, name, return, body) -> toSExpr (name, return, body)) defs <> [S.L $ map toSExpr dependencies]
@@ -44,9 +44,9 @@ deriving stock instance Show Producer
 
 deriving stock instance Generic Producer
 
-deriving anyclass instance Store Producer
+deriving anyclass instance Binary Producer
 
-deriving via (ViaStore Producer) instance Resource Producer
+deriving via (ViaBinary Producer) instance Resource Producer
 
 instance HasRange Producer where
   range (Var range _) = range
@@ -83,9 +83,9 @@ deriving stock instance Show Consumer
 
 deriving stock instance Generic Consumer
 
-deriving anyclass instance Store Consumer
+deriving anyclass instance Binary Consumer
 
-deriving via (ViaStore Consumer) instance Resource Consumer
+deriving via (ViaBinary Consumer) instance Resource Consumer
 
 instance ToSExpr Consumer where
   toSExpr (Label _ name) = toSExpr name
@@ -109,9 +109,9 @@ deriving stock instance (Show Consumer) => Show Statement
 
 deriving stock instance Generic Statement
 
-deriving anyclass instance (Store Consumer) => Store Statement
+deriving anyclass instance (Binary Consumer) => Binary Statement
 
-deriving via (ViaStore Statement) instance (Resource Statement)
+deriving via (ViaBinary Statement) instance (Resource Statement)
 
 instance HasRange Statement where
   range (Cut producer _) = range producer
@@ -143,9 +143,9 @@ deriving stock instance Show Branch
 
 deriving stock instance Generic Branch
 
-deriving anyclass instance Store Branch
+deriving anyclass instance Binary Branch
 
-deriving via (ViaStore Branch) instance (Resource Branch)
+deriving via (ViaBinary Branch) instance (Resource Branch)
 
 instance ToSExpr Branch where
   toSExpr (Branch _ pattern statement) = S.L [toSExpr pattern, toSExpr statement]

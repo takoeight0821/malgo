@@ -99,6 +99,18 @@ jobs:
           echo "next_tag=$next_tag" >> $GITHUB_OUTPUT
           echo "bump_type=$bump_type" >> $GITHUB_OUTPUT
 
+      - name: Clean up stale draft releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT_TAG: ${{ steps.compute.outputs.next_tag }}
+        run: |
+          gh release list --exclude-pre-releases --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' | while read -r tag; do
+            if [ "$tag" != "$NEXT_TAG" ]; then
+              echo "Deleting stale draft release: $tag"
+              gh release delete "$tag" --yes
+            fi
+          done
+
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}

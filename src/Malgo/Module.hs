@@ -1,6 +1,4 @@
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Malgo.Module
   ( ModuleName (..),
@@ -24,7 +22,6 @@ module Malgo.Module
 where
 
 import Control.Monad.Catch
-import Data.Aeson hiding (encode)
 import Data.Binary (Binary)
 import Data.Binary qualified as Binary
 import Data.ByteString (ByteString)
@@ -38,10 +35,10 @@ import Effectful.Dispatch.Static
 import Effectful.Error.Static (prettyCallStack)
 import GHC.Records
 import GHC.Stack (callStack)
+import Malgo.Path
 import Malgo.Prelude
 import Malgo.SExpr (ToSExpr (..))
 import Malgo.SExpr qualified as S
-import Path
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findFile, getCurrentDirectory, listDirectory, makeAbsolute)
 import System.FilePath (makeRelative)
 import System.FilePath qualified as F
@@ -52,7 +49,7 @@ data ModuleName
   = ModuleName Text
   | Artifact ArtifactPath
   deriving stock (Eq, Show, Ord, Generic, Data)
-  deriving anyclass (Hashable, ToJSON, ToJSONKey, FromJSON, FromJSONKey, Binary)
+  deriving anyclass (Hashable, Binary)
 
 instance HasRange ModuleName where
   range (ModuleName raw) = Range (initialPos $ convertString raw) (initialPos $ convertString raw)
@@ -170,16 +167,12 @@ data ArtifactPath = ArtifactPath
     targetPath :: Path Abs File
   }
   deriving stock (Eq, Ord, Generic, Data)
-  deriving anyclass (Hashable, ToJSON, ToJSONKey, FromJSON, FromJSONKey, Binary)
+  deriving anyclass (Hashable, Binary)
 
 instance Show ArtifactPath where
   -- Do not show rawPath, originPath, targetPath.
   -- Because they include absolute path, which is not portable and may leak information.
   showsPrec d (ArtifactPath {relPath}) = showParen (d > 10) $ showString "ArtifactPath " . showsPrec 11 (toFilePath relPath)
-
-deriving anyclass instance Binary (Path Abs File)
-
-deriving anyclass instance Binary (Path Rel File)
 
 instance Pretty ArtifactPath where
   pretty path = pretty $ toFilePath path.relPath
@@ -188,9 +181,9 @@ pwdPath :: (Workspace :> es) => Eff es ArtifactPath
 pwdPath = do
   workspace <- getWorkspaceAbs
   let pwd = parent workspace
-  let originPath = pwd </> [relfile|dummy|]
-  let relPath = [relfile|dummy|]
-  let targetPath = workspace </> [relfile|dummy|]
+  let originPath = pwd </> mkRelFile "dummy"
+  let relPath = mkRelFile "dummy"
+  let targetPath = workspace </> mkRelFile "dummy"
   pure
     $ ArtifactPath
       { rawPath = ".",
@@ -256,7 +249,7 @@ instance (Show a) => Resource (ViaShow a) where
 newtype Pragma = Pragma (Map ModuleName [Text])
   deriving stock (Eq, Show, Generic, Data)
   deriving newtype (Semigroup, Monoid)
-  deriving anyclass (Hashable, ToJSON, FromJSON, Binary)
+  deriving anyclass (Hashable, Binary)
 
 insertPragmas :: ModuleName -> [Text] -> Pragma -> Pragma
 insertPragmas path value (Pragma map) = Pragma $ Map.insertWith (<>) path value map

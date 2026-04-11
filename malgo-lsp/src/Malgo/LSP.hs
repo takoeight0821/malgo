@@ -3,13 +3,13 @@
 -- | LSP server entry point for Malgo.
 module Malgo.LSP (runLSP) where
 
-import Colog.Core (LogAction, WithSeverity (..), cmap, hoistLogAction, logStringStderr)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
-import Language.LSP.Logging (defaultClientLogger)
-import Language.LSP.Protocol.Types qualified as LSP
-import Language.LSP.Server
-import Malgo.LSP.Handlers (LspState (..), lspHandlers)
+import Malgo.LSP.Handlers (LspState (..), handleDidChange, handleDidClose, handleDidOpen, handleHover)
+import Malgo.LSP.Json (JValue (..), jLookup, jText)
+import Malgo.LSP.Protocol (LspPosition (..), Uri (..), toNormalizedUri)
+import Malgo.LSP.Server (ServerEnv (..), logMessage, runServer)
+import Malgo.LSP.Server.JsonRpc (JsonRpcMessage (..), sendResponse)
 import Malgo.Prelude
 import Malgo.Query.Database (newDatabase)
 
@@ -26,47 +26,81 @@ lspFlag =
       useInfer = False
     }
 
--- | Text document sync options: full-document updates.
-syncOptions :: LSP.TextDocumentSyncOptions
-syncOptions =
-  LSP.TextDocumentSyncOptions
-    { LSP._openClose = Just True,
-      LSP._change = Just LSP.TextDocumentSyncKind_Full,
-      LSP._willSave = Just False,
-      LSP._willSaveWaitUntil = Just False,
-      LSP._save = Just $ LSP.InR $ LSP.SaveOptions $ Just False
-    }
-
 -- | Run the Malgo LSP server over stdin/stdout.
 runLSP :: IO Int
 runLSP = do
   db <- newDatabase
   renamedCache <- newIORef Map.empty
   let state = LspState {db, flag = lspFlag, renamedCache}
+  runServer (dispatch state)
 
-  -- Server infrastructure loggers (LspServerLog type)
-  let ioLogger :: LogAction IO (WithSeverity LspServerLog)
-      ioLogger = cmap show logStringStderr
+-- | Dispatch an incoming JSON-RPC message to the appropriate handler.
+dispatch :: LspState -> ServerEnv -> JsonRpcMessage -> IO ()
+dispatch state env msg = case msg.method of
+  "textDocument/didOpen" -> case parseDidOpen msg of
+    Nothing -> logMessage env "Failed to parse didOpen params"
+    Just (uri, content) -> handleDidOpen env state uri content
+  "textDocument/didChange" -> case parseDidChange msg of
+    Nothing -> logMessage env "Failed to parse didChange params"
+    Just (uri, mText) -> handleDidChange env state uri mText
+  "textDocument/didClose" -> case parseDidCloseUri msg of
+    Nothing -> logMessage env "Failed to parse didClose params"
+    Just uri -> handleDidClose env state uri
+  "textDocument/hover" -> case parseHover msg of
+    Nothing -> case msg.id of
+      Just reqId -> sendResponse env.envStdout reqId JNull
+      Nothing -> pure ()
+    Just (uri, pos) -> do
+      let nuri = toNormalizedUri uri
+      result <- handleHover state nuri pos
+      case msg.id of
+        Just reqId -> sendResponse env.envStdout reqId result
+        Nothing -> pure ()
+  _ -> logMessage env ("Unknown method: " <> msg.method)
 
-      lspLogger :: LogAction (LspM LspState) (WithSeverity LspServerLog)
-      lspLogger = hoistLogAction liftIO ioLogger
+-- | Parse didOpen params: extract URI and text content.
+parseDidOpen :: JsonRpcMessage -> Maybe (Uri, T.Text)
+parseDidOpen msg = do
+  params_ <- msg.params
+  td <- jLookup "textDocument" params_
+  uriText <- jLookup "uri" td >>= jText
+  text <- jLookup "text" td >>= jText
+  pure (Uri uriText, text)
 
-  -- Application-level logger for user-facing diagnostics (Text type)
-  let appLogger :: LogAction (LspM LspState) (WithSeverity T.Text)
-      appLogger = defaultClientLogger
+-- | Parse didChange params: extract URI and optional full text.
+parseDidChange :: JsonRpcMessage -> Maybe (Uri, Maybe T.Text)
+parseDidChange msg = do
+  params_ <- msg.params
+  td <- jLookup "textDocument" params_
+  uriText <- jLookup "uri" td >>= jText
+  let mText = do
+        changes <- jLookup "contentChanges" params_
+        arr <- case changes of
+          JArray xs -> Just xs
+          _ -> Nothing
+        case arr of
+          (first : _) -> jLookup "text" first >>= jText
+          _ -> Nothing
+  pure (Uri uriText, mText)
 
-  runServerWithHandles
-    ioLogger
-    lspLogger
-    stdin
-    stdout
-    ServerDefinition
-      { defaultConfig = state,
-        configSection = "malgo",
-        parseConfig = \oldCfg _ -> Right oldCfg,
-        onConfigChange = const $ pure (),
-        doInitialize = \env _req -> pure (Right env),
-        staticHandlers = \_caps -> lspHandlers appLogger state,
-        interpretHandler = \env -> Iso (runLspT env) liftIO,
-        options = defaultOptions {optTextDocumentSync = Just syncOptions}
-      }
+-- | Parse didClose params: extract URI.
+parseDidCloseUri :: JsonRpcMessage -> Maybe Uri
+parseDidCloseUri msg = do
+  params_ <- msg.params
+  td <- jLookup "textDocument" params_
+  uriText <- jLookup "uri" td >>= jText
+  pure (Uri uriText)
+
+-- | Parse hover params: extract URI and position.
+parseHover :: JsonRpcMessage -> Maybe (Uri, LspPosition)
+parseHover msg = do
+  params_ <- msg.params
+  td <- jLookup "textDocument" params_
+  uriText <- jLookup "uri" td >>= jText
+  posVal <- jLookup "position" params_
+  line <- jLookup "line" posVal >>= jInt
+  char <- jLookup "character" posVal >>= jInt
+  pure (Uri uriText, LspPosition line char)
+  where
+    jInt (JNumber n) = Just (round n)
+    jInt _ = Nothing

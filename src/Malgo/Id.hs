@@ -16,7 +16,6 @@ module Malgo.Id
   )
 where
 
-import Data.Aeson (FromJSON, ToJSON)
 import Data.Binary (Binary)
 import Data.Data (Data)
 import Data.SCargot.Repr.Basic qualified as S
@@ -40,7 +39,7 @@ data IdSort
     -- For dev experience, these are printed with a prefix `$`.
     Temporal Int
   deriving stock (Eq, Show, Ord, Generic, Data)
-  deriving anyclass (Hashable, ToJSON, FromJSON)
+  deriving anyclass (Hashable)
   deriving (Pretty) via PrettyShow IdSort
 
 instance Binary IdSort
@@ -51,7 +50,7 @@ data Id = Id
     sort :: IdSort
   }
   deriving stock (Show, Eq, Ord, Generic, Data)
-  deriving anyclass (Hashable, ToJSON, FromJSON)
+  deriving anyclass (Hashable)
 
 instance Pretty Id where
   pretty Id {name, sort = External} = pretty name
@@ -70,7 +69,7 @@ data Meta a = Meta
     id :: Id
   }
   deriving stock (Show, Eq, Ord, Functor, Foldable, Traversable, Generic, Data)
-  deriving anyclass (Hashable, ToJSON, FromJSON)
+  deriving anyclass (Hashable)
 
 withMeta :: a -> Id -> Meta a
 withMeta meta id = Meta {..}

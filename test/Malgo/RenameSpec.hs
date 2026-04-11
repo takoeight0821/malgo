@@ -40,7 +40,7 @@ driveRename srcPath = do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    pure $ pShowCompact renamed
+    pure $ sShow renamed
 
 driveErrorRename :: FilePath -> IO String
 driveErrorRename srcPath = do

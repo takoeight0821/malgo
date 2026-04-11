@@ -8,6 +8,7 @@ import Malgo.Parser (ParserPass (..))
 import Malgo.Pass
 import Malgo.Prelude
 import Malgo.Rename
+import Malgo.SExpr (sShow)
 import Malgo.Syntax (Module (..))
 import Malgo.Syntax.Extension (Malgo, MalgoPhase (..))
 import Malgo.TestUtils
@@ -32,4 +33,4 @@ driveElaborate srcPath = do
     rnEnv <- genBuiltinRnEnv
     (Module modName def, _) <- runPass RenamePass (parsed, rnEnv)
     elaborated <- runReader modName $ runPass ElaboratePass def
-    pure $ show elaborated
+    pure $ sShow elaborated

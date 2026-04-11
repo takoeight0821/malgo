@@ -6,8 +6,8 @@ on:
     branches: [main, master]
 
 jobs:
-  build:
-    name: GHC ${{ matrix.ghc-version }}
+  build-malgo:
+    name: malgo (GHC ${{ matrix.ghc-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,15 +48,66 @@ jobs:
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: dist-newstyle
-          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-${{ hashFiles('cabal.project.freeze') }}-${{ hashFiles('**/*.hs', '**/*.cabal', 'package.yaml') }}
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-malgo-${{ hashFiles('cabal.project.freeze') }}-${{ hashFiles('src/**/*.hs', '*.cabal', 'package.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-${{ hashFiles('cabal.project.freeze') }}-
+            ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-malgo-${{ hashFiles('cabal.project.freeze') }}-
 
-      - name: Install dependencies
-        run: cabal build all --only-dependencies
-
-      - name: Build
-        run: cabal build all
+      - name: Build malgo
+        run: |
+          cabal build lib:malgo --only-dependencies
+          cabal build lib:malgo exe:malgo test:malgo-test
 
       - name: Run tests
-        run: cabal test all --test-option=--jobs=4 --test-option=--fail-fast
+        run: cabal test malgo-test --test-option=--jobs=4 --test-option=--fail-fast
+
+  build-malgo-lsp:
+    name: malgo-lsp (GHC ${{ matrix.ghc-version }})
+    needs: build-malgo
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc-version: ['9.12.4']
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 2
+
+      - name: Restore file timestamps
+        run: |
+          rev=HEAD
+          for f in $(git ls-tree -r -t --full-name --name-only "$rev"); do
+            touch -d "$(git log --pretty=format:%cI -1 "$rev" -- "$f")" "$f"
+          done
+
+      - uses: haskell-actions/setup@de26526e12bc780fb9d384c1fb61c0bf02e3a40d # v2.10.4
+        id: setup
+        with:
+          ghc-version: ${{ matrix.ghc-version }}
+          cabal-version: latest
+          cabal-update: true
+
+      - name: Configure the build
+        run: cabal configure --disable-tests --disable-documentation
+
+      - name: Cache cabal store
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-store-${{ hashFiles('cabal.project.freeze') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-store-
+
+      - name: Cache dist-newstyle
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: dist-newstyle
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-lsp-${{ hashFiles('cabal.project.freeze') }}-${{ hashFiles('malgo-lsp/**/*.hs', 'malgo-lsp/*.cabal', 'malgo-lsp/package.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-lsp-${{ hashFiles('cabal.project.freeze') }}-
+
+      - name: Build malgo-lsp
+        run: |
+          cabal build exe:malgo-lsp --only-dependencies
+          cabal build exe:malgo-lsp

@@ -3,13 +3,15 @@
 -- | LSP server entry point for Malgo.
 module Malgo.LSP (runLSP) where
 
-import Colog.Core (LogAction, WithSeverity (..), cmap, hoistLogAction, logStringStderr)
+import Data.Aeson ((.:))
+import Data.Aeson qualified as Aeson
+import Data.Aeson.Types qualified as Aeson
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
-import Language.LSP.Logging (defaultClientLogger)
 import Language.LSP.Protocol.Types qualified as LSP
-import Language.LSP.Server
-import Malgo.LSP.Handlers (LspState (..), lspHandlers)
+import Malgo.LSP.Handlers (LspState (..), handleDidChange, handleDidClose, handleDidOpen, handleHover)
+import Malgo.LSP.Server (ServerEnv (..), logMessage, runServer)
+import Malgo.LSP.Server.JsonRpc (JsonRpcMessage (..), sendResponse)
 import Malgo.Prelude
 import Malgo.Query.Database (newDatabase)
 
@@ -26,47 +28,75 @@ lspFlag =
       useInfer = False
     }
 
--- | Text document sync options: full-document updates.
-syncOptions :: LSP.TextDocumentSyncOptions
-syncOptions =
-  LSP.TextDocumentSyncOptions
-    { LSP._openClose = Just True,
-      LSP._change = Just LSP.TextDocumentSyncKind_Full,
-      LSP._willSave = Just False,
-      LSP._willSaveWaitUntil = Just False,
-      LSP._save = Just $ LSP.InR $ LSP.SaveOptions $ Just False
-    }
-
 -- | Run the Malgo LSP server over stdin/stdout.
 runLSP :: IO Int
 runLSP = do
   db <- newDatabase
   renamedCache <- newIORef Map.empty
   let state = LspState {db, flag = lspFlag, renamedCache}
+  runServer (dispatch state)
 
-  -- Server infrastructure loggers (LspServerLog type)
-  let ioLogger :: LogAction IO (WithSeverity LspServerLog)
-      ioLogger = cmap show logStringStderr
+-- | Dispatch an incoming JSON-RPC message to the appropriate handler.
+dispatch :: LspState -> ServerEnv -> JsonRpcMessage -> IO ()
+dispatch state env msg = case msg.method of
+  "textDocument/didOpen" -> case parseDidOpen msg of
+    Nothing -> logMessage env "Failed to parse didOpen params"
+    Just (uri, content) -> handleDidOpen env state uri content
+  "textDocument/didChange" -> case parseDidChange msg of
+    Nothing -> logMessage env "Failed to parse didChange params"
+    Just (uri, mText) -> handleDidChange env state uri mText
+  "textDocument/didClose" -> case parseDidCloseUri msg of
+    Nothing -> logMessage env "Failed to parse didClose params"
+    Just uri -> handleDidClose env state uri
+  "textDocument/hover" -> case parseHover msg of
+    Nothing -> case msg.id of
+      Just reqId -> sendResponse env.envStdout reqId Aeson.Null
+      Nothing -> pure ()
+    Just (uri, pos) -> do
+      let nuri = LSP.toNormalizedUri uri
+      result <- handleHover state nuri pos
+      case msg.id of
+        Just reqId -> sendResponse env.envStdout reqId result
+        Nothing -> pure ()
+  _ -> logMessage env ("Unknown method: " <> msg.method)
 
-      lspLogger :: LogAction (LspM LspState) (WithSeverity LspServerLog)
-      lspLogger = hoistLogAction liftIO ioLogger
+-- | Parse didOpen params: extract URI and text content.
+parseDidOpen :: JsonRpcMessage -> Maybe (LSP.Uri, T.Text)
+parseDidOpen msg = msg.params >>= Aeson.parseMaybe parser
+  where
+    parser = Aeson.withObject "params" $ \o -> do
+      td <- o .: "textDocument"
+      Aeson.withObject "textDocument" (\td' -> (,) <$> td' .: "uri" <*> td' .: "text") td
 
-  -- Application-level logger for user-facing diagnostics (Text type)
-  let appLogger :: LogAction (LspM LspState) (WithSeverity T.Text)
-      appLogger = defaultClientLogger
+-- | Parse didChange params: extract URI and optional full text.
+parseDidChange :: JsonRpcMessage -> Maybe (LSP.Uri, Maybe T.Text)
+parseDidChange msg = msg.params >>= Aeson.parseMaybe parser
+  where
+    parser = Aeson.withObject "params" $ \o -> do
+      td <- o .: "textDocument"
+      uri <- Aeson.withObject "textDocument" (\td' -> td' .: "uri") td
+      changes <- o .: "contentChanges"
+      let mText = case changes of
+            Aeson.Array arr
+              | (first : _) <- toList arr ->
+                  Aeson.parseMaybe (\v -> Aeson.withObject "change" (\c -> c .: "text") v) first
+            _ -> Nothing
+      pure (uri, mText)
 
-  runServerWithHandles
-    ioLogger
-    lspLogger
-    stdin
-    stdout
-    ServerDefinition
-      { defaultConfig = state,
-        configSection = "malgo",
-        parseConfig = \oldCfg _ -> Right oldCfg,
-        onConfigChange = const $ pure (),
-        doInitialize = \env _req -> pure (Right env),
-        staticHandlers = \_caps -> lspHandlers appLogger state,
-        interpretHandler = \env -> Iso (runLspT env) liftIO,
-        options = defaultOptions {optTextDocumentSync = Just syncOptions}
-      }
+-- | Parse didClose params: extract URI.
+parseDidCloseUri :: JsonRpcMessage -> Maybe LSP.Uri
+parseDidCloseUri msg = msg.params >>= Aeson.parseMaybe parser
+  where
+    parser = Aeson.withObject "params" $ \o -> do
+      td <- o .: "textDocument"
+      Aeson.withObject "textDocument" (\td' -> td' .: "uri") td
+
+-- | Parse hover params: extract URI and position.
+parseHover :: JsonRpcMessage -> Maybe (LSP.Uri, LSP.Position)
+parseHover msg = msg.params >>= Aeson.parseMaybe parser
+  where
+    parser = Aeson.withObject "params" $ \o -> do
+      td <- o .: "textDocument"
+      uri <- Aeson.withObject "textDocument" (\td' -> td' .: "uri") td
+      pos <- o .: "position"
+      pure (uri, pos)

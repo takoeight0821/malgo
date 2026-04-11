@@ -4,7 +4,7 @@ import Data.ByteString.Lazy qualified as BL
 import Malgo.Monad (runMalgoM)
 import Malgo.Parser (parse)
 import Malgo.Prelude
-import Malgo.SExpr (ToSExpr (..))
+import Malgo.SExpr (ToSExpr (..), sShow)
 import Malgo.TestUtils
 import System.Directory (listDirectory)
 import System.FilePath (isExtensionOf, takeBaseName, (</>))
@@ -101,7 +101,7 @@ driveParse srcPath = do
     case parsed of
       Left err -> error $ errorBundlePretty err
       Right parsed ->
-        pure $ pShowCompact parsed
+        pure $ sShow parsed
 
 driveParseSExpr :: FilePath -> IO String
 driveParseSExpr srcPath = do

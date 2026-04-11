@@ -32,4 +32,4 @@ driveElaborate srcPath = do
     rnEnv <- genBuiltinRnEnv
     (Module modName def, _) <- runPass RenamePass (parsed, rnEnv)
     elaborated <- runReader modName $ runPass ElaboratePass def
-    pure $ pShowCompact elaborated
+    pure $ show elaborated

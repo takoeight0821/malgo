@@ -1,6 +1,5 @@
 module Malgo.TestUtils
-  ( pShowCompact,
-    testcaseDir,
+  ( testcaseDir,
     builtinPath,
     setupBuiltin,
     preludePath,
@@ -46,17 +45,6 @@ import System.FilePath ((</>))
 import Test.Hspec (Spec, it)
 import Test.Hspec.Core.Spec (getSpecDescriptionPath)
 import Test.Hspec.Golden (defaultGolden)
-import Text.Pretty.Simple
-
-smallIndentNoColor :: OutputOptions
-smallIndentNoColor =
-  defaultOutputOptionsNoColor
-    { outputOptionsIndentAmount = 1,
-      outputOptionsStringStyle = Literal
-    }
-
-pShowCompact :: (ConvertibleStrings TL.Text b, Show a) => a -> b
-pShowCompact x = convertString $ pShowOpt smallIndentNoColor x
 
 testcaseDir :: FilePath
 testcaseDir = "./test/testcases/malgo"

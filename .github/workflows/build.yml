@@ -7,8 +7,12 @@ on:
 
 jobs:
   build:
-    name: GHC 9.12
+    name: GHC ${{ matrix.ghc-version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc-version: ['9.12.4']
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -22,30 +26,12 @@ jobs:
             touch -d "$(git log --pretty=format:%cI -1 "$rev" -- "$f")" "$f"
           done
 
-      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+      - uses: haskell-actions/setup@de26526e12bc780fb9d384c1fb61c0bf02e3a40d # v2.10.4
+        id: setup
         with:
-          install: true
-          cache: true
-
-      - name: Restore GHC cache
-        id: cache-ghc
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-        with:
-          path: /home/runner/.ghcup
-          key: ${{ runner.os }}-ghcup-v6-${{ hashFiles('mise.toml') }}
-
-      - name: Setup GHC and cabal
-        run: |
-          ghcup install ghc 9.12.4 --set
-          ghcup install cabal latest --set
-          cabal update
-
-      - name: Save GHC cache
-        if: steps.cache-ghc.outputs.cache-hit != 'true'
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-        with:
-          path: /home/runner/.ghcup
-          key: ${{ runner.os }}-ghcup-v6-${{ hashFiles('mise.toml') }}
+          ghc-version: ${{ matrix.ghc-version }}
+          cabal-version: latest
+          cabal-update: true
 
       - name: Configure the build
         run: cabal configure --enable-tests --disable-documentation
@@ -53,18 +39,18 @@ jobs:
       - name: Cache cabal store
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ~/.cabal/store
-          key: ${{ runner.os }}-cabal-store-${{ hashFiles('cabal.project.freeze') }}
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-store-${{ hashFiles('cabal.project.freeze') }}
           restore-keys: |
-            ${{ runner.os }}-cabal-store-
+            ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-store-
 
       - name: Cache dist-newstyle
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: dist-newstyle
-          key: ${{ runner.os }}-dist-${{ hashFiles('cabal.project.freeze') }}-${{ hashFiles('**/*.hs', '**/*.cabal', 'package.yaml') }}
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-${{ hashFiles('cabal.project.freeze') }}-${{ hashFiles('**/*.hs', '**/*.cabal', 'package.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-dist-${{ hashFiles('cabal.project.freeze') }}-
+            ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-${{ hashFiles('cabal.project.freeze') }}-
 
       - name: Install dependencies
         run: cabal build all --only-dependencies

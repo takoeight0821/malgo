@@ -1,6 +1,4 @@
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Malgo.Module
   ( ModuleName (..),
@@ -37,10 +35,10 @@ import Effectful.Dispatch.Static
 import Effectful.Error.Static (prettyCallStack)
 import GHC.Records
 import GHC.Stack (callStack)
+import Malgo.Path
 import Malgo.Prelude
 import Malgo.SExpr (ToSExpr (..))
 import Malgo.SExpr qualified as S
-import Path
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findFile, getCurrentDirectory, listDirectory, makeAbsolute)
 import System.FilePath (makeRelative)
 import System.FilePath qualified as F
@@ -176,10 +174,6 @@ instance Show ArtifactPath where
   -- Because they include absolute path, which is not portable and may leak information.
   showsPrec d (ArtifactPath {relPath}) = showParen (d > 10) $ showString "ArtifactPath " . showsPrec 11 (toFilePath relPath)
 
-deriving anyclass instance Binary (Path Abs File)
-
-deriving anyclass instance Binary (Path Rel File)
-
 instance Pretty ArtifactPath where
   pretty path = pretty $ toFilePath path.relPath
 
@@ -187,9 +181,9 @@ pwdPath :: (Workspace :> es) => Eff es ArtifactPath
 pwdPath = do
   workspace <- getWorkspaceAbs
   let pwd = parent workspace
-  let originPath = pwd </> [relfile|dummy|]
-  let relPath = [relfile|dummy|]
-  let targetPath = workspace </> [relfile|dummy|]
+  let originPath = pwd </> mkRelFile "dummy"
+  let relPath = mkRelFile "dummy"
+  let targetPath = workspace </> mkRelFile "dummy"
   pure
     $ ArtifactPath
       { rawPath = ".",

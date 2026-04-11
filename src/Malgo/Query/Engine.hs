@@ -23,6 +23,7 @@ import Malgo.Interface
 import Malgo.Module
 import Malgo.Parser (ParserPass (..))
 import Malgo.Pass (CompileError, Pass (..))
+import Malgo.Path (replaceExtension, toFilePath)
 import Malgo.Prelude
 import Malgo.Query
 import Malgo.Query.Database
@@ -33,7 +34,6 @@ import Malgo.Sequent.Core.Join qualified as Join
 import Malgo.Sequent.ToCore (ToCorePass (..))
 import Malgo.Sequent.ToFun (ToFunPass (..))
 import Malgo.Syntax qualified as Syntax
-import Path (replaceExtension, toFilePath)
 import System.Directory (doesFileExist)
 
 -- | Run the QueryDB effect using a 'Database' for caching.

@@ -12,7 +12,6 @@ module Malgo.LSP.Handlers
   )
 where
 
-import Data.Aeson (Value (..), toJSON)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
@@ -20,10 +19,11 @@ import Effectful (Eff, IOE, runEff)
 import Effectful.Error.Static (Error, runError)
 import Effectful.Reader.Static (Reader, runReader)
 import Effectful.State.Static.Local (State, evalState)
-import Language.LSP.Protocol.Types qualified as LSP
 import Malgo.Features (Features, runFeatures)
 import Malgo.Id (Id (..))
 import Malgo.LSP.Diagnostics (compileToDiagnostics, rangeToLsp)
+import Malgo.LSP.Json (JValue (..))
+import Malgo.LSP.Protocol (Diagnostic, LspPosition (..), NormalizedUri, Uri, encodeHover, toNormalizedUri, uriToFilePath)
 import Malgo.LSP.Server (ServerEnv (..), getFileContent, logMessage, publishDiagnostics, removeFileContent, updateFileContent)
 import Malgo.Module (ModuleName (..), Pragma, Workspace, moduleNameToString, runWorkspaceOnPwd)
 import Malgo.Pass (CompileError)
@@ -40,7 +40,7 @@ data LspState = LspState
   { db :: Database,
     flag :: Flag,
     -- | Maps each open file's URI to its last successfully renamed module.
-    renamedCache :: IORef (Map LSP.NormalizedUri (ModuleName, Syntax.Module (Malgo Rename)))
+    renamedCache :: IORef (Map NormalizedUri (ModuleName, Syntax.Module (Malgo Rename)))
   }
 
 -- | Run a query-based compilation, returning diagnostics on error.
@@ -57,7 +57,7 @@ runLspCompile ::
        IOE
      ]
     a ->
-  IO (Either [LSP.Diagnostic] a)
+  IO (Either [Diagnostic] a)
 runLspCompile LspState {db, flag} action = do
   result <-
     runEff $ runWorkspaceOnPwd do
@@ -77,10 +77,10 @@ runLspCompile LspState {db, flag} action = do
 checkFile ::
   ServerEnv ->
   LspState ->
-  LSP.NormalizedUri ->
+  NormalizedUri ->
   FilePath ->
   TL.Text ->
-  IO [LSP.Diagnostic]
+  IO [Diagnostic]
 checkFile _env state nuri filePath content = do
   let modName = ModuleName (T.pack filePath)
   result <- runLspCompile state do
@@ -97,11 +97,11 @@ checkFile _env state nuri filePath content = do
       pure []
 
 -- | Handle textDocument/didOpen notification.
-handleDidOpen :: ServerEnv -> LspState -> LSP.Uri -> T.Text -> IO ()
+handleDidOpen :: ServerEnv -> LspState -> Uri -> T.Text -> IO ()
 handleDidOpen env state uri content = do
-  let nuri = LSP.toNormalizedUri uri
+  let nuri = toNormalizedUri uri
   updateFileContent env nuri content
-  case LSP.uriToFilePath uri of
+  case uriToFilePath uri of
     Nothing ->
       logMessage env ("Could not resolve path for URI: " <> T.pack (show uri))
     Just filePath -> do
@@ -110,13 +110,13 @@ handleDidOpen env state uri content = do
       publishDiagnostics env nuri diags
 
 -- | Handle textDocument/didChange notification.
-handleDidChange :: ServerEnv -> LspState -> LSP.Uri -> Maybe T.Text -> IO ()
+handleDidChange :: ServerEnv -> LspState -> Uri -> Maybe T.Text -> IO ()
 handleDidChange env state uri mFullText = do
-  let nuri = LSP.toNormalizedUri uri
+  let nuri = toNormalizedUri uri
   case mFullText of
     Just txt -> updateFileContent env nuri txt
     Nothing -> pure ()
-  case LSP.uriToFilePath uri of
+  case uriToFilePath uri of
     Nothing ->
       logMessage env ("Could not resolve path for URI: " <> T.pack (show uri))
     Just filePath -> do
@@ -130,31 +130,23 @@ handleDidChange env state uri mFullText = do
           publishDiagnostics env nuri diags
 
 -- | Handle textDocument/didClose notification.
-handleDidClose :: ServerEnv -> LspState -> LSP.Uri -> IO ()
+handleDidClose :: ServerEnv -> LspState -> Uri -> IO ()
 handleDidClose env state uri = do
-  let nuri = LSP.toNormalizedUri uri
+  let nuri = toNormalizedUri uri
   removeFileContent env nuri
   modifyIORef state.renamedCache $ Map.delete nuri
 
 -- | Handle textDocument/hover request. Returns a JSON Value for the response.
-handleHover :: LspState -> LSP.NormalizedUri -> LSP.Position -> IO Value
+handleHover :: LspState -> NormalizedUri -> LspPosition -> IO JValue
 handleHover state nuri pos = do
   cache <- readIORef state.renamedCache
   pure $ case Map.lookup nuri cache of
-    Nothing -> Null
+    Nothing -> JNull
     Just (_, renamedMod) ->
       case findIdAtPos pos renamedMod of
-        Nothing -> Null
+        Nothing -> JNull
         Just (r, idInfo) ->
-          toJSON
-            LSP.Hover
-              { LSP._contents =
-                  LSP.InL
-                    $ LSP.MarkupContent
-                      LSP.MarkupKind_Markdown
-                      (hoverText idInfo),
-                LSP._range = Just (rangeToLsp r)
-              }
+          encodeHover (hoverText idInfo) (Just (rangeToLsp r))
 
 -- | Render hover markdown for an identifier.
 hoverText :: Id -> T.Text
@@ -162,7 +154,7 @@ hoverText Id {name = n, moduleName = mn} =
   "**`" <> n <> "`**" <> " *(from " <> moduleNameToString mn <> ")*"
 
 -- | Find the tightest-ranging identifier at the given LSP cursor position.
-findIdAtPos :: LSP.Position -> Syntax.Module (Malgo Rename) -> Maybe (Range, Id)
+findIdAtPos :: LspPosition -> Syntax.Module (Malgo Rename) -> Maybe (Range, Id)
 findIdAtPos pos mod_ =
   case filter (posInRange pos . fst) (collectIds mod_) of
     [] -> Nothing
@@ -177,12 +169,12 @@ findIdAtPos pos mod_ =
        in (el - sl) * 10000 + (ec - sc)
 
 -- | Test whether an LSP position (0-indexed) falls within a Malgo Range (1-indexed).
-posInRange :: LSP.Position -> Range -> Bool
-posInRange (LSP.Position line char) r =
-  let sl = fromIntegral (unPos (sourceLine r._start)) - 1
-      sc = fromIntegral (unPos (sourceColumn r._start)) - 1
-      el = fromIntegral (unPos (sourceLine r._end)) - 1
-      ec = fromIntegral (unPos (sourceColumn r._end)) - 1
+posInRange :: LspPosition -> Range -> Bool
+posInRange (LspPosition line char) r =
+  let sl = unPos (sourceLine r._start) - 1
+      sc = unPos (sourceColumn r._start) - 1
+      el = unPos (sourceLine r._end) - 1
+      ec = unPos (sourceColumn r._end) - 1
    in (line > sl || (line == sl && char >= sc))
         && (line < el || (line == el && char <= ec))
 

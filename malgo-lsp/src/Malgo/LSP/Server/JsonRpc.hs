@@ -9,28 +9,32 @@ module Malgo.LSP.Server.JsonRpc
   )
 where
 
-import Data.Aeson (Value (..), object, (.=))
-import Data.Aeson qualified as Aeson
 import Data.ByteString.Char8 qualified as BS
 import Data.ByteString.Lazy qualified as BL
 import Data.Text (Text)
 import Data.Text qualified as T
+import Malgo.LSP.Json (JValue (..), decodeJson, encodeJson, jObject, (.=))
 import System.IO (Handle, hFlush, hSetBinaryMode)
 import Prelude
 
 -- | An incoming JSON-RPC message (request or notification).
 data JsonRpcMessage = JsonRpcMessage
-  { id :: Maybe Value,
+  { id :: Maybe JValue,
     method :: Text,
-    params :: Maybe Value
+    params :: Maybe JValue
   }
 
-instance Aeson.FromJSON JsonRpcMessage where
-  parseJSON = Aeson.withObject "JsonRpcMessage" $ \o ->
-    JsonRpcMessage
-      <$> o Aeson..:? "id"
-      <*> o Aeson..: "method"
-      <*> o Aeson..:? "params"
+-- | Parse a JsonRpcMessage from a JValue.
+parseMessage :: JValue -> Maybe JsonRpcMessage
+parseMessage (JObject kvs) = do
+  methodVal <- lookup "method" kvs
+  m <- case methodVal of
+    JString t -> Just t
+    _ -> Nothing
+  let mid = lookup "id" kvs
+      mparams = lookup "params" kvs
+  Just JsonRpcMessage {id = mid, method = m, params = mparams}
+parseMessage _ = Nothing
 
 -- | Read one Content-Length framed JSON-RPC message from a handle.
 -- Returns 'Nothing' on EOF.
@@ -44,11 +48,9 @@ readMessage h = do
       body <- BS.hGet h len
       if BS.null body
         then pure Nothing
-        else pure $ Aeson.decodeStrict body
+        else pure $ decodeJson body >>= parseMessage
 
 -- | Parse the Content-Length header from the input.
--- Reads lines until finding "Content-Length: N", then skips until the
--- blank line separator.
 readContentLength :: Handle -> IO (Maybe Int)
 readContentLength h = go
   where
@@ -86,29 +88,29 @@ skipUntilBlank h = do
       | otherwise = bs
 
 -- | Send a JSON-RPC response (for a request with an id).
-sendResponse :: Handle -> Value -> Value -> IO ()
+sendResponse :: Handle -> JValue -> JValue -> IO ()
 sendResponse h reqId result =
   sendMessage h $
-    object
-      [ "jsonrpc" .= ("2.0" :: Text),
+    jObject
+      [ "jsonrpc" .= JString "2.0",
         "id" .= reqId,
         "result" .= result
       ]
 
--- | Send a JSON-RPC notification (server → client, no id).
-sendNotification :: Handle -> Text -> Value -> IO ()
+-- | Send a JSON-RPC notification (server -> client, no id).
+sendNotification :: Handle -> Text -> JValue -> IO ()
 sendNotification h method_ params_ =
   sendMessage h $
-    object
-      [ "jsonrpc" .= ("2.0" :: Text),
-        "method" .= method_,
+    jObject
+      [ "jsonrpc" .= JString "2.0",
+        "method" .= JString method_,
         "params" .= params_
       ]
 
 -- | Encode a JSON value with Content-Length framing and write to handle.
-sendMessage :: Handle -> Value -> IO ()
+sendMessage :: Handle -> JValue -> IO ()
 sendMessage h val = do
-  let body = Aeson.encode val
+  let body = encodeJson val
       len = BL.length body
       header = "Content-Length: " <> BL.pack (map (fromIntegral . fromEnum) (show len)) <> "\r\n\r\n"
   BL.hPut h header

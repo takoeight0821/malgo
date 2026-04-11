@@ -3,13 +3,11 @@
 -- | LSP server entry point for Malgo.
 module Malgo.LSP (runLSP) where
 
-import Data.Aeson ((.:))
-import Data.Aeson qualified as Aeson
-import Data.Aeson.Types qualified as Aeson
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
-import Language.LSP.Protocol.Types qualified as LSP
 import Malgo.LSP.Handlers (LspState (..), handleDidChange, handleDidClose, handleDidOpen, handleHover)
+import Malgo.LSP.Json (JValue (..), jLookup, jText)
+import Malgo.LSP.Protocol (LspPosition (..), Uri (..), toNormalizedUri)
 import Malgo.LSP.Server (ServerEnv (..), logMessage, runServer)
 import Malgo.LSP.Server.JsonRpc (JsonRpcMessage (..), sendResponse)
 import Malgo.Prelude
@@ -50,10 +48,10 @@ dispatch state env msg = case msg.method of
     Just uri -> handleDidClose env state uri
   "textDocument/hover" -> case parseHover msg of
     Nothing -> case msg.id of
-      Just reqId -> sendResponse env.envStdout reqId Aeson.Null
+      Just reqId -> sendResponse env.envStdout reqId JNull
       Nothing -> pure ()
     Just (uri, pos) -> do
-      let nuri = LSP.toNormalizedUri uri
+      let nuri = toNormalizedUri uri
       result <- handleHover state nuri pos
       case msg.id of
         Just reqId -> sendResponse env.envStdout reqId result
@@ -61,42 +59,48 @@ dispatch state env msg = case msg.method of
   _ -> logMessage env ("Unknown method: " <> msg.method)
 
 -- | Parse didOpen params: extract URI and text content.
-parseDidOpen :: JsonRpcMessage -> Maybe (LSP.Uri, T.Text)
-parseDidOpen msg = msg.params >>= Aeson.parseMaybe parser
-  where
-    parser = Aeson.withObject "params" $ \o -> do
-      td <- o .: "textDocument"
-      Aeson.withObject "textDocument" (\td' -> (,) <$> td' .: "uri" <*> td' .: "text") td
+parseDidOpen :: JsonRpcMessage -> Maybe (Uri, T.Text)
+parseDidOpen msg = do
+  params_ <- msg.params
+  td <- jLookup "textDocument" params_
+  uriText <- jLookup "uri" td >>= jText
+  text <- jLookup "text" td >>= jText
+  pure (Uri uriText, text)
 
 -- | Parse didChange params: extract URI and optional full text.
-parseDidChange :: JsonRpcMessage -> Maybe (LSP.Uri, Maybe T.Text)
-parseDidChange msg = msg.params >>= Aeson.parseMaybe parser
-  where
-    parser = Aeson.withObject "params" $ \o -> do
-      td <- o .: "textDocument"
-      uri <- Aeson.withObject "textDocument" (\td' -> td' .: "uri") td
-      changes <- o .: "contentChanges"
-      let mText = case changes of
-            Aeson.Array arr
-              | (first : _) <- toList arr ->
-                  Aeson.parseMaybe (\v -> Aeson.withObject "change" (\c -> c .: "text") v) first
-            _ -> Nothing
-      pure (uri, mText)
+parseDidChange :: JsonRpcMessage -> Maybe (Uri, Maybe T.Text)
+parseDidChange msg = do
+  params_ <- msg.params
+  td <- jLookup "textDocument" params_
+  uriText <- jLookup "uri" td >>= jText
+  let mText = do
+        changes <- jLookup "contentChanges" params_
+        arr <- case changes of
+          JArray xs -> Just xs
+          _ -> Nothing
+        case arr of
+          (first : _) -> jLookup "text" first >>= jText
+          _ -> Nothing
+  pure (Uri uriText, mText)
 
 -- | Parse didClose params: extract URI.
-parseDidCloseUri :: JsonRpcMessage -> Maybe LSP.Uri
-parseDidCloseUri msg = msg.params >>= Aeson.parseMaybe parser
-  where
-    parser = Aeson.withObject "params" $ \o -> do
-      td <- o .: "textDocument"
-      Aeson.withObject "textDocument" (\td' -> td' .: "uri") td
+parseDidCloseUri :: JsonRpcMessage -> Maybe Uri
+parseDidCloseUri msg = do
+  params_ <- msg.params
+  td <- jLookup "textDocument" params_
+  uriText <- jLookup "uri" td >>= jText
+  pure (Uri uriText)
 
 -- | Parse hover params: extract URI and position.
-parseHover :: JsonRpcMessage -> Maybe (LSP.Uri, LSP.Position)
-parseHover msg = msg.params >>= Aeson.parseMaybe parser
+parseHover :: JsonRpcMessage -> Maybe (Uri, LspPosition)
+parseHover msg = do
+  params_ <- msg.params
+  td <- jLookup "textDocument" params_
+  uriText <- jLookup "uri" td >>= jText
+  posVal <- jLookup "position" params_
+  line <- jLookup "line" posVal >>= jInt
+  char <- jLookup "character" posVal >>= jInt
+  pure (Uri uriText, LspPosition line char)
   where
-    parser = Aeson.withObject "params" $ \o -> do
-      td <- o .: "textDocument"
-      uri <- Aeson.withObject "textDocument" (\td' -> td' .: "uri") td
-      pos <- o .: "position"
-      pure (uri, pos)
+    jInt (JNumber n) = Just (round n)
+    jInt _ = Nothing

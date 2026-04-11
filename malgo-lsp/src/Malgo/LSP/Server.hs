@@ -12,13 +12,13 @@ module Malgo.LSP.Server
   )
 where
 
-import Data.Aeson (Value (..), object, (.=))
 import Data.IORef
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
-import Language.LSP.Protocol.Types qualified as LSP
+import Malgo.LSP.Json (JValue (..), jObject, (.=))
+import Malgo.LSP.Protocol (Diagnostic, NormalizedUri (..), Uri (..), encodeDiagnostic, fromNormalizedUri)
 import Malgo.LSP.Server.JsonRpc
 import System.IO (Handle, hPutStrLn, stderr, stdin, stdout)
 import Prelude
@@ -26,7 +26,7 @@ import Prelude
 -- | The server environment, accessible to all handlers.
 data ServerEnv = ServerEnv
   { envStdout :: Handle,
-    envVfs :: IORef (Map LSP.NormalizedUri Text),
+    envVfs :: IORef (Map NormalizedUri Text),
     envLogger :: Text -> IO ()
   }
 
@@ -54,7 +54,7 @@ serverLoop env dispatch = go False
           "initialized" -> go shutdown
           "shutdown" -> do
             case msg.id of
-              Just reqId -> sendResponse env.envStdout reqId Null
+              Just reqId -> sendResponse env.envStdout reqId JNull
               Nothing -> pure ()
             go True
           "exit" -> pure ()
@@ -69,18 +69,18 @@ serverLoop env dispatch = go False
 handleInitialize :: ServerEnv -> JsonRpcMessage -> IO ()
 handleInitialize env msg = do
   let capabilities =
-        object
+        jObject
           [ "capabilities"
-              .= object
+              .= jObject
                 [ "textDocumentSync"
-                    .= object
-                      [ "openClose" .= True,
-                        "change" .= (1 :: Int),
-                        "willSave" .= False,
-                        "willSaveWaitUntil" .= False,
-                        "save" .= object ["includeText" .= False]
+                    .= jObject
+                      [ "openClose" .= JBool True,
+                        "change" .= JNumber 1,
+                        "willSave" .= JBool False,
+                        "willSaveWaitUntil" .= JBool False,
+                        "save" .= jObject ["includeText" .= JBool False]
                       ],
-                  "hoverProvider" .= True
+                  "hoverProvider" .= JBool True
                 ]
           ]
   case msg.id of
@@ -88,25 +88,25 @@ handleInitialize env msg = do
     Nothing -> pure ()
 
 -- | Send textDocument/publishDiagnostics notification.
-publishDiagnostics :: ServerEnv -> LSP.NormalizedUri -> [LSP.Diagnostic] -> IO ()
+publishDiagnostics :: ServerEnv -> NormalizedUri -> [Diagnostic] -> IO ()
 publishDiagnostics env nuri diags =
   sendNotification env.envStdout "textDocument/publishDiagnostics" $
-    object
-      [ "uri" .= LSP.fromNormalizedUri nuri,
-        "diagnostics" .= diags
+    jObject
+      [ "uri" .= JString (let Uri t = fromNormalizedUri nuri in t),
+        "diagnostics" .= JArray (map encodeDiagnostic diags)
       ]
 
 -- | Get file content from the VFS.
-getFileContent :: ServerEnv -> LSP.NormalizedUri -> IO (Maybe Text)
+getFileContent :: ServerEnv -> NormalizedUri -> IO (Maybe Text)
 getFileContent env nuri = Map.lookup nuri <$> readIORef env.envVfs
 
 -- | Store or update file content in the VFS.
-updateFileContent :: ServerEnv -> LSP.NormalizedUri -> Text -> IO ()
+updateFileContent :: ServerEnv -> NormalizedUri -> Text -> IO ()
 updateFileContent env nuri content =
   modifyIORef' env.envVfs (Map.insert nuri content)
 
 -- | Remove file content from the VFS.
-removeFileContent :: ServerEnv -> LSP.NormalizedUri -> IO ()
+removeFileContent :: ServerEnv -> NormalizedUri -> IO ()
 removeFileContent env nuri =
   modifyIORef' env.envVfs (Map.delete nuri)
 

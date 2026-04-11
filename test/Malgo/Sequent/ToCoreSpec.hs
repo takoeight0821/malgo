@@ -31,7 +31,7 @@ spec = parallel do
   golden "Builtin flat" (driveFlat builtinPath)
   golden "Builtin join" (driveJoin builtinPath)
   golden "Prelude" (driveToCore preludePath)
-  golden "Prelude flat" (driveFlat builtinPath)
+  golden "Prelude flat" (driveFlat preludePath)
   golden "Prelude join" (driveJoin preludePath)
   for_ testcases \testcase -> do
     golden (takeBaseName testcase) (driveToCore (testcaseDir </> testcase))

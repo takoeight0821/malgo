@@ -7,9 +7,8 @@
 module Malgo.Prelude
   ( -- * Reexports
     module Control.Arrow,
-    module Control.Lens,
+    module Lens.Micro,
     module Control.Monad,
-    module Control.Monad.Extra,
     module Control.Monad.IO.Class,
     module Data.Bifunctor,
     module Data.Bitraversable,
@@ -19,7 +18,6 @@ module Malgo.Prelude
     module Data.Data,
     module Data.Either,
     module Data.Foldable,
-    module Data.Foldable.Extra,
     module Data.Function,
     module Data.Functor,
     module Data.Hashable,
@@ -52,9 +50,13 @@ module Malgo.Prelude
     pass,
     foldMapM,
     replaceOf,
+    hasDuplicates,
     chomp,
     asumMap,
     PrettyShow (..),
+
+    -- * Lens utilities
+    view,
 
     -- * Lift IO functions
 
@@ -84,8 +86,6 @@ module Malgo.Prelude
     -- * Range
     Range (..),
     HasRange (..),
-    HasStart (..),
-    HasEnd (..),
     errorOn,
     warningOn,
 
@@ -97,12 +97,10 @@ where
 
 import Control.Applicative
 import Control.Arrow ((<<<), (>>>))
-import Control.Lens (ASetter, over, (??))
-import Control.Lens.TH
 import Control.Monad
-import Control.Monad.Extra (ifM)
 import Control.Monad.IO.Class
 import Data.Bifunctor
+import Data.Binary (Binary)
 import Data.Bitraversable
 import Data.ByteString.Short (ShortByteString)
 import Data.Char
@@ -110,15 +108,15 @@ import Data.Coerce
 import Data.Data (Typeable)
 import Data.Either
 import Data.Foldable
-import Data.Foldable.Extra
 import Data.Function (applyWhen, fix, on, (&))
 import Data.Functor
+import Data.Functor.Const (Const (..), getConst)
 import Data.Hashable (Hashable)
 import Data.IORef (IORef)
 import Data.IORef qualified as IORef
 import Data.Int (Int32, Int64)
 import Data.Kind (Constraint)
-import Data.List (dropWhileEnd, foldl', sort, transpose)
+import Data.List (dropWhileEnd, foldl', nub, sort, transpose)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map qualified as Map
 import Data.Map.Strict (Map)
@@ -126,8 +124,6 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid (Alt (..))
 import Data.Semigroup
 import Data.Set (Set)
-import Data.Store ()
-import Data.Store.TH (makeStore)
 import Data.String
 import Data.String.Conversions
 import Data.Text (Text)
@@ -138,6 +134,8 @@ import Effectful.State.Static.Local (State, state)
 import GHC.Exts (sortWith)
 import GHC.Generics (Generic)
 import GHC.Stack (HasCallStack)
+import Lens.Micro (ASetter, Getting, over)
+import Lens.Micro.TH
 import Prettyprinter
 import Prettyprinter.Render.String (renderString)
 import Prettyprinter.Render.Text (hPutDoc, renderStrict)
@@ -180,9 +178,16 @@ foldMapM f =
     )
     mempty
 
+view :: Getting a s a -> s -> a
+view l s = getConst (l Const s)
+{-# INLINE view #-}
+
 replaceOf :: (Eq b) => ASetter s t b b -> b -> b -> s -> t
 replaceOf l x x' = over l (\v -> if v == x then x' else v)
 {-# INLINE replaceOf #-}
+
+hasDuplicates :: (Eq a) => [a] -> Bool
+hasDuplicates xs = length xs /= length (nub xs)
 
 chomp :: String -> String
 chomp = dropWhileEnd (`elem` ['\r', '\n'])
@@ -256,9 +261,9 @@ instance Hashable Megaparsec.Pos
 
 instance Hashable SourcePos
 
-makeStore ''Megaparsec.Pos
+instance Binary Megaparsec.Pos
 
-makeStore ''SourcePos
+instance Binary SourcePos
 
 -- | Range of a token.
 data Range = Range
@@ -268,7 +273,7 @@ data Range = Range
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (Hashable)
 
-makeStore ''Range
+instance Binary Range
 
 class HasRange a where
   range :: a -> Range
@@ -293,8 +298,6 @@ instance Pretty Range where
       <> pretty (unPos (sourceLine end))
       <> ", column "
       <> pretty (unPos (sourceColumn end))
-
-makeFieldsNoPrefix ''Range
 
 errorOn :: (MonadIO m, Pretty a) => a -> Doc ann -> m b
 errorOn range x = do

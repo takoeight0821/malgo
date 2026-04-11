@@ -77,9 +77,9 @@ module Malgo.Syntax.Extension
   )
 where
 
+import Data.Binary (Binary)
 import Data.Kind qualified as K
 import Data.SCargot.Repr.Basic qualified as S
-import Data.Store.TH
 import Data.Void
 import Malgo.Id
 import Malgo.Module
@@ -402,4 +402,4 @@ type ForallDeclX (c :: K.Type -> Constraint) x =
 
 type family XModule x
 
-makeStore ''Assoc
+instance Binary Assoc

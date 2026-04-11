@@ -1,9 +1,7 @@
 -- | Name resolution and simple desugar transformation
 module Malgo.Rename.Pass (RenamePass (..)) where
 
-import Control.Lens (view, _2)
-import Data.List (intersect)
-import Data.List.Extra (anySame, disjoint)
+import Data.List (intersect, nub)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
@@ -12,6 +10,7 @@ import Effectful (Eff, IOE, (:>))
 import Effectful.Error.Static
 import Effectful.Reader.Static (Reader, ask, asks, local, runReader)
 import Effectful.State.Static.Local (State, execState, get, gets, modify, put, runState)
+import Lens.Micro (_2)
 import Malgo.Id
 import Malgo.Interface
 import Malgo.Module
@@ -259,7 +258,7 @@ rnClause (Clause pos ps e) = do
   let vars = concatMap patVars ps
   -- パターンが束縛する変数に重複がないことを確認する
   -- TODO: throwError に置き換える
-  when (anySame $ filter (/= "_") vars) $ errorOn pos "Same variables occurs in a pattern"
+  when (hasDuplicates $ filter (/= "_") vars) $ errorOn pos "Same variables occurs in a pattern"
   vm <- zip vars . map (Qualified Implicit) <$> traverse resolveName vars
   local (insertVarIdent vm) $ Clause pos <$> traverse rnPat ps <*> rnExpr e
 
@@ -321,7 +320,7 @@ rnCoClause (copat, expr) = do
   let vars = coPatVars copat
   -- パターンが束縛する変数に重複がないことを確認する
   -- TODO: throwError に置き換える
-  when (anySame $ filter (/= "_") vars) $ errorOn (range copat) "Same variables occurs in a pattern"
+  when (hasDuplicates $ filter (/= "_") vars) $ errorOn (range copat) "Same variables occurs in a pattern"
   vm <- zip vars . map (Qualified Implicit) <$> traverse resolveName vars
   local (insertVarIdent vm) do
     copat <- rnCoPat copat
@@ -382,11 +381,14 @@ rnStmts (With x _ _ :| []) = errorOn x "`with` statement cannnot appear in the l
 -- | Convert infix declarations to a Map. Infix for an undefined identifier is an error.
 infixDecls :: (Reader RnEnv :> es, Error RenameError :> es) => [Decl (Malgo Parse)] -> Eff es (Map RnId (Assoc, Int))
 infixDecls ds =
-  foldMapM ?? ds $ \case
-    (Infix pos assoc order name) -> do
-      name' <- lookupVarName pos name
-      pure $ Map.singleton name' (assoc, order)
-    _ -> pure mempty
+  foldMapM
+    ( \case
+        (Infix pos assoc order name) -> do
+          name' <- lookupVarName pos name
+          pure $ Map.singleton name' (assoc, order)
+        _ -> pure mempty
+    )
+    ds
 
 -- | OpApp recombination.
 -- Every OpApp in 'Malgo Parse' is treated as left associative.
@@ -454,7 +456,7 @@ genToplevelEnv (ds :: [Decl (Malgo Parse)]) env = do
       env <- get @RnEnv
       when (x `elem` Map.keys env.resolvedTypeIdentMap) do
         throwError $ DuplicateName pos x
-      unless (disjoint (map (view _2) cs) (Map.keys env.resolvedVarIdentMap)) do
+      unless (Set.null $ Set.fromList (map (view _2) cs) `Set.intersection` Set.fromList (Map.keys env.resolvedVarIdentMap)) do
         throwError $ DuplicateNames pos (map (view _2) cs `intersect` Map.keys env.resolvedVarIdentMap)
       x' <- resolveGlobalName x
       xs' <- traverse (resolveGlobalName . view _2) cs

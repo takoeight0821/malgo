@@ -14,7 +14,7 @@ module Malgo.Module
     Resource (..),
     pwdPath,
     parseArtifactPath,
-    ViaStore (..),
+    ViaBinary (..),
     ViaShow (..),
     moduleNameToString,
     moduleNameDigest,
@@ -25,12 +25,14 @@ where
 
 import Control.Monad.Catch
 import Data.Aeson hiding (encode)
+import Data.Binary (Binary)
+import Data.Binary qualified as Binary
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as BSL
 import Data.Data
 import Data.Map qualified as Map
 import Data.SCargot.Repr.Basic qualified as S
-import Data.Store
 import Effectful
 import Effectful.Dispatch.Static
 import Effectful.Error.Static (prettyCallStack)
@@ -40,18 +42,17 @@ import Malgo.Prelude
 import Malgo.SExpr (ToSExpr (..))
 import Malgo.SExpr qualified as S
 import Path
-import System.Directory (canonicalizePath, createDirectoryIfMissing, doesFileExist, findFile, getCurrentDirectory, makeAbsolute)
-import System.Directory.Extra (listDirectories)
+import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findFile, getCurrentDirectory, listDirectory, makeAbsolute)
 import System.FilePath (makeRelative)
 import System.FilePath qualified as F
+import System.FilePath qualified as FP
 import Text.Megaparsec.Pos (initialPos)
-import Text.Pretty.Simple (pShowNoColor)
 
 data ModuleName
   = ModuleName Text
   | Artifact ArtifactPath
   deriving stock (Eq, Show, Ord, Generic, Data)
-  deriving anyclass (Hashable, ToJSON, ToJSONKey, FromJSON, FromJSONKey, Store)
+  deriving anyclass (Hashable, ToJSON, ToJSONKey, FromJSON, FromJSONKey, Binary)
 
 instance HasRange ModuleName where
   range (ModuleName raw) = Range (initialPos $ convertString raw) (initialPos $ convertString raw)
@@ -143,9 +144,14 @@ searchAndRegister (ModuleName moduleName) = do
       case mfile of
         Just file -> pure file
         Nothing -> do
-          subDirs <- liftIO $ traverse listDirectories dirs
+          subDirs <- liftIO $ traverse listSubDirectories dirs
           search (concat subDirs) fileName
 searchAndRegister (Artifact path) = pure path
+
+listSubDirectories :: FilePath -> IO [FilePath]
+listSubDirectories dir = do
+  entries <- listDirectory dir
+  filterM doesDirectoryExist $ map (dir FP.</>) entries
 
 data WorkspaceError where
   ModuleNotFound :: (HasCallStack) => ModuleName -> WorkspaceError
@@ -164,16 +170,16 @@ data ArtifactPath = ArtifactPath
     targetPath :: Path Abs File
   }
   deriving stock (Eq, Ord, Generic, Data)
-  deriving anyclass (Hashable, ToJSON, ToJSONKey, FromJSON, FromJSONKey, Store)
+  deriving anyclass (Hashable, ToJSON, ToJSONKey, FromJSON, FromJSONKey, Binary)
 
 instance Show ArtifactPath where
   -- Do not show rawPath, originPath, targetPath.
   -- Because they include absolute path, which is not portable and may leak information.
   showsPrec d (ArtifactPath {relPath}) = showParen (d > 10) $ showString "ArtifactPath " . showsPrec 11 (toFilePath relPath)
 
-deriving anyclass instance Store (Path Abs File)
+deriving anyclass instance Binary (Path Abs File)
 
-deriving anyclass instance Store (Path Rel File)
+deriving anyclass instance Binary (Path Rel File)
 
 instance Pretty ArtifactPath where
   pretty path = pretty $ toFilePath path.relPath
@@ -229,12 +235,12 @@ class Resource a where
     liftIO $ createDirectoryIfMissing True $ toFilePath $ parent targetPath
     liftIO $ BS.writeFile (toFilePath targetPath) $ toByteString content
 
-newtype ViaStore a = ViaStore a
-  deriving newtype (Store)
+newtype ViaBinary a = ViaBinary a
+  deriving newtype (Binary)
 
-instance (Store a) => Resource (ViaStore a) where
-  toByteString (ViaStore a) = encode a
-  fromByteString = decodeEx
+instance (Binary a) => Resource (ViaBinary a) where
+  toByteString (ViaBinary a) = BSL.toStrict $ Binary.encode a
+  fromByteString bs = Binary.decode (BSL.fromStrict bs)
 
 instance Resource ByteString where
   toByteString = identity
@@ -244,13 +250,13 @@ newtype ViaShow a = ViaShow a
   deriving newtype (Pretty)
 
 instance (Show a) => Resource (ViaShow a) where
-  toByteString (ViaShow a) = convertString $ pShowNoColor a
+  toByteString (ViaShow a) = convertString $ show a
   fromByteString = error "fromByteString: ViaShow cannot be deserialized"
 
 newtype Pragma = Pragma (Map ModuleName [Text])
   deriving stock (Eq, Show, Generic, Data)
   deriving newtype (Semigroup, Monoid)
-  deriving anyclass (Hashable, ToJSON, FromJSON, Store)
+  deriving anyclass (Hashable, ToJSON, FromJSON, Binary)
 
 insertPragmas :: ModuleName -> [Text] -> Pragma -> Pragma
 insertPragmas path value (Pragma map) = Pragma $ Map.insertWith (<>) path value map

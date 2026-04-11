@@ -10,8 +10,8 @@ module Malgo.Interface
   )
 where
 
+import Data.Binary (Binary)
 import Data.Map.Strict qualified as Map
-import Data.Store (Store)
 import Effectful (Eff, IOE, (:>))
 import GHC.Records (HasField)
 import Malgo.Id
@@ -33,7 +33,7 @@ data Interface = Interface
   }
   deriving stock (Show, Generic)
 
-instance Store Interface
+instance Binary Interface
 
 instance Pretty Interface where
   pretty = viaShow
@@ -78,5 +78,5 @@ loadInterfaceFromDisk ::
   Eff es Interface
 loadInterfaceFromDisk modName = do
   modPath <- getModulePath modName
-  ViaStore interface <- load modPath ".mlgi"
+  ViaBinary interface <- load modPath ".mlgi"
   pure interface

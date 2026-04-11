@@ -42,22 +42,22 @@ spec = parallel do
       golden (takeBaseName testcase <> " flat") (driveFlat (testcaseDir </> testcase))
       golden (takeBaseName testcase <> " join") (driveJoin (testcaseDir </> testcase))
 
-  describe "flat invariants" do
+  describe "flat-invariants" do
     for_ testcases \testcase ->
       it (takeBaseName testcase)
         $ driveFlatValidate (testcaseDir </> testcase)
 
-  describe "join invariants" do
+  describe "join-invariants" do
     for_ testcases \testcase ->
       it (takeBaseName testcase)
         $ driveJoinValidate (testcaseDir </> testcase)
 
-  describe "flat fingerprint" do
+  describe "flat-fingerprint" do
     for_ testcases \testcase ->
       golden (takeBaseName testcase)
         $ driveFlatFingerprint (testcaseDir </> testcase)
 
-  describe "join fingerprint" do
+  describe "join-fingerprint" do
     for_ testcases \testcase ->
       golden (takeBaseName testcase)
         $ driveJoinFingerprint (testcaseDir </> testcase)

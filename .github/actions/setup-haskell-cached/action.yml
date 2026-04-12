@@ -40,14 +40,13 @@ runs:
     - name: Install ghcup, GHC, and Cabal (on cache miss)
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
-      env:
-        GHCUP_INSTALL_BASE_PREFIX: ${{ github.home }}
-        BOOTSTRAP_HASKELL_NONINTERACTIVE: "1"
-        BOOTSTRAP_HASKELL_NO_UPGRADE: "1"
-        BOOTSTRAP_HASKELL_MINIMAL: "1"
       run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | \
-          GHCUP_INSTALL_BASE_PREFIX="$HOME" sh
+        export GHCUP_INSTALL_BASE_PREFIX="$HOME"
+        export BOOTSTRAP_HASKELL_NONINTERACTIVE=1
+        export BOOTSTRAP_HASKELL_NO_UPGRADE=1
+        export BOOTSTRAP_HASKELL_MINIMAL=1
+        curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
+        source "$HOME/.ghcup/env"
         ghcup install ghc ${{ inputs.ghc-version }}
         ghcup set ghc ${{ inputs.ghc-version }}
         ghcup install cabal ${{ inputs.cabal-version }}

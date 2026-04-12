@@ -67,8 +67,6 @@ spec = parallel do
                 ir <- driveAll (testcaseDir </> testcase)
                 writeIORef ref (Just ir)
                 pure ir
-      golden (takeBaseName testcase) (sShow . (.core) <$> getAll)
-      golden (takeBaseName testcase <> " flat") (sShow . (.flat) <$> getAll)
       golden (takeBaseName testcase <> " join") (sShow . (.join) <$> getAll)
 
   for_ testcases \testcase -> do

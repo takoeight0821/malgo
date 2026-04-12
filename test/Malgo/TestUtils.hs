@@ -6,6 +6,7 @@ module Malgo.TestUtils
     setupPrelude,
     flag,
     golden,
+    representatives,
     failIfError,
     setupTestStdin,
     setupTestStdout,
@@ -67,6 +68,25 @@ setupPrelude =
 
 flag :: Flag
 flag = Flag {noOptimize = False, lambdaLift = False, debugMode = False, testMode = True, target = TargetEval, evalMode = EvalSmallStep, useInfer = False}
+
+-- | Test cases that retain full golden output across all passes.
+-- Other test cases use lightweight "compiles" tests instead.
+representatives :: [String]
+representatives =
+  [ "Primitive",
+    "List",
+    "HelloImport",
+    "RecordTest",
+    "RowPoly",
+    "CodataE2E",
+    "FibCopattern",
+    "LabelGoto",
+    "NestedMatch",
+    "CStyleApply",
+    "ZeroArgs",
+    "Eventually",
+    "TuplePattern"
+  ]
 
 golden ::
   -- | Test description

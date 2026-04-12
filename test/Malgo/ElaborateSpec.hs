@@ -16,23 +16,6 @@ import System.Directory
 import System.FilePath
 import Test.Hspec
 
-representatives :: [String]
-representatives =
-  [ "Primitive",
-    "List",
-    "HelloImport",
-    "RecordTest",
-    "RowPoly",
-    "CodataE2E",
-    "FibCopattern",
-    "LabelGoto",
-    "NestedMatch",
-    "CStyleApply",
-    "ZeroArgs",
-    "Eventually",
-    "TuplePattern"
-  ]
-
 spec :: Spec
 spec = parallel do
   runIO do

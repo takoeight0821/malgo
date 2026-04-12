@@ -14,23 +14,6 @@ import Text.Megaparsec (errorBundlePretty)
 errorcaseDir :: FilePath
 errorcaseDir = "test/Malgo/ParserSpec/errors"
 
-representatives :: [String]
-representatives =
-  [ "Primitive",
-    "List",
-    "HelloImport",
-    "RecordTest",
-    "RowPoly",
-    "CodataE2E",
-    "FibCopattern",
-    "LabelGoto",
-    "NestedMatch",
-    "CStyleApply",
-    "ZeroArgs",
-    "Eventually",
-    "TuplePattern"
-  ]
-
 spec :: Spec
 spec = parallel do
   testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir

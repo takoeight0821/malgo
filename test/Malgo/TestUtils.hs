@@ -74,7 +74,7 @@ flag = Flag {noOptimize = False, lambdaLift = False, debugMode = False, testMode
 representatives :: [String]
 representatives =
   [ "Primitive",
-    "List",
+    "ListOps",
     "HelloImport",
     "RecordTest",
     "RowPoly",

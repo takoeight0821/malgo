@@ -1,0 +1,45 @@
+(module
+   "test/testcases/malgo/CStyleApply.mlg"
+   ((import "runtime/malgo/Builtin.mlg" all)
+      (import "runtime/malgo/Prelude.mlg" all)
+      (infix neutral 4 ==)
+      (def == (fn ((clause (x y) (seq (do (apply (apply eqInt64 x) y)))))))
+      (infix left 6 -)
+      (def - (fn ((clause (x y) (seq (do (apply (apply subInt64 x) y)))))))
+      (infix left 7 *)
+      (def * (fn ((clause (x y) (seq (do (apply (apply mulInt64 x) y)))))))
+      (def
+         fact
+         (fn ((clause (n) (seq (do (apply factAcc (tuple n (int64 1)))))))))
+      (def
+         factAcc
+         (fn
+            ((clause
+                ((tuple n acc))
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (opapp == n (int64 0)))
+                            (fn ((clause (_) (seq (do acc))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         factAcc
+                                         (tuple
+                                            (opapp - n (int64 1))
+                                            (opapp * n acc)))))))))))))))
+      (def
+         main
+         (fn
+            ((clause
+                (_)
+                (seq
+                   (do
+                      (opapp
+                         |>
+                         (opapp |> (apply fact (int64 5)) toStringInt64)
+                         putStrLn)))))))))

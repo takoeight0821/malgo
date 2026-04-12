@@ -1,0 +1,121 @@
+(module
+   "test/testcases/malgo/Eventually.mlg"
+   ((import "runtime/malgo/Builtin.mlg" all)
+      (import "runtime/malgo/Prelude.mlg" all)
+      (data
+         Eventually
+         (a)
+         ((Done (a)) (NotYetDone ((block (app Eventually (a)))))))
+      (type
+         EventuallyBuilder
+         (a b)
+         (record
+            (bind
+               (->
+                  (app Eventually (a))
+                  (-> (-> a (app Eventually (b))) (app Eventually (b)))))
+            (return (-> a (app Eventually (a))))))
+      (sig eventually (app EventuallyBuilder (a b)))
+      (def eventually (record (bind eventuallyBind) (return Done)))
+      (sig
+         eventuallyBind
+         (->
+            (app Eventually (a))
+            (-> (-> a (app Eventually (b))) (app Eventually (b)))))
+      (def
+         eventuallyBind
+         (fn
+            ((clause ((con Done (value)) k) (seq (do (apply k value))))
+               (clause
+                  ((con NotYetDone (work)) k)
+                  (seq
+                     (do
+                        (apply
+                           NotYetDone
+                           (fn
+                              ((clause
+                                  (_)
+                                  (seq
+                                     (do
+                                        (apply
+                                           (apply
+                                              eventuallyBind
+                                              (apply work (tuple)))
+                                           k)))))))))))))
+      (def
+         step
+         (fn
+            ((clause ((con Done (value))) (seq (do (apply Done value))))
+               (clause
+                  ((con NotYetDone (work)))
+                  (seq (do (parens (apply work (tuple)))))))))
+      (sig
+         bind
+         (->
+            (app EventuallyBuilder (a b))
+            (->
+               (app Eventually (a))
+               (-> (-> a (app Eventually (b))) (app Eventually (b))))))
+      (def bind (fn ((clause ((record (bind x) (return _))) (seq (do x))))))
+      (sig return (-> (app EventuallyBuilder (a b)) (-> a (app Eventually (a)))))
+      (def return (fn ((clause ((record (bind _) (return x))) (seq (do x))))))
+      (sig comp (app Eventually (Int32)))
+      (def
+         comp
+         (apply
+            (apply
+               (apply bind eventually)
+               (apply
+                  NotYetDone
+                  (fn
+                     ((clause
+                         (_)
+                         (seq (do (apply Done (apply printString (string "1"))))))))))
+            (fn
+               ((clause
+                   (_)
+                   (seq
+                      (do
+                         (apply
+                            (apply
+                               (apply bind eventually)
+                               (apply
+                                  NotYetDone
+                                  (fn
+                                     ((clause
+                                         (_)
+                                         (seq
+                                            (do
+                                               (apply
+                                                  Done
+                                                  (apply printString (string "2"))))))))))
+                            (fn
+                               ((clause
+                                   (_)
+                                   (seq
+                                      (do
+                                         (apply
+                                            (apply return eventually)
+                                            (int32 3)))))))))))))))
+      (sig main (block (tuple)))
+      (def
+         main
+         (fn
+            ((clause
+                (_)
+                (seq
+                   (do (opapp |> comp step))
+                   (do
+                      (opapp
+                         |>
+                         (opapp |> (opapp |> (opapp |> comp step) step) step)
+                         (fn
+                            ((clause
+                                ((con Done (x)))
+                                (seq
+                                   (do
+                                      (apply printString (apply toStringInt32 x)))))
+                               (clause
+                                  ((con NotYetDone (_)))
+                                  (seq
+                                     (do (apply printString (string "not yet"))))))))))))))))

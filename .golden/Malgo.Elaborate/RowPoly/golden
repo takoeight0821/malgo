@@ -1,0 +1,79 @@
+((((def wideRecord (record (x (int64 20)) (y (int64 99)))))
+    ((def
+        sumXY
+        (fn
+           ((clause
+               (#RowPoly.rec_3)
+               (seq
+                  (do
+                     (apply
+                        (apply addInt64# (project #RowPoly.rec_3 "x"))
+                        (project #RowPoly.rec_3 "y")))))))))
+    ((def someOrNone (apply Some (int64 30))))
+    ((def
+        handleSome
+        (fn ((clause ((con Some (#RowPoly.x_6))) (seq (do #RowPoly.x_6)))))))
+    ((def
+        handleOption
+        (fn
+           ((clause
+               (#RowPoly.fallback_8 (con Some (#RowPoly.x_9)))
+               (seq (do #RowPoly.x_9)))
+              (clause
+                 (#RowPoly.fallback_10 (con None ()))
+                 (seq (do #RowPoly.fallback_10)))))))
+    ((def
+        getX
+        (fn ((clause (#RowPoly.rec_1) (seq (do (project #RowPoly.rec_1 "x"))))))))
+    ((def
+        main
+        (fn
+           ((clause
+               (#RowPoly.__11)
+               (seq
+                  (let
+                     #RowPoly.fromNarrowRecord_12
+                     (apply getX (record (x (int64 10)))))
+                  (let #RowPoly.fromWideRecord_13 (apply getX wideRecord))
+                  (let
+                     #RowPoly.fromWiderRecord_14
+                     (apply
+                        sumXY
+                        (record (x (int64 1)) (y (int64 2)) (z (int64 3)))))
+                  (let
+                     #RowPoly.fromClosedVariant_15
+                     (apply handleSome someOrNone))
+                  (let
+                     #RowPoly.fromOpenVariant_16
+                     (apply (apply handleOption (int64 7)) someOrNone))
+                  (let
+                     #RowPoly.fallbackFromNone_17
+                     (apply (apply handleOption (int64 7)) None))
+                  (let
+                     #RowPoly.total_18
+                     (apply
+                        (apply addInt64# #RowPoly.fromNarrowRecord_12)
+                        (apply
+                           (apply addInt64# #RowPoly.fromWideRecord_13)
+                           (apply
+                              (apply addInt64# #RowPoly.fromWiderRecord_14)
+                              (apply
+                                 (apply addInt64# #RowPoly.fromClosedVariant_15)
+                                 (apply
+                                    (apply addInt64# #RowPoly.fromOpenVariant_16)
+                                    #RowPoly.fallbackFromNone_17))))))
+                  (do
+                     (apply printString# (apply toStringInt64# #RowPoly.total_18))))))))))
+   ((sig getX (-> (record (x Int64#) (row #RowPoly.r_0)) Int64#))
+      (sig sumXY (-> (record (x Int64#) (y Int64#) (row #RowPoly.r_2)) Int64#))
+      (sig handleSome (-> (variant (Some Int64#) (row #RowPoly.r_5)) Int64#))
+      (sig
+         handleOption
+         (-> Int64# (-> (variant (Some Int64#) (None) (row #RowPoly.r_7)) Int64#)))
+      (sig wideRecord (record (x Int64#) (y Int64#)))
+      (sig someOrNone (variant (Some Int64#) (None))))
+   ((data Option (#RowPoly.a_4) ((Some (#RowPoly.a_4)) (None ()))))
+   ()
+   ()
+   ((import "runtime/malgo/Builtin.mlg" all)
+      (import "runtime/malgo/Prelude.mlg" all)))

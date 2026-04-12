@@ -18,24 +18,15 @@ spec :: Spec
 spec = parallel do
   testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
 
-  describe "golden" do
-    golden "Builtin" (driveParse builtinPath)
-    golden "Prelude" (driveParse preludePath)
-    for_ testcases \testcase ->
-      when (takeBaseName testcase `elem` representatives)
-        $ golden (takeBaseName testcase) (driveParse (testcaseDir </> testcase))
-
-  describe "compiles" do
-    for_ testcases \testcase ->
-      when (takeBaseName testcase `notElem` representatives)
-        $ it (takeBaseName testcase)
-        $ void
-        $ driveParse (testcaseDir </> testcase)
-
-  describe "errors" do
-    errorcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory errorcaseDir
-    for_ errorcases \errorcase -> do
-      golden ("error " <> takeBaseName errorcase) (driveErrorParse (errorcaseDir </> errorcase))
+  golden "Builtin" (driveParse builtinPath)
+  golden "Prelude" (driveParse preludePath)
+  for_ testcases \testcase ->
+    if takeBaseName testcase `elem` representatives
+      then golden (takeBaseName testcase) (driveParse (testcaseDir </> testcase))
+      else it (takeBaseName testcase) $ void $ driveParse (testcaseDir </> testcase)
+  errorcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory errorcaseDir
+  for_ errorcases \errorcase -> do
+    golden ("error " <> takeBaseName errorcase) (driveErrorParse (errorcaseDir </> errorcase))
 
   describe "unified parser entrypoint" do
     describe "accepts regular and C-style syntax" do

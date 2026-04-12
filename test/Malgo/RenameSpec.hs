@@ -23,24 +23,15 @@ spec = parallel do
     setupPrelude
   testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
 
-  describe "golden" do
-    golden "Builtin" (driveRename builtinPath)
-    golden "Prelude" (driveRename preludePath)
-    for_ testcases \testcase ->
-      when (takeBaseName testcase `elem` representatives)
-        $ golden (takeBaseName testcase) (driveRename (testcaseDir </> testcase))
-
-  describe "compiles" do
-    for_ testcases \testcase ->
-      when (takeBaseName testcase `notElem` representatives)
-        $ it (takeBaseName testcase)
-        $ void
-        $ driveRename (testcaseDir </> testcase)
-
-  describe "errors" do
-    errorcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory errorcaseDir
-    for_ errorcases \errorcase -> do
-      golden ("error " <> takeBaseName errorcase) (driveErrorRename (errorcaseDir </> errorcase))
+  golden "Builtin" (driveRename builtinPath)
+  golden "Prelude" (driveRename preludePath)
+  for_ testcases \testcase ->
+    if takeBaseName testcase `elem` representatives
+      then golden (takeBaseName testcase) (driveRename (testcaseDir </> testcase))
+      else it (takeBaseName testcase) $ void $ driveRename (testcaseDir </> testcase)
+  errorcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory errorcaseDir
+  for_ errorcases \errorcase -> do
+    golden ("error " <> takeBaseName errorcase) (driveErrorRename (errorcaseDir </> errorcase))
 
 driveRename :: FilePath -> IO String
 driveRename srcPath = do

@@ -24,19 +24,12 @@ spec = parallel do
     files <- listDirectory testcaseDir
     pure $ filter (isExtensionOf "mlg") files
 
-  describe "golden" do
-    golden "Builtin" (driveToFun builtinPath)
-    golden "Prelude" (driveToFun preludePath)
-    for_ testcases \testcase ->
-      when (takeBaseName testcase `elem` representatives)
-        $ golden (takeBaseName testcase) (driveToFun (testcaseDir </> testcase))
-
-  describe "compiles" do
-    for_ testcases \testcase ->
-      when (takeBaseName testcase `notElem` representatives)
-        $ it (takeBaseName testcase)
-        $ void
-        $ driveToFun (testcaseDir </> testcase)
+  golden "Builtin" (driveToFun builtinPath)
+  golden "Prelude" (driveToFun preludePath)
+  for_ testcases \testcase ->
+    if takeBaseName testcase `elem` representatives
+      then golden (takeBaseName testcase) (driveToFun (testcaseDir </> testcase))
+      else it (takeBaseName testcase) $ void $ driveToFun (testcaseDir </> testcase)
 
 driveToFun :: FilePath -> IO String
 driveToFun srcPath = do

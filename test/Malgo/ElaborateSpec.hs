@@ -23,17 +23,10 @@ spec = parallel do
     setupPrelude
   testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
 
-  describe "golden" do
-    for_ testcases \testcase ->
-      when (takeBaseName testcase `elem` representatives)
-        $ golden (takeBaseName testcase) (driveElaborate (testcaseDir </> testcase))
-
-  describe "compiles" do
-    for_ testcases \testcase ->
-      when (takeBaseName testcase `notElem` representatives)
-        $ it (takeBaseName testcase)
-        $ void
-        $ driveElaborate (testcaseDir </> testcase)
+  for_ testcases \testcase ->
+    if takeBaseName testcase `elem` representatives
+      then golden (takeBaseName testcase) (driveElaborate (testcaseDir </> testcase))
+      else it (takeBaseName testcase) $ void $ driveElaborate (testcaseDir </> testcase)
 
 driveElaborate :: FilePath -> IO String
 driveElaborate srcPath = do

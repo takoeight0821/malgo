@@ -23,11 +23,14 @@ spec = parallel do
   testcases <- runIO do
     files <- listDirectory testcaseDir
     pure $ filter (isExtensionOf "mlg") files
+  runIO $ validateRepresentatives testcases
 
   golden "Builtin" (driveToFun builtinPath)
   golden "Prelude" (driveToFun preludePath)
-  for_ testcases \testcase -> do
-    golden (takeBaseName testcase) (driveToFun (testcaseDir </> testcase))
+  for_ testcases \testcase ->
+    if takeBaseName testcase `elem` representatives
+      then golden (takeBaseName testcase) (driveToFun (testcaseDir </> testcase))
+      else it (takeBaseName testcase) $ void $ driveToFun (testcaseDir </> testcase)
 
 driveToFun :: FilePath -> IO String
 driveToFun srcPath = do

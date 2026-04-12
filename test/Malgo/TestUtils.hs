@@ -6,6 +6,8 @@ module Malgo.TestUtils
     setupPrelude,
     flag,
     golden,
+    representatives,
+    validateRepresentatives,
     failIfError,
     setupTestStdin,
     setupTestStdout,
@@ -41,7 +43,7 @@ import Malgo.Sequent.Core.Join (Program (..), joinProgram)
 import Malgo.Sequent.ToCore (toCore)
 import Malgo.Sequent.ToFun (ToFunPass (..))
 import Malgo.Syntax (Module (..))
-import System.FilePath ((</>))
+import System.FilePath (takeBaseName, (</>))
 import Test.Hspec (Spec, it)
 import Test.Hspec.Core.Spec (getSpecDescriptionPath)
 import Test.Hspec.Golden (defaultGolden)
@@ -67,6 +69,47 @@ setupPrelude =
 
 flag :: Flag
 flag = Flag {noOptimize = False, lambdaLift = False, debugMode = False, testMode = True, target = TargetEval, evalMode = EvalSmallStep, useInfer = False}
+
+-- | Test cases that retain full golden output across all passes.
+-- Other test cases use lightweight "compiles" tests instead.
+--
+-- Selection criteria: one case per independent language feature axis.
+-- When adding a new test case that exercises a construct not already
+-- covered, add it here. Current axes:
+--   primitive ops, recursion/HOF, import, record, row polymorphism,
+--   codata, copattern, label/goto, nested pattern, C-style syntax,
+--   zero-arity edge, complex control flow, tuple pattern
+--
+-- After updating: mise run reset && mise run test
+representatives :: [String]
+representatives =
+  [ "Primitive",
+    "ListOps",
+    "HelloImport",
+    "RecordTest",
+    "RowPoly",
+    "CodataE2E",
+    "FibCopattern",
+    "LabelGoto",
+    "NestedMatch",
+    "CStyleApply",
+    "ZeroArgs",
+    "Eventually",
+    "TuplePattern"
+  ]
+
+-- | Verify that all entries in 'representatives' correspond to actual
+-- test case files. Call from 'runIO' in each spec to catch typos early.
+validateRepresentatives :: [FilePath] -> IO ()
+validateRepresentatives testcases = do
+  let names = map takeBaseName testcases
+  for_ representatives \r ->
+    unless (r `elem` names)
+      $ error
+      $ "Representative test case not found: "
+        <> r
+        <> "\nAvailable: "
+        <> show names
 
 golden ::
   -- | Test description

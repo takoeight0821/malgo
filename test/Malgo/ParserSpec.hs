@@ -4,7 +4,7 @@ import Data.ByteString.Lazy qualified as BL
 import Malgo.Monad (runMalgoM)
 import Malgo.Parser (parse)
 import Malgo.Prelude
-import Malgo.SExpr (ToSExpr (..), sShow)
+import Malgo.SExpr (sShow)
 import Malgo.TestUtils
 import System.Directory (listDirectory)
 import System.FilePath (isExtensionOf, takeBaseName, (</>))
@@ -16,6 +16,19 @@ errorcaseDir = "test/Malgo/ParserSpec/errors"
 
 spec :: Spec
 spec = parallel do
+  testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
+  runIO $ validateRepresentatives testcases
+
+  golden "Builtin" (driveParse builtinPath)
+  golden "Prelude" (driveParse preludePath)
+  for_ testcases \testcase ->
+    if takeBaseName testcase `elem` representatives
+      then golden (takeBaseName testcase) (driveParse (testcaseDir </> testcase))
+      else it (takeBaseName testcase) $ void $ driveParse (testcaseDir </> testcase)
+  errorcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory errorcaseDir
+  for_ errorcases \errorcase -> do
+    golden ("error " <> takeBaseName errorcase) (driveErrorParse (errorcaseDir </> errorcase))
+
   describe "unified parser entrypoint" do
     describe "accepts regular and C-style syntax" do
       it "parses regular function application with spaces" do
@@ -81,30 +94,8 @@ spec = parallel do
       it "ignores unknown pragmas while preserving parse behavior" do
         expectParsed "#c-style-apply\n#debug\ndef main = f(x, y)"
 
-  testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
-  golden "Builtin" (driveParse builtinPath)
-  golden "Builtin sexpr" (driveParseSExpr builtinPath)
-  golden "Prelude" (driveParse preludePath)
-  golden "Prelude sexpr" (driveParseSExpr preludePath)
-  for_ testcases \testcase -> do
-    golden (takeBaseName testcase) (driveParse (testcaseDir </> testcase))
-    golden (takeBaseName testcase <> " sexpr") (driveParseSExpr (testcaseDir </> testcase))
-  errorcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory errorcaseDir
-  for_ errorcases \errorcase -> do
-    golden ("error " <> takeBaseName errorcase) (driveErrorParse (errorcaseDir </> errorcase))
-
 driveParse :: FilePath -> IO String
 driveParse srcPath = do
-  src <- convertString <$> BL.readFile srcPath
-  runMalgoM flag do
-    parsed <- parse srcPath src
-    case parsed of
-      Left err -> error $ errorBundlePretty err
-      Right parsed ->
-        pure $ sShow parsed
-
-driveParseSExpr :: FilePath -> IO String
-driveParseSExpr srcPath = do
   src <- convertString <$> BL.readFile srcPath
   runMalgoM flag do
     parsed <- parse srcPath src

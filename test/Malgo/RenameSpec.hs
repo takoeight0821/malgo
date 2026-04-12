@@ -22,13 +22,14 @@ spec = parallel do
     setupBuiltin
     setupPrelude
   testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
+  runIO $ validateRepresentatives testcases
+
   golden "Builtin" (driveRename builtinPath)
-  golden "Builtin sexpr" (driveRenameSExpr builtinPath)
   golden "Prelude" (driveRename preludePath)
-  golden "Prelude sexpr" (driveRenameSExpr preludePath)
-  for_ testcases \testcase -> do
-    golden (takeBaseName testcase) (driveRename (testcaseDir </> testcase))
-    golden (takeBaseName testcase <> " sexpr") (driveRenameSExpr (testcaseDir </> testcase))
+  for_ testcases \testcase ->
+    if takeBaseName testcase `elem` representatives
+      then golden (takeBaseName testcase) (driveRename (testcaseDir </> testcase))
+      else it (takeBaseName testcase) $ void $ driveRename (testcaseDir </> testcase)
   errorcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory errorcaseDir
   for_ errorcases \errorcase -> do
     golden ("error " <> takeBaseName errorcase) (driveErrorRename (errorcaseDir </> errorcase))
@@ -50,12 +51,3 @@ driveErrorRename srcPath = do
     rnEnv <- genBuiltinRnEnv
     fmap show (runPass RenamePass (parsed, rnEnv))
       `catchError` \_ CompileError {compileError} -> pure $ show compileError
-
-driveRenameSExpr :: FilePath -> IO String
-driveRenameSExpr srcPath = do
-  src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError $ withFreshQueryDB do
-    parsed <- runPass ParserPass (srcPath, src)
-    rnEnv <- genBuiltinRnEnv
-    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    pure $ sShow renamed

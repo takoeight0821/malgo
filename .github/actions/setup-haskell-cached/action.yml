@@ -1,0 +1,73 @@
+name: "Setup Haskell (Cached)"
+description: "GHC/Cabal を ~/.ghcup にインストールし、キャッシュする"
+
+inputs:
+  ghc-version:
+    description: "GHC version to install"
+    required: true
+  cabal-version:
+    description: "Cabal version to install"
+    required: false
+    default: "latest"
+
+outputs:
+  ghc-version:
+    description: "Installed GHC version"
+    value: ${{ steps.info.outputs.ghc-version }}
+  cabal-version:
+    description: "Installed Cabal version"
+    value: ${{ steps.info.outputs.cabal-version }}
+  cabal-store:
+    description: "Cabal store path"
+    value: ${{ steps.info.outputs.cabal-store }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Restore ghcup cache
+      id: cache
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ~/.ghcup
+        key: ghcup-${{ runner.os }}-${{ runner.arch }}-ghc-${{ inputs.ghc-version }}-cabal-${{ inputs.cabal-version }}
+
+    - name: Setup PATH
+      shell: bash
+      run: |
+        echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
+        echo "$HOME/.cabal/bin" >> $GITHUB_PATH
+
+    - name: Install ghcup, GHC, and Cabal (on cache miss)
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        GHCUP_INSTALL_BASE_PREFIX: ${{ github.home }}
+        BOOTSTRAP_HASKELL_NONINTERACTIVE: "1"
+        BOOTSTRAP_HASKELL_NO_UPGRADE: "1"
+        BOOTSTRAP_HASKELL_MINIMAL: "1"
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | \
+          GHCUP_INSTALL_BASE_PREFIX="$HOME" sh
+        ghcup install ghc ${{ inputs.ghc-version }}
+        ghcup set ghc ${{ inputs.ghc-version }}
+        ghcup install cabal ${{ inputs.cabal-version }}
+        ghcup set cabal ${{ inputs.cabal-version }}
+
+    - name: Verify installation
+      shell: bash
+      run: |
+        ghc --version
+        cabal --version
+
+    - name: Update cabal package index
+      shell: bash
+      run: cabal update
+
+    - name: Collect outputs
+      id: info
+      shell: bash
+      run: |
+        echo "ghc-version=$(ghc --numeric-version)" >> $GITHUB_OUTPUT
+        echo "cabal-version=$(cabal --numeric-version)" >> $GITHUB_OUTPUT
+        store_dir=$(cabal path --store-dir 2>/dev/null || echo "$HOME/.cabal/store")
+        echo "cabal-store=$store_dir" >> $GITHUB_OUTPUT

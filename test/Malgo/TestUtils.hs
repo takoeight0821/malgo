@@ -16,11 +16,13 @@ module Malgo.TestUtils
     setupEvalBuiltin,
     setupEvalPrelude,
     compileTestCase,
+    compileTestCaseWithElaborate,
     withFreshQueryDB,
   )
 where
 
 import Data.ByteString qualified as BS
+import Data.Set qualified as Set
 import Data.Text.Lazy qualified as TL
 import Effectful
 import Effectful.Error.Static (Error)
@@ -28,7 +30,8 @@ import Effectful.Reader.Static (Reader, runReader)
 import Effectful.State.Static.Local (State)
 import GHC.Stack (CallStack, prettyCallStack)
 import Malgo.Driver qualified as Driver
-import Malgo.Features (Features)
+import Malgo.Elaborate (ElaboratePass (..))
+import Malgo.Features (Feature (..), FeatureFlags (..), Features)
 import Malgo.Module
 import Malgo.Monad
 import Malgo.Parser (ParserPass (..))
@@ -192,6 +195,29 @@ compileTestCase builtinName preludeName srcPath = do
     rnEnv <- genBuiltinRnEnv
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)
     fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
+    Program {definitions = program} <- runReader renamed.moduleName $ toCore fun >>= flatProgram >>= joinProgram
+
+    Program {definitions = builtin} <- load builtinName ".sqt"
+    Program {definitions = prelude} <- load preludeName ".sqt"
+
+    let linked = Program {definitions = builtin <> prelude <> program, dependencies = []}
+    pure (renamed.moduleName, linked)
+
+-- | Like 'compileTestCase' but runs 'ElaboratePass' after 'RenamePass',
+-- matching the production path when the Malgo2025 feature is enabled.
+compileTestCaseWithElaborate :: ArtifactPath -> ArtifactPath -> FilePath -> IO (ModuleName, Program)
+compileTestCaseWithElaborate builtinName preludeName srcPath = do
+  src <- BS.readFile srcPath
+  db <- newDatabase
+  runMalgoMWith flag (FeatureFlags (Set.singleton Malgo2025)) $ runCompileError $ runQueryDB db do
+    pwd <- pwdPath
+    srcModulePath <- parseArtifactPath pwd srcPath
+    save srcModulePath ".mlg" src
+    parsed <- runPass ParserPass (srcPath, convertString src)
+    rnEnv <- genBuiltinRnEnv
+    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
+    elaborated <- runReader renamed.moduleName $ runPass ElaboratePass renamed.moduleDefinition
+    fun <- runReader renamed.moduleName $ runPass ToFunPass elaborated
     Program {definitions = program} <- runReader renamed.moduleName $ toCore fun >>= flatProgram >>= joinProgram
 
     Program {definitions = builtin} <- load builtinName ".sqt"

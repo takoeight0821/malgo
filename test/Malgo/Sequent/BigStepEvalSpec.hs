@@ -40,6 +40,21 @@ specWith builtin prelude = parallel do
           (Left err, Right _) -> expectationFailure $ "Small-step failed but big-step succeeded: " <> show err
           (Right _, Left err) -> expectationFailure $ "Small-step succeeded but big-step failed: " <> show err
 
+  describe "with-elaborate" do
+    for_ testcases \testcase -> do
+      it (takeBaseName testcase <> " matches without elaborate") do
+        normalResult <- try @SomeException do
+          (moduleName, program) <- compileTestCase builtin prelude (testcaseDir </> testcase)
+          runEval bigStepEvalProgram moduleName program
+        elabResult <- try @SomeException do
+          (moduleName, program) <- compileTestCaseWithElaborate builtin prelude (testcaseDir </> testcase)
+          runEval bigStepEvalProgram moduleName program
+        case (normalResult, elabResult) of
+          (Right normal, Right elab) -> elab `shouldBe` normal
+          (Left _, Left _) -> pure ()
+          (Left err, Right _) -> expectationFailure $ "Normal failed but elaborate succeeded: " <> show err
+          (Right _, Left err) -> expectationFailure $ "Normal succeeded but elaborate failed: " <> show err
+
 -- | Run an evaluator on a compiled program and capture stdout.
 runEval ::
   (forall es. (Error EvalError :> es, State Uniq :> es, Reader ModuleName :> es, Reader Handlers :> es, IOE :> es) => Program -> Eff es ()) ->

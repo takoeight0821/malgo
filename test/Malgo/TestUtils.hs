@@ -72,6 +72,15 @@ flag = Flag {noOptimize = False, lambdaLift = False, debugMode = False, testMode
 
 -- | Test cases that retain full golden output across all passes.
 -- Other test cases use lightweight "compiles" tests instead.
+--
+-- Selection criteria: one case per independent language feature axis.
+-- When adding a new test case that exercises a construct not already
+-- covered, add it here. Current axes:
+--   primitive ops, recursion/HOF, import, record, row polymorphism,
+--   codata, copattern, label/goto, nested pattern, C-style syntax,
+--   zero-arity edge, complex control flow, tuple pattern
+--
+-- After updating: mise run reset && mise run test
 representatives :: [String]
 representatives =
   [ "Primitive",

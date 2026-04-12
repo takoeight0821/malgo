@@ -22,6 +22,7 @@ spec = parallel do
     setupBuiltin
     setupPrelude
   testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
+  runIO $ validateRepresentatives testcases
 
   golden "Builtin" (driveRename builtinPath)
   golden "Prelude" (driveRename preludePath)

@@ -7,6 +7,7 @@ module Malgo.TestUtils
     flag,
     golden,
     representatives,
+    validateRepresentatives,
     failIfError,
     setupTestStdin,
     setupTestStdout,
@@ -42,7 +43,7 @@ import Malgo.Sequent.Core.Join (Program (..), joinProgram)
 import Malgo.Sequent.ToCore (toCore)
 import Malgo.Sequent.ToFun (ToFunPass (..))
 import Malgo.Syntax (Module (..))
-import System.FilePath ((</>))
+import System.FilePath (takeBaseName, (</>))
 import Test.Hspec (Spec, it)
 import Test.Hspec.Core.Spec (getSpecDescriptionPath)
 import Test.Hspec.Golden (defaultGolden)
@@ -87,6 +88,19 @@ representatives =
     "Eventually",
     "TuplePattern"
   ]
+
+-- | Verify that all entries in 'representatives' correspond to actual
+-- test case files. Call from 'runIO' in each spec to catch typos early.
+validateRepresentatives :: [FilePath] -> IO ()
+validateRepresentatives testcases = do
+  let names = map takeBaseName testcases
+  for_ representatives \r ->
+    unless (r `elem` names)
+      $ error
+      $ "Representative test case not found: "
+        <> r
+        <> "\nAvailable: "
+        <> show names
 
 golden ::
   -- | Test description

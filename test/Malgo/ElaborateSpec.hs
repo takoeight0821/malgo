@@ -22,6 +22,7 @@ spec = parallel do
     setupBuiltin
     setupPrelude
   testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
+  runIO $ validateRepresentatives testcases
 
   for_ testcases \testcase ->
     if takeBaseName testcase `elem` representatives

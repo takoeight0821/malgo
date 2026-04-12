@@ -17,6 +17,7 @@ errorcaseDir = "test/Malgo/ParserSpec/errors"
 spec :: Spec
 spec = parallel do
   testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
+  runIO $ validateRepresentatives testcases
 
   golden "Builtin" (driveParse builtinPath)
   golden "Prelude" (driveParse preludePath)

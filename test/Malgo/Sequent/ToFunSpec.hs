@@ -23,6 +23,7 @@ spec = parallel do
   testcases <- runIO do
     files <- listDirectory testcaseDir
     pure $ filter (isExtensionOf "mlg") files
+  runIO $ validateRepresentatives testcases
 
   golden "Builtin" (driveToFun builtinPath)
   golden "Prelude" (driveToFun preludePath)

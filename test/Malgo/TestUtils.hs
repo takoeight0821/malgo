@@ -17,10 +17,12 @@ module Malgo.TestUtils
     setupEvalPrelude,
     compileTestCase,
     compileTestCaseWithElaborate,
+    assertConsistentResults,
     withFreshQueryDB,
   )
 where
 
+import Control.Exception (SomeException, try)
 import Data.ByteString qualified as BS
 import Data.Set qualified as Set
 import Data.Text.Lazy qualified as TL
@@ -47,7 +49,7 @@ import Malgo.Sequent.ToCore (toCore)
 import Malgo.Sequent.ToFun (ToFunPass (..))
 import Malgo.Syntax (Module (..))
 import System.FilePath (takeBaseName, (</>))
-import Test.Hspec (Spec, it)
+import Test.Hspec (Spec, expectationFailure, it, shouldBe)
 import Test.Hspec.Core.Spec (getSpecDescriptionPath)
 import Test.Hspec.Golden (defaultGolden)
 
@@ -225,6 +227,17 @@ compileTestCaseWithElaborate builtinName preludeName srcPath = do
 
     let linked = Program {definitions = builtin <> prelude <> program, dependencies = []}
     pure (renamed.moduleName, linked)
+
+-- | Assert that two IO actions produce the same result, or both fail.
+assertConsistentResults :: (Show a, Eq a) => IO a -> IO a -> IO ()
+assertConsistentResults action1 action2 = do
+  result1 <- try @SomeException action1
+  result2 <- try @SomeException action2
+  case (result1, result2) of
+    (Right v1, Right v2) -> v2 `shouldBe` v1
+    (Left _, Left _) -> pure ()
+    (Left err, Right _) -> expectationFailure $ "First failed but second succeeded: " <> show err
+    (Right _, Left err) -> expectationFailure $ "First succeeded but second failed: " <> show err
 
 -- | Wrap an action requiring 'QueryDB' with a fresh database.
 -- Convenient for tests that call 'runPass RenamePass' directly.

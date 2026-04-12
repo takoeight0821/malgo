@@ -1,6 +1,5 @@
 module Malgo.Sequent.EvalSpec (specWith) where
 
-import Control.Exception (SomeException, try)
 import Effectful.Error.Static (runError)
 import Effectful.Reader.Static (runReader)
 import Malgo.Module (ArtifactPath, ModuleName)
@@ -20,20 +19,15 @@ specWith builtin prelude = parallel do
     files <- listDirectory testcaseDir
     pure $ filter (isExtensionOf "mlg") files
 
-  describe "golden" do
-    for_ testcases \testcase -> do
-      golden (takeBaseName testcase) (driveEval builtin prelude (testcaseDir </> testcase))
+  for_ testcases \testcase -> do
+    golden (takeBaseName testcase) (driveEval builtin prelude (testcaseDir </> testcase))
 
   describe "with-elaborate" do
     for_ testcases \testcase -> do
-      it (takeBaseName testcase <> " matches without elaborate") do
-        normalResult <- try @SomeException $ driveEval builtin prelude (testcaseDir </> testcase)
-        elabResult <- try @SomeException $ driveEvalWithElaborate builtin prelude (testcaseDir </> testcase)
-        case (normalResult, elabResult) of
-          (Right normal, Right elab) -> elab `shouldBe` normal
-          (Left _, Left _) -> pure ()
-          (Left err, Right _) -> expectationFailure $ "Normal failed but elaborate succeeded: " <> show err
-          (Right _, Left err) -> expectationFailure $ "Normal succeeded but elaborate failed: " <> show err
+      it (takeBaseName testcase) $
+        assertConsistentResults
+          (driveEval builtin prelude (testcaseDir </> testcase))
+          (driveEvalWithElaborate builtin prelude (testcaseDir </> testcase))
 
 driveEval :: ArtifactPath -> ArtifactPath -> FilePath -> IO String
 driveEval builtinName preludeName srcPath = do

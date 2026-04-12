@@ -33,9 +33,6 @@ malgo2025Flags = FeatureFlags (Set.singleton Malgo2025)
 spec :: Spec
 spec = parallel do
   describe "full-program" do
-    runIO do
-      setupBuiltin
-      setupPrelude
     testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
     for_ testcases \testcase ->
       it (takeBaseName testcase) $ driveInfer (testcaseDir </> testcase)

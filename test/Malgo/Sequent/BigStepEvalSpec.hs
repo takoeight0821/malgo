@@ -1,6 +1,5 @@
 module Malgo.Sequent.BigStepEvalSpec (specWith) where
 
-import Control.Exception (SomeException, try)
 import Effectful
 import Effectful.Error.Static (Error, runError)
 import Effectful.Reader.Static (Reader, runReader)
@@ -31,29 +30,20 @@ specWith builtin prelude = parallel do
   describe "consistency" do
     for_ testcases \testcase -> do
       (moduleName, program) <- runIO $ compileTestCase builtin prelude (testcaseDir </> testcase)
-      it (takeBaseName testcase <> " matches small-step") do
-        smallStepResult <- try @SomeException $ runEval evalProgram moduleName program
-        bigStepResult <- try @SomeException $ runEval bigStepEvalProgram moduleName program
-        case (smallStepResult, bigStepResult) of
-          (Right smallStep, Right bigStep) -> bigStep `shouldBe` smallStep
-          (Left _, Left _) -> pure () -- Both failed, consistent
-          (Left err, Right _) -> expectationFailure $ "Small-step failed but big-step succeeded: " <> show err
-          (Right _, Left err) -> expectationFailure $ "Small-step succeeded but big-step failed: " <> show err
+      it (takeBaseName testcase <> " matches small-step") $
+        assertConsistentResults
+          (runEval evalProgram moduleName program)
+          (runEval bigStepEvalProgram moduleName program)
 
   describe "with-elaborate" do
     for_ testcases \testcase -> do
-      it (takeBaseName testcase <> " matches without elaborate") do
-        normalResult <- try @SomeException do
-          (moduleName, program) <- compileTestCase builtin prelude (testcaseDir </> testcase)
-          runEval bigStepEvalProgram moduleName program
-        elabResult <- try @SomeException do
-          (moduleName, program) <- compileTestCaseWithElaborate builtin prelude (testcaseDir </> testcase)
-          runEval bigStepEvalProgram moduleName program
-        case (normalResult, elabResult) of
-          (Right normal, Right elab) -> elab `shouldBe` normal
-          (Left _, Left _) -> pure ()
-          (Left err, Right _) -> expectationFailure $ "Normal failed but elaborate succeeded: " <> show err
-          (Right _, Left err) -> expectationFailure $ "Normal succeeded but elaborate failed: " <> show err
+      let compileAndRun compile = do
+            (moduleName, program) <- compile builtin prelude (testcaseDir </> testcase)
+            runEval bigStepEvalProgram moduleName program
+      it (takeBaseName testcase) $
+        assertConsistentResults
+          (compileAndRun compileTestCase)
+          (compileAndRun compileTestCaseWithElaborate)
 
 -- | Run an evaluator on a compiled program and capture stdout.
 runEval ::

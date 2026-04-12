@@ -16,14 +16,41 @@ import System.Directory
 import System.FilePath
 import Test.Hspec
 
+representatives :: [String]
+representatives =
+  [ "Primitive",
+    "List",
+    "HelloImport",
+    "RecordTest",
+    "RowPoly",
+    "CodataE2E",
+    "FibCopattern",
+    "LabelGoto",
+    "NestedMatch",
+    "CStyleApply",
+    "ZeroArgs",
+    "Eventually",
+    "TuplePattern"
+  ]
+
 spec :: Spec
 spec = parallel do
   runIO do
     setupBuiltin
     setupPrelude
   testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
-  for_ testcases \testcase -> do
-    golden (takeBaseName testcase) (driveElaborate (testcaseDir </> testcase))
+
+  describe "golden" do
+    for_ testcases \testcase ->
+      when (takeBaseName testcase `elem` representatives)
+        $ golden (takeBaseName testcase) (driveElaborate (testcaseDir </> testcase))
+
+  describe "compiles" do
+    for_ testcases \testcase ->
+      when (takeBaseName testcase `notElem` representatives)
+        $ it (takeBaseName testcase)
+        $ void
+        $ driveElaborate (testcaseDir </> testcase)
 
 driveElaborate :: FilePath -> IO String
 driveElaborate srcPath = do

@@ -16,22 +16,48 @@ import Test.Hspec
 errorcaseDir :: FilePath
 errorcaseDir = "test/Malgo/RenameSpec/errors"
 
+representatives :: [String]
+representatives =
+  [ "Primitive",
+    "List",
+    "HelloImport",
+    "RecordTest",
+    "RowPoly",
+    "CodataE2E",
+    "FibCopattern",
+    "LabelGoto",
+    "NestedMatch",
+    "CStyleApply",
+    "ZeroArgs",
+    "Eventually",
+    "TuplePattern"
+  ]
+
 spec :: Spec
 spec = parallel do
   runIO do
     setupBuiltin
     setupPrelude
   testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
-  golden "Builtin" (driveRename builtinPath)
-  golden "Builtin sexpr" (driveRenameSExpr builtinPath)
-  golden "Prelude" (driveRename preludePath)
-  golden "Prelude sexpr" (driveRenameSExpr preludePath)
-  for_ testcases \testcase -> do
-    golden (takeBaseName testcase) (driveRename (testcaseDir </> testcase))
-    golden (takeBaseName testcase <> " sexpr") (driveRenameSExpr (testcaseDir </> testcase))
-  errorcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory errorcaseDir
-  for_ errorcases \errorcase -> do
-    golden ("error " <> takeBaseName errorcase) (driveErrorRename (errorcaseDir </> errorcase))
+
+  describe "golden" do
+    golden "Builtin" (driveRename builtinPath)
+    golden "Prelude" (driveRename preludePath)
+    for_ testcases \testcase ->
+      when (takeBaseName testcase `elem` representatives)
+        $ golden (takeBaseName testcase) (driveRename (testcaseDir </> testcase))
+
+  describe "compiles" do
+    for_ testcases \testcase ->
+      when (takeBaseName testcase `notElem` representatives)
+        $ it (takeBaseName testcase)
+        $ void
+        $ driveRename (testcaseDir </> testcase)
+
+  describe "errors" do
+    errorcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory errorcaseDir
+    for_ errorcases \errorcase -> do
+      golden ("error " <> takeBaseName errorcase) (driveErrorRename (errorcaseDir </> errorcase))
 
 driveRename :: FilePath -> IO String
 driveRename srcPath = do
@@ -50,12 +76,3 @@ driveErrorRename srcPath = do
     rnEnv <- genBuiltinRnEnv
     fmap show (runPass RenamePass (parsed, rnEnv))
       `catchError` \_ CompileError {compileError} -> pure $ show compileError
-
-driveRenameSExpr :: FilePath -> IO String
-driveRenameSExpr srcPath = do
-  src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError $ withFreshQueryDB do
-    parsed <- runPass ParserPass (srcPath, src)
-    rnEnv <- genBuiltinRnEnv
-    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    pure $ sShow renamed

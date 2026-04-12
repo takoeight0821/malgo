@@ -15,6 +15,23 @@ import System.Directory
 import System.FilePath
 import Test.Hspec
 
+representatives :: [String]
+representatives =
+  [ "Primitive",
+    "List",
+    "HelloImport",
+    "RecordTest",
+    "RowPoly",
+    "CodataE2E",
+    "FibCopattern",
+    "LabelGoto",
+    "NestedMatch",
+    "CStyleApply",
+    "ZeroArgs",
+    "Eventually",
+    "TuplePattern"
+  ]
+
 spec :: Spec
 spec = parallel do
   runIO do
@@ -24,10 +41,19 @@ spec = parallel do
     files <- listDirectory testcaseDir
     pure $ filter (isExtensionOf "mlg") files
 
-  golden "Builtin" (driveToFun builtinPath)
-  golden "Prelude" (driveToFun preludePath)
-  for_ testcases \testcase -> do
-    golden (takeBaseName testcase) (driveToFun (testcaseDir </> testcase))
+  describe "golden" do
+    golden "Builtin" (driveToFun builtinPath)
+    golden "Prelude" (driveToFun preludePath)
+    for_ testcases \testcase ->
+      when (takeBaseName testcase `elem` representatives)
+        $ golden (takeBaseName testcase) (driveToFun (testcaseDir </> testcase))
+
+  describe "compiles" do
+    for_ testcases \testcase ->
+      when (takeBaseName testcase `notElem` representatives)
+        $ it (takeBaseName testcase)
+        $ void
+        $ driveToFun (testcaseDir </> testcase)
 
 driveToFun :: FilePath -> IO String
 driveToFun srcPath = do

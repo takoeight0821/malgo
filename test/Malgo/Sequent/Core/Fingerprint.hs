@@ -10,15 +10,11 @@ import Malgo.Sequent.Core.Flat qualified as Flat
 import Malgo.Sequent.Core.Join qualified as Join
 import Prelude
 
--- | Compute a shape fingerprint for a Flat IR program.
--- The fingerprint is a single-line summary of structural statistics,
--- stable across formatting changes but sensitive to semantic structure changes.
 fingerprintFlat :: Flat.Program -> String
 fingerprintFlat (Flat.Program defs _) =
   let stats = foldMap flatDefStats defs
    in renderStats stats
 
--- | Compute a shape fingerprint for a Join IR program.
 fingerprintJoin :: Join.Program -> String
 fingerprintJoin (Join.Program defs _) =
   let stats = foldMap joinDefStats defs

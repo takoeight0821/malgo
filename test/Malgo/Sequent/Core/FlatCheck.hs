@@ -64,14 +64,11 @@ checkConsumer (Destructor _ _ producers consumer) = do
   mapM_ checkProducer producers
   checkConsumer consumer
 
--- | Assert that a producer is a "value" (no computation).
--- Values: Var, Literal, Construct with all-value sub-producers.
 assertValue :: Producer -> IO ()
 assertValue p
   | isValueProducer p = pure ()
   | otherwise = expectationFailure $ "Expected value producer, got: " <> take 200 (show p)
 
--- | Check if a producer is a "value" (no computation at the top level).
 isValueProducer :: Producer -> Bool
 isValueProducer (Var _ _) = True
 isValueProducer (Literal _ _) = True

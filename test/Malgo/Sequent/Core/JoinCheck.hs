@@ -3,103 +3,72 @@ module Malgo.Sequent.Core.JoinCheck
   )
 where
 
-import Data.IORef
+import Control.Exception (evaluate)
 import Malgo.Sequent.Core.Join
 import Test.Hspec (expectationFailure)
 import Prelude
 
 -- | Assert that a Join IR program is structurally well-formed by
--- traversing all nodes. This catches:
--- 1. Lazy evaluation errors (bottom values from broken transformations)
--- 2. Structural consistency (all nodes are reachable and well-formed)
---
--- Note: Full scope checking is not performed because top-level definitions
--- are implicitly in scope and tracking them requires global analysis.
+-- traversing all nodes and forcing evaluation. This catches lazy
+-- evaluation errors (bottom values from broken transformations).
 assertJoin :: Program -> IO ()
-assertJoin (Program defs _) = do
-  counter <- newIORef (0 :: Int)
-  mapM_ (checkDefinition counter) defs
-  count <- readIORef counter
-  if count > 0
-    then pure ()
-    else expectationFailure "Join program has no nodes (empty program)"
+assertJoin (Program defs _)
+  | null defs = expectationFailure "Join program has no definitions"
+  | otherwise = mapM_ checkDefinition defs
 
-checkStatement :: IORef Int -> Statement -> IO ()
-checkStatement c (Cut producer name) = do
-  tick c
-  checkProducer c producer
-  seq name (pure ())
-checkStatement c (Join _ name consumer stmt) = do
-  tick c
-  seq name (pure ())
-  checkConsumer c consumer
-  checkStatement c stmt
-checkStatement c (Primitive _ _ producers name) = do
-  tick c
-  mapM_ (checkProducer c) producers
-  seq name (pure ())
-checkStatement c (Invoke _ _ name) = do
-  tick c
-  seq name (pure ())
-checkStatement c (ExternalCall _ _ producers name) = do
-  tick c
-  mapM_ (checkProducer c) producers
-  seq name (pure ())
-checkStatement c (BinOp _ _ lhs rhs name) = do
-  tick c
-  checkProducer c lhs
-  checkProducer c rhs
-  seq name (pure ())
-checkStatement c (Ifz _ cond thenStmt elseStmt) = do
-  tick c
-  checkProducer c cond
-  checkStatement c thenStmt
-  checkStatement c elseStmt
+checkDefinition :: (a, b, c, Statement) -> IO ()
+checkDefinition (_, _, _, stmt) = checkStatement stmt
 
-checkDefinition :: IORef Int -> (a, b, c, Statement) -> IO ()
-checkDefinition c (_, _, _, stmt) = checkStatement c stmt
+checkStatement :: Statement -> IO ()
+checkStatement (Cut producer name) = do
+  checkProducer producer
+  evaluate name >> pure ()
+checkStatement (Join _ name consumer stmt) = do
+  evaluate name >> pure ()
+  checkConsumer consumer
+  checkStatement stmt
+checkStatement (Primitive _ _ producers name) = do
+  mapM_ checkProducer producers
+  evaluate name >> pure ()
+checkStatement (Invoke _ _ name) =
+  evaluate name >> pure ()
+checkStatement (ExternalCall _ _ producers name) = do
+  mapM_ checkProducer producers
+  evaluate name >> pure ()
+checkStatement (BinOp _ _ lhs rhs name) = do
+  checkProducer lhs
+  checkProducer rhs
+  evaluate name >> pure ()
+checkStatement (Ifz _ cond thenStmt elseStmt) = do
+  checkProducer cond
+  checkStatement thenStmt
+  checkStatement elseStmt
 
-checkProducer :: IORef Int -> Producer -> IO ()
-checkProducer c (Var _ _) = tick c
-checkProducer c (Literal _ _) = tick c
-checkProducer c (Construct _ _ producers names) = do
-  tick c
-  mapM_ (checkProducer c) producers
-  seq names (pure ())
-checkProducer c (Lambda _ _ stmt) = do
-  tick c
-  checkStatement c stmt
-checkProducer c (Object _ fields) = do
-  tick c
-  mapM_ (\(_, stmt) -> checkStatement c stmt) fields
-checkProducer c (Mu _ _ stmt) = do
-  tick c
-  checkStatement c stmt
-checkProducer c (Cocase _ branches) = do
-  tick c
-  mapM_ (\(_, _, s) -> checkStatement c s) branches
+checkProducer :: Producer -> IO ()
+checkProducer (Var _ _) = pure ()
+checkProducer (Literal _ _) = pure ()
+checkProducer (Construct _ _ producers names) = do
+  mapM_ checkProducer producers
+  mapM_ (\n -> evaluate n >> pure ()) names
+checkProducer (Lambda _ _ stmt) = checkStatement stmt
+checkProducer (Object _ fields) =
+  mapM_ (\(_, stmt) -> checkStatement stmt) fields
+checkProducer (Mu _ _ stmt) = checkStatement stmt
+checkProducer (Cocase _ branches) =
+  mapM_ (\(_, _, s) -> checkStatement s) branches
 
-checkConsumer :: IORef Int -> Consumer -> IO ()
-checkConsumer c (Label _ _) = tick c
-checkConsumer c (Apply _ producers names) = do
-  tick c
-  mapM_ (checkProducer c) producers
-  seq names (pure ())
-checkConsumer c (Project _ _ name) = do
-  tick c
-  seq name (pure ())
-checkConsumer c (Then _ name stmt) = do
-  tick c
-  seq name (pure ())
-  checkStatement c stmt
-checkConsumer c (Finish _) = tick c
-checkConsumer c (Select _ branches) = do
-  tick c
-  mapM_ (\(Branch _ _ s) -> checkStatement c s) branches
-checkConsumer c (Destructor _ _ producers name) = do
-  tick c
-  mapM_ (checkProducer c) producers
-  seq name (pure ())
-
-tick :: IORef Int -> IO ()
-tick c = modifyIORef' c (+ 1)
+checkConsumer :: Consumer -> IO ()
+checkConsumer (Label _ name) = evaluate name >> pure ()
+checkConsumer (Apply _ producers names) = do
+  mapM_ checkProducer producers
+  mapM_ (\n -> evaluate n >> pure ()) names
+checkConsumer (Project _ _ name) = evaluate name >> pure ()
+checkConsumer (Then _ name stmt) = do
+  evaluate name >> pure ()
+  checkStatement stmt
+checkConsumer (Finish _) = pure ()
+checkConsumer (Select _ branches) =
+  mapM_ (\(Branch _ _ s) -> checkStatement s) branches
+checkConsumer (Destructor _ _ producers name) = do
+  mapM_ checkProducer producers
+  evaluate name >> pure ()

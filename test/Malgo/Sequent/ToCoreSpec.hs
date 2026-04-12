@@ -11,6 +11,7 @@ import Malgo.SExpr (sShow)
 import Malgo.Sequent.Core.Fingerprint (fingerprintFlat, fingerprintJoin)
 import Malgo.Sequent.Core.Flat qualified as Flat
 import Malgo.Sequent.Core.FlatCheck (assertFlat)
+import Malgo.Sequent.Core.Full qualified as Full
 import Malgo.Sequent.Core.Join qualified as Join
 import Malgo.Sequent.Core.JoinCheck (assertJoin)
 import Malgo.Sequent.ToCore (toCore)
@@ -20,6 +21,25 @@ import Malgo.TestUtils
 import System.Directory
 import System.FilePath
 import Test.Hspec
+
+data AllIR = AllIR
+  { core :: Full.Program,
+    flat :: Flat.Program,
+    join :: Join.Program
+  }
+
+driveAll :: FilePath -> IO AllIR
+driveAll srcPath = do
+  src <- convertString <$> BS.readFile srcPath
+  runMalgoM flag $ runCompileError $ withFreshQueryDB do
+    parsed <- runPass ParserPass (srcPath, src)
+    rnEnv <- genBuiltinRnEnv
+    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
+    fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
+    coreProgram <- runReader renamed.moduleName $ toCore fun
+    flatProgram <- runReader renamed.moduleName $ Flat.flatProgram coreProgram
+    joinProgram <- runReader renamed.moduleName $ Join.joinProgram flatProgram
+    pure AllIR {core = coreProgram, flat = flatProgram, join = joinProgram}
 
 spec :: Spec
 spec = parallel do
@@ -31,110 +51,45 @@ spec = parallel do
     pure $ filter (isExtensionOf "mlg") files
 
   describe "golden" do
-    golden "Builtin" (driveToCore builtinPath)
-    golden "Builtin flat" (driveFlat builtinPath)
-    golden "Builtin join" (driveJoin builtinPath)
-    golden "Prelude" (driveToCore preludePath)
-    golden "Prelude flat" (driveFlat preludePath)
-    golden "Prelude join" (driveJoin preludePath)
+    golden "Builtin" (sShow . (.core) <$> driveAll builtinPath)
+    golden "Builtin flat" (sShow . (.flat) <$> driveAll builtinPath)
+    golden "Builtin join" (sShow . (.join) <$> driveAll builtinPath)
+    golden "Prelude" (sShow . (.core) <$> driveAll preludePath)
+    golden "Prelude flat" (sShow . (.flat) <$> driveAll preludePath)
+    golden "Prelude join" (sShow . (.join) <$> driveAll preludePath)
     for_ testcases \testcase -> do
-      golden (takeBaseName testcase) (driveToCore (testcaseDir </> testcase))
-      golden (takeBaseName testcase <> " flat") (driveFlat (testcaseDir </> testcase))
-      golden (takeBaseName testcase <> " join") (driveJoin (testcaseDir </> testcase))
+      ref <- runIO $ newIORef Nothing
+      let getAll = do
+            cached <- readIORef ref
+            case cached of
+              Just ir -> pure ir
+              Nothing -> do
+                ir <- driveAll (testcaseDir </> testcase)
+                writeIORef ref (Just ir)
+                pure ir
+      golden (takeBaseName testcase) (sShow . (.core) <$> getAll)
+      golden (takeBaseName testcase <> " flat") (sShow . (.flat) <$> getAll)
+      golden (takeBaseName testcase <> " join") (sShow . (.join) <$> getAll)
 
-  describe "flat-invariants" do
-    for_ testcases \testcase ->
-      it (takeBaseName testcase)
-        $ driveFlatValidate (testcaseDir </> testcase)
+  for_ testcases \testcase -> do
+    ref <- runIO $ newIORef Nothing
+    let getAll = do
+          cached <- readIORef ref
+          case cached of
+            Just ir -> pure ir
+            Nothing -> do
+              ir <- driveAll (testcaseDir </> testcase)
+              writeIORef ref (Just ir)
+              pure ir
 
-  describe "join-invariants" do
-    for_ testcases \testcase ->
-      it (takeBaseName testcase)
-        $ driveJoinValidate (testcaseDir </> testcase)
+    describe "flat-invariants" do
+      it (takeBaseName testcase) $ getAll >>= assertFlat . (.flat)
 
-  describe "flat-fingerprint" do
-    for_ testcases \testcase ->
-      golden (takeBaseName testcase)
-        $ driveFlatFingerprint (testcaseDir </> testcase)
+    describe "join-invariants" do
+      it (takeBaseName testcase) $ getAll >>= assertJoin . (.join)
 
-  describe "join-fingerprint" do
-    for_ testcases \testcase ->
-      golden (takeBaseName testcase)
-        $ driveJoinFingerprint (testcaseDir </> testcase)
+    describe "flat-fingerprint" do
+      golden (takeBaseName testcase) $ fingerprintFlat . (.flat) <$> getAll
 
-driveToCore :: FilePath -> IO String
-driveToCore srcPath = do
-  src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError $ withFreshQueryDB do
-    parsed <- runPass ParserPass (srcPath, src)
-    rnEnv <- genBuiltinRnEnv
-    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
-    program <- runReader renamed.moduleName $ toCore fun
-    pure $ sShow program
-
-driveFlat :: FilePath -> IO String
-driveFlat srcPath = do
-  src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError $ withFreshQueryDB do
-    parsed <- runPass ParserPass (srcPath, src)
-    rnEnv <- genBuiltinRnEnv
-    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
-    program <- runReader renamed.moduleName $ toCore fun >>= Flat.flatProgram
-    pure $ sShow program
-
-driveJoin :: FilePath -> IO String
-driveJoin srcPath = do
-  src <- convertString <$> BS.readFile srcPath
-  runMalgoM flag $ runCompileError $ withFreshQueryDB do
-    parsed <- runPass ParserPass (srcPath, src)
-    rnEnv <- genBuiltinRnEnv
-    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
-    program <- runReader renamed.moduleName $ toCore fun >>= Flat.flatProgram >>= Join.joinProgram
-    pure $ sShow program
-
-driveFlatValidate :: FilePath -> IO ()
-driveFlatValidate srcPath = do
-  src <- convertString <$> BS.readFile srcPath
-  program <- runMalgoM flag $ runCompileError $ withFreshQueryDB do
-    parsed <- runPass ParserPass (srcPath, src)
-    rnEnv <- genBuiltinRnEnv
-    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
-    runReader renamed.moduleName $ toCore fun >>= Flat.flatProgram
-  assertFlat program
-
-driveJoinValidate :: FilePath -> IO ()
-driveJoinValidate srcPath = do
-  src <- convertString <$> BS.readFile srcPath
-  program <- runMalgoM flag $ runCompileError $ withFreshQueryDB do
-    parsed <- runPass ParserPass (srcPath, src)
-    rnEnv <- genBuiltinRnEnv
-    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
-    runReader renamed.moduleName $ toCore fun >>= Flat.flatProgram >>= Join.joinProgram
-  assertJoin program
-
-driveFlatFingerprint :: FilePath -> IO String
-driveFlatFingerprint srcPath = do
-  src <- convertString <$> BS.readFile srcPath
-  program <- runMalgoM flag $ runCompileError $ withFreshQueryDB do
-    parsed <- runPass ParserPass (srcPath, src)
-    rnEnv <- genBuiltinRnEnv
-    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
-    runReader renamed.moduleName $ toCore fun >>= Flat.flatProgram
-  pure $ fingerprintFlat program
-
-driveJoinFingerprint :: FilePath -> IO String
-driveJoinFingerprint srcPath = do
-  src <- convertString <$> BS.readFile srcPath
-  program <- runMalgoM flag $ runCompileError $ withFreshQueryDB do
-    parsed <- runPass ParserPass (srcPath, src)
-    rnEnv <- genBuiltinRnEnv
-    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
-    fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
-    runReader renamed.moduleName $ toCore fun >>= Flat.flatProgram >>= Join.joinProgram
-  pure $ fingerprintJoin program
+    describe "join-fingerprint" do
+      golden (takeBaseName testcase) $ fingerprintJoin . (.join) <$> getAll

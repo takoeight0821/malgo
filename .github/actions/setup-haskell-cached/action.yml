@@ -31,12 +31,6 @@ runs:
         path: ~/.ghcup
         key: ghcup-${{ runner.os }}-${{ runner.arch }}-ghc-${{ inputs.ghc-version }}-cabal-${{ inputs.cabal-version }}
 
-    - name: Setup PATH
-      shell: bash
-      run: |
-        echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
-        echo "$HOME/.cabal/bin" >> $GITHUB_PATH
-
     - name: Install ghcup, GHC, and Cabal (on cache miss)
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
@@ -48,14 +42,25 @@ runs:
         curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
         source "$HOME/.ghcup/env"
         ghcup install ghc ${{ inputs.ghc-version }}
-        ghcup set ghc ${{ inputs.ghc-version }}
         ghcup install cabal ${{ inputs.cabal-version }}
-        ghcup set cabal ${{ inputs.cabal-version }}
+
+    - name: Setup PATH
+      shell: bash
+      run: |
+        echo "$HOME/.ghcup/ghc/${{ inputs.ghc-version }}/bin" >> $GITHUB_PATH
+        cabal_dir=$(ls -d "$HOME/.ghcup/cabal/"*/bin 2>/dev/null | head -1)
+        if [ -n "$cabal_dir" ]; then
+          echo "$cabal_dir" >> $GITHUB_PATH
+        fi
+        echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
+        echo "$HOME/.cabal/bin" >> $GITHUB_PATH
 
     - name: Verify installation
       shell: bash
       run: |
+        which ghc
         ghc --version
+        which cabal
         cabal --version
 
     - name: Update cabal package index

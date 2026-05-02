@@ -236,12 +236,12 @@ currentSubst = gets (.solvedSubst)
 
 -- | Standard types
 tyInt32, tyInt64, tyFloat, tyDouble, tyChar, tyString, tyUnit :: Ty
-tyInt32 = TCon "Int32"
-tyInt64 = TCon "Int64"
-tyFloat = TCon "Float"
-tyDouble = TCon "Double"
-tyChar = TCon "Char"
-tyString = TCon "String"
+tyInt32 = TCon "Int32#"
+tyInt64 = TCon "Int64#"
+tyFloat = TCon "Float#"
+tyDouble = TCon "Double#"
+tyChar = TCon "Char#"
+tyString = TCon "String#"
 tyUnit = TTuple []
 
 -- | A dummy range for compiler-generated constraints

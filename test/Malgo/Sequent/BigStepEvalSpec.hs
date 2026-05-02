@@ -24,24 +24,30 @@ specWith builtin prelude = parallel do
 
   describe "golden" do
     for_ testcases \testcase -> do
-      (moduleName, program) <- runIO $ compileTestCase builtin prelude (testcaseDir </> testcase)
-      golden (takeBaseName testcase) $ runEval bigStepEvalProgram moduleName program
+      golden (takeBaseName testcase) do
+        (moduleName, program) <- compileTestCase builtin prelude (testcaseDir </> testcase)
+        runEval bigStepEvalProgram moduleName program
 
   describe "consistency" do
     for_ testcases \testcase -> do
-      (moduleName, program) <- runIO $ compileTestCase builtin prelude (testcaseDir </> testcase)
-      it (takeBaseName testcase <> " matches small-step") $
-        assertConsistentResults
-          (runEval evalProgram moduleName program)
-          (runEval bigStepEvalProgram moduleName program)
+      it (takeBaseName testcase <> " matches small-step")
+        $ assertConsistentResults
+          ( do
+              (moduleName, program) <- compileTestCase builtin prelude (testcaseDir </> testcase)
+              runEval evalProgram moduleName program
+          )
+          ( do
+              (moduleName, program) <- compileTestCase builtin prelude (testcaseDir </> testcase)
+              runEval bigStepEvalProgram moduleName program
+          )
 
   describe "with-elaborate" do
     for_ testcases \testcase -> do
       let compileAndRun compile = do
             (moduleName, program) <- compile builtin prelude (testcaseDir </> testcase)
             runEval bigStepEvalProgram moduleName program
-      it (takeBaseName testcase) $
-        assertConsistentResults
+      it (takeBaseName testcase)
+        $ assertConsistentResults
           (compileAndRun compileTestCase)
           (compileAndRun compileTestCaseWithElaborate)
 

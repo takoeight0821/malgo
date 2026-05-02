@@ -9,6 +9,7 @@ module Malgo.Module
     getModulePath,
     runWorkspaceOnPwd,
     ArtifactPath (..),
+    WorkspaceError (..),
     Resource (..),
     pwdPath,
     parseArtifactPath,
@@ -28,6 +29,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BSL
 import Data.Data
+import Data.Hashable (Hashable (..))
 import Data.Map qualified as Map
 import Data.SCargot.Repr.Basic qualified as S
 import Effectful
@@ -166,8 +168,20 @@ data ArtifactPath = ArtifactPath
     relPath :: Path Rel File,
     targetPath :: Path Abs File
   }
-  deriving stock (Eq, Ord, Generic, Data)
-  deriving anyclass (Hashable, Binary)
+  deriving stock (Generic, Data)
+  deriving anyclass (Binary)
+
+-- | Equality based on relPath so that paths to the same file via different
+-- traversal routes (e.g. "./runtime/..." vs "../../../runtime/...") compare equal.
+instance Eq ArtifactPath where
+  a == b = a.relPath == b.relPath
+
+instance Ord ArtifactPath where
+  compare a b = compare a.relPath b.relPath
+
+instance Hashable ArtifactPath where
+  hash a = hash (toFilePath a.relPath)
+  hashWithSalt s a = hashWithSalt s (toFilePath a.relPath)
 
 instance Show ArtifactPath where
   -- Do not show rawPath, originPath, targetPath.

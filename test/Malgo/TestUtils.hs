@@ -112,9 +112,9 @@ validateRepresentatives testcases = do
     unless (r `elem` names)
       $ error
       $ "Representative test case not found: "
-        <> r
-        <> "\nAvailable: "
-        <> show names
+      <> r
+      <> "\nAvailable: "
+      <> show names
 
 golden ::
   -- | Test description

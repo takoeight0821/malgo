@@ -3,10 +3,15 @@
 module Malgo.Infer
   ( InferPass (..),
     InferError (..),
+    TyEnv,
+    buildSigEnv,
+    buildDataEnv,
+    buildForeignEnv,
   )
 where
 
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Text qualified as T
 import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error, throwError)
@@ -23,15 +28,15 @@ import Malgo.Syntax.Extension
 data InferPass = InferPass
 
 instance Pass InferPass where
-  type Input InferPass = BindGroup (Malgo Rename)
+  type Input InferPass = (TyEnv, BindGroup (Malgo Rename))
   type Output InferPass = BindGroup (Malgo Rename)
   type ErrorType InferPass = InferError
   type
     Effects InferPass es =
       (State Uniq :> es)
 
-  runPassImpl _ bindGroup = evalState initGenState do
-    inferBindGroup bindGroup
+  runPassImpl _ (importedEnv, bindGroup) = evalState initGenState do
+    inferBindGroup importedEnv bindGroup
     pure bindGroup
 
 -- | Initial generation state
@@ -50,14 +55,15 @@ type TyEnv = Map Id Scheme
 -- | Infer types for an entire bind group
 inferBindGroup ::
   (State GenState :> es, Error InferError :> es) =>
+  TyEnv ->
   BindGroup (Malgo Rename) ->
   Eff es TyEnv
-inferBindGroup bg = do
+inferBindGroup importedEnv bg = do
   -- Build initial environment from type signatures and data definitions
   let sigEnv = buildSigEnv bg
       dataEnv = buildDataEnv bg
       foreignEnv = buildForeignEnv bg
-      env0 = sigEnv <> dataEnv <> foreignEnv
+      env0 = importedEnv <> sigEnv <> dataEnv <> foreignEnv
 
   -- Infer each mutually recursive group of definitions
   env <- foldlM inferScGroup env0 bg._scDefs
@@ -74,7 +80,8 @@ buildSigEnv bg = Map.fromList $ map toSigEntry bg._scSigs
     toSigEntry :: ScSig (Malgo Rename) -> (Id, Scheme)
     toSigEntry (_, name, ty) =
       let inferTy = surfaceTypeToTy ty
-       in (name, Scheme {vars = [], ty = inferTy})
+          fvs = Set.toList $ freeVars inferTy
+       in (name, Scheme {vars = fvs, ty = inferTy})
 
 -- | Build type environment from data definitions (constructors)
 buildDataEnv :: BindGroup (Malgo Rename) -> TyEnv
@@ -90,7 +97,8 @@ buildDataEnv bg = Map.fromList $ concatMap dataDefEntries bg._dataDefs
     conEntry resultTy (_, conName, argTypes) =
       let argTys = map surfaceTypeToTy argTypes
           conTy = foldr TArr resultTy argTys
-       in (conName, Scheme {vars = [], ty = conTy})
+          fvs = Set.toList $ freeVars conTy
+       in (conName, Scheme {vars = fvs, ty = conTy})
 
 -- | Build type environment from foreign declarations
 buildForeignEnv :: BindGroup (Malgo Rename) -> TyEnv
@@ -98,7 +106,9 @@ buildForeignEnv bg = Map.fromList $ map foreignEntry bg._foreigns
   where
     foreignEntry :: Foreign (Malgo Rename) -> (Id, Scheme)
     foreignEntry (_, name, ty) =
-      (name, Scheme {vars = [], ty = surfaceTypeToTy ty})
+      let inferTy = surfaceTypeToTy ty
+          fvs = Set.toList $ freeVars inferTy
+       in (name, Scheme {vars = fvs, ty = inferTy})
 
 -- | Infer a mutually recursive group of definitions
 inferScGroup ::

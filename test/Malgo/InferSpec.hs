@@ -6,17 +6,21 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Effectful (runPureEff)
 import Effectful.Error.Static (runError)
+import Effectful.Exception qualified as EffException
 import Effectful.Reader.Static (runReader)
 import Effectful.State.Static.Local (evalState)
 import Malgo.Elaborate (ElaboratePass (..))
 import Malgo.Features (Feature (..), FeatureFlags (..))
-import Malgo.Infer (InferPass (..))
+import Malgo.Infer (InferPass (..), buildDataEnv, buildForeignEnv, buildSigEnv)
 import Malgo.Infer.Constraint
 import Malgo.Infer.Unify (unify)
 import Malgo.Monad (runMalgoMWith)
 import Malgo.Parser (ParserPass (..))
 import Malgo.Pass
 import Malgo.Prelude
+import Malgo.Query (Query (..), fetch)
+import Malgo.Query.Database (newDatabase)
+import Malgo.Query.Engine (runQueryDB)
 import Malgo.Rename
 import Malgo.Syntax (Module (..))
 import Malgo.TestUtils
@@ -180,9 +184,26 @@ driveInfer srcPath = do
 runInfer :: FilePath -> IO ()
 runInfer srcPath = do
   src <- convertString <$> BS.readFile srcPath
-  runMalgoMWith inferFlag malgo2025Flags $ runCompileError $ withFreshQueryDB do
+  db <- newDatabase
+  runMalgoMWith inferFlag malgo2025Flags $ runCompileError $ runQueryDB db do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
-    (Module modName def, _) <- runPass RenamePass (parsed, rnEnv)
+    (Module modName def, rnState) <- runPass RenamePass (parsed, rnEnv)
+    importedEnv <-
+      foldlM
+        ( \acc dep -> do
+            result <- EffException.try @SomeException do
+              (renamedDep, _) <- fetch (RenamedModule dep)
+              let depEnv =
+                    buildSigEnv renamedDep.moduleDefinition
+                      <> buildDataEnv renamedDep.moduleDefinition
+                      <> buildForeignEnv renamedDep.moduleDefinition
+              pure depEnv
+            pure $ case result of
+              Left _ -> acc
+              Right depEnv -> acc <> depEnv
+        )
+        Map.empty
+        (Set.toList rnState.dependencies)
     elaborated <- runReader modName $ runPass ElaboratePass def
-    void $ runPass InferPass elaborated
+    void $ runPass InferPass (importedEnv, elaborated)

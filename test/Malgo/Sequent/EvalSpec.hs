@@ -24,8 +24,8 @@ specWith builtin prelude = parallel do
 
   describe "with-elaborate" do
     for_ testcases \testcase -> do
-      it (takeBaseName testcase) $
-        assertConsistentResults
+      it (takeBaseName testcase)
+        $ assertConsistentResults
           (driveEval builtin prelude (testcaseDir </> testcase))
           (driveEvalWithElaborate builtin prelude (testcaseDir </> testcase))
 

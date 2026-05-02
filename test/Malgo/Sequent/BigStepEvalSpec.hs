@@ -30,8 +30,8 @@ specWith builtin prelude = parallel do
   describe "consistency" do
     for_ testcases \testcase -> do
       (moduleName, program) <- runIO $ compileTestCase builtin prelude (testcaseDir </> testcase)
-      it (takeBaseName testcase <> " matches small-step") $
-        assertConsistentResults
+      it (takeBaseName testcase <> " matches small-step")
+        $ assertConsistentResults
           (runEval evalProgram moduleName program)
           (runEval bigStepEvalProgram moduleName program)
 
@@ -40,8 +40,8 @@ specWith builtin prelude = parallel do
       let compileAndRun compile = do
             (moduleName, program) <- compile builtin prelude (testcaseDir </> testcase)
             runEval bigStepEvalProgram moduleName program
-      it (takeBaseName testcase) $
-        assertConsistentResults
+      it (takeBaseName testcase)
+        $ assertConsistentResults
           (compileAndRun compileTestCase)
           (compileAndRun compileTestCaseWithElaborate)
 

@@ -9,7 +9,7 @@ Malgo is a statically typed functional programming language with an interpreter 
 ## Build, Test, and Development Commands
 
 ```bash
-mise run setup       # Install toolchain (GHC 9.12.2, cabal, hpack, ormolu)
+mise run setup       # Install toolchain (GHC 9.12.4, cabal, hpack, ormolu)
 mise run build       # Format + build (hpack && cabal build)
 mise run test        # Run test suite
 mise run test -- --match=Parser  # Run tests matching "Parser"

@@ -9,6 +9,7 @@ module Malgo.Module
     getModulePath,
     runWorkspaceOnPwd,
     ArtifactPath (..),
+    WorkspaceError (..),
     Resource (..),
     pwdPath,
     parseArtifactPath,
@@ -180,6 +181,7 @@ instance Ord ArtifactPath where
 
 instance Hashable ArtifactPath where
   hash a = hash (toFilePath a.relPath)
+  hashWithSalt s a = hashWithSalt s (toFilePath a.relPath)
 
 instance Show ArtifactPath where
   -- Do not show rawPath, originPath, targetPath.

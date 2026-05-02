@@ -6,7 +6,6 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Effectful (runPureEff)
 import Effectful.Error.Static (runError)
-import Effectful.Exception qualified as EffException
 import Effectful.Reader.Static (runReader)
 import Effectful.State.Static.Local (evalState)
 import Malgo.Elaborate (ElaboratePass (..))
@@ -189,19 +188,18 @@ runInfer srcPath = do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (Module modName def, rnState) <- runPass RenamePass (parsed, rnEnv)
+    -- Dependency-load failures propagate so 'driveInfer' can report the actual
+    -- error via 'pendingWith' rather than silently continuing with a partial env
+    -- (which would mask root causes for the remaining pending tests, see #321).
     importedEnv <-
       foldlM
         ( \acc dep -> do
-            result <- EffException.try @SomeException do
-              (renamedDep, _) <- fetch (RenamedModule dep)
-              let depEnv =
-                    buildSigEnv renamedDep.moduleDefinition
-                      <> buildDataEnv renamedDep.moduleDefinition
-                      <> buildForeignEnv renamedDep.moduleDefinition
-              pure depEnv
-            pure $ case result of
-              Left _ -> acc
-              Right depEnv -> acc <> depEnv
+            (renamedDep, _) <- fetch (RenamedModule dep)
+            let depEnv =
+                  buildSigEnv renamedDep.moduleDefinition
+                    <> buildDataEnv renamedDep.moduleDefinition
+                    <> buildForeignEnv renamedDep.moduleDefinition
+            pure (acc <> depEnv)
         )
         Map.empty
         (Set.toList rnState.dependencies)

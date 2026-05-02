@@ -3,7 +3,7 @@ module Malgo.Query.Engine
   )
 where
 
-import Control.Exception (SomeException, try)
+import Control.Exception (try)
 import Data.Binary (Binary, decode)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BSL
@@ -175,9 +175,11 @@ tryLoadInterfaceFromDisk modName = do
         else pure Nothing
 
 -- | Try to get the ArtifactPath for a module, returning 'Nothing' if not found.
+-- Only swallows 'WorkspaceError' (i.e. 'ModuleNotFound'); other IO/programming
+-- errors propagate so they remain visible.
 tryGetModulePath :: (IOE :> es) => ModuleName -> Eff es (Maybe ArtifactPath)
 tryGetModulePath modName = do
-  result <- liftIO $ try @SomeException $ do
+  result <- liftIO $ try @WorkspaceError $ do
     runEff $ runWorkspaceOnPwd do
       getModulePath modName
   pure $ either (const Nothing) Just result

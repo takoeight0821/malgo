@@ -93,7 +93,11 @@ handleFetch db = \case
         liftIO $ modifyIORef db.cacheRenamedModule $ Map.insert modName result
         -- Build and persist the interface (best-effort: skip save if path is unavailable,
         -- e.g. for in-memory LSP sources whose paths lie outside the workspace root).
-        let inf = buildInterface modName rnState
+        -- Use the parsed module's own moduleName so that External Ids in the
+        -- interface match Ids generated when the module is compiled directly,
+        -- regardless of which alias (e.g. ModuleName "Builtin" vs Artifact path)
+        -- was used as the query key.
+        let inf = buildInterface parsedAst.moduleName rnState
         liftIO $ modifyIORef db.cacheModuleInterface $ Map.insert modName inf
         mSrcPath <- tryGetModulePath modName
         case mSrcPath of
@@ -156,7 +160,7 @@ fetchSource db modName = do
 
 -- | Try to load a pre-built '.mlgi' interface from disk.  Returns 'Nothing' when
 -- the artifact does not yet exist so the caller can fall back to compilation.
-tryLoadInterfaceFromDisk :: (IOE :> es, Workspace :> es) => ModuleName -> Eff es (Maybe Interface)
+tryLoadInterfaceFromDisk :: (IOE :> es) => ModuleName -> Eff es (Maybe Interface)
 tryLoadInterfaceFromDisk modName = do
   mPath <- tryGetModulePath modName
   case mPath of

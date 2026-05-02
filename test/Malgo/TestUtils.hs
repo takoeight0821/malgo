@@ -16,11 +16,15 @@ module Malgo.TestUtils
     setupEvalBuiltin,
     setupEvalPrelude,
     compileTestCase,
+    compileTestCaseWithElaborate,
+    assertConsistentResults,
     withFreshQueryDB,
   )
 where
 
+import Control.Exception (SomeException, try)
 import Data.ByteString qualified as BS
+import Data.Set qualified as Set
 import Data.Text.Lazy qualified as TL
 import Effectful
 import Effectful.Error.Static (Error)
@@ -28,7 +32,8 @@ import Effectful.Reader.Static (Reader, runReader)
 import Effectful.State.Static.Local (State)
 import GHC.Stack (CallStack, prettyCallStack)
 import Malgo.Driver qualified as Driver
-import Malgo.Features (Features)
+import Malgo.Elaborate (ElaboratePass (..))
+import Malgo.Features (Feature (..), FeatureFlags (..), Features)
 import Malgo.Module
 import Malgo.Monad
 import Malgo.Parser (ParserPass (..))
@@ -44,7 +49,7 @@ import Malgo.Sequent.ToCore (toCore)
 import Malgo.Sequent.ToFun (ToFunPass (..))
 import Malgo.Syntax (Module (..))
 import System.FilePath (takeBaseName, (</>))
-import Test.Hspec (Spec, it)
+import Test.Hspec (Spec, expectationFailure, it, shouldBe)
 import Test.Hspec.Core.Spec (getSpecDescriptionPath)
 import Test.Hspec.Golden (defaultGolden)
 
@@ -199,6 +204,40 @@ compileTestCase builtinName preludeName srcPath = do
 
     let linked = Program {definitions = builtin <> prelude <> program, dependencies = []}
     pure (renamed.moduleName, linked)
+
+-- | Like 'compileTestCase' but runs 'ElaboratePass' after 'RenamePass',
+-- matching the production path when the Malgo2025 feature is enabled.
+compileTestCaseWithElaborate :: ArtifactPath -> ArtifactPath -> FilePath -> IO (ModuleName, Program)
+compileTestCaseWithElaborate builtinName preludeName srcPath = do
+  src <- BS.readFile srcPath
+  db <- newDatabase
+  runMalgoMWith flag (FeatureFlags (Set.singleton Malgo2025)) $ runCompileError $ runQueryDB db do
+    pwd <- pwdPath
+    srcModulePath <- parseArtifactPath pwd srcPath
+    save srcModulePath ".mlg" src
+    parsed <- runPass ParserPass (srcPath, convertString src)
+    rnEnv <- genBuiltinRnEnv
+    (renamed, _) <- runPass RenamePass (parsed, rnEnv)
+    elaborated <- runReader renamed.moduleName $ runPass ElaboratePass renamed.moduleDefinition
+    fun <- runReader renamed.moduleName $ runPass ToFunPass elaborated
+    Program {definitions = program} <- runReader renamed.moduleName $ toCore fun >>= flatProgram >>= joinProgram
+
+    Program {definitions = builtin} <- load builtinName ".sqt"
+    Program {definitions = prelude} <- load preludeName ".sqt"
+
+    let linked = Program {definitions = builtin <> prelude <> program, dependencies = []}
+    pure (renamed.moduleName, linked)
+
+-- | Assert that two IO actions produce the same result, or both fail.
+assertConsistentResults :: (Show a, Eq a) => IO a -> IO a -> IO ()
+assertConsistentResults action1 action2 = do
+  result1 <- try @SomeException action1
+  result2 <- try @SomeException action2
+  case (result1, result2) of
+    (Right v1, Right v2) -> v2 `shouldBe` v1
+    (Left _, Left _) -> pure ()
+    (Left err, Right _) -> expectationFailure $ "First failed but second succeeded: " <> show err
+    (Right _, Left err) -> expectationFailure $ "First succeeded but second failed: " <> show err
 
 -- | Wrap an action requiring 'QueryDB' with a fresh database.
 -- Convenient for tests that call 'runPass RenamePass' directly.

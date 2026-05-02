@@ -6,6 +6,8 @@ description: >
   mise toolchain versions, and Nix flake inputs. Includes security advisory checks,
   release maturity verification (avoid bleeding-edge releases), supply chain attack
   detection, and unnecessary dependency removal.
+  This skill enforces explicit user-approval gates before modifying files and before
+  creating PRs — these gates are mandatory even under Auto Mode.
   Use this skill whenever the user mentions upgrading, updating, or bumping dependencies,
   packages, actions, toolchains, or flake inputs — even if they say something casual like
   "update deps" or "are my packages outdated?". Also trigger when the user asks about
@@ -235,8 +237,30 @@ Risk levels:
 - **medium**: minor version bump
 - **high**: major version bump
 
-Ask the user which upgrades to apply. Default to all low+medium with clean security
-and sufficient age. Hold anything flagged.
+Suggest a default scope (typically all low+medium with clean security and sufficient
+age, holding anything flagged), but **do not apply anything yet** — proceed to Gate A.
+
+### 4.5. Gate A — Confirmation before applying changes (HARD STOP)
+
+**This is a mandatory stop. Do not proceed past this gate without explicit user
+approval, even when running under Auto Mode.** Auto Mode's "execute immediately"
+default does not override this gate — dependency upgrades are not "low-risk routine
+work" and require human review.
+
+What to do at this gate:
+
+1. After presenting the table from §4, **stop and wait** for the user to say which
+   candidates to apply. Acceptable approval signals are explicit phrases like
+   "apply", "go ahead", "approve", "proceed", or an enumerated subset of candidates.
+   Silence or ambiguity is **not** approval.
+2. If the user's intent is unclear (e.g., they say "looks good" without specifying
+   scope), use `AskUserQuestion` to confirm the exact set to apply.
+3. Confirm the scope before any file modification: which removals, which version
+   bumps, which Action SHA updates, and whether to also push / open a PR later.
+4. Do **not** run `cabal freeze`, edit `package.yaml`, edit workflow files, or
+   create a branch until approval is given.
+
+Once approval is received, proceed to §5.
 
 ### 5. Apply upgrades
 
@@ -286,6 +310,26 @@ If tests fail:
 - Check for API changes in upgraded packages
 - Report failures to the user before proceeding
 
+### 6.5. Gate B — Confirmation before pushing & creating the PR (HARD STOP)
+
+**This is a second mandatory stop. Do not push the branch or create a PR without
+explicit user approval, even when running under Auto Mode.** Pushing and opening
+a PR are externally visible actions and must not be taken on assumption.
+
+What to do at this gate:
+
+1. It is fine to create local commits on a feature branch (so the user can review
+   `git log` / `git diff`), but **do not** run `git push` or `gh pr create` yet.
+2. Show the user:
+   - The branch name you intend to push
+   - The list of commits (`git log --oneline master..HEAD`)
+   - The drafted PR title and body (paste it inline so they can edit it)
+3. Wait for an explicit go-ahead like "push", "open the PR", "create PR",
+   "looks good — ship it". A vague "thanks" is not approval.
+4. If the user wants edits to the PR description, branch name, or commits, apply
+   them and re-confirm before proceeding.
+5. Only after approval, run `git push -u origin <branch>` and `gh pr create`.
+
 ### 7. Create PR
 
 Create a branch and PR using `gh`:
@@ -306,6 +350,12 @@ Commits format.
 
 ## Important notes
 
+- **Always stop for explicit user approval at the two gates** (Gate A in §4.5
+  before applying changes, Gate B in §6.5 before pushing & creating the PR).
+  These gates are mandatory **even under Auto Mode** — the "execute immediately"
+  default does not extend to dependency upgrades or PR creation. Treat silence,
+  vague acknowledgement ("ok", "thanks"), or implicit consent as **not approved**
+  and ask again with `AskUserQuestion`.
 - **Never upgrade GHC major version without explicit user approval** — this can break
   the entire build and requires careful migration.
 - **The `allow-newer` field in `cabal.project`** may need adjustment when upgrading.

@@ -9,9 +9,10 @@ module Malgo.Module
     getModulePath,
     runWorkspaceOnPwd,
     ArtifactPath (..),
+    WorkspaceError (..),
     Resource (..),
-    pwdPath,
     parseArtifactPath,
+    parseArtifactPathFromPwd,
     ViaBinary (..),
     ViaShow (..),
     moduleNameToString,
@@ -28,6 +29,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BSL
 import Data.Data
+import Data.Hashable (Hashable (..))
 import Data.Map qualified as Map
 import Data.SCargot.Repr.Basic qualified as S
 import Effectful
@@ -130,8 +132,7 @@ searchAndRegister (ModuleName moduleName) = do
   workspace <- getWorkspaceAbs
   file <- search [toFilePath workspace] fileName
   let relPath = makeRelative (toFilePath workspace) file
-  pwd <- pwdPath
-  path <- parseArtifactPath pwd relPath
+  path <- parseArtifactPathFromPwd relPath
   registerModule (ModuleName moduleName) path
   pure path
   where
@@ -166,8 +167,20 @@ data ArtifactPath = ArtifactPath
     relPath :: Path Rel File,
     targetPath :: Path Abs File
   }
-  deriving stock (Eq, Ord, Generic, Data)
-  deriving anyclass (Hashable, Binary)
+  deriving stock (Generic, Data)
+  deriving anyclass (Binary)
+
+-- | Equality based on relPath so that paths to the same file via different
+-- traversal routes (e.g. "./runtime/..." vs "../../../runtime/...") compare equal.
+instance Eq ArtifactPath where
+  a == b = a.relPath == b.relPath
+
+instance Ord ArtifactPath where
+  compare a b = compare a.relPath b.relPath
+
+instance Hashable ArtifactPath where
+  hash a = hash (toFilePath a.relPath)
+  hashWithSalt s a = hashWithSalt s (toFilePath a.relPath)
 
 instance Show ArtifactPath where
   -- Do not show rawPath, originPath, targetPath.
@@ -176,21 +189,6 @@ instance Show ArtifactPath where
 
 instance Pretty ArtifactPath where
   pretty path = pretty $ toFilePath path.relPath
-
-pwdPath :: (Workspace :> es) => Eff es ArtifactPath
-pwdPath = do
-  workspace <- getWorkspaceAbs
-  let pwd = parent workspace
-  let originPath = pwd </> mkRelFile "dummy"
-  let relPath = mkRelFile "dummy"
-  let targetPath = workspace </> mkRelFile "dummy"
-  pure
-    $ ArtifactPath
-      { rawPath = ".",
-        originPath,
-        relPath,
-        targetPath
-      }
 
 parseArtifactPath :: (IOE :> es, Workspace :> es) => ArtifactPath -> FilePath -> Eff es ArtifactPath
 parseArtifactPath from path = do
@@ -202,6 +200,19 @@ parseArtifactPath from path = do
   let originBasePath = parent workspace
   relPath <- stripProperPrefix originBasePath originPath
 
+  let targetPath = workspace </> relPath
+  pure $ ArtifactPath {rawPath = path, originPath, relPath, targetPath}
+
+-- | Resolve a path string relative to the directory containing the workspace
+-- (i.e. the user's "pwd" in the project root).
+parseArtifactPathFromPwd :: (IOE :> es, Workspace :> es) => FilePath -> Eff es ArtifactPath
+parseArtifactPathFromPwd path = do
+  workspace <- getWorkspaceAbs
+  let pwd = parent workspace
+  basePath <- liftIO $ makeAbsolute $ toFilePath pwd
+  rawPath <- liftIO $ canonicalizePath (basePath F.</> path)
+  originPath <- parseAbsFile rawPath
+  relPath <- stripProperPrefix pwd originPath
   let targetPath = workspace </> relPath
   pure $ ArtifactPath {rawPath = path, originPath, relPath, targetPath}
 

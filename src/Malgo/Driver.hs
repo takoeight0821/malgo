@@ -85,8 +85,7 @@ compile ::
   Eff es ()
 compile srcPath = do
   flags <- ask @Flag
-  pwd <- pwdPath
-  srcModulePath <- parseArtifactPath pwd srcPath
+  srcModulePath <- parseArtifactPathFromPwd srcPath
   src <- liftIO $ BS.readFile srcPath
   save srcModulePath ".mlg" src
   runCompileError do

@@ -3,7 +3,7 @@ module Malgo.Query.Engine
   )
 where
 
-import Control.Exception (SomeException, try)
+import Control.Exception (try)
 import Data.Binary (Binary, decode)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BSL
@@ -18,7 +18,7 @@ import Effectful.Reader.Static (Reader, ask, runReader)
 import Effectful.State.Static.Local (State)
 import Malgo.Elaborate (ElaboratePass (..))
 import Malgo.Features
-import Malgo.Infer (InferPass (..))
+import Malgo.Infer (InferPass (..), TyEnv, buildDataEnv, buildForeignEnv, buildSigEnv)
 import Malgo.Interface
 import Malgo.Module
 import Malgo.Parser (ParserPass (..))
@@ -93,7 +93,11 @@ handleFetch db = \case
         liftIO $ modifyIORef db.cacheRenamedModule $ Map.insert modName result
         -- Build and persist the interface (best-effort: skip save if path is unavailable,
         -- e.g. for in-memory LSP sources whose paths lie outside the workspace root).
-        let inf = buildInterface modName rnState
+        -- Use the parsed module's own moduleName so that External Ids in the
+        -- interface match Ids generated when the module is compiled directly,
+        -- regardless of which alias (e.g. ModuleName "Builtin" vs Artifact path)
+        -- was used as the query key.
+        let inf = buildInterface parsedAst.moduleName rnState
         liftIO $ modifyIORef db.cacheModuleInterface $ Map.insert modName inf
         mSrcPath <- tryGetModulePath modName
         case mSrcPath of
@@ -124,6 +128,7 @@ handleFetch db = \case
         srcPath <- getModulePath modName
         flags <- ask @Flag
         malgo2025 <- isMalgo2025Enabled
+        importedEnv <- buildDepsEnv db rnState.dependencies
         program <- runReader modName do
           bindGroup <-
             if malgo2025
@@ -131,7 +136,7 @@ handleFetch db = \case
               else pure renamedAst.moduleDefinition
           bindGroup' <-
             if flags.useInfer
-              then runPass InferPass bindGroup
+              then runPass InferPass (importedEnv, bindGroup)
               else pure bindGroup
           runPass ToFunPass bindGroup'
             >>= runPass ToCorePass
@@ -151,11 +156,11 @@ fetchSource db modName = do
     Nothing -> do
       modPath <- getModulePath modName
       content <- liftIO $ BS.readFile $ toFilePath modPath.originPath
-      pure (modPath.rawPath, convertString content)
+      pure (toFilePath modPath.originPath, convertString content)
 
 -- | Try to load a pre-built '.mlgi' interface from disk.  Returns 'Nothing' when
 -- the artifact does not yet exist so the caller can fall back to compilation.
-tryLoadInterfaceFromDisk :: (IOE :> es, Workspace :> es) => ModuleName -> Eff es (Maybe Interface)
+tryLoadInterfaceFromDisk :: (IOE :> es) => ModuleName -> Eff es (Maybe Interface)
 tryLoadInterfaceFromDisk modName = do
   mPath <- tryGetModulePath modName
   case mPath of
@@ -170,12 +175,40 @@ tryLoadInterfaceFromDisk modName = do
         else pure Nothing
 
 -- | Try to get the ArtifactPath for a module, returning 'Nothing' if not found.
+-- Only swallows 'WorkspaceError' (i.e. 'ModuleNotFound'); other IO/programming
+-- errors propagate so they remain visible.
 tryGetModulePath :: (IOE :> es) => ModuleName -> Eff es (Maybe ArtifactPath)
 tryGetModulePath modName = do
-  result <- liftIO $ try @SomeException $ do
+  result <- liftIO $ try @WorkspaceError $ do
     runEff $ runWorkspaceOnPwd do
       getModulePath modName
   pure $ either (const Nothing) Just result
+
+-- | Build a TyEnv from all dependency modules' declarations (sig + data + foreign).
+-- Uses the transitive dependency set already recorded in RnState.
+buildDepsEnv ::
+  ( Reader Flag :> es,
+    State Uniq :> es,
+    IOE :> es,
+    Workspace :> es,
+    Features :> es,
+    Error CompileError :> es
+  ) =>
+  Database ->
+  Set ModuleName ->
+  Eff es TyEnv
+buildDepsEnv db deps =
+  foldlM
+    ( \acc dep -> do
+        (renamedDep, _) <- handleFetch db (RenamedModule dep)
+        let depEnv =
+              buildSigEnv renamedDep.moduleDefinition
+                <> buildDataEnv renamedDep.moduleDefinition
+                <> buildForeignEnv renamedDep.moduleDefinition
+        pure (acc <> depEnv)
+    )
+    Map.empty
+    (Set.toList deps)
 
 -- | Load dependency programs from disk and merge into a single linked program.
 linkDeps :: (Workspace :> es, IOE :> es) => Set ModuleName -> Join.Program -> Eff es Join.Program

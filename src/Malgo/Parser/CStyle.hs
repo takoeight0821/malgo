@@ -9,7 +9,7 @@ import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Effectful (Eff, IOE, type (:>))
 import Malgo.Features (Features)
-import Malgo.Module (ModuleName (..), Workspace, parseArtifactPath, pwdPath)
+import Malgo.Module (ModuleName (..), Workspace, parseArtifactPath, parseArtifactPathFromPwd)
 import Malgo.Parser.Core
   ( Parser,
     captureRange,
@@ -47,8 +47,7 @@ pModule :: (IOE :> es, Workspace :> es, Features :> es) => Parser es (Module (Ma
 pModule = do
   space -- consume leading whitespace and comments
   sourcePath <- (.sourceName) <$> getSourcePos
-  pwd <- lift pwdPath
-  sourcePath <- lift $ parseArtifactPath pwd sourcePath
+  sourcePath <- lift $ parseArtifactPathFromPwd sourcePath
   decls <- many pDecl
   pure
     Module
@@ -212,8 +211,7 @@ pImport = captureRange do
     asPath = do
       path <- pStringLiteral
       sourcePath <- (.sourceName) <$> getSourcePos
-      pwd <- lift pwdPath
-      sourcePath <- lift $ parseArtifactPath pwd sourcePath
+      sourcePath <- lift $ parseArtifactPathFromPwd sourcePath
       path' <- lift $ parseArtifactPath sourcePath path
       pure $ Artifact path'
 

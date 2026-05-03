@@ -6,7 +6,7 @@
     - [x] Implement `TMu` in `freeVars` and `applySubst` functions
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Type Representation Update' (Protocol in workflow.md)
 
-## Phase 2: Unification Engine Refinement
+## Phase 2: Unification Engine Refinement [checkpoint: c838fb2]
 - [x] Task: Update Unification Logic
     - [x] Modify `unifyTypes` in `src/Malgo/Infer/Unify.hs` to handle recursive unification
     - [x] Implement cycle-safe type processing to avoid infinite loops during unification

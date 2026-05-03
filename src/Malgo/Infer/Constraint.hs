@@ -188,8 +188,14 @@ generalize lvl ty =
     collectVars (TVariant cases rowTail) =
       concatMap (\(_, ts) -> concatMap collectVars ts) cases <> concatMap collectVars (maybeToList rowTail)
     collectVars TBottom = []
-    collectVars (TForall _ t) = collectVars t
-    collectVars (TMu _ t) = collectVars t
+    -- Exclude binder-bound variables to match freeVars semantics.
+    -- Without this, generalize could quantify over a μ-bound variable.
+    collectVars (TForall v t) = filter (notBound v) (collectVars t)
+    collectVars (TMu v t) = filter (notBound v) (collectVars t)
+
+    notBound :: T.Text -> Ty -> Bool
+    notBound v (TVar n _) = n /= v
+    notBound _ _ = True
 
 -- | Instantiate a scheme by replacing quantified variables with fresh type variables
 instantiate :: (State GenState :> es) => Scheme -> Eff es Ty

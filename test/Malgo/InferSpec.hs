@@ -103,6 +103,18 @@ spec = parallel do
             scheme = generalize 0 ty
         scheme.vars `shouldBe` []
 
+      it "does not quantify TMu-bound variables" do
+        -- μ_t5._t5 -> _t6 at level 2, generalizing at level 0
+        -- Only _t6 should be quantified; _t5 is bound by μ.
+        let ty = TMu "_t5" (TArr (TVar "_t5" 2) (TVar "_t6" 2))
+            scheme = generalize 0 ty
+        scheme.vars `shouldBe` ["_t6"]
+
+      it "does not quantify TForall-bound variables" do
+        let ty = TForall "_t5" (TArr (TVar "_t5" 2) (TVar "_t6" 2))
+            scheme = generalize 0 ty
+        scheme.vars `shouldBe` ["_t6"]
+
   describe "Unify" do
     describe "basic unification" do
       it "unifies identical type constructors" do
@@ -138,6 +150,32 @@ spec = parallel do
         case result of
           Right subst -> Map.lookup v subst `shouldBe` Just (TMu v t)
           Left err -> expectationFailure $ show err
+
+      it "rejects (μa.a→Int) vs (Int→Int)" do
+        -- μa.a→Int unrolls to (μa.a→Int)→Int, never collapses to Int.
+        -- Final mismatch (TArr vs TCon Int) must surface.
+        let t1 = TMu "a" (TArr (TVar "a" 0) tyInt32)
+            t2 = TArr tyInt32 tyInt32
+        result <- runUnify (dummyRange) t1 t2
+        case result of
+          Left _ -> pure ()
+          Right _ -> expectationFailure "Expected μa.a→Int vs Int→Int to fail"
+
+      it "accepts α-equivalent recursive types: (μa.a→Int) vs (μb.b→Int)" do
+        let t1 = TMu "a" (TArr (TVar "a" 0) tyInt32)
+            t2 = TMu "b" (TArr (TVar "b" 0) tyInt32)
+        result <- runUnify (dummyRange) t1 t2
+        case result of
+          Right _ -> pure ()
+          Left err -> expectationFailure $ show err
+
+      it "rejects (μa.a→Int) vs (μb.b→String) on tail mismatch" do
+        let t1 = TMu "a" (TArr (TVar "a" 0) tyInt32)
+            t2 = TMu "b" (TArr (TVar "b" 0) tyString)
+        result <- runUnify (dummyRange) t1 t2
+        case result of
+          Left _ -> pure ()
+          Right _ -> expectationFailure "Expected μa.a→Int vs μb.b→String to fail"
 
     describe "bottom type" do
       it "bottom unifies with any type" do

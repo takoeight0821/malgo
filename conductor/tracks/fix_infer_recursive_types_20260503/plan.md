@@ -7,10 +7,10 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Type Representation Update' (Protocol in workflow.md)
 
 ## Phase 2: Unification Engine Refinement
-- [ ] Task: Update Unification Logic
-    - [ ] Modify `unifyTypes` in `src/Malgo/Infer/Unify.hs` to handle recursive unification
-    - [ ] Implement cycle-safe type processing to avoid infinite loops during unification
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Unification Engine Refinement' (Protocol in workflow.md)
+- [x] Task: Update Unification Logic
+    - [x] Modify `unifyTypes` in `src/Malgo/Infer/Unify.hs` to handle recursive unification
+    - [x] Implement cycle-safe type processing to avoid infinite loops during unification
+- [x] Task: Conductor - User Manual Verification 'Phase 2: Unification Engine Refinement' (Protocol in workflow.md)
 
 ## Phase 3: Verification & Testing
 - [ ] Task: Fix failing `InferSpec` tests

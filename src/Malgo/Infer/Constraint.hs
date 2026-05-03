@@ -46,7 +46,7 @@ module Malgo.Infer.Constraint
 where
 
 import Control.Exception (Exception (..))
-import Data.List (intersperse, nub)
+import Data.List (intersperse)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (maybeToList)
 import Data.Set qualified as Set
@@ -55,7 +55,7 @@ import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error)
 import Effectful.State.Static.Local (State, get, gets, modify)
 import Malgo.Id (Id)
-import Malgo.Prelude hiding (Constraint, State, get, gets, modify, put)
+import Malgo.Prelude hiding (Constraint)
 import Text.Megaparsec.Pos qualified as Megaparsec
 
 -- | Level for let-polymorphism.

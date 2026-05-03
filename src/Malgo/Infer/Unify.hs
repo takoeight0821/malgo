@@ -7,12 +7,13 @@ module Malgo.Infer.Unify
 where
 
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Text qualified as T
 import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error, throwError)
-import Effectful.State.Static.Local (State, get, modify)
+import Effectful.State.Static.Local (State, evalState, get, modify)
 import Malgo.Infer.Constraint
-import Malgo.Prelude hiding (State, get, gets, modify, put)
+import Malgo.Prelude hiding (Constraint)
 
 -- | Unify two types, returning a substitution
 unify :: (State GenState :> es, Error InferError :> es) => Range -> Ty -> Ty -> Eff es Subst
@@ -20,67 +21,86 @@ unify pos t1 t2 = do
   subst <- currentSubst
   let t1' = applySubst subst t1
       t2' = applySubst subst t2
-  unifyTypes pos t1' t2'
+  evalState (Set.empty :: Set (Ty, Ty)) $ unifyTypes pos t1' t2'
 
 -- | Core unification
-unifyTypes :: (State GenState :> es, Error InferError :> es) => Range -> Ty -> Ty -> Eff es Subst
+unifyTypes :: (State GenState :> es, State (Set (Ty, Ty)) :> es, Error InferError :> es) => Range -> Ty -> Ty -> Eff es Subst
+unifyTypes pos t1 t2
+  | t1 == t2 = pure Map.empty
+  | otherwise = do
+      seen <- get @(Set (Ty, Ty))
+      if Set.member (t1, t2) seen || Set.member (t2, t1) seen
+        then pure Map.empty
+        else do
+          modify @(Set (Ty, Ty)) (Set.insert (t1, t2))
+          unifyInternal pos t1 t2
+
+unifyInternal :: (State GenState :> es, State (Set (Ty, Ty)) :> es, Error InferError :> es) => Range -> Ty -> Ty -> Eff es Subst
 -- Bottom unifies with anything
-unifyTypes _ TBottom _ = pure Map.empty
-unifyTypes _ _ TBottom = pure Map.empty
+unifyInternal _ TBottom _ = pure Map.empty
+unifyInternal _ _ TBottom = pure Map.empty
 -- Type constructors
-unifyTypes pos (TCon c1) (TCon c2)
+unifyInternal pos (TCon c1) (TCon c2)
   | c1 == c2 = pure Map.empty
   | otherwise = throwError $ UnificationError pos (TCon c1) (TCon c2) $ "Cannot unify type constructors '" <> c1 <> "' and '" <> c2 <> "'"
 -- Same variable
-unifyTypes _ (TVar x _) (TVar y _)
+unifyInternal _ (TVar x _) (TVar y _)
   | x == y = pure Map.empty
 -- Variable on the left
-unifyTypes pos (TVar x _) t
-  | occursIn x t = throwError $ OccursCheckError pos x t
+unifyInternal _ (TVar x _) t
+  | occursIn x t = do
+      -- Equi-recursive unification: create TMu
+      let t' = TMu x t
+      let s = Map.singleton x t'
+      modify (\st -> st {solvedSubst = Map.map (applySubst s) st.solvedSubst <> s})
+      pure s
   | otherwise = do
       let s = Map.singleton x t
       modify (\st -> st {solvedSubst = Map.map (applySubst s) st.solvedSubst <> s})
       pure s
 -- Variable on the right
-unifyTypes pos t (TVar x _)
-  | occursIn x t = throwError $ OccursCheckError pos x t
-  | otherwise = do
-      let s = Map.singleton x t
-      modify (\st -> st {solvedSubst = Map.map (applySubst s) st.solvedSubst <> s})
-      pure s
+unifyInternal pos t (TVar x l) = unifyTypes pos (TVar x l) t
+-- TMu on the left: unroll and unify
+unifyInternal pos (TMu v ty) t2 = do
+  let unrolled = applySubst (Map.singleton v (TMu v ty)) ty
+  unifyTypes pos unrolled t2
+-- TMu on the right: unroll and unify
+unifyInternal pos t1 (TMu v ty) = do
+  let unrolled = applySubst (Map.singleton v (TMu v ty)) ty
+  unifyTypes pos t1 unrolled
 -- Arrow types
-unifyTypes pos (TArr a1 b1) (TArr a2 b2) = do
+unifyInternal pos (TArr a1 b1) (TArr a2 b2) = do
   s1 <- unifyTypes pos a1 a2
   s2 <- unifyTypes pos (applySubst s1 b1) (applySubst s1 b2)
   pure (composeSubst s2 s1)
 -- Type application
-unifyTypes pos (TApp f1 a1) (TApp f2 a2) = do
+unifyInternal pos (TApp f1 a1) (TApp f2 a2) = do
   s1 <- unifyTypes pos f1 f2
   s2 <- unifyTypes pos (applySubst s1 a1) (applySubst s1 a2)
   pure (composeSubst s2 s1)
 -- Tuples
-unifyTypes pos (TTuple ts1) (TTuple ts2)
+unifyInternal pos (TTuple ts1) (TTuple ts2)
   | length ts1 == length ts2 = unifyList pos ts1 ts2
   | otherwise = throwError $ UnificationError pos (TTuple ts1) (TTuple ts2) "Tuple lengths differ"
 -- Records (row polymorphism)
-unifyTypes pos (TRecord fs1 r1) (TRecord fs2 r2) = unifyRecords pos fs1 r1 fs2 r2
+unifyInternal pos (TRecord fs1 r1) (TRecord fs2 r2) = unifyRecords pos fs1 r1 fs2 r2
 -- Variants (row polymorphism)
-unifyTypes pos (TVariant cs1 r1) (TVariant cs2 r2) = unifyVariants pos cs1 r1 cs2 r2
+unifyInternal pos (TVariant cs1 r1) (TVariant cs2 r2) = unifyVariants pos cs1 r1 cs2 r2
 -- Forall: instantiate then unify
-unifyTypes pos (TForall v ty) t2 = do
+unifyInternal pos (TForall v ty) t2 = do
   fresh <- freshTyVar
   let body = applySubst (Map.singleton v fresh) ty
   unifyTypes pos body t2
-unifyTypes pos t1 (TForall v ty) = do
+unifyInternal pos t1 (TForall v ty) = do
   fresh <- freshTyVar
   let body = applySubst (Map.singleton v fresh) ty
   unifyTypes pos t1 body
 -- Mismatch
-unifyTypes pos t1 t2 =
+unifyInternal pos t1 t2 =
   throwError $ UnificationError pos t1 t2 "Cannot unify types"
 
 -- | Unify a list of types pairwise
-unifyList :: (State GenState :> es, Error InferError :> es) => Range -> [Ty] -> [Ty] -> Eff es Subst
+unifyList :: (State GenState :> es, State (Set (Ty, Ty)) :> es, Error InferError :> es) => Range -> [Ty] -> [Ty] -> Eff es Subst
 unifyList _ [] [] = pure Map.empty
 unifyList pos (t1 : ts1) (t2 : ts2) = do
   s1 <- unifyTypes pos t1 t2
@@ -89,10 +109,8 @@ unifyList pos (t1 : ts1) (t2 : ts2) = do
 unifyList _ _ _ = pure Map.empty
 
 -- | Record row unification
--- 1. Find common fields -> unify their types
--- 2. Remaining fields handled by row tails
 unifyRecords ::
-  (State GenState :> es, Error InferError :> es) =>
+  (State GenState :> es, State (Set (Ty, Ty)) :> es, Error InferError :> es) =>
   Range ->
   [(T.Text, Ty)] ->
   Maybe Ty ->
@@ -147,9 +165,9 @@ unifyRecords pos fs1 r1 fs2 r2 = do
       s2 <- unifyTypes pos (applySubst (composeSubst s1 commonSubst) row2) (applySubst s1 (TRecord only1' (Just freshRow)))
       pure (composeSubst s2 (composeSubst s1 commonSubst))
 
--- | Variant row unification (analogous to records)
+-- | Variant row unification
 unifyVariants ::
-  (State GenState :> es, Error InferError :> es) =>
+  (State GenState :> es, State (Set (Ty, Ty)) :> es, Error InferError :> es) =>
   Range ->
   [(T.Text, [Ty])] ->
   Maybe Ty ->
@@ -216,7 +234,7 @@ solveConstraints = do
       subst <- currentSubst
       let t1' = applySubst subst t1
           t2' = applySubst subst t2
-      _ <- unifyTypes pos t1' t2'
+      _ <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes pos t1' t2'
       pure ()
     solveOne (CBottomProp sources target) = do
       subst <- currentSubst
@@ -226,7 +244,7 @@ solveConstraints = do
       when (any isBottom sources') $ do
         case target' of
           TVar _ _ -> do
-            _ <- unifyTypes dummyRange target' TBottom
+            _ <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes dummyRange target' TBottom
             pure ()
           _ -> pure ()
 

@@ -127,11 +127,17 @@ spec = parallel do
           Right _ -> pure ()
           Left err -> expectationFailure $ show err
 
-      it "detects occurs check" do
+      it "allows equi-recursive types (relaxed occurs check)" do
         result <- runUnify (dummyRange) (TVar "_t0" 0) (TArr (TVar "_t0" 0) tyInt32)
+        result `shouldSatisfy` isRight
+
+      it "unifies recursive types to TMu" do
+        let v = "_t0"
+            t = TArr (TVar v 0) tyInt32
+        result <- runUnify (dummyRange) (TVar v 0) t
         case result of
-          Left _ -> pure ()
-          Right _ -> expectationFailure "Expected occurs check failure"
+          Right subst -> Map.lookup v subst `shouldBe` Just (TMu v t)
+          Left err -> expectationFailure $ show err
 
     describe "bottom type" do
       it "bottom unifies with any type" do

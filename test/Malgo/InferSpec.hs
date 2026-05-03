@@ -55,6 +55,16 @@ spec = parallel do
         applySubst subst (TArr (TVar "_t0" 0) (TVar "_t1" 0))
           `shouldBe` TArr tyInt32 (TVar "_t1" 0)
 
+      it "substitutes variables in TMu" do
+        let subst = Map.singleton "_t0" tyInt32
+        applySubst subst (TMu "a" (TArr (TVar "_t0" 0) (TVar "a" 0)))
+          `shouldBe` TMu "a" (TArr tyInt32 (TVar "a" 0))
+
+      it "respects binder in TMu" do
+        let subst = Map.singleton "a" tyInt32
+        applySubst subst (TMu "a" (TVar "a" 0))
+          `shouldBe` TMu "a" (TVar "a" 0)
+
     describe "freeVars" do
       it "finds free variables in arrow types" do
         freeVars (TArr (TVar "a" 0) (TVar "b" 0))
@@ -62,6 +72,10 @@ spec = parallel do
 
       it "removes bound variables in forall" do
         freeVars (TForall "a" (TArr (TVar "a" 0) (TVar "b" 0)))
+          `shouldBe` Set.fromList ["b"]
+
+      it "removes bound variables in TMu" do
+        freeVars (TMu "a" (TArr (TVar "a" 0) (TVar "b" 0)))
           `shouldBe` Set.fromList ["b"]
 
     describe "occursIn" do
@@ -73,6 +87,10 @@ spec = parallel do
 
       it "returns False for absent variable" do
         occursIn "a" (TArr tyInt32 tyInt32) `shouldBe` False
+
+      it "respects binder in TMu" do
+        occursIn "a" (TMu "a" (TVar "a" 0)) `shouldBe` False
+        occursIn "a" (TMu "b" (TVar "a" 0)) `shouldBe` True
 
     describe "generalize" do
       it "generalizes variables above the given level" do

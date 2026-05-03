@@ -1,0 +1,20 @@
+# Implementation Plan - Fix(infer): Relax occurs check for recursive/codata types
+
+## Phase 1: Type Representation Update
+- [ ] Task: Add `TMu` to `Ty` data type
+    - [ ] Update `Ty` definition in `src/Malgo/Infer/Constraint.hs`
+    - [ ] Implement `TMu` in `freeVars` and `applySubst` functions
+- [ ] Task: Conductor - User Manual Verification 'Phase 1: Type Representation Update' (Protocol in workflow.md)
+
+## Phase 2: Unification Engine Refinement
+- [ ] Task: Update Unification Logic
+    - [ ] Modify `unifyTypes` in `src/Malgo/Infer/Unify.hs` to handle recursive unification
+    - [ ] Implement cycle-safe type processing to avoid infinite loops during unification
+- [ ] Task: Conductor - User Manual Verification 'Phase 2: Unification Engine Refinement' (Protocol in workflow.md)
+
+## Phase 3: Verification & Testing
+- [ ] Task: Fix failing `InferSpec` tests
+    - [ ] Run `mise run test -- --match=InferSpec` and ensure codata/recursive tests pass
+- [ ] Task: Add new tests for complex recursive types
+    - [ ] Create new test cases in `test/testcases/malgo/` for nested recursive types and verify with golden tests
+- [ ] Task: Conductor - User Manual Verification 'Phase 3: Verification & Testing' (Protocol in workflow.md)

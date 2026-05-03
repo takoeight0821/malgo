@@ -1,0 +1,49 @@
+#malgo-2025
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- Nested recursive type: a stream of streams
+type Stream(a) = { head: a, tail: Stream(a) }
+
+def constStream = {
+  #(x).head -> x,
+  #(x).tail -> constStream(x)
+}
+
+def nats = {
+  #(n).head -> n,
+  #(n).tail -> nats (addInt32(n, 1))
+}
+
+def streamOfNats = {
+  #(n).head -> nats(n),
+  #(n).tail -> streamOfNats(addInt32(n, 1))
+}
+
+-- Mutual recursion via records/lambdas
+type A = { getB: B, val: Int32 }
+type B = { getA: A, val: Int32 }
+
+def mkA = { n ->
+  { val = n, getB = mkB(addInt32(n, 1)) }
+}
+
+def mkB = { n ->
+  { val = n, getA = mkA(addInt32(n, 1)) }
+}
+
+def main = { (_) ->
+  -- Test nested stream
+  let s = streamOfNats(0);
+  printString(toStringInt32(s.head.head));
+  printString(toStringInt32(s.tail.head.head));
+  printString(toStringInt32(s.tail.head.tail.head));
+  
+  -- Test mutual recursion
+  let a = mkA(10);
+  printString(toStringInt32(a.val));
+  printString(toStringInt32(a.getB.val));
+  printString(toStringInt32(a.getB.getA.val));
+  
+  printString("Done")
+}

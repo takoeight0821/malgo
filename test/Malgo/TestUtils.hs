@@ -83,7 +83,8 @@ flag = Flag {noOptimize = False, lambdaLift = False, debugMode = False, testMode
 -- covered, add it here. Current axes:
 --   primitive ops, recursion/HOF, import, record, row polymorphism,
 --   codata, copattern, label/goto, nested pattern, C-style syntax,
---   zero-arity edge, complex control flow, tuple pattern
+--   zero-arity edge, complex control flow, tuple pattern,
+--   nested/mutual recursive types
 --
 -- After updating: mise run reset && mise run test
 representatives :: [String]
@@ -100,7 +101,8 @@ representatives =
     "CStyleApply",
     "ZeroArgs",
     "Eventually",
-    "TuplePattern"
+    "TuplePattern",
+    "NestedRecursive"
   ]
 
 -- | Verify that all entries in 'representatives' correspond to actual

@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Fix(infer): Relax occurs check for recursive/codata types (Issue #320)**
+- [x] **Track: Fix(infer): Relax occurs check for recursive/codata types (Issue #320)**
   *Link: [./tracks/fix_infer_recursive_types_20260503/](./tracks/fix_infer_recursive_types_20260503/)*

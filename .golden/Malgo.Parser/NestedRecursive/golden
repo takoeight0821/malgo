@@ -1,0 +1,85 @@
+(module
+   "test/testcases/malgo/NestedRecursive.mlg"
+   ((import "runtime/malgo/Builtin.mlg" all)
+      (import "runtime/malgo/Prelude.mlg" all)
+      (type Stream (a) (record (head a) (tail (app Stream (a)))))
+      (def
+         constStream
+         (codata
+            ((project (apply # x) "head") x)
+            ((project (apply # x) "tail") (apply constStream x))))
+      (def
+         nats
+         (codata
+            ((project (apply # n) "head") n)
+            ((project (apply # n) "tail")
+               (apply nats (apply (apply addInt32 n) (int32 1))))))
+      (def
+         streamOfNats
+         (codata
+            ((project (apply # n) "head") (apply nats n))
+            ((project (apply # n) "tail")
+               (apply streamOfNats (apply (apply addInt32 n) (int32 1))))))
+      (type A () (record (getB B) (val Int32)))
+      (type B () (record (getA A) (val Int32)))
+      (def
+         mkA
+         (fn
+            ((clause
+                (n)
+                (seq
+                   (do
+                      (record
+                         (val n)
+                         (getB (apply mkB (apply (apply addInt32 n) (int32 1)))))))))))
+      (def
+         mkB
+         (fn
+            ((clause
+                (n)
+                (seq
+                   (do
+                      (record
+                         (val n)
+                         (getA (apply mkA (apply (apply addInt32 n) (int32 1)))))))))))
+      (def
+         main
+         (fn
+            ((clause
+                (_)
+                (seq
+                   (let s (apply streamOfNats (int32 0)))
+                   (do
+                      (apply
+                         printString
+                         (apply toStringInt32 (project (project s "head") "head"))))
+                   (do
+                      (apply
+                         printString
+                         (apply
+                            toStringInt32
+                            (project (project (project s "tail") "head") "head"))))
+                   (do
+                      (apply
+                         printString
+                         (apply
+                            toStringInt32
+                            (project
+                               (project
+                                  (project (project s "tail") "head")
+                                  "tail")
+                               "head"))))
+                   (let a (apply mkA (int32 10)))
+                   (do
+                      (apply printString (apply toStringInt32 (project a "val"))))
+                   (do
+                      (apply
+                         printString
+                         (apply toStringInt32 (project (project a "getB") "val"))))
+                   (do
+                      (apply
+                         printString
+                         (apply
+                            toStringInt32
+                            (project (project (project a "getB") "getA") "val"))))
+                   (do (apply printString (string "Done"))))))))))

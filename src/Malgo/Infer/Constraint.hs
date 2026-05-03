@@ -46,7 +46,7 @@ module Malgo.Infer.Constraint
 where
 
 import Control.Exception (Exception (..))
-import Data.List (intersperse, nub)
+import Data.List (intersperse)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (maybeToList)
 import Data.Set qualified as Set
@@ -55,7 +55,7 @@ import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error)
 import Effectful.State.Static.Local (State, get, gets, modify)
 import Malgo.Id (Id)
-import Malgo.Prelude hiding (Constraint, State, get, gets, modify, put)
+import Malgo.Prelude hiding (Constraint)
 import Text.Megaparsec.Pos qualified as Megaparsec
 
 -- | Level for let-polymorphism.
@@ -83,6 +83,8 @@ data Ty
     TBottom
   | -- | Forall quantifier (used in Schemes after generalization)
     TForall T.Text Ty
+  | -- | Recursive type: mu v. ty
+    TMu T.Text Ty
   deriving stock (Eq, Show, Ord)
 
 instance Pretty Ty where
@@ -103,6 +105,7 @@ instance Pretty Ty where
       <> "]"
   pretty TBottom = "_|_"
   pretty (TForall v ty) = "(forall " <> pretty v <> ". " <> pretty ty <> ")"
+  pretty (TMu v ty) = "(mu " <> pretty v <> ". " <> pretty ty <> ")"
 
 -- | Type scheme for let-polymorphism
 data Scheme = Scheme
@@ -134,6 +137,8 @@ applySubst subst (TVariant cases rowTail) =
 applySubst _ TBottom = TBottom
 applySubst subst (TForall v ty) =
   TForall v (applySubst (Map.delete v subst) ty)
+applySubst subst (TMu v ty) =
+  TMu v (applySubst (Map.delete v subst) ty)
 
 -- | Free type variables in a type
 freeVars :: Ty -> Set T.Text
@@ -148,6 +153,7 @@ freeVars (TVariant cases rowTail) =
   foldMap (\(_, ts) -> foldMap freeVars ts) cases <> foldMap freeVars rowTail
 freeVars TBottom = Set.empty
 freeVars (TForall v ty) = Set.delete v (freeVars ty)
+freeVars (TMu v ty) = Set.delete v (freeVars ty)
 
 -- | Occurs check: does a type variable occur in a type?
 occursIn :: T.Text -> Ty -> Bool
@@ -162,6 +168,7 @@ occursIn name (TVariant cases rowTail) =
   any (\(_, ts) -> any (occursIn name) ts) cases || maybe False (occursIn name) rowTail
 occursIn _ TBottom = False
 occursIn name (TForall v ty) = name /= v && occursIn name ty
+occursIn name (TMu v ty) = name /= v && occursIn name ty
 
 -- | Generalize a type by quantifying over free variables not in the environment
 -- and with level strictly greater than the given level.
@@ -181,7 +188,14 @@ generalize lvl ty =
     collectVars (TVariant cases rowTail) =
       concatMap (\(_, ts) -> concatMap collectVars ts) cases <> concatMap collectVars (maybeToList rowTail)
     collectVars TBottom = []
-    collectVars (TForall _ t) = collectVars t
+    -- Exclude binder-bound variables to match freeVars semantics.
+    -- Without this, generalize could quantify over a μ-bound variable.
+    collectVars (TForall v t) = filter (notBound v) (collectVars t)
+    collectVars (TMu v t) = filter (notBound v) (collectVars t)
+
+    notBound :: T.Text -> Ty -> Bool
+    notBound v (TVar n _) = n /= v
+    notBound _ _ = True
 
 -- | Instantiate a scheme by replacing quantified variables with fresh type variables
 instantiate :: (State GenState :> es) => Scheme -> Eff es Ty

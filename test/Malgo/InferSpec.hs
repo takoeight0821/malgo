@@ -55,6 +55,16 @@ spec = parallel do
         applySubst subst (TArr (TVar "_t0" 0) (TVar "_t1" 0))
           `shouldBe` TArr tyInt32 (TVar "_t1" 0)
 
+      it "substitutes variables in TMu" do
+        let subst = Map.singleton "_t0" tyInt32
+        applySubst subst (TMu "a" (TArr (TVar "_t0" 0) (TVar "a" 0)))
+          `shouldBe` TMu "a" (TArr tyInt32 (TVar "a" 0))
+
+      it "respects binder in TMu" do
+        let subst = Map.singleton "a" tyInt32
+        applySubst subst (TMu "a" (TVar "a" 0))
+          `shouldBe` TMu "a" (TVar "a" 0)
+
     describe "freeVars" do
       it "finds free variables in arrow types" do
         freeVars (TArr (TVar "a" 0) (TVar "b" 0))
@@ -62,6 +72,10 @@ spec = parallel do
 
       it "removes bound variables in forall" do
         freeVars (TForall "a" (TArr (TVar "a" 0) (TVar "b" 0)))
+          `shouldBe` Set.fromList ["b"]
+
+      it "removes bound variables in TMu" do
+        freeVars (TMu "a" (TArr (TVar "a" 0) (TVar "b" 0)))
           `shouldBe` Set.fromList ["b"]
 
     describe "occursIn" do
@@ -74,6 +88,10 @@ spec = parallel do
       it "returns False for absent variable" do
         occursIn "a" (TArr tyInt32 tyInt32) `shouldBe` False
 
+      it "respects binder in TMu" do
+        occursIn "a" (TMu "a" (TVar "a" 0)) `shouldBe` False
+        occursIn "a" (TMu "b" (TVar "a" 0)) `shouldBe` True
+
     describe "generalize" do
       it "generalizes variables above the given level" do
         let ty = TArr (TVar "_t0" 1) (TVar "_t1" 0)
@@ -84,6 +102,18 @@ spec = parallel do
         let ty = TArr (TVar "_t0" 0) (TVar "_t1" 0)
             scheme = generalize 0 ty
         scheme.vars `shouldBe` []
+
+      it "does not quantify TMu-bound variables" do
+        -- μ_t5._t5 -> _t6 at level 2, generalizing at level 0
+        -- Only _t6 should be quantified; _t5 is bound by μ.
+        let ty = TMu "_t5" (TArr (TVar "_t5" 2) (TVar "_t6" 2))
+            scheme = generalize 0 ty
+        scheme.vars `shouldBe` ["_t6"]
+
+      it "does not quantify TForall-bound variables" do
+        let ty = TForall "_t5" (TArr (TVar "_t5" 2) (TVar "_t6" 2))
+            scheme = generalize 0 ty
+        scheme.vars `shouldBe` ["_t6"]
 
   describe "Unify" do
     describe "basic unification" do
@@ -109,11 +139,43 @@ spec = parallel do
           Right _ -> pure ()
           Left err -> expectationFailure $ show err
 
-      it "detects occurs check" do
+      it "allows equi-recursive types (relaxed occurs check)" do
         result <- runUnify (dummyRange) (TVar "_t0" 0) (TArr (TVar "_t0" 0) tyInt32)
+        result `shouldSatisfy` isRight
+
+      it "unifies recursive types to TMu" do
+        let v = "_t0"
+            t = TArr (TVar v 0) tyInt32
+        result <- runUnify (dummyRange) (TVar v 0) t
+        case result of
+          Right subst -> Map.lookup v subst `shouldBe` Just (TMu v t)
+          Left err -> expectationFailure $ show err
+
+      it "rejects (μa.a→Int) vs (Int→Int)" do
+        -- μa.a→Int unrolls to (μa.a→Int)→Int, never collapses to Int.
+        -- Final mismatch (TArr vs TCon Int) must surface.
+        let t1 = TMu "a" (TArr (TVar "a" 0) tyInt32)
+            t2 = TArr tyInt32 tyInt32
+        result <- runUnify (dummyRange) t1 t2
         case result of
           Left _ -> pure ()
-          Right _ -> expectationFailure "Expected occurs check failure"
+          Right _ -> expectationFailure "Expected μa.a→Int vs Int→Int to fail"
+
+      it "accepts α-equivalent recursive types: (μa.a→Int) vs (μb.b→Int)" do
+        let t1 = TMu "a" (TArr (TVar "a" 0) tyInt32)
+            t2 = TMu "b" (TArr (TVar "b" 0) tyInt32)
+        result <- runUnify (dummyRange) t1 t2
+        case result of
+          Right _ -> pure ()
+          Left err -> expectationFailure $ show err
+
+      it "rejects (μa.a→Int) vs (μb.b→String) on tail mismatch" do
+        let t1 = TMu "a" (TArr (TVar "a" 0) tyInt32)
+            t2 = TMu "b" (TArr (TVar "b" 0) tyString)
+        result <- runUnify (dummyRange) t1 t2
+        case result of
+          Left _ -> pure ()
+          Right _ -> expectationFailure "Expected μa.a→Int vs μb.b→String to fail"
 
     describe "bottom type" do
       it "bottom unifies with any type" do

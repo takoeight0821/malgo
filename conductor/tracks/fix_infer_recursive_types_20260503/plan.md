@@ -12,9 +12,9 @@
     - [x] Implement cycle-safe type processing to avoid infinite loops during unification
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Unification Engine Refinement' (Protocol in workflow.md)
 
-## Phase 3: Verification & Testing
-- [ ] Task: Fix failing `InferSpec` tests
-    - [ ] Run `mise run test -- --match=InferSpec` and ensure codata/recursive tests pass
-- [ ] Task: Add new tests for complex recursive types
-    - [ ] Create new test cases in `test/testcases/malgo/` for nested recursive types and verify with golden tests
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: Verification & Testing' (Protocol in workflow.md)
+## Phase 3: Verification & Testing [checkpoint: 243a64c]
+- [x] Task: Fix failing `InferSpec` tests
+    - [x] Run `mise run test -- --match=InferSpec` and ensure codata/recursive tests pass
+- [x] Task: Add new tests for complex recursive types
+    - [x] Create new test cases in `test/testcases/malgo/` for nested recursive types and verify with golden tests
+- [x] Task: Conductor - User Manual Verification 'Phase 3: Verification & Testing' (Protocol in workflow.md)

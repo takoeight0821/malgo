@@ -11,8 +11,8 @@ module Malgo.Module
     ArtifactPath (..),
     WorkspaceError (..),
     Resource (..),
-    pwdPath,
     parseArtifactPath,
+    parseArtifactPathFromPwd,
     ViaBinary (..),
     ViaShow (..),
     moduleNameToString,
@@ -132,8 +132,7 @@ searchAndRegister (ModuleName moduleName) = do
   workspace <- getWorkspaceAbs
   file <- search [toFilePath workspace] fileName
   let relPath = makeRelative (toFilePath workspace) file
-  pwd <- pwdPath
-  path <- parseArtifactPath pwd relPath
+  path <- parseArtifactPathFromPwd relPath
   registerModule (ModuleName moduleName) path
   pure path
   where
@@ -191,21 +190,6 @@ instance Show ArtifactPath where
 instance Pretty ArtifactPath where
   pretty path = pretty $ toFilePath path.relPath
 
-pwdPath :: (Workspace :> es) => Eff es ArtifactPath
-pwdPath = do
-  workspace <- getWorkspaceAbs
-  let pwd = parent workspace
-  let originPath = pwd </> mkRelFile "dummy"
-  let relPath = mkRelFile "dummy"
-  let targetPath = workspace </> mkRelFile "dummy"
-  pure
-    $ ArtifactPath
-      { rawPath = ".",
-        originPath,
-        relPath,
-        targetPath
-      }
-
 parseArtifactPath :: (IOE :> es, Workspace :> es) => ArtifactPath -> FilePath -> Eff es ArtifactPath
 parseArtifactPath from path = do
   basePath <- liftIO $ makeAbsolute $ toFilePath $ parent from.originPath
@@ -216,6 +200,19 @@ parseArtifactPath from path = do
   let originBasePath = parent workspace
   relPath <- stripProperPrefix originBasePath originPath
 
+  let targetPath = workspace </> relPath
+  pure $ ArtifactPath {rawPath = path, originPath, relPath, targetPath}
+
+-- | Resolve a path string relative to the directory containing the workspace
+-- (i.e. the user's "pwd" in the project root).
+parseArtifactPathFromPwd :: (IOE :> es, Workspace :> es) => FilePath -> Eff es ArtifactPath
+parseArtifactPathFromPwd path = do
+  workspace <- getWorkspaceAbs
+  let pwd = parent workspace
+  basePath <- liftIO $ makeAbsolute $ toFilePath pwd
+  rawPath <- liftIO $ canonicalizePath (basePath F.</> path)
+  originPath <- parseAbsFile rawPath
+  relPath <- stripProperPrefix pwd originPath
   let targetPath = workspace </> relPath
   pure $ ArtifactPath {rawPath = path, originPath, relPath, targetPath}
 

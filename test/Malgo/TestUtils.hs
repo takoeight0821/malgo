@@ -174,8 +174,7 @@ setupEvalModule srcPath = do
   src <- BS.readFile srcPath
   db <- newDatabase
   runMalgoM flag $ runCompileError $ runQueryDB db do
-    pwd <- pwdPath
-    srcModulePath <- parseArtifactPath pwd srcPath
+    srcModulePath <- parseArtifactPathFromPwd srcPath
     save srcModulePath ".mlg" src
     parsed <- runPass ParserPass (srcPath, convertString src)
     rnEnv <- genBuiltinRnEnv
@@ -190,8 +189,7 @@ compileTestCase builtinName preludeName srcPath = do
   src <- BS.readFile srcPath
   db <- newDatabase
   runMalgoM flag $ runCompileError $ runQueryDB db do
-    pwd <- pwdPath
-    srcModulePath <- parseArtifactPath pwd srcPath
+    srcModulePath <- parseArtifactPathFromPwd srcPath
     save srcModulePath ".mlg" src
     parsed <- runPass ParserPass (srcPath, convertString src)
     rnEnv <- genBuiltinRnEnv
@@ -212,8 +210,7 @@ compileTestCaseWithElaborate builtinName preludeName srcPath = do
   src <- BS.readFile srcPath
   db <- newDatabase
   runMalgoMWith flag (FeatureFlags (Set.singleton Malgo2025)) $ runCompileError $ runQueryDB db do
-    pwd <- pwdPath
-    srcModulePath <- parseArtifactPath pwd srcPath
+    srcModulePath <- parseArtifactPathFromPwd srcPath
     save srcModulePath ".mlg" src
     parsed <- runPass ParserPass (srcPath, convertString src)
     rnEnv <- genBuiltinRnEnv

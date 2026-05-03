@@ -1,10 +1,10 @@
 # Implementation Plan - Fix(infer): Relax occurs check for recursive/codata types
 
-## Phase 1: Type Representation Update
-- [ ] Task: Add `TMu` to `Ty` data type
-    - [ ] Update `Ty` definition in `src/Malgo/Infer/Constraint.hs`
-    - [ ] Implement `TMu` in `freeVars` and `applySubst` functions
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Type Representation Update' (Protocol in workflow.md)
+## Phase 1: Type Representation Update [checkpoint: 76188c91]
+- [x] Task: Add `TMu` to `Ty` data type
+    - [x] Update `Ty` definition in `src/Malgo/Infer/Constraint.hs`
+    - [x] Implement `TMu` in `freeVars` and `applySubst` functions
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Type Representation Update' (Protocol in workflow.md)
 
 ## Phase 2: Unification Engine Refinement
 - [ ] Task: Update Unification Logic

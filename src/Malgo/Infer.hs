@@ -29,15 +29,15 @@ data InferPass = InferPass
 
 instance Pass InferPass where
   type Input InferPass = (TyEnv, BindGroup (Malgo Rename))
-  type Output InferPass = BindGroup (Malgo Rename)
+  type Output InferPass = (BindGroup (Malgo Rename), TyEnv)
   type ErrorType InferPass = InferError
   type
     Effects InferPass es =
       (State Uniq :> es)
 
   runPassImpl _ (importedEnv, bindGroup) = evalState initGenState do
-    inferBindGroup importedEnv bindGroup
-    pure bindGroup
+    finalEnv <- inferBindGroup importedEnv bindGroup
+    pure (bindGroup, finalEnv)
 
 -- | Initial generation state
 initGenState :: GenState

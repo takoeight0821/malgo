@@ -6,6 +6,7 @@ where
 
 import Data.Map.Strict qualified as Map
 import Data.Text.Lazy qualified as TL
+import Malgo.Infer (TyEnv)
 import Malgo.Interface (Interface)
 import Malgo.Module
 import Malgo.Prelude
@@ -18,6 +19,7 @@ import Malgo.Syntax.Extension
 data Database = Database
   { cacheParsedModule :: IORef (Map ModuleName (Module (Malgo Parse))),
     cacheRenamedModule :: IORef (Map ModuleName (Module (Malgo Rename), RnState)),
+    cacheInferredModule :: IORef (Map ModuleName TyEnv),
     cacheLinkedProgram :: IORef (Map ModuleName Join.Program),
     cacheModuleInterface :: IORef (Map ModuleName Interface),
     -- | In-memory source registry; populated by 'updateSource' (e.g. from LSP).
@@ -29,6 +31,7 @@ newDatabase :: IO Database
 newDatabase = do
   cacheParsedModule <- newIORef Map.empty
   cacheRenamedModule <- newIORef Map.empty
+  cacheInferredModule <- newIORef Map.empty
   cacheLinkedProgram <- newIORef Map.empty
   cacheModuleInterface <- newIORef Map.empty
   sourceMap <- newIORef Map.empty

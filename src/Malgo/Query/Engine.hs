@@ -18,7 +18,7 @@ import Effectful.Reader.Static (Reader, ask, runReader)
 import Effectful.State.Static.Local (State)
 import Malgo.Elaborate (ElaboratePass (..))
 import Malgo.Features
-import Malgo.Infer (InferPass (..), TyEnv, buildDataEnv, buildForeignEnv, buildSigEnv)
+import Malgo.Infer (InferPass (..), TyEnv)
 import Malgo.Interface
 import Malgo.Module
 import Malgo.Parser (ParserPass (..))
@@ -56,6 +56,7 @@ runQueryDB db = interpret_ \case
   InvalidateModule modName -> liftIO do
     modifyIORef db.cacheParsedModule $ Map.delete modName
     modifyIORef db.cacheRenamedModule $ Map.delete modName
+    modifyIORef db.cacheInferredModule $ Map.delete modName
     modifyIORef db.cacheLinkedProgram $ Map.delete modName
     modifyIORef db.cacheModuleInterface $ Map.delete modName
 
@@ -119,6 +120,26 @@ handleFetch db = \case
             -- No pre-built artifact: compile from scratch.
             (_, rnState) <- handleFetch db (RenamedModule modName)
             pure $ buildInterface modName rnState
+  InferredModule modName -> do
+    cache <- liftIO $ readIORef db.cacheInferredModule
+    case Map.lookup modName cache of
+      Just result -> pure result
+      Nothing -> do
+        (renamedAst, rnState) <- handleFetch db (RenamedModule modName)
+        depsEnv <- buildDepsEnv db rnState.dependencies
+        malgo2025 <- isMalgo2025Enabled
+        finalEnv <- runReader modName do
+          bindGroup <-
+            if malgo2025
+              then runPass ElaboratePass renamedAst.moduleDefinition
+              else pure renamedAst.moduleDefinition
+          (_, env) <- runPass InferPass (depsEnv, bindGroup)
+          pure env
+        -- Export only the entries this module contributes — names inherited
+        -- from its dependencies are left to the caller's own dep walk.
+        let exported = Map.difference finalEnv depsEnv
+        liftIO $ modifyIORef db.cacheInferredModule $ Map.insert modName exported
+        pure exported
   LinkedProgram modName -> do
     cache <- liftIO $ readIORef db.cacheLinkedProgram
     case Map.lookup modName cache of
@@ -128,7 +149,6 @@ handleFetch db = \case
         srcPath <- getModulePath modName
         flags <- ask @Flag
         malgo2025 <- isMalgo2025Enabled
-        importedEnv <- buildDepsEnv db rnState.dependencies
         program <- runReader modName do
           bindGroup <-
             if malgo2025
@@ -136,7 +156,10 @@ handleFetch db = \case
               else pure renamedAst.moduleDefinition
           bindGroup' <-
             if flags.useInfer
-              then runPass InferPass (importedEnv, bindGroup)
+              then do
+                importedEnv <- buildDepsEnv db rnState.dependencies
+                (bg, _) <- runPass InferPass (importedEnv, bindGroup)
+                pure bg
               else pure bindGroup
           runPass ToFunPass bindGroup'
             >>= runPass ToCorePass
@@ -184,8 +207,10 @@ tryGetModulePath modName = do
       getModulePath modName
   pure $ either (const Nothing) Just result
 
--- | Build a TyEnv from all dependency modules' declarations (sig + data + foreign).
--- Uses the transitive dependency set already recorded in RnState.
+-- | Build a TyEnv by unioning each dependency's exported 'TyEnv'.
+-- Each 'InferredModule' result already covers explicit signatures, foreign
+-- imports, data constructors, *and* inferred bare 'def' bindings, so the
+-- caller does not need to walk the renamed AST itself.
 buildDepsEnv ::
   ( Reader Flag :> es,
     State Uniq :> es,
@@ -200,11 +225,7 @@ buildDepsEnv ::
 buildDepsEnv db deps =
   foldlM
     ( \acc dep -> do
-        (renamedDep, _) <- handleFetch db (RenamedModule dep)
-        let depEnv =
-              buildSigEnv renamedDep.moduleDefinition
-                <> buildDataEnv renamedDep.moduleDefinition
-                <> buildForeignEnv renamedDep.moduleDefinition
+        depEnv <- handleFetch db (InferredModule dep)
         pure (acc <> depEnv)
     )
     Map.empty

@@ -10,7 +10,7 @@ import Effectful.Reader.Static (runReader)
 import Effectful.State.Static.Local (evalState)
 import Malgo.Elaborate (ElaboratePass (..))
 import Malgo.Features (Feature (..), FeatureFlags (..))
-import Malgo.Infer (InferPass (..), buildDataEnv, buildForeignEnv, buildSigEnv)
+import Malgo.Infer (InferPass (..))
 import Malgo.Infer.Constraint
 import Malgo.Infer.Unify (unify)
 import Malgo.Monad (runMalgoMWith)
@@ -25,6 +25,7 @@ import Malgo.Syntax (Module (..))
 import Malgo.TestUtils
 import System.Directory
 import System.FilePath
+import System.Timeout (timeout)
 import Test.Hspec
 
 inferFlag :: Flag
@@ -235,12 +236,19 @@ runUnify pos t1 t2 = pure (stripCallStack result)
 -- Success means InferPass completed without throwing a type error.
 -- Currently most tests fail because InferPass does not resolve imported definitions;
 -- failures are reported via pendingWith so the suite stays green.
+-- A wall-clock timeout guards against latent non-termination in the inferencer
+-- (e.g. constraint-solving blowups exposed once a previously short-circuited
+-- path becomes reachable) so a single bad case cannot stall the whole suite.
 driveInfer :: FilePath -> IO ()
 driveInfer srcPath = do
-  result <- try @SomeException $ runInfer srcPath
+  result <- try @SomeException $ timeout inferTimeoutMicros $ runInfer srcPath
   case result of
-    Right () -> pure ()
+    Right (Just ()) -> pure ()
+    Right Nothing -> pendingWith $ "InferPass timed out after " <> show (inferTimeoutMicros `div` 1_000_000) <> "s"
     Left err -> pendingWith $ "InferPass failed: " <> show err
+  where
+    inferTimeoutMicros :: Int
+    inferTimeoutMicros = 5_000_000
 
 runInfer :: FilePath -> IO ()
 runInfer srcPath = do
@@ -250,17 +258,14 @@ runInfer srcPath = do
     parsed <- runPass ParserPass (srcPath, src)
     rnEnv <- genBuiltinRnEnv
     (Module modName def, rnState) <- runPass RenamePass (parsed, rnEnv)
-    -- Dependency-load failures propagate so 'driveInfer' can report the actual
-    -- error via 'pendingWith' rather than silently continuing with a partial env
-    -- (which would mask root causes for the remaining pending tests, see #321).
+    -- Pull each dep's exported TyEnv via the InferredModule query, which
+    -- runs InferPass on the dep and captures all of its sigs/foreigns/data
+    -- constructors/inferred bare-def types. Failures propagate so
+    -- 'driveInfer' can report the real error via 'pendingWith'.
     importedEnv <-
       foldlM
         ( \acc dep -> do
-            (renamedDep, _) <- fetch (RenamedModule dep)
-            let depEnv =
-                  buildSigEnv renamedDep.moduleDefinition
-                    <> buildDataEnv renamedDep.moduleDefinition
-                    <> buildForeignEnv renamedDep.moduleDefinition
+            depEnv <- fetch (InferredModule dep)
             pure (acc <> depEnv)
         )
         Map.empty

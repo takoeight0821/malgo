@@ -11,6 +11,7 @@ where
 import Data.Text.Lazy qualified as TL
 import Effectful
 import Effectful.Dispatch.Dynamic
+import Malgo.Infer (TyEnv)
 import Malgo.Interface (Interface)
 import Malgo.Module
 import Malgo.Prelude
@@ -23,6 +24,12 @@ import Malgo.Syntax.Extension
 data Query a where
   ParsedModule :: ModuleName -> Query (Module (Malgo Parse))
   RenamedModule :: ModuleName -> Query (Module (Malgo Rename), RnState)
+  -- | Type environment exported by a module after type inference.
+  -- The returned 'TyEnv' contains entries for explicit signatures, foreign
+  -- imports, data constructors, and inferred bare 'def' bindings — i.e. all
+  -- names this module contributes — but excludes entries inherited from its
+  -- own dependencies.
+  InferredModule :: ModuleName -> Query TyEnv
   LinkedProgram :: ModuleName -> Query Join.Program
   ModuleInterface :: ModuleName -> Query Interface
 

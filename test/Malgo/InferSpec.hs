@@ -10,9 +10,11 @@ import Effectful.Reader.Static (runReader)
 import Effectful.State.Static.Local (evalState)
 import Malgo.Elaborate (ElaboratePass (..))
 import Malgo.Features (Feature (..), FeatureFlags (..))
-import Malgo.Infer (InferPass (..))
+import Malgo.Id (Id (..))
+import Malgo.Infer (InferPass (..), TyEnv)
 import Malgo.Infer.Constraint
 import Malgo.Infer.Unify (unify)
+import Malgo.Module (ModuleName)
 import Malgo.Monad (runMalgoMWith)
 import Malgo.Parser (ParserPass (..))
 import Malgo.Pass
@@ -35,13 +37,38 @@ malgo2025Flags :: FeatureFlags
 malgo2025Flags = FeatureFlags (Set.singleton Malgo2025)
 
 spec :: Spec
-spec = parallel do
+spec = do
+  -- File-system-touching specs: 'runInfer' triggers '.mlgi' interface
+  -- writes via the query engine, so concurrent runs over the same source
+  -- corpus race on shared files (e.g. Builtin.mlgi). Run sequentially.
   describe "full-program" do
     testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
     for_ testcases \testcase ->
-      it (takeBaseName testcase) $ driveInfer (testcaseDir </> testcase)
+      it (takeBaseName testcase) $ driveInfer testcase (testcaseDir </> testcase)
 
-  describe "Constraint" do
+  describe "InferredModule export boundary" do
+    -- Echo.mlg only defines 'main' at the top level; everything else
+    -- (getContents, putStr, ...) comes from Builtin/Prelude.
+    let echo = testcaseDir </> "Echo.mlg"
+
+    it "exports only locally-defined names (no dep leakage)" do
+      Captured {modName, depsEnv, exported} <- runInferCapturing echo
+      Map.keys (Map.intersection depsEnv exported)
+        `shouldBe` []
+      let leaked =
+            [ key
+            | key <- Map.keys exported,
+              key.moduleName /= modName
+            ]
+      leaked `shouldBe` []
+
+    it "exports the module's top-level def 'main'" do
+      Captured {exported} <- runInferCapturing echo
+      let mainNames = filter (\i -> i.name == "main") (Map.keys exported)
+      length mainNames `shouldBe` 1
+
+  -- Pure spec blocks below — safe to parallelize.
+  parallel $ describe "Constraint" do
     describe "applySubst" do
       it "substitutes type variables" do
         let subst = Map.singleton "_t0" tyInt32
@@ -116,7 +143,7 @@ spec = parallel do
             scheme = generalize 0 ty
         scheme.vars `shouldBe` ["_t6"]
 
-  describe "Unify" do
+  parallel $ describe "Unify" do
     describe "basic unification" do
       it "unifies identical type constructors" do
         result <- runUnify (dummyRange) tyInt32 tyInt32
@@ -232,26 +259,86 @@ runUnify pos t1 t2 = pure (stripCallStack result)
     stripCallStack (Left (_, err)) = Left err
     stripCallStack (Right x) = Right x
 
+-- | Testcases that are known to fail or hang under InferPass. Tracked
+-- in #333; promote a case out of this map once the underlying inferencer
+-- bug is fixed. The 'driveInfer' runner deliberately fails when an
+-- entry here starts succeeding, so the list cannot drift behind reality.
+knownBadInfer :: Map FilePath String
+knownBadInfer =
+  Map.fromList
+    [ ("ArithInt32.mlg", "inferencer non-termination"),
+      ("CopatternApplyChain.mlg", "inferencer non-termination"),
+      ("ListOps.mlg", "inferencer non-termination"),
+      ("MapFilter.mlg", "inferencer non-termination"),
+      ("Punctuate.mlg", "inferencer non-termination"),
+      ("StringOps.mlg", "inferencer non-termination"),
+      ("TuplePattern.mlg", "inferencer non-termination"),
+      ("RecordTest.mlg", "spurious unification error")
+    ]
+
 -- | Run the full pipeline (Parse -> Rename -> Elaborate -> Infer) on a source file.
 -- Success means InferPass completed without throwing a type error.
--- Currently most tests fail because InferPass does not resolve imported definitions;
--- failures are reported via pendingWith so the suite stays green.
--- A wall-clock timeout guards against latent non-termination in the inferencer
--- (e.g. constraint-solving blowups exposed once a previously short-circuited
--- path becomes reachable) so a single bad case cannot stall the whole suite.
-driveInfer :: FilePath -> IO ()
-driveInfer srcPath = do
+--
+-- Outcomes:
+--   * Unlisted testcase succeeds -> pass.
+--   * Unlisted testcase times out or fails -> hard 'expectationFailure'.
+--     This locks regressions in cross-module inference (#321) and any
+--     other case currently expected to pass.
+--   * Listed testcase times out / fails -> 'pendingWith' with the recorded
+--     reason, so CI surfaces the pending count without going red.
+--   * Listed testcase now succeeds -> hard 'expectationFailure' demanding
+--     removal from 'knownBadInfer', preventing the allowlist from rotting.
+--
+-- A wall-clock timeout guards against latent non-termination in the
+-- inferencer so a single bad case cannot stall the whole suite.
+driveInfer :: FilePath -> FilePath -> IO ()
+driveInfer testcaseName srcPath = do
   result <- try @SomeException $ timeout inferTimeoutMicros $ runInfer srcPath
-  case result of
-    Right (Just ()) -> pure ()
-    Right Nothing -> pendingWith $ "InferPass timed out after " <> show (inferTimeoutMicros `div` 1_000_000) <> "s"
-    Left err -> pendingWith $ "InferPass failed: " <> show err
+  case (result, Map.lookup testcaseName knownBadInfer) of
+    (Right (Just ()), Nothing) -> pure ()
+    (Right (Just ()), Just reason) ->
+      expectationFailure
+        $ testcaseName
+        <> " now passes — remove it from knownBadInfer (was: "
+        <> reason
+        <> ")"
+    (Right Nothing, Just reason) ->
+      pendingWith
+        $ "timed out after "
+        <> show timeoutSecs
+        <> "s ("
+        <> reason
+        <> ")"
+    (Right Nothing, Nothing) ->
+      expectationFailure
+        $ "InferPass timed out after "
+        <> show timeoutSecs
+        <> "s — possible non-termination regression"
+    (Left err, Just reason) ->
+      pendingWith $ reason <> ": " <> show err
+    (Left err, Nothing) ->
+      expectationFailure $ "InferPass failed: " <> show err
   where
     inferTimeoutMicros :: Int
     inferTimeoutMicros = 5_000_000
+    timeoutSecs :: Int
+    timeoutSecs = inferTimeoutMicros `div` 1_000_000
 
 runInfer :: FilePath -> IO ()
-runInfer srcPath = do
+runInfer srcPath = void $ runInferCapturing srcPath
+
+-- | Captured intermediate state from running InferPass on a single source file.
+-- Lets boundary tests inspect the same envs the engine's 'InferredModule'
+-- handler computes ('depsEnv' is unioned dep envs; 'exported' is what the
+-- module contributes after 'Map.difference').
+data Captured = Captured
+  { modName :: ModuleName,
+    depsEnv :: TyEnv,
+    exported :: TyEnv
+  }
+
+runInferCapturing :: FilePath -> IO Captured
+runInferCapturing srcPath = do
   src <- convertString <$> BS.readFile srcPath
   db <- newDatabase
   runMalgoMWith inferFlag malgo2025Flags $ runCompileError $ runQueryDB db do
@@ -262,7 +349,7 @@ runInfer srcPath = do
     -- runs InferPass on the dep and captures all of its sigs/foreigns/data
     -- constructors/inferred bare-def types. Failures propagate so
     -- 'driveInfer' can report the real error via 'pendingWith'.
-    importedEnv <-
+    depsEnv <-
       foldlM
         ( \acc dep -> do
             depEnv <- fetch (InferredModule dep)
@@ -270,5 +357,7 @@ runInfer srcPath = do
         )
         Map.empty
         (Set.toList rnState.dependencies)
-    elaborated <- runReader modName $ runPass ElaboratePass def
-    void $ runPass InferPass (importedEnv, elaborated)
+    runReader modName do
+      elaborated <- runPass ElaboratePass def
+      (_, finalEnv) <- runPass InferPass (depsEnv, elaborated)
+      pure Captured {modName, depsEnv, exported = Map.difference finalEnv depsEnv}

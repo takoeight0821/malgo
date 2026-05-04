@@ -1,5 +1,8 @@
 module Malgo.Query.Engine
   ( runQueryDB,
+
+    -- * Test-only helpers
+    reverseDepClosure,
   )
 where
 
@@ -53,12 +56,7 @@ runQueryDB db = interpret_ \case
   Fetch query -> handleFetch db query
   UpdateSource modName srcPath text ->
     liftIO $ modifyIORef db.sourceMap $ Map.insert modName (srcPath, text)
-  InvalidateModule modName -> liftIO do
-    modifyIORef db.cacheParsedModule $ Map.delete modName
-    modifyIORef db.cacheRenamedModule $ Map.delete modName
-    modifyIORef db.cacheInferredModule $ Map.delete modName
-    modifyIORef db.cacheLinkedProgram $ Map.delete modName
-    modifyIORef db.cacheModuleInterface $ Map.delete modName
+  InvalidateModule modName -> liftIO $ invalidateWithRdeps db modName
 
 -- | Core query handler; called recursively for sub-queries.
 handleFetch ::
@@ -207,10 +205,57 @@ tryGetModulePath modName = do
       getModulePath modName
   pure $ either (const Nothing) Just result
 
+-- | Invalidate 'modName' and every cached module that transitively depends
+-- on it. Reverse-dep tracking is reconstructed from the cached
+-- 'cacheRenamedModule' (rnState.dependencies). Without this cascade,
+-- an edit to module @A@ would leave stale 'cacheInferredModule[B]' /
+-- 'cacheLinkedProgram[B]' entries for any importer @B@, since their
+-- values were computed against the previous version of @A@.
+invalidateWithRdeps :: Database -> ModuleName -> IO ()
+invalidateWithRdeps db modName = do
+  renamed <- readIORef db.cacheRenamedModule
+  let depsOf = Map.map (\(_, st) -> st.dependencies) renamed
+      victims = Set.insert modName (reverseDepClosure depsOf modName)
+  for_ (Set.toList victims) \m -> do
+    modifyIORef db.cacheParsedModule $ Map.delete m
+    modifyIORef db.cacheRenamedModule $ Map.delete m
+    modifyIORef db.cacheInferredModule $ Map.delete m
+    modifyIORef db.cacheLinkedProgram $ Map.delete m
+    modifyIORef db.cacheModuleInterface $ Map.delete m
+
+-- | Compute the transitive set of modules that depend on 'target', using
+-- a forward dep-edge map @M -> M's deps@. Excludes 'target' itself.
+-- Pure so it can be unit-tested without a populated 'Database'.
+reverseDepClosure ::
+  Map ModuleName (Set ModuleName) ->
+  ModuleName ->
+  Set ModuleName
+reverseDepClosure depsOf target = go Set.empty (Set.singleton target)
+  where
+    go acc frontier
+      | Set.null frontier = acc
+      | otherwise =
+          let next =
+                Set.fromList
+                  [ m
+                  | (m, ds) <- Map.toList depsOf,
+                    m /= target,
+                    not (m `Set.member` acc),
+                    not (Set.null (Set.intersection ds frontier))
+                  ]
+           in go (acc <> next) next
+
 -- | Build a TyEnv by unioning each dependency's exported 'TyEnv'.
 -- Each 'InferredModule' result already covers explicit signatures, foreign
 -- imports, data constructors, *and* inferred bare 'def' bindings, so the
 -- caller does not need to walk the renamed AST itself.
+--
+-- Two dependencies must not export the same 'Id' — 'Id' carries its
+-- defining 'ModuleName', so a collision indicates an upstream invariant
+-- violation (for example, a renamer bug producing non-unique Ids, or a
+-- future re-export feature without a deduplication strategy). Surfacing
+-- the collision loudly is far better than silently dropping one of the
+-- two entries via 'Map's left-biased 'Semigroup'.
 buildDepsEnv ::
   ( Reader Flag :> es,
     State Uniq :> es,
@@ -226,6 +271,13 @@ buildDepsEnv db deps =
   foldlM
     ( \acc dep -> do
         depEnv <- handleFetch db (InferredModule dep)
+        let collisions = Map.intersectionWith (,) acc depEnv
+        unless (Map.null collisions)
+          $ error
+          $ "Malgo.Query.Engine.buildDepsEnv: dependency "
+          <> show dep
+          <> " redefines names already exported by an earlier dep: "
+          <> show (Map.keys collisions)
         pure (acc <> depEnv)
     )
     Map.empty

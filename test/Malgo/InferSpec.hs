@@ -37,10 +37,7 @@ malgo2025Flags :: FeatureFlags
 malgo2025Flags = FeatureFlags (Set.singleton Malgo2025)
 
 spec :: Spec
-spec = do
-  -- File-system-touching specs: 'runInfer' triggers '.mlgi' interface
-  -- writes via the query engine, so concurrent runs over the same source
-  -- corpus race on shared files (e.g. Builtin.mlgi). Run sequentially.
+spec = parallel do
   describe "full-program" do
     testcases <- runIO $ filter (isExtensionOf "mlg") <$> listDirectory testcaseDir
     for_ testcases \testcase ->
@@ -67,8 +64,7 @@ spec = do
       let mainNames = filter (\i -> i.name == "main") (Map.keys exported)
       length mainNames `shouldBe` 1
 
-  -- Pure spec blocks below — safe to parallelize.
-  parallel $ describe "Constraint" do
+  describe "Constraint" do
     describe "applySubst" do
       it "substitutes type variables" do
         let subst = Map.singleton "_t0" tyInt32
@@ -143,7 +139,7 @@ spec = do
             scheme = generalize 0 ty
         scheme.vars `shouldBe` ["_t6"]
 
-  parallel $ describe "Unify" do
+  describe "Unify" do
     describe "basic unification" do
       it "unifies identical type constructors" do
         result <- runUnify (dummyRange) tyInt32 tyInt32

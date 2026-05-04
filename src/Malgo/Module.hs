@@ -41,10 +41,11 @@ import Malgo.Path
 import Malgo.Prelude
 import Malgo.SExpr (ToSExpr (..))
 import Malgo.SExpr qualified as S
-import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findFile, getCurrentDirectory, listDirectory, makeAbsolute)
-import System.FilePath (makeRelative)
+import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findFile, getCurrentDirectory, listDirectory, makeAbsolute, removeFile, renameFile)
+import System.FilePath (makeRelative, takeDirectory, takeFileName)
 import System.FilePath qualified as F
 import System.FilePath qualified as FP
+import System.IO (hClose, openBinaryTempFile)
 import Text.Megaparsec.Pos (initialPos)
 
 data ModuleName
@@ -236,8 +237,34 @@ class Resource a where
   save :: (IOE :> es) => ArtifactPath -> String -> a -> Eff es ()
   save ArtifactPath {targetPath} ext content = do
     targetPath <- replaceExtension ext targetPath
+    let path = toFilePath targetPath
     liftIO $ createDirectoryIfMissing True $ toFilePath $ parent targetPath
-    liftIO $ BS.writeFile (toFilePath targetPath) $ toByteString content
+    -- Write atomically via a temp file + rename, so concurrent writers
+    -- (multiple test specs racing on a shared interface like
+    -- runtime/malgo/Builtin.mlgi) cannot trip 'ResourceBusy' on
+    -- 'BS.writeFile'. POSIX/NTFS rename overwrites atomically; the
+    -- last writer wins, which is fine because the cached payload is
+    -- a deterministic function of the source.
+    liftIO $ atomicWriteByteString path $ toByteString content
+
+-- | Write 'bytes' to 'path' such that concurrent callers cannot observe
+-- a half-written file or trip 'ResourceBusy' on the destination handle.
+-- Implementation: open a uniquely-named temp file in the same directory
+-- (so the subsequent 'renameFile' is an atomic rename within one
+-- filesystem), write the bytes, close the handle, then rename over
+-- 'path'. On rename failure, the temp file is best-effort cleaned up.
+atomicWriteByteString :: FilePath -> ByteString -> IO ()
+atomicWriteByteString path bytes = do
+  let dir = takeDirectory path
+      template = takeFileName path <> ".tmp"
+  (tmpPath, hdl) <- openBinaryTempFile dir template
+  let cleanup = handle (\(_ :: SomeException) -> pure ()) (removeFile tmpPath)
+  ( do
+      BS.hPut hdl bytes
+      hClose hdl
+      renameFile tmpPath path
+    )
+    `onException` cleanup
 
 newtype ViaBinary a = ViaBinary a
   deriving newtype (Binary)

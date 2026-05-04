@@ -268,8 +268,7 @@ knownBadInfer =
       ("MapFilter.mlg", "inferencer non-termination"),
       ("Punctuate.mlg", "inferencer non-termination"),
       ("StringOps.mlg", "inferencer non-termination"),
-      ("TuplePattern.mlg", "inferencer non-termination"),
-      ("RecordTest.mlg", "spurious unification error")
+      ("TuplePattern.mlg", "inferencer non-termination")
     ]
 
 -- | Run the full pipeline (Parse -> Rename -> Elaborate -> Infer) on a source file.

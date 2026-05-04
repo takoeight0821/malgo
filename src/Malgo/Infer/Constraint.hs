@@ -270,6 +270,10 @@ data InferError
   | UnboundVariable Range Id
   | OccursCheckError Range T.Text Ty
   | NotImplemented Range T.Text
+  | -- | Type synonym refers (transitively) to itself in a use position.
+    CyclicSynonym Range Id
+  | -- | Synonym applied with the wrong number of arguments. Fields: expected, got.
+    SynonymArityMismatch Range Id Int Int
   deriving stock (Show)
 
 instance Exception InferError where
@@ -289,3 +293,12 @@ instance Exception InferError where
       <> show (pretty ty)
   displayException (NotImplemented _pos feature) =
     "Type inference not yet implemented for: " <> T.unpack feature
+  displayException (CyclicSynonym _pos name) =
+    "Cyclic type synonym: " <> show (pretty name)
+  displayException (SynonymArityMismatch _pos name expected got) =
+    "Type synonym '"
+      <> show (pretty name)
+      <> "' expects "
+      <> show expected
+      <> " argument(s) but got "
+      <> show got

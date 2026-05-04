@@ -10,11 +10,11 @@ import Effectful.Reader.Static (runReader)
 import Effectful.State.Static.Local (evalState)
 import Malgo.Elaborate (ElaboratePass (..))
 import Malgo.Features (Feature (..), FeatureFlags (..))
-import Malgo.Id (Id (..))
+import Malgo.Id (Id (..), IdSort (..))
 import Malgo.Infer (InferPass (..), TyEnv)
 import Malgo.Infer.Constraint
 import Malgo.Infer.Unify (unify)
-import Malgo.Module (ModuleName)
+import Malgo.Module (ModuleName (..))
 import Malgo.Monad (runMalgoMWith)
 import Malgo.Parser (ParserPass (..))
 import Malgo.Pass
@@ -67,77 +67,77 @@ spec = parallel do
   describe "Constraint" do
     describe "applySubst" do
       it "substitutes type variables" do
-        let subst = Map.singleton "_t0" tyInt32
-        applySubst subst (TVar "_t0" 0) `shouldBe` tyInt32
+        let subst = Map.singleton (mkId "_t0") tyInt32
+        applySubst subst (TVar (mkId "_t0") 0) `shouldBe` tyInt32
 
       it "leaves unrelated variables" do
-        let subst = Map.singleton "_t0" tyInt32
-        applySubst subst (TVar "_t1" 0) `shouldBe` TVar "_t1" 0
+        let subst = Map.singleton (mkId "_t0") tyInt32
+        applySubst subst (TVar (mkId "_t1") 0) `shouldBe` TVar (mkId "_t1") 0
 
       it "applies to arrow types" do
-        let subst = Map.singleton "_t0" tyInt32
-        applySubst subst (TArr (TVar "_t0" 0) (TVar "_t1" 0))
-          `shouldBe` TArr tyInt32 (TVar "_t1" 0)
+        let subst = Map.singleton (mkId "_t0") tyInt32
+        applySubst subst (TArr (TVar (mkId "_t0") 0) (TVar (mkId "_t1") 0))
+          `shouldBe` TArr tyInt32 (TVar (mkId "_t1") 0)
 
       it "substitutes variables in TMu" do
-        let subst = Map.singleton "_t0" tyInt32
-        applySubst subst (TMu "a" (TArr (TVar "_t0" 0) (TVar "a" 0)))
-          `shouldBe` TMu "a" (TArr tyInt32 (TVar "a" 0))
+        let subst = Map.singleton (mkId "_t0") tyInt32
+        applySubst subst (TMu (mkId "a") (TArr (TVar (mkId "_t0") 0) (TVar (mkId "a") 0)))
+          `shouldBe` TMu (mkId "a") (TArr tyInt32 (TVar (mkId "a") 0))
 
       it "respects binder in TMu" do
-        let subst = Map.singleton "a" tyInt32
-        applySubst subst (TMu "a" (TVar "a" 0))
-          `shouldBe` TMu "a" (TVar "a" 0)
+        let subst = Map.singleton (mkId "a") tyInt32
+        applySubst subst (TMu (mkId "a") (TVar (mkId "a") 0))
+          `shouldBe` TMu (mkId "a") (TVar (mkId "a") 0)
 
     describe "freeVars" do
       it "finds free variables in arrow types" do
-        freeVars (TArr (TVar "a" 0) (TVar "b" 0))
-          `shouldBe` Set.fromList ["a", "b"]
+        freeVars (TArr (TVar (mkId "a") 0) (TVar (mkId "b") 0))
+          `shouldBe` Set.fromList [mkId "a", mkId "b"]
 
       it "removes bound variables in forall" do
-        freeVars (TForall "a" (TArr (TVar "a" 0) (TVar "b" 0)))
-          `shouldBe` Set.fromList ["b"]
+        freeVars (TForall (mkId "a") (TArr (TVar (mkId "a") 0) (TVar (mkId "b") 0)))
+          `shouldBe` Set.fromList [mkId "b"]
 
       it "removes bound variables in TMu" do
-        freeVars (TMu "a" (TArr (TVar "a" 0) (TVar "b" 0)))
-          `shouldBe` Set.fromList ["b"]
+        freeVars (TMu (mkId "a") (TArr (TVar (mkId "a") 0) (TVar (mkId "b") 0)))
+          `shouldBe` Set.fromList [mkId "b"]
 
     describe "occursIn" do
       it "detects direct occurrence" do
-        occursIn "a" (TVar "a" 0) `shouldBe` True
+        occursIn (mkId "a") (TVar (mkId "a") 0) `shouldBe` True
 
       it "detects nested occurrence" do
-        occursIn "a" (TArr (TVar "a" 0) tyInt32) `shouldBe` True
+        occursIn (mkId "a") (TArr (TVar (mkId "a") 0) tyInt32) `shouldBe` True
 
       it "returns False for absent variable" do
-        occursIn "a" (TArr tyInt32 tyInt32) `shouldBe` False
+        occursIn (mkId "a") (TArr tyInt32 tyInt32) `shouldBe` False
 
       it "respects binder in TMu" do
-        occursIn "a" (TMu "a" (TVar "a" 0)) `shouldBe` False
-        occursIn "a" (TMu "b" (TVar "a" 0)) `shouldBe` True
+        occursIn (mkId "a") (TMu (mkId "a") (TVar (mkId "a") 0)) `shouldBe` False
+        occursIn (mkId "a") (TMu (mkId "b") (TVar (mkId "a") 0)) `shouldBe` True
 
     describe "generalize" do
       it "generalizes variables above the given level" do
-        let ty = TArr (TVar "_t0" 1) (TVar "_t1" 0)
+        let ty = TArr (TVar (mkId "_t0") 1) (TVar (mkId "_t1") 0)
             scheme = generalize 0 ty
-        scheme.vars `shouldBe` ["_t0"]
+        scheme.vars `shouldBe` [mkId "_t0"]
 
       it "does not generalize variables at or below the given level" do
-        let ty = TArr (TVar "_t0" 0) (TVar "_t1" 0)
+        let ty = TArr (TVar (mkId "_t0") 0) (TVar (mkId "_t1") 0)
             scheme = generalize 0 ty
         scheme.vars `shouldBe` []
 
       it "does not quantify TMu-bound variables" do
         -- μ_t5._t5 -> _t6 at level 2, generalizing at level 0
         -- Only _t6 should be quantified; _t5 is bound by μ.
-        let ty = TMu "_t5" (TArr (TVar "_t5" 2) (TVar "_t6" 2))
+        let ty = TMu (mkId "_t5") (TArr (TVar (mkId "_t5") 2) (TVar (mkId "_t6") 2))
             scheme = generalize 0 ty
-        scheme.vars `shouldBe` ["_t6"]
+        scheme.vars `shouldBe` [mkId "_t6"]
 
       it "does not quantify TForall-bound variables" do
-        let ty = TForall "_t5" (TArr (TVar "_t5" 2) (TVar "_t6" 2))
+        let ty = TForall (mkId "_t5") (TArr (TVar (mkId "_t5") 2) (TVar (mkId "_t6") 2))
             scheme = generalize 0 ty
-        scheme.vars `shouldBe` ["_t6"]
+        scheme.vars `shouldBe` [mkId "_t6"]
 
   describe "Unify" do
     describe "basic unification" do
@@ -146,7 +146,7 @@ spec = parallel do
         result `shouldSatisfy` isRight
 
       it "unifies variable with concrete type" do
-        result <- runUnify (dummyRange) (TVar "_t0" 0) tyInt32
+        result <- runUnify (dummyRange) (TVar (mkId "_t0") 0) tyInt32
         case result of
           Right _ -> pure ()
           Left err -> expectationFailure $ show err
@@ -158,17 +158,17 @@ spec = parallel do
           Right _ -> expectationFailure "Expected unification to fail"
 
       it "unifies arrow types" do
-        result <- runUnify (dummyRange) (TArr (TVar "_t0" 0) tyInt32) (TArr tyString tyInt32)
+        result <- runUnify (dummyRange) (TArr (TVar (mkId "_t0") 0) tyInt32) (TArr tyString tyInt32)
         case result of
           Right _ -> pure ()
           Left err -> expectationFailure $ show err
 
       it "allows equi-recursive types (relaxed occurs check)" do
-        result <- runUnify (dummyRange) (TVar "_t0" 0) (TArr (TVar "_t0" 0) tyInt32)
+        result <- runUnify (dummyRange) (TVar (mkId "_t0") 0) (TArr (TVar (mkId "_t0") 0) tyInt32)
         result `shouldSatisfy` isRight
 
       it "unifies recursive types to TMu" do
-        let v = "_t0"
+        let v = mkId "_t0"
             t = TArr (TVar v 0) tyInt32
         result <- runUnify (dummyRange) (TVar v 0) t
         case result of
@@ -178,7 +178,7 @@ spec = parallel do
       it "rejects (μa.a→Int) vs (Int→Int)" do
         -- μa.a→Int unrolls to (μa.a→Int)→Int, never collapses to Int.
         -- Final mismatch (TArr vs TCon Int) must surface.
-        let t1 = TMu "a" (TArr (TVar "a" 0) tyInt32)
+        let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) tyInt32)
             t2 = TArr tyInt32 tyInt32
         result <- runUnify (dummyRange) t1 t2
         case result of
@@ -186,16 +186,16 @@ spec = parallel do
           Right _ -> expectationFailure "Expected μa.a→Int vs Int→Int to fail"
 
       it "accepts α-equivalent recursive types: (μa.a→Int) vs (μb.b→Int)" do
-        let t1 = TMu "a" (TArr (TVar "a" 0) tyInt32)
-            t2 = TMu "b" (TArr (TVar "b" 0) tyInt32)
+        let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) tyInt32)
+            t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) tyInt32)
         result <- runUnify (dummyRange) t1 t2
         case result of
           Right _ -> pure ()
           Left err -> expectationFailure $ show err
 
       it "rejects (μa.a→Int) vs (μb.b→String) on tail mismatch" do
-        let t1 = TMu "a" (TArr (TVar "a" 0) tyInt32)
-            t2 = TMu "b" (TArr (TVar "b" 0) tyString)
+        let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) tyInt32)
+            t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) tyString)
         result <- runUnify (dummyRange) t1 t2
         case result of
           Left _ -> pure ()
@@ -240,18 +240,32 @@ spec = parallel do
           Left _ -> pure ()
           Right _ -> expectationFailure "Expected failure on different-length tuples"
 
+-- | Module name used by tests when constructing 'Id' values via 'mkId'.
+testModule :: ModuleName
+testModule = ModuleName "Test"
+
+-- | Build a deterministic 'Id' for a surface name. All test 'Id's share the
+-- same module and 'External' sort, so two calls with the same text are equal.
+mkId :: Text -> Id
+mkId n = Id {name = n, moduleName = testModule, sort = External}
+
 -- | Helper to run unification in a test context
 runUnify :: Range -> Ty -> Ty -> IO (Either InferError Subst)
 runUnify pos t1 t2 = pure (stripCallStack result)
   where
     initState =
       GenState
-        { nextVar = 100,
-          constraints = [],
+        { constraints = [],
           currentLevel = 0,
           solvedSubst = Map.empty
         }
-    result = runPureEff $ evalState initState $ runError @InferError $ unify pos t1 t2
+    result =
+      runPureEff
+        $ runReader testModule
+        $ evalState (Uniq 0)
+        $ evalState initState
+        $ runError @InferError
+        $ unify pos t1 t2
     stripCallStack (Left (_, err)) = Left err
     stripCallStack (Right x) = Right x
 
@@ -262,14 +276,7 @@ runUnify pos t1 t2 = pure (stripCallStack result)
 knownBadInfer :: Map FilePath String
 knownBadInfer =
   Map.fromList
-    [ ("ArithInt32.mlg", "inferencer non-termination"),
-      ("CopatternApplyChain.mlg", "inferencer non-termination"),
-      ("ListOps.mlg", "inferencer non-termination"),
-      ("MapFilter.mlg", "inferencer non-termination"),
-      ("Punctuate.mlg", "inferencer non-termination"),
-      ("StringOps.mlg", "inferencer non-termination"),
-      ("TuplePattern.mlg", "inferencer non-termination")
-    ]
+    []
 
 -- | Run the full pipeline (Parse -> Rename -> Elaborate -> Infer) on a source file.
 -- Success means InferPass completed without throwing a type error.

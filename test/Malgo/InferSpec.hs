@@ -153,7 +153,7 @@ spec = parallel do
             s2 = Map.singleton t1 (TArr (TVar t0 0) tyInt32)
             composed = composeSubst s2 s1
         case Map.lookup t0 composed of
-          Nothing -> pure ()
+          Nothing -> expectationFailure "Expected _t0 binding in composed substitution"
           Just v -> occursIn t0 v `shouldBe` False
 
       it "composeSubst is idempotent on normal (non-recursive) entries" do

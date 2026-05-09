@@ -304,7 +304,7 @@ inferPat env (ConP pos conName pats) = do
 inferPat env (TupleP _ pats) = do
   (bindings, patTys) <- unzip <$> traverse (inferPat env) pats
   pure (concat bindings, TTuple patTys)
-inferPat env (RecordP _ fields) = do
+inferPat env (RecordP pos fields) = do
   (bindings, fieldTys) <-
     unzip
       <$> traverse
@@ -313,7 +313,9 @@ inferPat env (RecordP _ fields) = do
             pure (b, (name, ty))
         )
         fields
-  pure (concat bindings, TRecord fieldTys Nothing)
+  resultTy <- freshTyVar
+  addConstraint $ CUnify pos resultTy (TRecord fieldTys Nothing)
+  pure (concat bindings, resultTy)
 inferPat _ (ListP pos _) = absurd pos
 inferPat _ (UnboxedP _ lit) = pure ([], inferLiteral lit)
 inferPat _ (BoxedP pos _) = absurd pos

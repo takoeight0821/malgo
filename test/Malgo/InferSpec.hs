@@ -153,7 +153,7 @@ spec = parallel do
             s2 = Map.singleton t1 (TArr (TVar t0 0) tyInt32)
             composed = composeSubst s2 s1
         case Map.lookup t0 composed of
-          Nothing -> pure ()
+          Nothing -> expectationFailure "Expected _t0 binding in composed substitution"
           Just v -> occursIn t0 v `shouldBe` False
 
       it "composeSubst is idempotent on normal (non-recursive) entries" do
@@ -324,6 +324,24 @@ spec = parallel do
           Right _ -> expectationFailure "Expected constraint solving to fail"
         finalState.solvedSubst `shouldBe` initialSubst
         finalState.constraints `shouldBe` initialConstraints
+
+      it "terminates when row-tail constraints recurse across constraint boundaries" do
+        let a = mkId "_rowA"
+            b = mkId "_rowB"
+            c1 = CUnify dummyRange (TVar a 0) (TRecord [("x", tyInt32)] (Just (TVar b 0)))
+            c2 = CUnify dummyRange (TVar b 0) (TRecord [("y", tyString)] (Just (TVar a 0)))
+            initState =
+              GenState
+                { constraints = [c2, c1],
+                  currentLevel = 0,
+                  solvedSubst = Map.empty
+                }
+            timeoutMicros = 1_000_000
+        timed <- timeout timeoutMicros $ runSolveConstraints initState
+        case timed of
+          Nothing -> expectationFailure $ "Expected solveConstraints to terminate within " <> show timeoutMicros <> " microseconds"
+          Just (result, _) ->
+            result `shouldSatisfy` isRight
 
 -- | Module name used by tests when constructing 'Id' values via 'mkId'.
 testModule :: ModuleName

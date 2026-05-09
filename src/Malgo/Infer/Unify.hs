@@ -32,8 +32,9 @@ canonicalModuleName :: ModuleName
 canonicalModuleName = ModuleName "$canonical"
 
 -- Offset used for canonical binder IDs in α-normalization.
--- We keep canonical IDs in a dedicated negative range, separate from typical
--- compiler-generated internal IDs.
+-- 1,000,000 is intentionally far away from the small, incrementing uniques
+-- produced during ordinary compilation, and we negate it to keep canonical IDs
+-- in a dedicated negative range.
 canonicalSortBase :: Int
 canonicalSortBase = 1000000
 

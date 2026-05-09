@@ -198,7 +198,7 @@ spec = parallel do
             t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) (TForall (mkId "y") (TVar (mkId "y") 0)))
         timed <- timeout 1000000 $ runUnify (dummyRange) t1 t2
         case timed of
-          Nothing -> expectationFailure "Expected unification to terminate within 1000000μs (1s)"
+          Nothing -> expectationFailure "Expected unification to terminate within 1000000 microseconds (1s)"
           Just result -> result `shouldSatisfy` isRight
 
       it "rejects (μa.a→Int) vs (μb.b→String) on tail mismatch" do

@@ -35,7 +35,10 @@ canonicalizeTy :: Ty -> Ty
 canonicalizeTy = go Map.empty 0
   where
     go env next ty = case ty of
-      TVar v l -> TVar (Map.findWithDefault v v env) l
+      TVar v l ->
+        case Map.lookup v env of
+          Just v' -> TVar v' l
+          Nothing -> TVar v l
       TCon c -> TCon c
       TArr a b -> TArr (go env next a) (go env next b)
       TApp f a -> TApp (go env next f) (go env next a)
@@ -53,7 +56,7 @@ canonicalizeTy = go Map.empty 0
         let v' = canonicalBinderId "_mu" next
          in TMu v' (go (Map.insert v v' env) (next + 1) body)
 
-    canonicalBinderId :: Text -> Int -> Id
+    canonicalBinderId :: T.Text -> Int -> Id
     canonicalBinderId prefix n =
       Id
         { name = prefix <> T.pack (show n),

@@ -276,17 +276,17 @@ solveConstraints = do
   st <- get
   let cs = reverse st.constraints
       baseSubst = st.solvedSubst
-  s <- foldlM' (solveOne baseSubst) Map.empty cs
+  s <- evalState (Set.empty @(Ty, Ty)) $ foldlM' (solveOne baseSubst) Map.empty cs
   commitSubst s
   modify (\st' -> st' {constraints = []})
   currentSubst
   where
-    solveOne :: (UnifyEffs es) => Subst -> Subst -> TyConstraint -> Eff es Subst
+    solveOne :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Subst -> Subst -> TyConstraint -> Eff es Subst
     solveOne baseSubst acc (CUnify pos t1 t2) = do
       let subst = composeSubst acc baseSubst
       let t1' = applySubst subst t1
           t2' = applySubst subst t2
-      s <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes pos t1' t2'
+      s <- unifyTypes pos t1' t2'
       pure $ composeSubst s acc
     solveOne baseSubst acc (CBottomProp sources target) = do
       let subst = composeSubst acc baseSubst
@@ -296,7 +296,7 @@ solveConstraints = do
       if any isBottom sources'
         then case target' of
           TVar _ _ -> do
-            s <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes dummyRange target' TBottom
+            s <- unifyTypes dummyRange target' TBottom
             pure $ composeSubst s acc
           _ -> pure acc
         else pure acc

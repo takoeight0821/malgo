@@ -325,6 +325,24 @@ spec = parallel do
         finalState.solvedSubst `shouldBe` initialSubst
         finalState.constraints `shouldBe` initialConstraints
 
+      it "terminates when row-tail constraints recurse across constraint boundaries" do
+        let a = mkId "_rowA"
+            b = mkId "_rowB"
+            c1 = CUnify dummyRange (TVar a 0) (TRecord [("x", tyInt32)] (Just (TVar b 0)))
+            c2 = CUnify dummyRange (TVar b 0) (TRecord [("y", tyString)] (Just (TVar a 0)))
+            initState =
+              GenState
+                { constraints = [c2, c1],
+                  currentLevel = 0,
+                  solvedSubst = Map.empty
+                }
+            timeoutMicros = 1_000_000
+        timed <- timeout timeoutMicros $ runSolveConstraints initState
+        case timed of
+          Nothing -> expectationFailure $ "Expected solveConstraints to terminate within " <> show timeoutMicros <> " microseconds"
+          Just (result, _) ->
+            result `shouldSatisfy` isRight
+
 -- | Module name used by tests when constructing 'Id' values via 'mkId'.
 testModule :: ModuleName
 testModule = ModuleName "Test"

@@ -255,7 +255,8 @@ spec = parallel do
             t2 = TArr tyString tyFloat
         (result, finalState) <- runUnifyWithState initState dummyRange t1 t2
         case result of
-          Left _ -> pure ()
+          Left UnificationError {} -> pure ()
+          Left err -> expectationFailure $ "Expected UnificationError, got: " <> show err
           Right _ -> expectationFailure "Expected unification to fail"
         finalState.solvedSubst `shouldBe` initialSubst
 

@@ -56,7 +56,7 @@ canonicalizeTy = go Map.empty 0
     canonicalBinderId :: Text -> Int -> Id
     canonicalBinderId prefix n =
       Id
-        { name = prefix <> convertString (show n),
+        { name = prefix <> T.pack (show n),
           moduleName = ModuleName "__canonical__",
           sort = Internal (negate (n + 1))
         }

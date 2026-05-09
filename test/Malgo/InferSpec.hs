@@ -13,7 +13,7 @@ import Malgo.Features (Feature (..), FeatureFlags (..))
 import Malgo.Id (Id (..), IdSort (..))
 import Malgo.Infer (InferPass (..), TyEnv)
 import Malgo.Infer.Constraint
-import Malgo.Infer.Unify (solveConstraints, unify)
+import Malgo.Infer.Unify (composeSubst, solveConstraints, unify)
 import Malgo.Module (ModuleName (..))
 import Malgo.Monad (runMalgoMWith)
 import Malgo.Parser (ParserPass (..))
@@ -140,6 +140,31 @@ spec = parallel do
         scheme.vars `shouldBe` [mkId "_t6"]
 
   describe "Unify" do
+    describe "composeSubst" do
+      it "does not create self-referential entry when TMu value gains free key via composition" do
+        -- Regression for issue #330:
+        -- s1 = {_t0 ↦ TMu(TBound 0 -> _t1)}  (from: _t0 = _t0 -> _t1)
+        -- s2 = {_t1 ↦ _t0 -> Int32}            (from: _t1 = _t0 -> Int32, no occurs check)
+        -- Naive composeSubst s2 s1 produces {_t0 ↦ TMu(TBound 0 -> (_t0 -> Int32))}
+        -- where _t0 is free in its own value, causing applySubst to loop.
+        let t0 = mkId "_t0"
+            t1 = mkId "_t1"
+            s1 = Map.singleton t0 (TMu (TArr (TBound 0) (TVar t1 0)))
+            s2 = Map.singleton t1 (TArr (TVar t0 0) tyInt32)
+            composed = composeSubst s2 s1
+        case Map.lookup t0 composed of
+          Nothing -> pure ()
+          Just v -> occursIn t0 v `shouldBe` False
+
+      it "composeSubst is idempotent on normal (non-recursive) entries" do
+        let t0 = mkId "_t0"
+            t1 = mkId "_t1"
+            s1 = Map.singleton t0 tyInt32
+            s2 = Map.singleton t1 tyString
+            composed = composeSubst s2 s1
+        Map.lookup t0 composed `shouldBe` Just tyInt32
+        Map.lookup t1 composed `shouldBe` Just tyString
+
     describe "basic unification" do
       it "unifies identical type constructors" do
         result <- runUnify (dummyRange) tyInt32 tyInt32

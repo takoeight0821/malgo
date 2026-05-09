@@ -7,13 +7,13 @@ import Data.Set qualified as Set
 import Effectful (runPureEff)
 import Effectful.Error.Static (runError)
 import Effectful.Reader.Static (runReader)
-import Effectful.State.Static.Local (evalState)
+import Effectful.State.Static.Local (evalState, runState)
 import Malgo.Elaborate (ElaboratePass (..))
 import Malgo.Features (Feature (..), FeatureFlags (..))
 import Malgo.Id (Id (..), IdSort (..))
 import Malgo.Infer (InferPass (..), TyEnv)
 import Malgo.Infer.Constraint
-import Malgo.Infer.Unify (unify)
+import Malgo.Infer.Unify (solveConstraints, unify)
 import Malgo.Module (ModuleName (..))
 import Malgo.Monad (runMalgoMWith)
 import Malgo.Parser (ParserPass (..))
@@ -240,6 +240,27 @@ spec = parallel do
           Left _ -> pure ()
           Right _ -> expectationFailure "Expected failure on different-length tuples"
 
+    describe "constraint solving" do
+      it "does not commit substitutions or clear constraints when solving fails" do
+        let existing = mkId "_existing"
+            inferred = mkId "_inferred"
+            initialSubst = Map.singleton existing tyString
+            successfulConstraint = CUnify dummyRange (TVar inferred 0) tyInt32
+            failingConstraint = CUnify dummyRange tyInt32 tyString
+            initialConstraints = [failingConstraint, successfulConstraint]
+            initState =
+              GenState
+                { constraints = initialConstraints,
+                  currentLevel = 0,
+                  solvedSubst = initialSubst
+                }
+        (result, finalState) <- runSolveConstraints initState
+        case result of
+          Left _ -> pure ()
+          Right _ -> expectationFailure "Expected constraint solving to fail"
+        finalState.solvedSubst `shouldBe` initialSubst
+        finalState.constraints `shouldBe` initialConstraints
+
 -- | Module name used by tests when constructing 'Id' values via 'mkId'.
 testModule :: ModuleName
 testModule = ModuleName "Test"
@@ -268,6 +289,20 @@ runUnify pos t1 t2 = pure (stripCallStack result)
         $ unify pos t1 t2
     stripCallStack (Left (_, err)) = Left err
     stripCallStack (Right x) = Right x
+
+-- | Helper to run constraint solving while preserving the final GenState.
+runSolveConstraints :: GenState -> IO (Either InferError Subst, GenState)
+runSolveConstraints initState = pure (stripCallStack result)
+  where
+    result =
+      runPureEff
+        $ runReader testModule
+        $ evalState (Uniq 0)
+        $ runState initState
+        $ runError @InferError
+        $ solveConstraints
+    stripCallStack (Left (_, err), finalState) = (Left err, finalState)
+    stripCallStack (Right x, finalState) = (Right x, finalState)
 
 -- | Testcases that are known to fail or hang under InferPass. Tracked
 -- in #333; promote a case out of this map once the underlying inferencer

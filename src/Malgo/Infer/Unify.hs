@@ -33,7 +33,9 @@ unify pos t1 t2 = do
   subst <- currentSubst
   let t1' = applySubst subst t1
       t2' = applySubst subst t2
-  evalState (Set.empty :: Set (Ty, Ty)) $ unifyTypes pos t1' t2'
+  s <- evalState (Set.empty :: Set (Ty, Ty)) $ unifyTypes pos t1' t2'
+  commitSubst s
+  pure s
 
 -- | Core unification
 unifyTypes :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Range -> Ty -> Ty -> Eff es Subst
@@ -63,13 +65,9 @@ unifyInternal _ (TVar x _) t
   | occursIn x t = do
       -- Equi-recursive unification: create TMu
       let t' = TMu x t
-      let s = Map.singleton x t'
-      modify (\st -> st {solvedSubst = Map.map (applySubst s) st.solvedSubst <> s})
-      pure s
+      pure $ Map.singleton x t'
   | otherwise = do
-      let s = Map.singleton x t
-      modify (\st -> st {solvedSubst = Map.map (applySubst s) st.solvedSubst <> s})
-      pure s
+      pure $ Map.singleton x t
 -- Variable on the right
 unifyInternal pos t (TVar x l) = unifyTypes pos (TVar x l) t
 -- TMu on the left: unroll and unify
@@ -237,28 +235,36 @@ solveConstraints :: (UnifyEffs es) => Eff es Subst
 solveConstraints = do
   st <- get
   let cs = reverse st.constraints
-  modify (\s -> s {constraints = []})
-  mapM_ solveOne cs
+      baseSubst = st.solvedSubst
+  s <- foldlM' (solveOne baseSubst) Map.empty cs
+  commitSubst s
+  modify (\st' -> st' {constraints = []})
   currentSubst
   where
-    solveOne :: (UnifyEffs es) => TyConstraint -> Eff es ()
-    solveOne (CUnify pos t1 t2) = do
-      subst <- currentSubst
+    solveOne :: (UnifyEffs es) => Subst -> Subst -> TyConstraint -> Eff es Subst
+    solveOne baseSubst acc (CUnify pos t1 t2) = do
+      let subst = composeSubst acc baseSubst
       let t1' = applySubst subst t1
           t2' = applySubst subst t2
-      _ <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes pos t1' t2'
-      pure ()
-    solveOne (CBottomProp sources target) = do
-      subst <- currentSubst
-      let sources' = map (applySubst subst) sources
+      s <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes pos t1' t2'
+      pure $ composeSubst s acc
+    solveOne baseSubst acc (CBottomProp sources target) = do
+      let subst = composeSubst acc baseSubst
+          sources' = map (applySubst subst) sources
           target' = applySubst subst target
       -- If any source is bottom, target should also be bottom
-      when (any isBottom sources') $ do
-        case target' of
+      if any isBottom sources'
+        then case target' of
           TVar _ _ -> do
-            _ <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes dummyRange target' TBottom
-            pure ()
-          _ -> pure ()
+            s <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes dummyRange target' TBottom
+            pure $ composeSubst s acc
+          _ -> pure acc
+        else pure acc
+
+-- | Commit a successfully-computed substitution to the global inference state.
+commitSubst :: (State GenState :> es) => Subst -> Eff es ()
+commitSubst s =
+  modify (\st -> st {solvedSubst = composeSubst s st.solvedSubst})
 
 -- | Check if a type is bottom (after substitution)
 isBottom :: Ty -> Bool

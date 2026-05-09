@@ -241,6 +241,24 @@ spec = parallel do
           Right _ -> expectationFailure "Expected failure on different-length tuples"
 
     describe "constraint solving" do
+      it "does not commit substitutions when unification fails after partial progress" do
+        let existing = mkId "_existing"
+            inferred = mkId "_inferred"
+            initialSubst = Map.singleton existing tyString
+            initState =
+              GenState
+                { constraints = [],
+                  currentLevel = 0,
+                  solvedSubst = initialSubst
+                }
+            t1 = TArr (TVar inferred 0) tyInt32
+            t2 = TArr tyString tyFloat
+        (result, finalState) <- runUnifyWithState initState dummyRange t1 t2
+        case result of
+          Left _ -> pure ()
+          Right _ -> expectationFailure "Expected unification to fail"
+        finalState.solvedSubst `shouldBe` initialSubst
+
       it "does not commit substitutions or clear constraints when solving fails" do
         let existing = mkId "_existing"
             inferred = mkId "_inferred"
@@ -301,6 +319,20 @@ runSolveConstraints initState = pure (stripCallStack result)
         $ runState initState
         $ runError @InferError
         $ solveConstraints
+    stripCallStack (Left (_, err), finalState) = (Left err, finalState)
+    stripCallStack (Right x, finalState) = (Right x, finalState)
+
+-- | Helper to run unification while preserving the final GenState.
+runUnifyWithState :: GenState -> Range -> Ty -> Ty -> IO (Either InferError Subst, GenState)
+runUnifyWithState initState pos t1 t2 = pure (stripCallStack result)
+  where
+    result =
+      runPureEff
+        $ runReader testModule
+        $ evalState (Uniq 0)
+        $ runState initState
+        $ runError @InferError
+        $ unify pos t1 t2
     stripCallStack (Left (_, err), finalState) = (Left err, finalState)
     stripCallStack (Right x, finalState) = (Right x, finalState)
 

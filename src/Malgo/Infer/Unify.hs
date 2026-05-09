@@ -61,8 +61,13 @@ canonicalizeTy = go Map.empty 0
       Id
         { name = prefix <> T.pack (show n),
           moduleName = ModuleName "__canonical__",
-          sort = Internal (-1000000 - n)
+          sort = Internal (canonicalSortBase - n)
         }
+
+    -- Use a dedicated negative range to avoid collisions with regular
+    -- compiler-generated internal IDs.
+    canonicalSortBase :: Int
+    canonicalSortBase = -1000000
 
 -- | Unify two types, returning a substitution
 unify :: (UnifyEffs es) => Range -> Ty -> Ty -> Eff es Subst

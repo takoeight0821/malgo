@@ -193,6 +193,14 @@ spec = parallel do
           Right _ -> pure ()
           Left err -> expectationFailure $ show err
 
+      it "terminates on α-equivalent recursive types with forall binders" do
+        let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) (TForall (mkId "x") (TVar (mkId "x") 0)))
+            t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) (TForall (mkId "y") (TVar (mkId "y") 0)))
+        timed <- timeout 1_000_000 $ runUnify (dummyRange) t1 t2
+        case timed of
+          Nothing -> expectationFailure "Expected unification to terminate within 1s"
+          Just result -> result `shouldSatisfy` isRight
+
       it "rejects (μa.a→Int) vs (μb.b→String) on tail mismatch" do
         let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) tyInt32)
             t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) tyString)
@@ -200,6 +208,14 @@ spec = parallel do
         case result of
           Left _ -> pure ()
           Right _ -> expectationFailure "Expected μa.a→Int vs μb.b→String to fail"
+
+      it "rejects recursive forall codomain mismatch" do
+        let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) (TForall (mkId "x") tyInt32))
+            t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) (TForall (mkId "y") tyString))
+        result <- runUnify (dummyRange) t1 t2
+        case result of
+          Left _ -> pure ()
+          Right _ -> expectationFailure "Expected recursive forall codomain mismatch to fail"
 
     describe "bottom type" do
       it "bottom unifies with any type" do

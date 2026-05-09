@@ -27,29 +27,69 @@ type UnifyEffs es =
     Error InferError :> es
   )
 
+-- | Canonical key used by cycle detection in unification.
+-- Bound variables under @forall@/@mu@ are normalized by binder position
+-- so α-equivalent types map to the same key.
+data CanonTy
+  = CBoundVar Int
+  | CFreeVar Ty
+  | CCon T.Text
+  | CArr CanonTy CanonTy
+  | CApp CanonTy CanonTy
+  | CTuple [CanonTy]
+  | CRecord [(T.Text, CanonTy)] (Maybe CanonTy)
+  | CVariant [(T.Text, [CanonTy])] (Maybe CanonTy)
+  | CBottom
+  | CForall CanonTy
+  | CMu CanonTy
+  deriving stock (Eq, Ord, Show)
+
+canonicalizeTy :: Ty -> CanonTy
+canonicalizeTy = go Map.empty 0
+  where
+    go env next ty = case ty of
+      TVar v l -> case Map.lookup v env of
+        Just ix -> CBoundVar ix
+        Nothing -> CFreeVar (TVar v l)
+      TCon c -> CCon c
+      TArr a b -> CArr (go env next a) (go env next b)
+      TApp f a -> CApp (go env next f) (go env next a)
+      TTuple ts -> CTuple (map (go env next) ts)
+      TRecord fs row -> CRecord (map (second (go env next)) fs) (fmap (go env next) row)
+      TVariant cs row ->
+        CVariant
+          (map (second (map (go env next))) cs)
+          (fmap (go env next) row)
+      TBottom -> CBottom
+      TForall v body -> CForall (go (Map.insert v next env) (next + 1) body)
+      TMu v body -> CMu (go (Map.insert v next env) (next + 1) body)
+
 -- | Unify two types, returning a substitution
 unify :: (UnifyEffs es) => Range -> Ty -> Ty -> Eff es Subst
 unify pos t1 t2 = do
   subst <- currentSubst
   let t1' = applySubst subst t1
       t2' = applySubst subst t2
-  s <- evalState (Set.empty :: Set (Ty, Ty)) $ unifyTypes pos t1' t2'
+  s <- evalState (Set.empty :: Set (CanonTy, CanonTy)) $ unifyTypes pos t1' t2'
   commitSubst s
   pure s
 
 -- | Core unification
-unifyTypes :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Range -> Ty -> Ty -> Eff es Subst
+unifyTypes :: (UnifyEffs es, State (Set (CanonTy, CanonTy)) :> es) => Range -> Ty -> Ty -> Eff es Subst
 unifyTypes pos t1 t2
-  | t1 == t2 = pure Map.empty
+  | k1 == k2 = pure Map.empty
   | otherwise = do
-      seen <- get @(Set (Ty, Ty))
-      if Set.member (t1, t2) seen || Set.member (t2, t1) seen
+      seen <- get @(Set (CanonTy, CanonTy))
+      if Set.member (k1, k2) seen || Set.member (k2, k1) seen
         then pure Map.empty
         else do
-          modify @(Set (Ty, Ty)) (Set.insert (t1, t2))
+          modify @(Set (CanonTy, CanonTy)) (Set.insert (k1, k2))
           unifyInternal pos t1 t2
+  where
+    k1 = canonicalizeTy t1
+    k2 = canonicalizeTy t2
 
-unifyInternal :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Range -> Ty -> Ty -> Eff es Subst
+unifyInternal :: (UnifyEffs es, State (Set (CanonTy, CanonTy)) :> es) => Range -> Ty -> Ty -> Eff es Subst
 -- Bottom unifies with anything
 unifyInternal _ TBottom _ = pure Map.empty
 unifyInternal _ _ TBottom = pure Map.empty
@@ -110,7 +150,7 @@ unifyInternal pos t1 t2 =
   throwError $ UnificationError pos t1 t2 "Cannot unify types"
 
 -- | Unify a list of types pairwise
-unifyList :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Range -> [Ty] -> [Ty] -> Eff es Subst
+unifyList :: (UnifyEffs es, State (Set (CanonTy, CanonTy)) :> es) => Range -> [Ty] -> [Ty] -> Eff es Subst
 unifyList _ [] [] = pure Map.empty
 unifyList pos (t1 : ts1) (t2 : ts2) = do
   s1 <- unifyTypes pos t1 t2
@@ -120,7 +160,7 @@ unifyList _ _ _ = pure Map.empty
 
 -- | Record row unification
 unifyRecords ::
-  (UnifyEffs es, State (Set (Ty, Ty)) :> es) =>
+  (UnifyEffs es, State (Set (CanonTy, CanonTy)) :> es) =>
   Range ->
   [(T.Text, Ty)] ->
   Maybe Ty ->
@@ -177,7 +217,7 @@ unifyRecords pos fs1 r1 fs2 r2 = do
 
 -- | Variant row unification
 unifyVariants ::
-  (UnifyEffs es, State (Set (Ty, Ty)) :> es) =>
+  (UnifyEffs es, State (Set (CanonTy, CanonTy)) :> es) =>
   Range ->
   [(T.Text, [Ty])] ->
   Maybe Ty ->
@@ -246,7 +286,7 @@ solveConstraints = do
       let subst = composeSubst acc baseSubst
       let t1' = applySubst subst t1
           t2' = applySubst subst t2
-      s <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes pos t1' t2'
+      s <- evalState (Set.empty @(CanonTy, CanonTy)) $ unifyTypes pos t1' t2'
       pure $ composeSubst s acc
     solveOne baseSubst acc (CBottomProp sources target) = do
       let subst = composeSubst acc baseSubst
@@ -256,7 +296,7 @@ solveConstraints = do
       if any isBottom sources'
         then case target' of
           TVar _ _ -> do
-            s <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes dummyRange target' TBottom
+            s <- evalState (Set.empty @(CanonTy, CanonTy)) $ unifyTypes dummyRange target' TBottom
             pure $ composeSubst s acc
           _ -> pure acc
         else pure acc

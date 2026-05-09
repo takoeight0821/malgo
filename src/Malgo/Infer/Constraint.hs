@@ -66,12 +66,20 @@ type Level = Int
 
 -- | Internal type representation for inference.
 -- Separate from surface syntax Type to allow inference-specific constructs.
+--
+-- Binders ('TForall', 'TMu') are nameless; bound occurrences are represented
+-- by 'TBound' with a de Bruijn *index* (0 = innermost enclosing binder).
+-- This makes alpha-equivalent types structurally equal under '(==)', so the
+-- unifier's cycle-detection set requires no canonicalization.
 data Ty
   = -- | Type variable with its creation level. Identity is carried by 'Id'
     -- so that variables originating from different scopes never collide on
     -- their surface name (e.g. two distinct 'a's coming from a signature
     -- and a synonym parameter).
     TVar Id Level
+  | -- | de Bruijn index for a variable bound by an enclosing 'TForall'/'TMu'.
+    -- Index 0 refers to the immediately enclosing binder.
+    TBound Int
   | -- | Type constructor (e.g., Int32, Bool)
     TCon T.Text
   | -- | Function arrow: arg -> result
@@ -86,31 +94,50 @@ data Ty
     TVariant [(T.Text, [Ty])] (Maybe Ty)
   | -- | Bottom type (for non-terminating expressions)
     TBottom
-  | -- | Forall quantifier (used in Schemes after generalization)
-    TForall Id Ty
-  | -- | Recursive type: mu v. ty
-    TMu Id Ty
+  | -- | Forall quantifier. The bound variable is anonymous; use 'TBound 0'
+    -- inside the body to refer to it.
+    TForall Ty
+  | -- | Recursive type: mu. ty. Use 'TBound 0' inside the body for
+    -- the self-reference.
+    TMu Ty
   deriving stock (Eq, Show, Ord)
 
 instance Pretty Ty where
-  pretty (TVar name _) = pretty name
-  pretty (TCon name) = pretty name
-  pretty (TArr arg ret) = "(" <> pretty arg <> " -> " <> pretty ret <> ")"
-  pretty (TApp f a) = "(" <> pretty f <> " " <> pretty a <> ")"
-  pretty (TTuple ts) = "(" <> mconcat (intersperse ", " $ map pretty ts) <> ")"
-  pretty (TRecord fields rowTail) =
-    "{"
-      <> mconcat (intersperse ", " $ map (\(k, v) -> pretty k <> " : " <> pretty v) fields)
-      <> maybe "" (\r -> " | " <> pretty r) rowTail
-      <> "}"
-  pretty (TVariant cases rowTail) =
-    "["
-      <> mconcat (intersperse " | " $ map (\(c, ts) -> pretty c <> " " <> mconcat (intersperse " " $ map pretty ts)) cases)
-      <> maybe "" (\r -> " | " <> pretty r) rowTail
-      <> "]"
-  pretty TBottom = "_|_"
-  pretty (TForall v ty) = "(forall " <> pretty v <> ". " <> pretty ty <> ")"
-  pretty (TMu v ty) = "(mu " <> pretty v <> ". " <> pretty ty <> ")"
+  pretty = prettyTyWith []
+
+-- | Pretty-print a 'Ty' given an environment of bound-variable names.
+-- @env@ is ordered innermost-first: @env !! 0@ is the name for 'TBound 0'.
+prettyTyWith :: [T.Text] -> Ty -> Doc ann
+prettyTyWith _ (TVar name _) = pretty name
+prettyTyWith env (TBound i)
+  | i < length env = pretty (env !! i)
+  | otherwise = "?" <> pretty i
+prettyTyWith _ (TCon name) = pretty name
+prettyTyWith env (TArr arg ret) = "(" <> prettyTyWith env arg <> " -> " <> prettyTyWith env ret <> ")"
+prettyTyWith env (TApp f a) = "(" <> prettyTyWith env f <> " " <> prettyTyWith env a <> ")"
+prettyTyWith env (TTuple ts) = "(" <> mconcat (intersperse ", " $ map (prettyTyWith env) ts) <> ")"
+prettyTyWith env (TRecord fields rowTail) =
+  "{"
+    <> mconcat (intersperse ", " $ map (\(k, v) -> pretty k <> " : " <> prettyTyWith env v) fields)
+    <> maybe "" (\r -> " | " <> prettyTyWith env r) rowTail
+    <> "}"
+prettyTyWith env (TVariant cases rowTail) =
+  "["
+    <> mconcat (intersperse " | " $ map (\(c, ts) -> pretty c <> " " <> mconcat (intersperse " " $ map (prettyTyWith env) ts)) cases)
+    <> maybe "" (\r -> " | " <> prettyTyWith env r) rowTail
+    <> "]"
+prettyTyWith _ TBottom = "_|_"
+prettyTyWith env (TForall body) =
+  let n = boundVarName (length env)
+   in "(forall " <> pretty n <> ". " <> prettyTyWith (n : env) body <> ")"
+prettyTyWith env (TMu body) =
+  let n = boundVarName (length env)
+   in "(mu " <> pretty n <> ". " <> prettyTyWith (n : env) body <> ")"
+
+boundVarName :: Int -> T.Text
+boundVarName n
+  | n < 26 = T.singleton (toEnum (fromEnum 'a' + n))
+  | otherwise = "t" <> T.pack (show (n - 26))
 
 -- | Type scheme for let-polymorphism
 data Scheme = Scheme
@@ -124,11 +151,14 @@ data Scheme = Scheme
 -- collide.
 type Subst = Map Id Ty
 
--- | Apply a substitution to a type
+-- | Apply a substitution to a type.
+-- Only 'TVar' nodes (inference metavariables) are substituted; 'TBound'
+-- (de Bruijn-indexed binder occurrences) are never touched.
 applySubst :: Subst -> Ty -> Ty
 applySubst subst ty@(TVar name _) = case Map.lookup name subst of
   Just ty' -> applySubst subst ty'
   Nothing -> ty
+applySubst _ ty@(TBound _) = ty
 applySubst _ ty@(TCon _) = ty
 applySubst subst (TArr a b) = TArr (applySubst subst a) (applySubst subst b)
 applySubst subst (TApp f a) = TApp (applySubst subst f) (applySubst subst a)
@@ -142,14 +172,15 @@ applySubst subst (TVariant cases rowTail) =
     (map (second (map (applySubst subst))) cases)
     (fmap (applySubst subst) rowTail)
 applySubst _ TBottom = TBottom
-applySubst subst (TForall v ty) =
-  TForall v (applySubst (Map.delete v subst) ty)
-applySubst subst (TMu v ty) =
-  TMu v (applySubst (Map.delete v subst) ty)
+applySubst subst (TForall ty) = TForall (applySubst subst ty)
+applySubst subst (TMu ty) = TMu (applySubst subst ty)
 
--- | Free type variables in a type
+-- | Free type variables (inference metavariables) in a type.
+-- 'TBound' indices are not free variables; they are bound by an enclosing
+-- 'TForall'/'TMu' and do not appear in the result set.
 freeVars :: Ty -> Set Id
 freeVars (TVar name _) = Set.singleton name
+freeVars (TBound _) = Set.empty
 freeVars (TCon _) = Set.empty
 freeVars (TArr a b) = freeVars a <> freeVars b
 freeVars (TApp f a) = freeVars f <> freeVars a
@@ -159,12 +190,14 @@ freeVars (TRecord fields rowTail) =
 freeVars (TVariant cases rowTail) =
   foldMap (\(_, ts) -> foldMap freeVars ts) cases <> foldMap freeVars rowTail
 freeVars TBottom = Set.empty
-freeVars (TForall v ty) = Set.delete v (freeVars ty)
-freeVars (TMu v ty) = Set.delete v (freeVars ty)
+freeVars (TForall ty) = freeVars ty
+freeVars (TMu ty) = freeVars ty
 
--- | Occurs check: does a type variable occur in a type?
+-- | Occurs check: does inference metavariable @name@ occur free in a type?
+-- 'TBound' indices are never the target of an occurs check.
 occursIn :: Id -> Ty -> Bool
 occursIn name (TVar v _) = name == v
+occursIn _ (TBound _) = False
 occursIn _ (TCon _) = False
 occursIn name (TArr a b) = occursIn name a || occursIn name b
 occursIn name (TApp f a) = occursIn name f || occursIn name a
@@ -174,8 +207,8 @@ occursIn name (TRecord fields rowTail) =
 occursIn name (TVariant cases rowTail) =
   any (\(_, ts) -> any (occursIn name) ts) cases || maybe False (occursIn name) rowTail
 occursIn _ TBottom = False
-occursIn name (TForall v ty) = name /= v && occursIn name ty
-occursIn name (TMu v ty) = name /= v && occursIn name ty
+occursIn name (TForall ty) = occursIn name ty
+occursIn name (TMu ty) = occursIn name ty
 
 -- | Generalize a type by quantifying over free variables not in the environment
 -- and with level strictly greater than the given level.
@@ -186,6 +219,7 @@ generalize lvl ty =
   where
     collectVars :: Ty -> [Ty]
     collectVars tv@(TVar _ _) = [tv]
+    collectVars (TBound _) = []
     collectVars (TCon _) = []
     collectVars (TArr a b) = collectVars a <> collectVars b
     collectVars (TApp f a) = collectVars f <> collectVars a
@@ -195,14 +229,10 @@ generalize lvl ty =
     collectVars (TVariant cases rowTail) =
       concatMap (\(_, ts) -> concatMap collectVars ts) cases <> concatMap collectVars (maybeToList rowTail)
     collectVars TBottom = []
-    -- Exclude binder-bound variables to match freeVars semantics.
-    -- Without this, generalize could quantify over a μ-bound variable.
-    collectVars (TForall v t) = filter (notBound v) (collectVars t)
-    collectVars (TMu v t) = filter (notBound v) (collectVars t)
-
-    notBound :: Id -> Ty -> Bool
-    notBound v (TVar n _) = n /= v
-    notBound _ _ = True
+    -- TBound indices are not free metavariables, so TForall/TMu bodies are
+    -- traversed without any filtering.
+    collectVars (TForall t) = collectVars t
+    collectVars (TMu t) = collectVars t
 
 -- | Instantiate a scheme by replacing quantified variables with fresh type variables
 instantiate ::

@@ -13,6 +13,7 @@ import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error, throwError)
 import Effectful.Reader.Static (Reader)
 import Effectful.State.Static.Local (State, evalState, get, modify)
+import Malgo.Id (Id)
 import Malgo.Infer.Constraint
 import Malgo.Module (ModuleName)
 import Malgo.Prelude hiding (Constraint)
@@ -26,6 +27,49 @@ type UnifyEffs es =
     Reader ModuleName :> es,
     Error InferError :> es
   )
+
+-- | Substitute the bound variable at de Bruijn index @target@ with
+-- @replacement@ throughout @ty@. No shifting is needed because all
+-- replacements in this codebase are either closed ('TMu' bodies) or
+-- plain metavariables (fresh 'TVar'), neither of which contain free
+-- 'TBound' nodes that could be captured.
+substBound :: Int -> Ty -> Ty -> Ty
+substBound target repl (TBound i)
+  | i == target = repl
+  | otherwise = TBound i
+substBound _ _ (TVar v l) = TVar v l
+substBound _ _ (TCon c) = TCon c
+substBound _ _ TBottom = TBottom
+substBound t r (TArr a b) = TArr (substBound t r a) (substBound t r b)
+substBound t r (TApp f a) = TApp (substBound t r f) (substBound t r a)
+substBound t r (TTuple ts) = TTuple (map (substBound t r) ts)
+substBound t r (TRecord fs row) =
+  TRecord (map (second (substBound t r)) fs) (fmap (substBound t r) row)
+substBound t r (TVariant cs row) =
+  TVariant (map (second (map (substBound t r))) cs) (fmap (substBound t r) row)
+substBound t r (TForall body) = TForall (substBound (t + 1) r body)
+substBound t r (TMu body) = TMu (substBound (t + 1) r body)
+
+-- | Abstract free metavariable @x@ out of @ty@, replacing each free
+-- occurrence with 'TBound depth' where @depth@ counts the binders
+-- crossed while descending into @ty@.  The result is the body of a
+-- new 'TMu' that closes over @x@.
+abstractVar :: Id -> Ty -> Ty
+abstractVar x = go 0
+  where
+    go depth (TVar v l)
+      | v == x = TBound depth
+      | otherwise = TVar v l
+    go _ (TBound i) = TBound i
+    go _ (TCon c) = TCon c
+    go _ TBottom = TBottom
+    go d (TArr a b) = TArr (go d a) (go d b)
+    go d (TApp f a) = TApp (go d f) (go d a)
+    go d (TTuple ts) = TTuple (map (go d) ts)
+    go d (TRecord fs row) = TRecord (map (second (go d)) fs) (fmap (go d) row)
+    go d (TVariant cs row) = TVariant (map (second (map (go d))) cs) (fmap (go d) row)
+    go d (TForall body) = TForall (go (d + 1) body)
+    go d (TMu body) = TMu (go (d + 1) body)
 
 -- | Unify two types, returning a substitution
 unify :: (UnifyEffs es) => Range -> Ty -> Ty -> Eff es Subst
@@ -62,22 +106,19 @@ unifyInternal _ (TVar x _) (TVar y _)
   | x == y = pure Map.empty
 -- Variable on the left
 unifyInternal _ (TVar x _) t
-  | occursIn x t = do
-      -- Equi-recursive unification: create TMu
-      let t' = TMu x t
-      pure $ Map.singleton x t'
-  | otherwise = do
+  | occursIn x t =
+      -- Equi-recursive unification: abstract x out of t to form the TMu body
+      pure $ Map.singleton x (TMu (abstractVar x t))
+  | otherwise =
       pure $ Map.singleton x t
 -- Variable on the right
 unifyInternal pos t (TVar x l) = unifyTypes pos (TVar x l) t
 -- TMu on the left: unroll and unify
-unifyInternal pos (TMu v ty) t2 = do
-  let unrolled = applySubst (Map.singleton v (TMu v ty)) ty
-  unifyTypes pos unrolled t2
+unifyInternal pos (TMu body) t2 =
+  unifyTypes pos (substBound 0 (TMu body) body) t2
 -- TMu on the right: unroll and unify
-unifyInternal pos t1 (TMu v ty) = do
-  let unrolled = applySubst (Map.singleton v (TMu v ty)) ty
-  unifyTypes pos t1 unrolled
+unifyInternal pos t1 (TMu body) =
+  unifyTypes pos t1 (substBound 0 (TMu body) body)
 -- Arrow types
 unifyInternal pos (TArr a1 b1) (TArr a2 b2) = do
   s1 <- unifyTypes pos a1 a2
@@ -97,14 +138,12 @@ unifyInternal pos (TRecord fs1 r1) (TRecord fs2 r2) = unifyRecords pos fs1 r1 fs
 -- Variants (row polymorphism)
 unifyInternal pos (TVariant cs1 r1) (TVariant cs2 r2) = unifyVariants pos cs1 r1 cs2 r2
 -- Forall: instantiate then unify
-unifyInternal pos (TForall v ty) t2 = do
+unifyInternal pos (TForall body) t2 = do
   fresh <- freshTyVar
-  let body = applySubst (Map.singleton v fresh) ty
-  unifyTypes pos body t2
-unifyInternal pos t1 (TForall v ty) = do
+  unifyTypes pos (substBound 0 fresh body) t2
+unifyInternal pos t1 (TForall body) = do
   fresh <- freshTyVar
-  let body = applySubst (Map.singleton v fresh) ty
-  unifyTypes pos t1 body
+  unifyTypes pos t1 (substBound 0 fresh body)
 -- Mismatch
 unifyInternal pos t1 t2 =
   throwError $ UnificationError pos t1 t2 "Cannot unify types"

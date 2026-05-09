@@ -61,7 +61,7 @@ canonicalizeTy = go Map.empty 0
       Id
         { name = prefix <> T.pack (show n),
           moduleName = ModuleName "__canonical__",
-          sort = Internal (negate (n + 1))
+          sort = Internal (-1000000 - n)
         }
 
 -- | Unify two types, returning a substitution

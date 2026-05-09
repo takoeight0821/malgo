@@ -32,7 +32,8 @@ canonicalModuleName :: ModuleName
 canonicalModuleName = ModuleName "$canonical"
 
 -- Offset used for canonical binder IDs in α-normalization.
--- We keep this in a separate range from typical compiler-generated internal IDs.
+-- We keep canonical IDs in a dedicated negative range, separate from typical
+-- compiler-generated internal IDs.
 canonicalSortBase :: Int
 canonicalSortBase = 1000000
 
@@ -66,10 +67,10 @@ canonicalizeTy = go Map.empty 0
           (fmap (go env next) row)
       TBottom -> TBottom
       TForall v body ->
-        let v' = canonicalBinderId "_forall" next
+        let v' = canonicalBinderId "forall" next
          in TForall v' (go (Map.insert v v' env) (next + 1) body)
       TMu v body ->
-        let v' = canonicalBinderId "_mu" next
+        let v' = canonicalBinderId "mu" next
          in TMu v' (go (Map.insert v v' env) (next + 1) body)
 
 -- | Unify two types, returning a substitution

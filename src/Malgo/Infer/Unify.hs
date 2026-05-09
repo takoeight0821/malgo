@@ -13,8 +13,9 @@ import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error, throwError)
 import Effectful.Reader.Static (Reader)
 import Effectful.State.Static.Local (State, evalState, get, modify)
+import Malgo.Id (Id (..), IdSort (..))
 import Malgo.Infer.Constraint
-import Malgo.Module (ModuleName)
+import Malgo.Module (ModuleName (..))
 import Malgo.Prelude hiding (Constraint)
 
 -- | Effect bundle required by the unifier and constraint solver.
@@ -30,39 +31,35 @@ type UnifyEffs es =
 -- | Canonical key used by cycle detection in unification.
 -- Bound variables under @forall@/@mu@ are normalized by binder position
 -- so α-equivalent types map to the same key.
-data CanonTy
-  = CBoundVar Int
-  | CFreeVar Ty
-  | CCon T.Text
-  | CArr CanonTy CanonTy
-  | CApp CanonTy CanonTy
-  | CTuple [CanonTy]
-  | CRecord [(T.Text, CanonTy)] (Maybe CanonTy)
-  | CVariant [(T.Text, [CanonTy])] (Maybe CanonTy)
-  | CBottom
-  | CForall CanonTy
-  | CMu CanonTy
-  deriving stock (Eq, Ord, Show)
-
-canonicalizeTy :: Ty -> CanonTy
+canonicalizeTy :: Ty -> Ty
 canonicalizeTy = go Map.empty 0
   where
     go env next ty = case ty of
-      TVar v l -> case Map.lookup v env of
-        Just ix -> CBoundVar ix
-        Nothing -> CFreeVar (TVar v l)
-      TCon c -> CCon c
-      TArr a b -> CArr (go env next a) (go env next b)
-      TApp f a -> CApp (go env next f) (go env next a)
-      TTuple ts -> CTuple (map (go env next) ts)
-      TRecord fs row -> CRecord (map (second (go env next)) fs) (fmap (go env next) row)
+      TVar v l -> TVar (Map.findWithDefault v v env) l
+      TCon c -> TCon c
+      TArr a b -> TArr (go env next a) (go env next b)
+      TApp f a -> TApp (go env next f) (go env next a)
+      TTuple ts -> TTuple (map (go env next) ts)
+      TRecord fs row -> TRecord (map (second (go env next)) fs) (fmap (go env next) row)
       TVariant cs row ->
-        CVariant
+        TVariant
           (map (second (map (go env next))) cs)
           (fmap (go env next) row)
-      TBottom -> CBottom
-      TForall v body -> CForall (go (Map.insert v next env) (next + 1) body)
-      TMu v body -> CMu (go (Map.insert v next env) (next + 1) body)
+      TBottom -> TBottom
+      TForall v body ->
+        let v' = canonicalBinderId "_forall" next
+         in TForall v' (go (Map.insert v v' env) (next + 1) body)
+      TMu v body ->
+        let v' = canonicalBinderId "_mu" next
+         in TMu v' (go (Map.insert v v' env) (next + 1) body)
+
+    canonicalBinderId :: Text -> Int -> Id
+    canonicalBinderId prefix n =
+      Id
+        { name = prefix <> convertString (show n),
+          moduleName = ModuleName "__canonical__",
+          sort = Internal (negate (n + 1))
+        }
 
 -- | Unify two types, returning a substitution
 unify :: (UnifyEffs es) => Range -> Ty -> Ty -> Eff es Subst
@@ -70,26 +67,26 @@ unify pos t1 t2 = do
   subst <- currentSubst
   let t1' = applySubst subst t1
       t2' = applySubst subst t2
-  s <- evalState (Set.empty :: Set (CanonTy, CanonTy)) $ unifyTypes pos t1' t2'
+  s <- evalState (Set.empty :: Set (Ty, Ty)) $ unifyTypes pos t1' t2'
   commitSubst s
   pure s
 
 -- | Core unification
-unifyTypes :: (UnifyEffs es, State (Set (CanonTy, CanonTy)) :> es) => Range -> Ty -> Ty -> Eff es Subst
+unifyTypes :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Range -> Ty -> Ty -> Eff es Subst
 unifyTypes pos t1 t2
   | k1 == k2 = pure Map.empty
   | otherwise = do
-      seen <- get @(Set (CanonTy, CanonTy))
+      seen <- get @(Set (Ty, Ty))
       if Set.member (k1, k2) seen || Set.member (k2, k1) seen
         then pure Map.empty
         else do
-          modify @(Set (CanonTy, CanonTy)) (Set.insert (k1, k2))
+          modify @(Set (Ty, Ty)) (Set.insert (k1, k2))
           unifyInternal pos t1 t2
   where
     k1 = canonicalizeTy t1
     k2 = canonicalizeTy t2
 
-unifyInternal :: (UnifyEffs es, State (Set (CanonTy, CanonTy)) :> es) => Range -> Ty -> Ty -> Eff es Subst
+unifyInternal :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Range -> Ty -> Ty -> Eff es Subst
 -- Bottom unifies with anything
 unifyInternal _ TBottom _ = pure Map.empty
 unifyInternal _ _ TBottom = pure Map.empty
@@ -150,7 +147,7 @@ unifyInternal pos t1 t2 =
   throwError $ UnificationError pos t1 t2 "Cannot unify types"
 
 -- | Unify a list of types pairwise
-unifyList :: (UnifyEffs es, State (Set (CanonTy, CanonTy)) :> es) => Range -> [Ty] -> [Ty] -> Eff es Subst
+unifyList :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Range -> [Ty] -> [Ty] -> Eff es Subst
 unifyList _ [] [] = pure Map.empty
 unifyList pos (t1 : ts1) (t2 : ts2) = do
   s1 <- unifyTypes pos t1 t2
@@ -160,7 +157,7 @@ unifyList _ _ _ = pure Map.empty
 
 -- | Record row unification
 unifyRecords ::
-  (UnifyEffs es, State (Set (CanonTy, CanonTy)) :> es) =>
+  (UnifyEffs es, State (Set (Ty, Ty)) :> es) =>
   Range ->
   [(T.Text, Ty)] ->
   Maybe Ty ->
@@ -217,7 +214,7 @@ unifyRecords pos fs1 r1 fs2 r2 = do
 
 -- | Variant row unification
 unifyVariants ::
-  (UnifyEffs es, State (Set (CanonTy, CanonTy)) :> es) =>
+  (UnifyEffs es, State (Set (Ty, Ty)) :> es) =>
   Range ->
   [(T.Text, [Ty])] ->
   Maybe Ty ->
@@ -286,7 +283,7 @@ solveConstraints = do
       let subst = composeSubst acc baseSubst
       let t1' = applySubst subst t1
           t2' = applySubst subst t2
-      s <- evalState (Set.empty @(CanonTy, CanonTy)) $ unifyTypes pos t1' t2'
+      s <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes pos t1' t2'
       pure $ composeSubst s acc
     solveOne baseSubst acc (CBottomProp sources target) = do
       let subst = composeSubst acc baseSubst
@@ -296,7 +293,7 @@ solveConstraints = do
       if any isBottom sources'
         then case target' of
           TVar _ _ -> do
-            s <- evalState (Set.empty @(CanonTy, CanonTy)) $ unifyTypes dummyRange target' TBottom
+            s <- evalState (Set.empty @(Ty, Ty)) $ unifyTypes dummyRange target' TBottom
             pure $ composeSubst s acc
           _ -> pure acc
         else pure acc

@@ -310,7 +310,7 @@ runUnify pos t1 t2 = pure (stripCallStack result)
 
 -- | Helper to run constraint solving while preserving the final GenState.
 runSolveConstraints :: GenState -> IO (Either InferError Subst, GenState)
-runSolveConstraints initState = pure (stripCallStack result)
+runSolveConstraints initState = pure (stripStateError result)
   where
     result =
       runPureEff
@@ -319,12 +319,10 @@ runSolveConstraints initState = pure (stripCallStack result)
         $ runState initState
         $ runError @InferError
         $ solveConstraints
-    stripCallStack (Left (_, err), finalState) = (Left err, finalState)
-    stripCallStack (Right x, finalState) = (Right x, finalState)
 
 -- | Helper to run unification while preserving the final GenState.
 runUnifyWithState :: GenState -> Range -> Ty -> Ty -> IO (Either InferError Subst, GenState)
-runUnifyWithState initState pos t1 t2 = pure (stripCallStack result)
+runUnifyWithState initState pos t1 t2 = pure (stripStateError result)
   where
     result =
       runPureEff
@@ -333,8 +331,10 @@ runUnifyWithState initState pos t1 t2 = pure (stripCallStack result)
         $ runState initState
         $ runError @InferError
         $ unify pos t1 t2
-    stripCallStack (Left (_, err), finalState) = (Left err, finalState)
-    stripCallStack (Right x, finalState) = (Right x, finalState)
+
+stripStateError :: (Either (a, InferError) b, GenState) -> (Either InferError b, GenState)
+stripStateError (Left (_, err), finalState) = (Left err, finalState)
+stripStateError (Right x, finalState) = (Right x, finalState)
 
 -- | Testcases that are known to fail or hang under InferPass. Tracked
 -- in #333; promote a case out of this map once the underlying inferencer

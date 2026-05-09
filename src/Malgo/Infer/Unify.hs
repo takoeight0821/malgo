@@ -3,6 +3,7 @@
 module Malgo.Infer.Unify
   ( unify,
     solveConstraints,
+    composeSubst,
   )
 where
 
@@ -310,9 +311,18 @@ isBottom :: Ty -> Bool
 isBottom TBottom = True
 isBottom _ = False
 
--- | Compose two substitutions: s2 after s1
+-- | Compose two substitutions: s2 after s1.
+-- After applying s2 to each value in s1, a key k may appear free in its
+-- own value (e.g. k ↦ TMu(... TVar k ...)).  Leaving that in place causes
+-- applySubst to loop infinitely when it chases k.  We normalise by
+-- wrapping any such self-referential value in TMu via abstractVar.
 composeSubst :: Subst -> Subst -> Subst
-composeSubst s2 s1 = Map.map (applySubst s2) s1 <> s2
+composeSubst s2 s1 = Map.mapWithKey normalizeRecursive (Map.map (applySubst s2) s1) <> s2
+  where
+    normalizeRecursive k v
+      | not (occursIn k v) = v
+      | TMu body <- v = TMu (abstractVar k body)
+      | otherwise = TMu (abstractVar k v)
 
 -- | Look up a field type in a field list
 lookupField :: T.Text -> [(T.Text, Ty)] -> Ty

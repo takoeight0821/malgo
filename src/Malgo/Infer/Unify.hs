@@ -55,7 +55,7 @@ canonicalizeTy = go Map.empty 0
     go env next ty = case ty of
       TVar v l ->
         case Map.lookup v env of
-          Just v' -> TVar v' l
+          Just v' -> TVar v' 0
           Nothing -> TVar v l
       TCon c -> TCon c
       TArr a b -> TArr (go env next a) (go env next b)

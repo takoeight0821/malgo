@@ -196,9 +196,11 @@ spec = parallel do
       it "terminates on α-equivalent recursive types with forall binders" do
         let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) (TForall (mkId "x") (TVar (mkId "x") 0)))
             t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) (TForall (mkId "y") (TVar (mkId "y") 0)))
-        timed <- timeout 1000000 $ runUnify (dummyRange) t1 t2
+            timeoutMicros = 1_000_000
+            timeoutSecs = timeoutMicros `div` 1_000_000
+        timed <- timeout timeoutMicros $ runUnify (dummyRange) t1 t2
         case timed of
-          Nothing -> expectationFailure "Expected unification to terminate within 1000000 microseconds (1s)"
+          Nothing -> expectationFailure $ "Expected unification to terminate within " <> show timeoutMicros <> " microseconds (" <> show timeoutSecs <> "s)"
           Just result -> result `shouldSatisfy` isRight
 
       it "rejects (μa.a→Int) vs (μb.b→String) on tail mismatch" do

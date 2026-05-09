@@ -81,13 +81,13 @@ spec = parallel do
 
       it "substitutes variables in TMu" do
         let subst = Map.singleton (mkId "_t0") tyInt32
-        applySubst subst (TMu (mkId "a") (TArr (TVar (mkId "_t0") 0) (TVar (mkId "a") 0)))
-          `shouldBe` TMu (mkId "a") (TArr tyInt32 (TVar (mkId "a") 0))
+        applySubst subst (TMu (TArr (TVar (mkId "_t0") 0) (TBound 0)))
+          `shouldBe` TMu (TArr tyInt32 (TBound 0))
 
-      it "respects binder in TMu" do
+      it "does not substitute TBound (de Bruijn index, not a metavar)" do
         let subst = Map.singleton (mkId "a") tyInt32
-        applySubst subst (TMu (mkId "a") (TVar (mkId "a") 0))
-          `shouldBe` TMu (mkId "a") (TVar (mkId "a") 0)
+        applySubst subst (TMu (TBound 0))
+          `shouldBe` TMu (TBound 0)
 
     describe "freeVars" do
       it "finds free variables in arrow types" do
@@ -95,11 +95,11 @@ spec = parallel do
           `shouldBe` Set.fromList [mkId "a", mkId "b"]
 
       it "removes bound variables in forall" do
-        freeVars (TForall (mkId "a") (TArr (TVar (mkId "a") 0) (TVar (mkId "b") 0)))
+        freeVars (TForall (TArr (TBound 0) (TVar (mkId "b") 0)))
           `shouldBe` Set.fromList [mkId "b"]
 
       it "removes bound variables in TMu" do
-        freeVars (TMu (mkId "a") (TArr (TVar (mkId "a") 0) (TVar (mkId "b") 0)))
+        freeVars (TMu (TArr (TBound 0) (TVar (mkId "b") 0)))
           `shouldBe` Set.fromList [mkId "b"]
 
     describe "occursIn" do
@@ -112,9 +112,9 @@ spec = parallel do
       it "returns False for absent variable" do
         occursIn (mkId "a") (TArr tyInt32 tyInt32) `shouldBe` False
 
-      it "respects binder in TMu" do
-        occursIn (mkId "a") (TMu (mkId "a") (TVar (mkId "a") 0)) `shouldBe` False
-        occursIn (mkId "a") (TMu (mkId "b") (TVar (mkId "a") 0)) `shouldBe` True
+      it "respects binder in TMu (TBound is not a free metavar)" do
+        occursIn (mkId "a") (TMu (TBound 0)) `shouldBe` False
+        occursIn (mkId "a") (TMu (TVar (mkId "a") 0)) `shouldBe` True
 
     describe "generalize" do
       it "generalizes variables above the given level" do
@@ -128,14 +128,14 @@ spec = parallel do
         scheme.vars `shouldBe` []
 
       it "does not quantify TMu-bound variables" do
-        -- μ_t5._t5 -> _t6 at level 2, generalizing at level 0
-        -- Only _t6 should be quantified; _t5 is bound by μ.
-        let ty = TMu (mkId "_t5") (TArr (TVar (mkId "_t5") 2) (TVar (mkId "_t6") 2))
+        -- μ(TBound 0 -> _t6) at level 2, generalizing at level 0
+        -- Only _t6 should be quantified; TBound 0 is not a metavar.
+        let ty = TMu (TArr (TBound 0) (TVar (mkId "_t6") 2))
             scheme = generalize 0 ty
         scheme.vars `shouldBe` [mkId "_t6"]
 
       it "does not quantify TForall-bound variables" do
-        let ty = TForall (mkId "_t5") (TArr (TVar (mkId "_t5") 2) (TVar (mkId "_t6") 2))
+        let ty = TForall (TArr (TBound 0) (TVar (mkId "_t6") 2))
             scheme = generalize 0 ty
         scheme.vars `shouldBe` [mkId "_t6"]
 
@@ -172,30 +172,32 @@ spec = parallel do
             t = TArr (TVar v 0) tyInt32
         result <- runUnify (dummyRange) (TVar v 0) t
         case result of
-          Right subst -> Map.lookup v subst `shouldBe` Just (TMu v t)
+          Right subst -> Map.lookup v subst `shouldBe` Just (TMu (TArr (TBound 0) tyInt32))
           Left err -> expectationFailure $ show err
 
       it "rejects (μa.a→Int) vs (Int→Int)" do
-        -- μa.a→Int unrolls to (μa.a→Int)→Int, never collapses to Int.
+        -- μ(TBound 0→Int) unrolls to (μ(TBound 0→Int))→Int, never collapses to Int.
         -- Final mismatch (TArr vs TCon Int) must surface.
-        let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) tyInt32)
+        let t1 = TMu (TArr (TBound 0) tyInt32)
             t2 = TArr tyInt32 tyInt32
         result <- runUnify (dummyRange) t1 t2
         case result of
           Left _ -> pure ()
-          Right _ -> expectationFailure "Expected μa.a→Int vs Int→Int to fail"
+          Right _ -> expectationFailure "Expected μ(a→Int) vs Int→Int to fail"
 
       it "accepts α-equivalent recursive types: (μa.a→Int) vs (μb.b→Int)" do
-        let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) tyInt32)
-            t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) tyInt32)
+        -- With de Bruijn, these are structurally identical: TMu (TArr (TBound 0) tyInt32)
+        let t1 = TMu (TArr (TBound 0) tyInt32)
+            t2 = TMu (TArr (TBound 0) tyInt32)
         result <- runUnify (dummyRange) t1 t2
         case result of
           Right _ -> pure ()
           Left err -> expectationFailure $ show err
 
       it "terminates on α-equivalent recursive types with forall binders" do
-        let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) (TForall (mkId "x") (TVar (mkId "x") 0)))
-            t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) (TForall (mkId "y") (TVar (mkId "y") 0)))
+        -- With de Bruijn, both types are structurally identical, so t1 == t2 immediately.
+        let t1 = TMu (TArr (TBound 0) (TForall (TBound 0)))
+            t2 = TMu (TArr (TBound 0) (TForall (TBound 0)))
             timeoutMicros = 1_000_000
             timeoutSecs = timeoutMicros `div` 1_000_000
         timed <- timeout timeoutMicros $ runUnify (dummyRange) t1 t2
@@ -204,16 +206,16 @@ spec = parallel do
           Just result -> result `shouldSatisfy` isRight
 
       it "rejects (μa.a→Int) vs (μb.b→String) on tail mismatch" do
-        let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) tyInt32)
-            t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) tyString)
+        let t1 = TMu (TArr (TBound 0) tyInt32)
+            t2 = TMu (TArr (TBound 0) tyString)
         result <- runUnify (dummyRange) t1 t2
         case result of
           Left _ -> pure ()
-          Right _ -> expectationFailure "Expected μa.a→Int vs μb.b→String to fail"
+          Right _ -> expectationFailure "Expected μ(a→Int) vs μ(a→String) to fail"
 
       it "rejects recursive forall codomain mismatch" do
-        let t1 = TMu (mkId "a") (TArr (TVar (mkId "a") 0) (TForall (mkId "x") tyInt32))
-            t2 = TMu (mkId "b") (TArr (TVar (mkId "b") 0) (TForall (mkId "y") tyString))
+        let t1 = TMu (TArr (TBound 0) (TForall tyInt32))
+            t2 = TMu (TArr (TBound 0) (TForall tyString))
         result <- runUnify (dummyRange) t1 t2
         case result of
           Left _ -> pure ()

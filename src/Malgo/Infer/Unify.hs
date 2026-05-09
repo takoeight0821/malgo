@@ -28,6 +28,22 @@ type UnifyEffs es =
     Error InferError :> es
   )
 
+canonicalModuleName :: ModuleName
+canonicalModuleName = ModuleName "$canonical"
+
+-- Offset used for canonical binder IDs in α-normalization.
+-- We keep this in a separate range from typical compiler-generated internal IDs.
+canonicalSortBase :: Int
+canonicalSortBase = 1000000
+
+canonicalBinderId :: T.Text -> Int -> Id
+canonicalBinderId prefix n =
+  Id
+    { name = prefix <> T.pack (show n),
+      moduleName = canonicalModuleName,
+      sort = Internal (negate (canonicalSortBase + n))
+    }
+
 -- | Canonical key used by cycle detection in unification.
 -- Bound variables under @forall@/@mu@ are normalized by binder position
 -- so α-equivalent types map to the same key.
@@ -55,22 +71,6 @@ canonicalizeTy = go Map.empty 0
       TMu v body ->
         let v' = canonicalBinderId "_mu" next
          in TMu v' (go (Map.insert v v' env) (next + 1) body)
-
-    canonicalBinderId :: T.Text -> Int -> Id
-    canonicalBinderId prefix n =
-      Id
-        { name = prefix <> T.pack (show n),
-          moduleName = canonicalModuleName,
-          sort = Internal (negate (canonicalSortBase + n))
-        }
-
-    canonicalModuleName :: ModuleName
-    canonicalModuleName = ModuleName "$canonical"
-
-    -- Use a dedicated offset so canonical IDs stay far from regular
-    -- compiler-generated internal IDs.
-    canonicalSortBase :: Int
-    canonicalSortBase = 1000000
 
 -- | Unify two types, returning a substitution
 unify :: (UnifyEffs es) => Range -> Ty -> Ty -> Eff es Subst

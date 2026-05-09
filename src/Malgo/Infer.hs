@@ -12,13 +12,14 @@ where
 
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
-import Data.Text qualified as T
 import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error, throwError)
+import Effectful.Reader.Static (Reader, ask, runReader)
 import Effectful.State.Static.Local (State, evalState, get)
 import Malgo.Id (Id (..))
 import Malgo.Infer.Constraint
 import Malgo.Infer.Unify (solveConstraints)
+import Malgo.Module (ModuleName)
 import Malgo.Pass (Pass (..))
 import Malgo.Prelude hiding (State, evalState, get, gets, modify, put)
 import Malgo.Syntax
@@ -33,7 +34,9 @@ instance Pass InferPass where
   type ErrorType InferPass = InferError
   type
     Effects InferPass es =
-      (State Uniq :> es)
+      ( State Uniq :> es,
+        Reader ModuleName :> es
+      )
 
   runPassImpl _ (importedEnv, bindGroup) = evalState initGenState do
     finalEnv <- inferBindGroup importedEnv bindGroup
@@ -43,8 +46,7 @@ instance Pass InferPass where
 initGenState :: GenState
 initGenState =
   GenState
-    { nextVar = 0,
-      constraints = [],
+    { constraints = [],
       currentLevel = 0,
       solvedSubst = Map.empty
     }
@@ -52,18 +54,48 @@ initGenState =
 -- | Type environment mapping identifiers to type schemes
 type TyEnv = Map Id Scheme
 
+-- | Type-synonym environment built from 'BindGroup._typeSynonyms'.
+-- The right-hand side is stored unexpanded; it is unfolded on demand by
+-- 'surfaceTypeToTy' so that recursive synonyms remain representable until
+-- they are actually used in a type position.
+type SynEnv = Map Id ([Id], Type (Malgo Rename))
+
+-- | Build the synonym environment from a bind group.
+buildSynEnv :: BindGroup (Malgo Rename) -> SynEnv
+buildSynEnv bg =
+  Map.fromList
+    [ (name, (params, body))
+    | (_, name, params, body) <- bg._typeSynonyms
+    ]
+
+-- | Effect bundle required by the constraint generators. 'State Uniq' /
+-- 'Reader ModuleName' are needed because 'freshTyVar' (and any helper that
+-- transitively calls it, e.g. 'instantiate' / 'solveConstraints' /
+-- 'inferExpr Ann' via the unifier's 'TForall' case) generates fresh 'Id's.
+type InferEffs es =
+  ( Reader SynEnv :> es,
+    Reader ModuleName :> es,
+    State GenState :> es,
+    State Uniq :> es,
+    Error InferError :> es
+  )
+
 -- | Infer types for an entire bind group
 inferBindGroup ::
-  (State GenState :> es, Error InferError :> es) =>
+  ( State GenState :> es,
+    State Uniq :> es,
+    Reader ModuleName :> es,
+    Error InferError :> es
+  ) =>
   TyEnv ->
   BindGroup (Malgo Rename) ->
   Eff es TyEnv
-inferBindGroup importedEnv bg = do
+inferBindGroup importedEnv bg = runReader (buildSynEnv bg) do
   -- Build initial environment from type signatures and data definitions
-  let sigEnv = buildSigEnv bg
-      dataEnv = buildDataEnv bg
-      foreignEnv = buildForeignEnv bg
-      env0 = importedEnv <> sigEnv <> dataEnv <> foreignEnv
+  sigEnv <- buildSigEnv bg
+  dataEnv <- buildDataEnv bg
+  foreignEnv <- buildForeignEnv bg
+  let env0 = importedEnv <> sigEnv <> dataEnv <> foreignEnv
 
   -- Infer each mutually recursive group of definitions
   env <- foldlM inferScGroup env0 bg._scDefs
@@ -74,45 +106,54 @@ inferBindGroup importedEnv bg = do
   pure env
 
 -- | Build type environment from type signatures
-buildSigEnv :: BindGroup (Malgo Rename) -> TyEnv
-buildSigEnv bg = Map.fromList $ map toSigEntry bg._scSigs
+buildSigEnv ::
+  (Reader SynEnv :> es, Error InferError :> es) =>
+  BindGroup (Malgo Rename) ->
+  Eff es TyEnv
+buildSigEnv bg = Map.fromList <$> traverse toSigEntry bg._scSigs
   where
-    toSigEntry :: ScSig (Malgo Rename) -> (Id, Scheme)
-    toSigEntry (_, name, ty) =
-      let inferTy = surfaceTypeToTy ty
-          fvs = Set.toList $ freeVars inferTy
-       in (name, Scheme {vars = fvs, ty = inferTy})
+    toSigEntry :: (Reader SynEnv :> es, Error InferError :> es) => ScSig (Malgo Rename) -> Eff es (Id, Scheme)
+    toSigEntry (_, name, ty) = do
+      inferTy <- surfaceTypeToTy ty
+      let fvs = Set.toList $ freeVars inferTy
+      pure (name, Scheme {vars = fvs, ty = inferTy})
 
 -- | Build type environment from data definitions (constructors)
-buildDataEnv :: BindGroup (Malgo Rename) -> TyEnv
-buildDataEnv bg = Map.fromList $ concatMap dataDefEntries bg._dataDefs
+buildDataEnv ::
+  (Reader SynEnv :> es, Error InferError :> es) =>
+  BindGroup (Malgo Rename) ->
+  Eff es TyEnv
+buildDataEnv bg = Map.fromList . concat <$> traverse dataDefEntries bg._dataDefs
   where
-    dataDefEntries :: DataDef (Malgo Rename) -> [(Id, Scheme)]
-    dataDefEntries (_, typeName, params, cons) =
-      let paramTys = map (\(_, p) -> TVar (idToVarName p) 0) params
-          resultTy = foldl' TApp (TCon (idToVarName typeName)) paramTys
-       in map (conEntry resultTy) cons
+    dataDefEntries :: (Reader SynEnv :> es, Error InferError :> es) => DataDef (Malgo Rename) -> Eff es [(Id, Scheme)]
+    dataDefEntries (_, typeName, params, cons) = do
+      let paramTys = map (\(_, p) -> TVar p 0) params
+          resultTy = foldl' TApp (TCon typeName.name) paramTys
+      traverse (conEntry resultTy) cons
 
-    conEntry :: Ty -> (Range, Id, [Type (Malgo Rename)]) -> (Id, Scheme)
-    conEntry resultTy (_, conName, argTypes) =
-      let argTys = map surfaceTypeToTy argTypes
-          conTy = foldr TArr resultTy argTys
+    conEntry :: (Reader SynEnv :> es, Error InferError :> es) => Ty -> (Range, Id, [Type (Malgo Rename)]) -> Eff es (Id, Scheme)
+    conEntry resultTy (_, conName, argTypes) = do
+      argTys <- traverse surfaceTypeToTy argTypes
+      let conTy = foldr TArr resultTy argTys
           fvs = Set.toList $ freeVars conTy
-       in (conName, Scheme {vars = fvs, ty = conTy})
+      pure (conName, Scheme {vars = fvs, ty = conTy})
 
 -- | Build type environment from foreign declarations
-buildForeignEnv :: BindGroup (Malgo Rename) -> TyEnv
-buildForeignEnv bg = Map.fromList $ map foreignEntry bg._foreigns
+buildForeignEnv ::
+  (Reader SynEnv :> es, Error InferError :> es) =>
+  BindGroup (Malgo Rename) ->
+  Eff es TyEnv
+buildForeignEnv bg = Map.fromList <$> traverse foreignEntry bg._foreigns
   where
-    foreignEntry :: Foreign (Malgo Rename) -> (Id, Scheme)
-    foreignEntry (_, name, ty) =
-      let inferTy = surfaceTypeToTy ty
-          fvs = Set.toList $ freeVars inferTy
-       in (name, Scheme {vars = fvs, ty = inferTy})
+    foreignEntry :: (Reader SynEnv :> es, Error InferError :> es) => Foreign (Malgo Rename) -> Eff es (Id, Scheme)
+    foreignEntry (_, name, ty) = do
+      inferTy <- surfaceTypeToTy ty
+      let fvs = Set.toList $ freeVars inferTy
+      pure (name, Scheme {vars = fvs, ty = inferTy})
 
 -- | Infer a mutually recursive group of definitions
 inferScGroup ::
-  (State GenState :> es, Error InferError :> es) =>
+  (InferEffs es) =>
   TyEnv ->
   [ScDef (Malgo Rename)] ->
   Eff es TyEnv
@@ -149,7 +190,7 @@ inferScGroup env defs = do
 
 -- | Infer the type of an expression
 inferExpr ::
-  (State GenState :> es, Error InferError :> es) =>
+  (InferEffs es) =>
   TyEnv ->
   Expr (Malgo Rename) ->
   Eff es Ty
@@ -205,7 +246,7 @@ inferExpr env (Record _ fields) = do
 inferExpr _ (List pos _) = absurd pos
 inferExpr env (Ann pos expr ty) = do
   exprTy <- inferExpr env expr
-  let annTy = surfaceTypeToTy ty
+  annTy <- surfaceTypeToTy ty
   addConstraint $ CUnify pos exprTy annTy
   pure annTy
 inferExpr env (Seq _ stmts) = inferStmts env (toList stmts)
@@ -230,7 +271,7 @@ inferExpr env (Goto pos value label) = do
 
 -- | Infer the type of a clause (pattern matching branch)
 inferClause ::
-  (State GenState :> es, Error InferError :> es) =>
+  (InferEffs es) =>
   TyEnv ->
   Clause (Malgo Rename) ->
   Eff es Ty
@@ -243,7 +284,7 @@ inferClause env (Clause _ pats body) = do
 
 -- | Infer the type of a pattern, returning bindings and the pattern type
 inferPat ::
-  (State GenState :> es, Error InferError :> es) =>
+  (InferEffs es) =>
   TyEnv ->
   Pat (Malgo Rename) ->
   Eff es ([(Id, Scheme)], Ty)
@@ -279,7 +320,7 @@ inferPat _ (BoxedP pos _) = absurd pos
 
 -- | Infer a coclause (copattern matching)
 inferCoClause ::
-  (State GenState :> es, Error InferError :> es) =>
+  (InferEffs es) =>
   TyEnv ->
   CoPat (Malgo Rename) ->
   Expr (Malgo Rename) ->
@@ -301,7 +342,7 @@ inferCoClause env (ProjectP pos copat field) body resultTy = do
 
 -- | Infer the type of a sequence of statements
 inferStmts ::
-  (State GenState :> es, Error InferError :> es) =>
+  (InferEffs es) =>
   TyEnv ->
   [Stmt (Malgo Rename)] ->
   Eff es Ty
@@ -333,21 +374,72 @@ inferLiteral (Double _) = tyDouble
 inferLiteral (Char _) = tyChar
 inferLiteral (String _) = tyString
 
--- | Convert surface syntax type to internal type
-surfaceTypeToTy :: Type (Malgo Rename) -> Ty
-surfaceTypeToTy (TyVar _ name) = TVar (idToVarName name) 0
-surfaceTypeToTy (TyCon _ name) = TCon (idToVarName name)
-surfaceTypeToTy (TyArr _ arg ret) = TArr (surfaceTypeToTy arg) (surfaceTypeToTy ret)
-surfaceTypeToTy (TyApp _ f args) = foldl' TApp (surfaceTypeToTy f) (map surfaceTypeToTy args)
-surfaceTypeToTy (TyTuple _ ts) = TTuple (map surfaceTypeToTy ts)
-surfaceTypeToTy (TyRecord _ fields rowTail) =
-  TRecord (map (second surfaceTypeToTy) fields) (surfaceTypeToTy <$> rowTail)
-surfaceTypeToTy (TyBlock pos _) = absurd pos
-surfaceTypeToTy (TyBottom _) = TBottom
-surfaceTypeToTy (TyTilde _ t) = surfaceTypeToTy t
-surfaceTypeToTy (TyVariant _ cases rowTail) =
-  TVariant (map (second (map surfaceTypeToTy)) cases) (surfaceTypeToTy <$> rowTail)
+-- | Convert surface syntax type to internal type, eagerly expanding type
+-- synonyms found in the ambient 'SynEnv'. Recursive expansion is detected
+-- via a visited set; partial application of a synonym is rejected.
+surfaceTypeToTy ::
+  (Reader SynEnv :> es, Error InferError :> es) =>
+  Type (Malgo Rename) ->
+  Eff es Ty
+surfaceTypeToTy = expandType Set.empty
 
--- | Convert an Id to a variable name for internal types
-idToVarName :: Id -> T.Text
-idToVarName Id {name} = name
+expandType ::
+  (Reader SynEnv :> es, Error InferError :> es) =>
+  Set Id ->
+  Type (Malgo Rename) ->
+  Eff es Ty
+expandType _ (TyVar _ name) = pure $ TVar name 0
+expandType visited (TyCon pos name) = do
+  synEnv <- ask @SynEnv
+  case Map.lookup name synEnv of
+    Just (params, _)
+      | not (null params) ->
+          throwError $ SynonymArityMismatch pos name (length params) 0
+    Just (_, body) -> do
+      when (Set.member name visited) $ throwError (CyclicSynonym pos name)
+      expandType (Set.insert name visited) body
+    Nothing -> pure $ TCon name.name
+expandType visited (TyArr _ arg ret) =
+  TArr <$> expandType visited arg <*> expandType visited ret
+expandType visited (TyApp pos f args) = do
+  synEnv <- ask @SynEnv
+  case f of
+    TyCon _ name | Just (params, body) <- Map.lookup name synEnv -> do
+      when (length params /= length args)
+        $ throwError
+        $ SynonymArityMismatch pos name (length params) (length args)
+      argTys <- traverse (expandType visited) args
+      expandSynonymApp pos visited name params argTys body
+    _ -> foldl' TApp <$> expandType visited f <*> traverse (expandType visited) args
+expandType visited (TyTuple _ ts) = TTuple <$> traverse (expandType visited) ts
+expandType visited (TyRecord _ fields rowTail) =
+  TRecord
+    <$> traverse (\(n, t) -> (n,) <$> expandType visited t) fields
+    <*> traverse (expandType visited) rowTail
+expandType _ (TyBlock pos _) = absurd pos
+expandType _ (TyBottom _) = pure TBottom
+expandType visited (TyTilde _ t) = expandType visited t
+expandType visited (TyVariant _ cases rowTail) =
+  TVariant
+    <$> traverse (\(n, ts) -> (n,) <$> traverse (expandType visited) ts) cases
+    <*> traverse (expandType visited) rowTail
+
+-- | Expand a parameterised synonym application by substituting arg types
+-- into the body's free type variables, after recursively converting the body.
+-- Because 'Ty.TVar' carries an 'Id' (and thus uniqueness across scopes),
+-- 'applySubst' is safe here even when a synonym's parameter shares its
+-- surface name with an outer-scope variable.
+expandSynonymApp ::
+  (Reader SynEnv :> es, Error InferError :> es) =>
+  Range ->
+  Set Id ->
+  Id ->
+  [Id] ->
+  [Ty] ->
+  Type (Malgo Rename) ->
+  Eff es Ty
+expandSynonymApp pos visited name params argTys body = do
+  when (Set.member name visited) $ throwError (CyclicSynonym pos name)
+  bodyTy <- expandType (Set.insert name visited) body
+  let subst = Map.fromList (zip params argTys)
+  pure $ applySubst subst bodyTy

@@ -53,8 +53,10 @@ import Data.Set qualified as Set
 import Data.Text qualified as T
 import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error)
-import Effectful.State.Static.Local (State, get, gets, modify)
-import Malgo.Id (Id)
+import Effectful.Reader.Static (Reader)
+import Effectful.State.Static.Local (State, gets, modify)
+import Malgo.Id (Id, newTemporalId)
+import Malgo.Module (ModuleName)
 import Malgo.Prelude hiding (Constraint)
 import Text.Megaparsec.Pos qualified as Megaparsec
 
@@ -65,8 +67,11 @@ type Level = Int
 -- | Internal type representation for inference.
 -- Separate from surface syntax Type to allow inference-specific constructs.
 data Ty
-  = -- | Type variable with its creation level
-    TVar T.Text Level
+  = -- | Type variable with its creation level. Identity is carried by 'Id'
+    -- so that variables originating from different scopes never collide on
+    -- their surface name (e.g. two distinct 'a's coming from a signature
+    -- and a synonym parameter).
+    TVar Id Level
   | -- | Type constructor (e.g., Int32, Bool)
     TCon T.Text
   | -- | Function arrow: arg -> result
@@ -82,9 +87,9 @@ data Ty
   | -- | Bottom type (for non-terminating expressions)
     TBottom
   | -- | Forall quantifier (used in Schemes after generalization)
-    TForall T.Text Ty
+    TForall Id Ty
   | -- | Recursive type: mu v. ty
-    TMu T.Text Ty
+    TMu Id Ty
   deriving stock (Eq, Show, Ord)
 
 instance Pretty Ty where
@@ -109,13 +114,15 @@ instance Pretty Ty where
 
 -- | Type scheme for let-polymorphism
 data Scheme = Scheme
-  { vars :: [T.Text],
+  { vars :: [Id],
     ty :: Ty
   }
   deriving stock (Eq, Show)
 
--- | Type substitution
-type Subst = Map T.Text Ty
+-- | Type substitution keyed by 'Id' so that distinct variables sharing a
+-- surface name (e.g. an outer-scope @a@ vs a synonym parameter @a@) cannot
+-- collide.
+type Subst = Map Id Ty
 
 -- | Apply a substitution to a type
 applySubst :: Subst -> Ty -> Ty
@@ -141,7 +148,7 @@ applySubst subst (TMu v ty) =
   TMu v (applySubst (Map.delete v subst) ty)
 
 -- | Free type variables in a type
-freeVars :: Ty -> Set T.Text
+freeVars :: Ty -> Set Id
 freeVars (TVar name _) = Set.singleton name
 freeVars (TCon _) = Set.empty
 freeVars (TArr a b) = freeVars a <> freeVars b
@@ -156,7 +163,7 @@ freeVars (TForall v ty) = Set.delete v (freeVars ty)
 freeVars (TMu v ty) = Set.delete v (freeVars ty)
 
 -- | Occurs check: does a type variable occur in a type?
-occursIn :: T.Text -> Ty -> Bool
+occursIn :: Id -> Ty -> Bool
 occursIn name (TVar v _) = name == v
 occursIn _ (TCon _) = False
 occursIn name (TArr a b) = occursIn name a || occursIn name b
@@ -193,12 +200,18 @@ generalize lvl ty =
     collectVars (TForall v t) = filter (notBound v) (collectVars t)
     collectVars (TMu v t) = filter (notBound v) (collectVars t)
 
-    notBound :: T.Text -> Ty -> Bool
+    notBound :: Id -> Ty -> Bool
     notBound v (TVar n _) = n /= v
     notBound _ _ = True
 
 -- | Instantiate a scheme by replacing quantified variables with fresh type variables
-instantiate :: (State GenState :> es) => Scheme -> Eff es Ty
+instantiate ::
+  ( State GenState :> es,
+    State Uniq :> es,
+    Reader ModuleName :> es
+  ) =>
+  Scheme ->
+  Eff es Ty
 instantiate Scheme {vars, ty} = do
   freshVars <- traverse (\v -> (v,) <$> freshTyVar) vars
   let subst = Map.fromList freshVars
@@ -214,8 +227,7 @@ data TyConstraint
 
 -- | State for constraint generation
 data GenState = GenState
-  { nextVar :: Int,
-    constraints :: [TyConstraint],
+  { constraints :: [TyConstraint],
     currentLevel :: Level,
     solvedSubst :: Subst
   }
@@ -224,13 +236,20 @@ data GenState = GenState
 -- | Constraint generation monad
 type GenM es = (State GenState :> es, Error InferError :> es)
 
--- | Fresh type variable at the current level
-freshTyVar :: (State GenState :> es) => Eff es Ty
+-- | Fresh type variable at the current level. Uses 'newTemporalId' so the
+-- variable carries a globally unique 'Id' rather than a possibly-colliding
+-- 'Text' name, which lets 'applySubst' / 'occursIn' / 'unify' compare
+-- variables structurally without false positives.
+freshTyVar ::
+  ( State GenState :> es,
+    State Uniq :> es,
+    Reader ModuleName :> es
+  ) =>
+  Eff es Ty
 freshTyVar = do
-  st <- get
-  let name = "_t" <> T.pack (show st.nextVar)
-  modify (\s -> s {nextVar = s.nextVar + 1})
-  pure $ TVar name st.currentLevel
+  st <- gets @GenState (.currentLevel)
+  freshId <- newTemporalId "_t"
+  pure $ TVar freshId st
 
 -- | Add a constraint
 addConstraint :: (State GenState :> es) => TyConstraint -> Eff es ()
@@ -268,8 +287,12 @@ dummyRange =
 data InferError
   = UnificationError Range Ty Ty T.Text
   | UnboundVariable Range Id
-  | OccursCheckError Range T.Text Ty
+  | OccursCheckError Range Id Ty
   | NotImplemented Range T.Text
+  | -- | Type synonym refers (transitively) to itself in a use position.
+    CyclicSynonym Range Id
+  | -- | Synonym applied with the wrong number of arguments. Fields: expected, got.
+    SynonymArityMismatch Range Id Int Int
   deriving stock (Show)
 
 instance Exception InferError where
@@ -284,8 +307,17 @@ instance Exception InferError where
     "Unbound variable: " <> show (pretty name)
   displayException (OccursCheckError _pos varName ty) =
     "Occurs check failed: type variable '"
-      <> T.unpack varName
+      <> show (pretty varName)
       <> "' occurs in "
       <> show (pretty ty)
   displayException (NotImplemented _pos feature) =
     "Type inference not yet implemented for: " <> T.unpack feature
+  displayException (CyclicSynonym _pos name) =
+    "Cyclic type synonym: " <> show (pretty name)
+  displayException (SynonymArityMismatch _pos name expected got) =
+    "Type synonym '"
+      <> show (pretty name)
+      <> "' expects "
+      <> show expected
+      <> " argument(s) but got "
+      <> show got

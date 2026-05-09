@@ -11,12 +11,24 @@ import Data.Set qualified as Set
 import Data.Text qualified as T
 import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error, throwError)
+import Effectful.Reader.Static (Reader)
 import Effectful.State.Static.Local (State, evalState, get, modify)
 import Malgo.Infer.Constraint
+import Malgo.Module (ModuleName)
 import Malgo.Prelude hiding (Constraint)
 
+-- | Effect bundle required by the unifier and constraint solver.
+-- 'State Uniq' / 'Reader ModuleName' come from 'freshTyVar'
+-- (used when instantiating 'TForall' on the fly).
+type UnifyEffs es =
+  ( State GenState :> es,
+    State Uniq :> es,
+    Reader ModuleName :> es,
+    Error InferError :> es
+  )
+
 -- | Unify two types, returning a substitution
-unify :: (State GenState :> es, Error InferError :> es) => Range -> Ty -> Ty -> Eff es Subst
+unify :: (UnifyEffs es) => Range -> Ty -> Ty -> Eff es Subst
 unify pos t1 t2 = do
   subst <- currentSubst
   let t1' = applySubst subst t1
@@ -24,7 +36,7 @@ unify pos t1 t2 = do
   evalState (Set.empty :: Set (Ty, Ty)) $ unifyTypes pos t1' t2'
 
 -- | Core unification
-unifyTypes :: (State GenState :> es, State (Set (Ty, Ty)) :> es, Error InferError :> es) => Range -> Ty -> Ty -> Eff es Subst
+unifyTypes :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Range -> Ty -> Ty -> Eff es Subst
 unifyTypes pos t1 t2
   | t1 == t2 = pure Map.empty
   | otherwise = do
@@ -35,7 +47,7 @@ unifyTypes pos t1 t2
           modify @(Set (Ty, Ty)) (Set.insert (t1, t2))
           unifyInternal pos t1 t2
 
-unifyInternal :: (State GenState :> es, State (Set (Ty, Ty)) :> es, Error InferError :> es) => Range -> Ty -> Ty -> Eff es Subst
+unifyInternal :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Range -> Ty -> Ty -> Eff es Subst
 -- Bottom unifies with anything
 unifyInternal _ TBottom _ = pure Map.empty
 unifyInternal _ _ TBottom = pure Map.empty
@@ -100,7 +112,7 @@ unifyInternal pos t1 t2 =
   throwError $ UnificationError pos t1 t2 "Cannot unify types"
 
 -- | Unify a list of types pairwise
-unifyList :: (State GenState :> es, State (Set (Ty, Ty)) :> es, Error InferError :> es) => Range -> [Ty] -> [Ty] -> Eff es Subst
+unifyList :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Range -> [Ty] -> [Ty] -> Eff es Subst
 unifyList _ [] [] = pure Map.empty
 unifyList pos (t1 : ts1) (t2 : ts2) = do
   s1 <- unifyTypes pos t1 t2
@@ -110,7 +122,7 @@ unifyList _ _ _ = pure Map.empty
 
 -- | Record row unification
 unifyRecords ::
-  (State GenState :> es, State (Set (Ty, Ty)) :> es, Error InferError :> es) =>
+  (UnifyEffs es, State (Set (Ty, Ty)) :> es) =>
   Range ->
   [(T.Text, Ty)] ->
   Maybe Ty ->
@@ -167,7 +179,7 @@ unifyRecords pos fs1 r1 fs2 r2 = do
 
 -- | Variant row unification
 unifyVariants ::
-  (State GenState :> es, State (Set (Ty, Ty)) :> es, Error InferError :> es) =>
+  (UnifyEffs es, State (Set (Ty, Ty)) :> es) =>
   Range ->
   [(T.Text, [Ty])] ->
   Maybe Ty ->
@@ -221,7 +233,7 @@ unifyVariants pos cs1 r1 cs2 r2 = do
       pure (composeSubst s2 (composeSubst s1 commonSubst))
 
 -- | Solve all constraints
-solveConstraints :: (State GenState :> es, Error InferError :> es) => Eff es Subst
+solveConstraints :: (UnifyEffs es) => Eff es Subst
 solveConstraints = do
   st <- get
   let cs = reverse st.constraints
@@ -229,7 +241,7 @@ solveConstraints = do
   mapM_ solveOne cs
   currentSubst
   where
-    solveOne :: (State GenState :> es, Error InferError :> es) => TyConstraint -> Eff es ()
+    solveOne :: (UnifyEffs es) => TyConstraint -> Eff es ()
     solveOne (CUnify pos t1 t2) = do
       subst <- currentSubst
       let t1' = applySubst subst t1

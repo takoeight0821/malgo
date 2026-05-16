@@ -57,3 +57,55 @@ jobs:
 
       - name: Run tests
         run: cabal test malgo-test --test-option=--jobs=4 --test-option=--fail-fast
+
+  selfhost-golden:
+    name: self-hosted golden (GHC ${{ matrix.ghc-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc-version: ['9.12.4']
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 2
+
+      - name: Restore file timestamps
+        run: |
+          rev=HEAD
+          for f in $(git ls-tree -r -t --full-name --name-only "$rev"); do
+            touch -d "$(git log --pretty=format:%cI -1 "$rev" -- "$f")" "$f"
+          done
+
+      - uses: ./.github/actions/setup-haskell-cached
+        id: setup
+        with:
+          ghc-version: ${{ matrix.ghc-version }}
+
+      - name: Configure the build
+        run: cabal configure --enable-tests --disable-documentation
+
+      - name: Cache cabal store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-store-${{ hashFiles('cabal.project.freeze') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-store-
+
+      - name: Cache dist-newstyle
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: dist-newstyle
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-selfhost-${{ hashFiles('cabal.project.freeze') }}-${{ hashFiles('src/**/*.hs', '*.cabal', 'package.yaml', 'runtime/**/*.mlg', 'scripts/selfhost-golden.sh', 'test/testcases/malgo/**/*.mlg') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-selfhost-${{ hashFiles('cabal.project.freeze') }}-
+
+      - name: Run self-hosted eval goldens
+        env:
+          MAX_FAILURES: 40
+          PRECOMPILE_TIMEOUT: 300
+          CASE_TIMEOUT: 60
+        run: scripts/selfhost-golden.sh

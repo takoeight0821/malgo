@@ -1,0 +1,54 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Token.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Lexer.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Parser.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Value.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Eval.mlg"
+
+-- ─── Pipeline ────────────────────────────────────────────────────────────────
+
+-- Run Malgo source through the full self-hosted pipeline and print the result.
+-- IO side-effects inside the program (printString, printChar) execute via the
+-- host builtins; the returned Value of main is printed afterwards unless it is
+-- VUnit (the program printed its own output).
+def runSource : String -> ()
+def runSource = { src ->
+  case (tokenize src) {
+    (Left err) ->
+      printString (appendString "Lex error: " (appendString err "\n")),
+    (Right toks) ->
+      case (parseModule toks) {
+        (Left err) ->
+          printString (appendString "Parse error: " (appendString err "\n")),
+        (Right m) ->
+          case (evalModule makeBaseEnv m) {
+            (Left err) ->
+              printString (appendString "Eval error: " (appendString err "\n")),
+            (Right gEnv) ->
+              case (runMain gEnv) {
+                (Left err) ->
+                  printString (appendString "Runtime error: " (appendString err "\n")),
+                (Right VUnit) ->
+                  -- program printed its own output; nothing to show
+                  (),
+                (Right v) ->
+                  printString (appendString (showValue v) "\n")
+              }
+          }
+      }
+  }
+}
+
+-- ─── Entry point ─────────────────────────────────────────────────────────────
+
+-- Read source from stdin, evaluate it, and print the result.
+-- Pipe a Malgo program in:
+--   echo 'def main = { _ -> addInt32 1i32 2i32 }' \
+--     | cabal run exe:malgo -- eval runtime/malgo/compiler/Main.mlg
+def main = { _ ->
+  let src = getContents ();
+  runSource src
+}

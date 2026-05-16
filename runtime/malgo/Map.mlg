@@ -1,0 +1,228 @@
+module {..} = import "../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../runtime/malgo/Prelude.mlg"
+
+-- AVL tree-based ordered map.
+-- All operations take an explicit comparison function (k -> k -> Int32)
+-- returning negative/zero/positive, since there are no type classes.
+--
+-- Constructor syntax: MapNode(Map k v, k, v, Map k v, Int32)
+-- Fields: left subtree, key, value, right subtree, height
+
+data Map k v = MapEmpty | MapNode(Map k v, k, v, Map k v, Int32)
+
+-- ──────────────────────────────────────────────────────────
+-- Basic constructors / accessors
+-- ──────────────────────────────────────────────────────────
+
+def mapEmpty : Map k v
+def mapEmpty = MapEmpty
+
+def mapHeight : Map k v -> Int32
+def mapHeight = {
+  MapEmpty            -> 0,
+  (MapNode _ _ _ _ h) -> h
+}
+
+def mapSize : Map k v -> Int32
+def mapSize = {
+  MapEmpty            -> 0,
+  (MapNode l _ _ r _) ->
+    addInt32 1 (addInt32 (mapSize l) (mapSize r))
+}
+
+-- max of two Int32 values (helper for height computation)
+def mapMaxH : Int32 -> Int32 -> Int32
+def mapMaxH = { a b -> if (gtInt32 a b) { a } { b } }
+
+-- Smart constructor that recomputes height
+def mapMkNode : Map k v -> k -> v -> Map k v -> Map k v
+def mapMkNode = { l k v r ->
+  MapNode l k v r (addInt32 1 (mapMaxH (mapHeight l) (mapHeight r)))
+}
+
+-- ──────────────────────────────────────────────────────────
+-- AVL rotations
+-- ──────────────────────────────────────────────────────────
+
+def mapRotL : Map k v -> k -> v -> Map k v -> Map k v
+def mapRotL = {
+  l k v (MapNode rl rk rv rr _) ->
+    mapMkNode (mapMkNode l k v rl) rk rv rr,
+  l k v r ->
+    mapMkNode l k v r
+}
+
+def mapRotR : Map k v -> k -> v -> Map k v -> Map k v
+def mapRotR = {
+  (MapNode ll lk lv lr _) k v r ->
+    mapMkNode ll lk lv (mapMkNode lr k v r),
+  l k v r ->
+    mapMkNode l k v r
+}
+
+def mapBalance : Map k v -> k -> v -> Map k v -> Map k v
+def mapBalance = { l k v r ->
+  let lh = mapHeight l;
+  let rh = mapHeight r;
+  if (gtInt32 (subInt32 lh rh) 1)
+    { case l {
+        (MapNode ll lk lv lr _) ->
+          if (geInt32 (mapHeight ll) (mapHeight lr))
+            { mapRotR l k v r }
+            { case lr {
+                (MapNode lrl lrk lrv lrr _) ->
+                  mapMkNode
+                    (mapMkNode ll lk lv lrl)
+                    lrk lrv
+                    (mapMkNode lrr k v r),
+                _ -> mapRotR l k v r
+              }
+            },
+        _ -> mapMkNode l k v r
+      }
+    }
+    { if (gtInt32 (subInt32 rh lh) 1)
+        { case r {
+            (MapNode rl rk rv rr _) ->
+              if (geInt32 (mapHeight rr) (mapHeight rl))
+                { mapRotL l k v r }
+                { case rl {
+                    (MapNode rll rlk rlv rlr _) ->
+                      mapMkNode
+                        (mapMkNode l k v rll)
+                        rlk rlv
+                        (mapMkNode rlr rk rv rr),
+                    _ -> mapRotL l k v r
+                  }
+                },
+            _ -> mapMkNode l k v r
+          }
+        }
+        { mapMkNode l k v r }
+    }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Core operations
+-- ──────────────────────────────────────────────────────────
+
+def mapInsert : (k -> k -> Int32) -> k -> v -> Map k v -> Map k v
+def mapInsert = {
+  cmp k v MapEmpty ->
+    mapMkNode MapEmpty k v MapEmpty,
+  cmp k v (MapNode l ek ev r _) ->
+    let c = cmp k ek;
+    if (ltInt32 c 0)
+      { mapBalance (mapInsert cmp k v l) ek ev r }
+      { if (gtInt32 c 0)
+          { mapBalance l ek ev (mapInsert cmp k v r) }
+          { mapMkNode l k v r }
+      }
+}
+
+def mapLookup : (k -> k -> Int32) -> k -> Map k v -> Maybe v
+def mapLookup = {
+  _ _ MapEmpty -> Nothing,
+  cmp k (MapNode l ek ev r _) ->
+    let c = cmp k ek;
+    if (ltInt32 c 0)
+      { mapLookup cmp k l }
+      { if (gtInt32 c 0)
+          { mapLookup cmp k r }
+          { Just ev }
+      }
+}
+
+def mapMember : (k -> k -> Int32) -> k -> Map k v -> Bool
+def mapMember = { cmp k m ->
+  case (mapLookup cmp k m) {
+    Nothing  -> False,
+    (Just _) -> True
+  }
+}
+
+def mapMinEntry : Map k v -> Maybe {key: k, val: v}
+def mapMinEntry = {
+  MapEmpty                   -> Nothing,
+  (MapNode MapEmpty k v _ _) -> Just {key = k, val = v},
+  (MapNode l _ _ _ _)        -> mapMinEntry l
+}
+
+def mapDeleteMin : Map k v -> Map k v
+def mapDeleteMin = {
+  MapEmpty                   -> MapEmpty,
+  (MapNode MapEmpty _ _ r _) -> r,
+  (MapNode l k v r _)        -> mapBalance (mapDeleteMin l) k v r
+}
+
+def mapMerge : Map k v -> Map k v -> Map k v
+def mapMerge = {
+  MapEmpty r -> r,
+  l MapEmpty -> l,
+  l r ->
+    case (mapMinEntry r) {
+      Nothing              -> l,
+      (Just {key = k, val = v}) ->
+        mapBalance l k v (mapDeleteMin r)
+    }
+}
+
+def mapDelete : (k -> k -> Int32) -> k -> Map k v -> Map k v
+def mapDelete = {
+  _ _ MapEmpty -> MapEmpty,
+  cmp k (MapNode l ek ev r _) ->
+    let c = cmp k ek;
+    if (ltInt32 c 0)
+      { mapBalance (mapDelete cmp k l) ek ev r }
+      { if (gtInt32 c 0)
+          { mapBalance l ek ev (mapDelete cmp k r) }
+          { mapMerge l r }
+      }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Conversions
+-- ──────────────────────────────────────────────────────────
+
+def mapToList : Map k v -> List {key: k, val: v}
+def mapToList = {
+  MapEmpty            -> Nil,
+  (MapNode l k v r _) ->
+    append (mapToList l) (Cons {key = k, val = v} (mapToList r))
+}
+
+def mapFromList : (k -> k -> Int32) -> List {key: k, val: v} -> Map k v
+def mapFromList = { cmp pairs ->
+  foldl { m {key = k, val = v} -> mapInsert cmp k v m } mapEmpty pairs
+}
+
+def mapKeys : Map k v -> List k
+def mapKeys = { m -> mapList { {key = k, val = _} -> k } (mapToList m) }
+
+def mapValues : Map k v -> List v
+def mapValues = { m -> mapList { {key = _, val = v} -> v } (mapToList m) }
+
+def mapMap : (v -> w) -> Map k v -> Map k w
+def mapMap = {
+  _ MapEmpty            -> MapEmpty,
+  f (MapNode l k v r h) -> MapNode (mapMap f l) k (f v) (mapMap f r) h
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Comparison helpers
+-- ──────────────────────────────────────────────────────────
+
+def cmpString : String -> String -> Int32
+def cmpString = { a b ->
+  if (ltString a b) { negInt32 1 } { if (gtString a b) { 1 } { 0 } }
+}
+
+def cmpInt32 : Int32 -> Int32 -> Int32
+def cmpInt32 = { a b ->
+  if (ltInt32 a b) { negInt32 1 } { if (gtInt32 a b) { 1 } { 0 } }
+}
+
+def cmpInt64 : Int64 -> Int64 -> Int32
+def cmpInt64 = { a b ->
+  if (ltInt64 a b) { negInt32 1 } { if (gtInt64 a b) { 1 } { 0 } }
+}

@@ -1,0 +1,40 @@
+module {..} = import "../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../runtime/malgo/Prelude.mlg"
+
+-- getArgs: parse newline-separated string from getRawArgs into a List String
+def getArgs : () -> List String
+def getArgs = { _ ->
+  let raw = getRawArgs ();
+  if (eqString raw "") { Nil } { splitLines raw }
+}
+
+-- Split a string by newline characters
+def splitLines : String -> List String
+def splitLines = { s ->
+  case (indexOfChar '\n' 0i64 s) {
+    Nothing -> Cons s Nil,
+    (Just i) ->
+      let line = substring s 0i64 i;
+      let rest = substring s (addInt64 i 1i64) (lengthString s);
+      Cons line (splitLines rest)
+  }
+}
+
+-- Find first occurrence of a character starting at offset i
+def indexOfChar : Char -> Int64 -> String -> Maybe Int64
+def indexOfChar = { c i s ->
+  if (geInt64 i (lengthString s))
+    { Nothing }
+    { if (eqChar c (atString i s))
+        { Just i }
+        { indexOfChar c (addInt64 i 1i64) s }
+    }
+}
+
+-- Join lines with newline separator
+def joinLines : List String -> String
+def joinLines = {
+  Nil           -> "",
+  (Cons s Nil)  -> s,
+  (Cons s rest) -> appendString s (consString '\n' (joinLines rest))
+}

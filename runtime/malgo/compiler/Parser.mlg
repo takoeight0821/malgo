@@ -1,0 +1,888 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Token.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Parser type: List Token -> Either String {val: a, rest: List Token}
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Token stream utilities
+-- ────────────────────────────────────────────────────────────────────────────
+
+def nextTok : List Token -> Either String {val: Token, rest: List Token}
+def nextTok = {
+  Nil -> Left "unexpected end of input",
+  (Cons t ts) -> Right {val = t, rest = ts}
+}
+
+def peekTok : List Token -> Either String Token
+def peekTok = {
+  Nil -> Left "unexpected end of input",
+  (Cons t _) -> Right t
+}
+
+def isNextIdentStr : String -> List Token -> Bool
+def isNextIdentStr = {
+  s (Cons (TkIdent k) _) -> eqString s k,
+  _ _ -> False
+}
+
+def isNextOpStr : String -> List Token -> Bool
+def isNextOpStr = {
+  s (Cons (TkOp k) _) -> eqString s k,
+  _ _ -> False
+}
+
+def isNextRBrace : List Token -> Bool
+def isNextRBrace = {
+  (Cons TkRBrace _) -> True,
+  _ -> False
+}
+
+def isNextRParen : List Token -> Bool
+def isNextRParen = {
+  (Cons TkRParen _) -> True,
+  _ -> False
+}
+
+def isNextComma : List Token -> Bool
+def isNextComma = {
+  (Cons TkComma _) -> True,
+  _ -> False
+}
+
+def isNextLParen : List Token -> Bool
+def isNextLParen = {
+  (Cons TkLParen _) -> True,
+  _ -> False
+}
+
+def isNextEof : List Token -> Bool
+def isNextEof = {
+  Nil -> True,
+  (Cons TkEof _) -> True,
+  _ -> False
+}
+
+-- Consume and assert an operator token
+def expectOp : String -> List Token -> Either String (List Token)
+def expectOp = { expected ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      (TkOp s) ->
+        if (eqString s expected)
+          { Right ts2 }
+          { Left (appendString "expected '" (appendString expected (appendString "' but got '" (appendString s "'")))) },
+      _ -> Left (appendString "expected operator '" (appendString expected (appendString "' but got " (showToken t))))
+    }
+  }
+}
+
+-- Consume and assert TkLBrace
+def expectLBrace : List Token -> Either String (List Token)
+def expectLBrace = { ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      TkLBrace -> Right ts2,
+      _ -> Left (appendString "expected '{' but got " (showToken t))
+    }
+  }
+}
+
+-- Consume and assert TkRBrace
+def expectRBrace : List Token -> Either String (List Token)
+def expectRBrace = { ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      TkRBrace -> Right ts2,
+      _ -> Left (appendString "expected '}' but got " (showToken t))
+    }
+  }
+}
+
+-- Consume and assert TkLParen
+def expectLParen : List Token -> Either String (List Token)
+def expectLParen = { ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      TkLParen -> Right ts2,
+      _ -> Left (appendString "expected '(' but got " (showToken t))
+    }
+  }
+}
+
+-- Consume and assert TkRParen
+def expectRParen : List Token -> Either String (List Token)
+def expectRParen = { ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      TkRParen -> Right ts2,
+      _ -> Left (appendString "expected ')' but got " (showToken t))
+    }
+  }
+}
+
+-- Consume an identifier and return its string value
+def eatIdent : List Token -> Either String {val: String, rest: List Token}
+def eatIdent = { ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      (TkIdent s) -> Right {val = s, rest = ts2},
+      _ -> Left (appendString "expected identifier but got " (showToken t))
+    }
+  }
+}
+
+-- True when a string starts with an uppercase letter (constructor indicator)
+def isUpperFirst : String -> Bool
+def isUpperFirst = { s ->
+  if (eqString s "") { False } { isUpper (atString 0i64 s) }
+}
+
+-- True when an operator string can appear as an infix binary operator in exprs
+-- Exclude: -> : = ; .. | (these are used in declarations/arms, not exprs)
+def isBinaryOp : String -> Bool
+def isBinaryOp = { s ->
+  if (eqString s "->") { False } {
+  if (eqString s ":")  { False } {
+  if (eqString s "=")  { False } {
+  if (eqString s ";")  { False } {
+  if (eqString s "..")  { False } {
+  if (eqString s "|")  { False } {
+    True
+  }}}}}}
+}
+
+-- True when the next token is a binary operator in expression context
+def isNextBinaryOp : List Token -> Bool
+def isNextBinaryOp = {
+  (Cons (TkOp s) _) -> isBinaryOp s,
+  _ -> False
+}
+
+-- True when the next token can start an atom expression
+def isAtomStart : List Token -> Bool
+def isAtomStart = {
+  (Cons (TkIdent s) _)  -> not (isDeclStart s),
+  (Cons (TkInt32 _) _)  -> True,
+  (Cons (TkInt64 _) _)  -> True,
+  (Cons (TkChar _) _)   -> True,
+  (Cons (TkString _) _) -> True,
+  (Cons TkLParen _)     -> True,
+  (Cons TkLBrace _)     -> True,
+  _ -> False
+}
+
+-- True when a string is a top-level declaration starter
+def isDeclStart : String -> Bool
+def isDeclStart = { s ->
+  if (eqString s "def")     { True } {
+  if (eqString s "data")    { True } {
+  if (eqString s "module")  { True } {
+  if (eqString s "foreign") { True } {
+    False
+  }}}}
+}
+
+-- Skip tokens until the start of the next declaration (or EOF)
+def skipToNextDecl : List Token -> List Token
+def skipToNextDecl = {
+  Nil -> Nil,
+  (Cons TkEof rest) -> Cons TkEof rest,
+  (Cons (TkIdent s) rest) ->
+    if (isDeclStart s)
+      { Cons (TkIdent s) rest }
+      { skipToNextDecl rest },
+  (Cons _ rest) -> skipToNextDecl rest
+}
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Literal parser
+-- ────────────────────────────────────────────────────────────────────────────
+
+def parseLit : List Token -> Either String {val: Lit, rest: List Token}
+def parseLit = { ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      (TkInt32 n)  -> Right {val = LitInt32 n, rest = ts2},
+      (TkInt64 n)  -> Right {val = LitInt64 n, rest = ts2},
+      (TkChar c)   -> Right {val = LitChar c, rest = ts2},
+      (TkString s) -> Right {val = LitString s, rest = ts2},
+      _ -> Left (appendString "expected literal but got " (showToken t))
+    }
+  }
+}
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Pattern parsers
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- Parse one atom-level pattern (no constructor application)
+def parseAtomPat : List Token -> Either String {val: Pat, rest: List Token}
+def parseAtomPat = { ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      (TkIdent s)   ->
+        if (eqString s "_")
+          { Right {val = PatWild, rest = ts2} }
+          { if (isUpperFirst s)
+              -- Uppercase: constructor, possibly with C-style args Con(p1, p2)
+              { if (isNextLParen ts2)
+                  { bindRight (expectLParen ts2) { ts3 ->
+                      if (isNextRParen ts3)
+                        -- Con() empty
+                        { bindRight (expectRParen ts3) { ts4 ->
+                            Right {val = PatCon(s, Nil), rest = ts4}
+                          }
+                        }
+                        { bindRight (parseCStylePatArgs ts3) { {val = ps, rest = ts4} ->
+                            Right {val = PatCon(s, ps), rest = ts4}
+                          }
+                        }
+                    }
+                  }
+                  { Right {val = PatCon(s, Nil), rest = ts2} }
+              }
+              -- Lowercase: variable
+              { Right {val = PatVar s, rest = ts2} }
+          },
+      (TkInt32 n)   -> Right {val = PatLit (LitInt32 n), rest = ts2},
+      (TkInt64 n)   -> Right {val = PatLit (LitInt64 n), rest = ts2},
+      (TkChar c)    -> Right {val = PatLit (LitChar c), rest = ts2},
+      (TkString s)  -> Right {val = PatLit (LitString s), rest = ts2},
+      TkLParen      -> parseParenPat ts2,
+      _ -> Left (appendString "expected pattern but got " (showToken t))
+    }
+  }
+}
+
+-- Parse content after consuming '('
+-- Handles: () unit, (Con p1 p2) constructor, (p) grouped, (p1,p2) tuple
+def parseParenPat : List Token -> Either String {val: Pat, rest: List Token}
+def parseParenPat = { ts ->
+  if (isNextRParen ts)
+    -- "()" unit
+    { bindRight (nextTok ts) { {rest = ts2} -> Right {val = PatLit LitUnit, rest = ts2} } }
+    {
+      bindRight (nextTok ts) { {val = t, rest = ts2} ->
+        case t {
+          (TkIdent s) ->
+            if (isUpperFirst s)
+              -- Constructor pattern: (Con p1 p2 ...)
+              { bindRight (parseSpacePatArgs ts2) { {val = ps, rest = ts3} ->
+                  bindRight (expectRParen ts3) { ts4 ->
+                    Right {val = PatCon(s, ps), rest = ts4}
+                  }
+                }
+              }
+              -- Variable: (x) — could become tuple
+              { parseTupleOrGroupedPat (PatVar s) ts2 },
+          (TkInt32 n)  -> parseTupleOrGroupedPat (PatLit (LitInt32 n)) ts2,
+          (TkInt64 n)  -> parseTupleOrGroupedPat (PatLit (LitInt64 n)) ts2,
+          (TkChar c)   -> parseTupleOrGroupedPat (PatLit (LitChar c)) ts2,
+          (TkString s) -> parseTupleOrGroupedPat (PatLit (LitString s)) ts2,
+          _ -> Left (appendString "expected pattern inside '(' but got " (showToken t))
+        }
+      }
+    }
+}
+
+-- After parsing first element: check for ',' (tuple) or ')' (close)
+def parseTupleOrGroupedPat : Pat -> List Token -> Either String {val: Pat, rest: List Token}
+def parseTupleOrGroupedPat = { p ts ->
+  if (isNextComma ts)
+    { bindRight (nextTok ts) { {rest = ts2} ->
+        bindRight (parseTuplePatRest ts2) { {val = ps, rest = ts3} ->
+          Right {val = PatTuple (Cons p ps), rest = ts3}
+        }
+      }
+    }
+    { bindRight (expectRParen ts) { ts2 ->
+        Right {val = p, rest = ts2}
+      }
+    }
+}
+
+-- Parse remaining tuple pattern elements: pat (',' pat)* ')'
+def parseTuplePatRest : List Token -> Either String {val: List Pat, rest: List Token}
+def parseTuplePatRest = { ts ->
+  bindRight (parseAtomPat ts) { {val = p, rest = ts2} ->
+    if (isNextComma ts2)
+      { bindRight (nextTok ts2) { {rest = ts3} ->
+          bindRight (parseTuplePatRest ts3) { {val = ps, rest = ts4} ->
+            Right {val = Cons p ps, rest = ts4}
+          }
+        }
+      }
+      { bindRight (expectRParen ts2) { ts3 ->
+          Right {val = Cons p Nil, rest = ts3}
+        }
+      }
+  }
+}
+
+-- Parse space-separated atom patterns inside (Con p1 p2 ...) until ')'
+def parseSpacePatArgs : List Token -> Either String {val: List Pat, rest: List Token}
+def parseSpacePatArgs = { ts ->
+  if (isNextRParen ts)
+    { Right {val = Nil, rest = ts} }
+    { bindRight (parseAtomPat ts) { {val = p, rest = ts2} ->
+        bindRight (parseSpacePatArgs ts2) { {val = ps, rest = ts3} ->
+          Right {val = Cons p ps, rest = ts3}
+        }
+      }
+    }
+}
+
+-- Parse comma-separated atom patterns inside Con(p1, p2, ...) — already past '('
+def parseCStylePatArgs : List Token -> Either String {val: List Pat, rest: List Token}
+def parseCStylePatArgs = { ts ->
+  bindRight (parseAtomPat ts) { {val = p, rest = ts2} ->
+    if (isNextComma ts2)
+      { bindRight (nextTok ts2) { {rest = ts3} ->
+          bindRight (parseCStylePatArgs ts3) { {val = ps, rest = ts4} ->
+            Right {val = Cons p ps, rest = ts4}
+          }
+        }
+      }
+      { bindRight (expectRParen ts2) { ts3 ->
+          Right {val = Cons p Nil, rest = ts3}
+        }
+      }
+  }
+}
+
+-- Parse zero or more atom patterns for an arm, stopping at '->'
+def parseArmPats : List Token -> Either String {val: List Pat, rest: List Token}
+def parseArmPats = { ts ->
+  if (isNextOpStr "->" ts)
+    { Right {val = Nil, rest = ts} }
+    {
+      bindRight (parseAtomPat ts) { {val = p, rest = ts2} ->
+        bindRight (parseArmPats ts2) { {val = ps, rest = ts3} ->
+          Right {val = Cons p ps, rest = ts3}
+        }
+      }
+    }
+}
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Expression parsers
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- Parse an atom (non-left-recursive base expression)
+def parseAtom : List Token -> Either String {val: Expr, rest: List Token}
+def parseAtom = { ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      (TkIdent s)  -> Right {val = ExVar s, rest = ts2},
+      (TkInt32 n)  -> Right {val = ExLit (LitInt32 n), rest = ts2},
+      (TkInt64 n)  -> Right {val = ExLit (LitInt64 n), rest = ts2},
+      (TkChar c)   -> Right {val = ExLit (LitChar c), rest = ts2},
+      (TkString s) -> Right {val = ExLit (LitString s), rest = ts2},
+      TkLParen     -> parseParenExpr ts2,
+      TkLBrace     -> parseCaseLambda ts2,
+      _ -> Left (appendString "expected expression but got " (showToken t))
+    }
+  }
+}
+
+-- Parse expression inside '(' — unit, grouped, tuple, or operator reference
+def parseParenExpr : List Token -> Either String {val: Expr, rest: List Token}
+def parseParenExpr = { ts ->
+  if (isNextRParen ts)
+    -- "()" unit
+    { bindRight (nextTok ts) { {rest = ts2} -> Right {val = ExUnit, rest = ts2} } }
+    {
+      -- Check for operator reference: (op)
+      case ts {
+        (Cons (TkOp s) ts2) ->
+          if (isNextRParen ts2)
+            { bindRight (nextTok ts2) { {rest = ts3} -> Right {val = ExVar s, rest = ts3} } }
+            { -- Not a simple op ref; parse as expression
+              bindRight (parseOp ts) { {val = e, rest = ts2b} ->
+                parseTupleOrGroupedExpr e ts2b
+              }
+            },
+        _ ->
+          bindRight (parseOp ts) { {val = e, rest = ts2} ->
+            parseTupleOrGroupedExpr e ts2
+          }
+      }
+    }
+}
+
+-- After first expr in parens: check for ',' (tuple) or ')' (grouped)
+def parseTupleOrGroupedExpr : Expr -> List Token -> Either String {val: Expr, rest: List Token}
+def parseTupleOrGroupedExpr = { e ts ->
+  if (isNextComma ts)
+    { bindRight (nextTok ts) { {rest = ts2} ->
+        bindRight (parseTupleExprRest ts2) { {val = es, rest = ts3} ->
+          Right {val = ExTuple (Cons e es), rest = ts3}
+        }
+      }
+    }
+    { bindRight (expectRParen ts) { ts2 ->
+        Right {val = e, rest = ts2}
+      }
+    }
+}
+
+-- Parse remaining tuple elements: expr (',' expr)* ')'
+def parseTupleExprRest : List Token -> Either String {val: List Expr, rest: List Token}
+def parseTupleExprRest = { ts ->
+  bindRight (parseOp ts) { {val = e, rest = ts2} ->
+    if (isNextComma ts2)
+      { bindRight (nextTok ts2) { {rest = ts3} ->
+          bindRight (parseTupleExprRest ts3) { {val = es, rest = ts4} ->
+            Right {val = Cons e es, rest = ts4}
+          }
+        }
+      }
+      { bindRight (expectRParen ts2) { ts3 ->
+          Right {val = Cons e Nil, rest = ts3}
+        }
+      }
+  }
+}
+
+-- Parse a case/lambda block: '{' arms '}' (already past '{')
+def parseCaseLambda : List Token -> Either String {val: Expr, rest: List Token}
+def parseCaseLambda = { ts ->
+  bindRight (parseArms ts) { {val = arms, rest = ts2} ->
+    bindRight (expectRBrace ts2) { ts3 ->
+      Right {val = ExCase arms, rest = ts3}
+    }
+  }
+}
+
+-- Parse function application chain: atom atom atom ...
+def parseApp : List Token -> Either String {val: Expr, rest: List Token}
+def parseApp = { ts ->
+  bindRight (parseAtom ts) { {val = f, rest = ts2} ->
+    parseAppRest f ts2
+  }
+}
+
+-- Continue application chain while next token starts an atom
+def parseAppRest : Expr -> List Token -> Either String {val: Expr, rest: List Token}
+def parseAppRest = { f ts ->
+  if (isAtomStart ts)
+    { bindRight (parseAtom ts) { {val = x, rest = ts2} ->
+        parseAppRest (ExApp(f, x)) ts2
+      }
+    }
+    { Right {val = f, rest = ts} }
+}
+
+-- Parse operator expression: app (op app)*
+-- Left-associative, no precedence (simplified)
+def parseOp : List Token -> Either String {val: Expr, rest: List Token}
+def parseOp = { ts ->
+  bindRight (parseApp ts) { {val = lhs, rest = ts2} ->
+    parseOpRest lhs ts2
+  }
+}
+
+-- Continue operator chain
+def parseOpRest : Expr -> List Token -> Either String {val: Expr, rest: List Token}
+def parseOpRest = { lhs ts ->
+  if (isNextBinaryOp ts)
+    { bindRight (nextTok ts) { {val = t, rest = ts2} ->
+        case t {
+          (TkOp s) ->
+            bindRight (parseApp ts2) { {val = rhs, rest = ts3} ->
+              parseOpRest (ExApp(ExApp(ExVar s, lhs), rhs)) ts3
+            },
+          _ -> Right {val = lhs, rest = ts}
+        }
+      }
+    }
+    { Right {val = lhs, rest = ts} }
+}
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Statement parser (clause body: let x = e; body | expr)
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- Parse a sequence of statements ending in an expression.
+-- Stops at ',' or '}' without consuming them.
+def parseStmts : List Token -> Either String {val: Expr, rest: List Token}
+def parseStmts = { ts ->
+  if (isNextIdentStr "let" ts)
+    -- let x = e; rest
+    { bindRight (nextTok ts) { {rest = ts2} ->        -- consume 'let'
+        bindRight (eatIdent ts2) { {val = name, rest = ts3} ->
+          bindRight (expectOp "=" ts3) { ts4 ->
+            bindRight (parseOp ts4) { {val = val, rest = ts5} ->
+              bindRight (expectOp ";" ts5) { ts6 ->
+                bindRight (parseStmts ts6) { {val = body, rest = ts7} ->
+                  Right {val = ExLet(name, val, body), rest = ts7}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    -- final expression
+    { parseOp ts }
+}
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Arm parsers
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- Parse one case arm: pats -> stmts
+def parseArm : List Token -> Either String {val: Expr, rest: List Token}
+def parseArm = { ts ->
+  bindRight (parseArmPats ts) { {val = pats, rest = ts2} ->
+    bindRight (expectOp "->" ts2) { ts3 ->
+      bindRight (parseStmts ts3) { {val = body, rest = ts4} ->
+        Right {val = ExArm(pats, body), rest = ts4}
+      }
+    }
+  }
+}
+
+-- Parse arms separated by ',' until '}' (does not consume '}')
+def parseArms : List Token -> Either String {val: List Expr, rest: List Token}
+def parseArms = { ts ->
+  bindRight (parseArm ts) { {val = arm, rest = ts2} ->
+    if (isNextComma ts2)
+      { bindRight (nextTok ts2) { {rest = ts3} ->
+          bindRight (parseArms ts3) { {val = arms, rest = ts4} ->
+            Right {val = Cons arm arms, rest = ts4}
+          }
+        }
+      }
+      { Right {val = Cons arm Nil, rest = ts2} }
+  }
+}
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Constructor declaration parser (for data declarations)
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- Skip nested parentheses, counting depth
+-- Returns rest of tokens after matching close paren
+def skipNestedParens : Int32 -> List Token -> Either String (List Token)
+def skipNestedParens = { depth ts ->
+  if (eqInt32 depth 0i32)
+    { Right ts }
+    { bindRight (nextTok ts) { {val = t, rest = ts2} ->
+        case t {
+          TkLParen -> skipNestedParens (addInt32 depth 1i32) ts2,
+          TkRParen ->
+            if (eqInt32 depth 1i32)
+              { Right ts2 }
+              { skipNestedParens (subInt32 depth 1i32) ts2 },
+          _ -> skipNestedParens depth ts2
+        }
+      }
+    }
+}
+
+-- Count arity of C-style constructor args: already past '('
+-- Counts top-level commas + 1; handles nested parens
+def countCStyleArity : Int32 -> Int32 -> List Token -> Either String {val: Int32, rest: List Token}
+def countCStyleArity = { count depth ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      TkRParen ->
+        if (eqInt32 depth 0i32)
+          { Right {val = count, rest = ts2} }
+          { countCStyleArity count (subInt32 depth 1i32) ts2 },
+      TkLParen -> countCStyleArity count (addInt32 depth 1i32) ts2,
+      TkComma ->
+        if (eqInt32 depth 0i32)
+          { countCStyleArity (addInt32 count 1i32) depth ts2 }
+          { countCStyleArity count depth ts2 },
+      TkEof -> Left "unexpected EOF inside constructor args",
+      _ -> countCStyleArity count depth ts2
+    }
+  }
+}
+
+-- True when token can start a type expression in a space-separated con decl
+def isTypeTokenStart : List Token -> Bool
+def isTypeTokenStart = {
+  (Cons (TkIdent s) _) -> not (isDeclStart s),
+  (Cons TkLParen _)    -> True,
+  (Cons TkLBracket _)  -> True,
+  _ -> False
+}
+
+-- Count arity of space-separated types: id or (grouped) until | or decl end
+def countSpaceArity : Int32 -> List Token -> Either String {val: Int32, rest: List Token}
+def countSpaceArity = { count ts ->
+  if (isTypeTokenStart ts)
+    { bindRight (nextTok ts) { {val = t, rest = ts2} ->
+        case t {
+          -- Skip over parenthesized type group (counts as 1 field)
+          TkLParen ->
+            bindRight (skipNestedParens 1i32 ts2) { ts3 ->
+              countSpaceArity (addInt32 count 1i32) ts3
+            },
+          TkLBracket ->
+            -- List type [T] — skip to matching ]
+            bindRight (skipToRBracket ts2) { ts3 ->
+              countSpaceArity (addInt32 count 1i32) ts3
+            },
+          _ ->
+            -- Plain identifier — one field, could be followed by more type tokens
+            -- but only simple (non-parameterized) spacing is supported
+            countSpaceArity (addInt32 count 1i32) ts2
+        }
+      }
+    }
+    { Right {val = count, rest = ts} }
+}
+
+-- Skip to end of bracket group
+def skipToRBracket : List Token -> Either String (List Token)
+def skipToRBracket = { ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      TkRBracket -> Right ts2,
+      TkLBracket ->
+        bindRight (skipToRBracket ts2) { ts3 -> skipToRBracket ts3 },
+      TkEof -> Left "unexpected EOF in bracket type",
+      _ -> skipToRBracket ts2
+    }
+  }
+}
+
+-- Parse a single constructor declaration: Name | Name(T1,T2) | Name T1 T2
+def parseConDecl : List Token -> Either String {val: ConDecl, rest: List Token}
+def parseConDecl = { ts ->
+  bindRight (eatIdent ts) { {val = name, rest = ts2} ->
+    if (isNextLParen ts2)
+      -- C-style: Name(T1, T2, ...) — count commas
+      { bindRight (expectLParen ts2) { ts3 ->
+          if (isNextRParen ts3)
+            -- Empty: Name()
+            { bindRight (expectRParen ts3) { ts4 ->
+                Right {val = ConDecl(name, 0i32), rest = ts4}
+              }
+            }
+            { bindRight (countCStyleArity 1i32 0i32 ts3) { {val = arity, rest = ts4} ->
+                Right {val = ConDecl(name, arity), rest = ts4}
+              }
+            }
+        }
+      }
+      -- Space-separated or nullary: count type atoms
+      { bindRight (countSpaceArity 0i32 ts2) { {val = arity, rest = ts3} ->
+          Right {val = ConDecl(name, arity), rest = ts3}
+        }
+      }
+  }
+}
+
+-- Parse '|' ConDecl rest, accumulating constructor list
+def parseConDeclsRest : List Token -> Either String {val: List ConDecl, rest: List Token}
+def parseConDeclsRest = { ts ->
+  if (isNextOpStr "|" ts)
+    { bindRight (nextTok ts) { {rest = ts2} ->
+        bindRight (parseConDecl ts2) { {val = con, rest = ts3} ->
+          bindRight (parseConDeclsRest ts3) { {val = cons, rest = ts4} ->
+            Right {val = Cons con cons, rest = ts4}
+          }
+        }
+      }
+    }
+    { Right {val = Nil, rest = ts} }
+}
+
+-- Parse list of constructor declarations: ConDecl ('|' ConDecl)*
+def parseConDecls : List Token -> Either String {val: List ConDecl, rest: List Token}
+def parseConDecls = { ts ->
+  bindRight (parseConDecl ts) { {val = first, rest = ts2} ->
+    bindRight (parseConDeclsRest ts2) { {val = rest, rest = ts3} ->
+      Right {val = Cons first rest, rest = ts3}
+    }
+  }
+}
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Declaration parsers
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- Parse type parameters (identifiers) until '='
+def parseTypeParams : List Token -> Either String {val: List String, rest: List Token}
+def parseTypeParams = { ts ->
+  if (isNextOpStr "=" ts)
+    { Right {val = Nil, rest = ts} }
+    { bindRight (eatIdent ts) { {val = p, rest = ts2} ->
+        bindRight (parseTypeParams ts2) { {val = ps, rest = ts3} ->
+          Right {val = Cons p ps, rest = ts3}
+        }
+      }
+    }
+}
+
+-- Collect rest of type string as tokens until next declaration
+def collectTypeStr : List Token -> {val: String, rest: List Token}
+def collectTypeStr = { ts ->
+  collectTypeStrAcc "" ts
+}
+
+def collectTypeStrAcc : String -> List Token -> {val: String, rest: List Token}
+def collectTypeStrAcc = { acc ts ->
+  case ts {
+    Nil -> {val = acc, rest = Nil},
+    (Cons TkEof rest) -> {val = acc, rest = Cons TkEof rest},
+    (Cons (TkIdent s) rest) ->
+      if (isDeclStart s)
+        { {val = acc, rest = Cons (TkIdent s) rest} }
+        { collectTypeStrAcc (appendString acc (appendString " " s)) rest },
+    (Cons t rest) ->
+      collectTypeStrAcc (appendString acc (appendString " " (showToken t))) rest
+  }
+}
+
+-- Parse a 'def name = expr' or 'def name : Type' (skip type annotation form)
+def parseDefDecl : List Token -> Either String {val: Maybe Decl, rest: List Token}
+def parseDefDecl = { ts ->
+  bindRight (eatIdent ts) { {val = name, rest = ts2} ->
+    if (isNextOpStr ":" ts2)
+      -- Type annotation: 'def name : Type' — skip it
+      { let ts3 = skipToNextDecl ts2;
+        Right {val = Nothing, rest = ts3}
+      }
+      { if (isNextOpStr "=" ts2)
+          { bindRight (expectOp "=" ts2) { ts3 ->
+              bindRight (parseExpr ts3) { {val = expr, rest = ts4} ->
+                Right {val = Just (DeclDef(name, expr)), rest = ts4}
+              }
+            }
+          }
+          { Left (appendString "expected ':' or '=' after 'def " (appendString name "'")) }
+      }
+  }
+}
+
+-- Parse a full expression (entry point for expression parsing)
+def parseExpr : List Token -> Either String {val: Expr, rest: List Token}
+def parseExpr = { ts -> parseOp ts }
+
+-- Parse a 'data Name Params = ConDecls' declaration
+def parseDataDecl : List Token -> Either String {val: Decl, rest: List Token}
+def parseDataDecl = { ts ->
+  bindRight (eatIdent ts) { {val = name, rest = ts2} ->
+    bindRight (parseTypeParams ts2) { {val = params, rest = ts3} ->
+      bindRight (expectOp "=" ts3) { ts4 ->
+        bindRight (parseConDecls ts4) { {val = cons, rest = ts5} ->
+          Right {val = DeclData(name, params, cons), rest = ts5}
+        }
+      }
+    }
+  }
+}
+
+-- Parse 'module {..} = import "path"'
+def parseModuleImport : List Token -> Either String {val: Decl, rest: List Token}
+def parseModuleImport = { ts ->
+  -- consume '{', '..', '}', '=', 'import', then string
+  bindRight (expectLBrace ts) { ts2 ->
+    -- skip '..' operator
+    bindRight (nextTok ts2) { {rest = ts3} ->
+      bindRight (expectRBrace ts3) { ts4 ->
+        bindRight (expectOp "=" ts4) { ts5 ->
+          -- expect 'import' keyword
+          bindRight (eatIdent ts5) { {val = kw, rest = ts6} ->
+            if (eqString kw "import")
+              { bindRight (nextTok ts6) { {val = t, rest = ts7} ->
+                  case t {
+                    (TkString path) -> Right {val = DeclImport path, rest = ts7},
+                    _ -> Left (appendString "expected path string after 'import' but got " (showToken t))
+                  }
+                }
+              }
+              { Left (appendString "expected 'import' but got " kw) }
+          }
+        }
+      }
+    }
+  }
+}
+
+-- Parse 'foreign import name : Type'
+def parseForeignDecl : List Token -> Either String {val: Decl, rest: List Token}
+def parseForeignDecl = { ts ->
+  -- already consumed 'foreign', next should be 'import'
+  bindRight (eatIdent ts) { {val = kw, rest = ts2} ->
+    if (eqString kw "import")
+      { bindRight (eatIdent ts2) { {val = name, rest = ts3} ->
+          case (collectTypeStr ts3) { {val = tyStr, rest = ts4} ->
+            Right {val = DeclForeign(name, tyStr), rest = ts4}
+          }
+        }
+      }
+      { Left (appendString "expected 'import' after 'foreign' but got " kw) }
+  }
+}
+
+-- Parse one declaration, returning Nothing for skipped forms
+def parseSingleDecl : List Token -> Either String {val: Maybe Decl, rest: List Token}
+def parseSingleDecl = { ts ->
+  bindRight (nextTok ts) { {val = t, rest = ts2} ->
+    case t {
+      (TkIdent s) ->
+        if (eqString s "def")
+          { parseDefDecl ts2 }
+          { if (eqString s "data")
+              { bindRight (parseDataDecl ts2) { {val = d, rest = ts3} ->
+                  Right {val = Just d, rest = ts3}
+                }
+              }
+              { if (eqString s "module")
+                  { bindRight (parseModuleImport ts2) { {val = d, rest = ts3} ->
+                      Right {val = Just d, rest = ts3}
+                    }
+                  }
+                  { if (eqString s "foreign")
+                      { bindRight (parseForeignDecl ts2) { {val = d, rest = ts3} ->
+                          Right {val = Just d, rest = ts3}
+                        }
+                      }
+                      { Left (appendString "expected declaration but got identifier '" (appendString s "'")) }
+                  }
+              }
+          },
+      TkEof -> Left "eof",
+      _ -> Left (appendString "expected declaration but got " (showToken t))
+    }
+  }
+}
+
+-- Parse all declarations until EOF
+def parseAllDecls : List Token -> Either String {val: List Decl, rest: List Token}
+def parseAllDecls = { ts ->
+  if (isNextEof ts)
+    { Right {val = Nil, rest = ts} }
+    { bindRight (parseSingleDecl ts) { {val = md, rest = ts2} ->
+        bindRight (parseAllDecls ts2) { {val = ds, rest = ts3} ->
+          case md {
+            Nothing -> Right {val = ds, rest = ts3},
+            (Just d) -> Right {val = Cons d ds, rest = ts3}
+          }
+        }
+      }
+    }
+}
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Module parser (entry point)
+-- ────────────────────────────────────────────────────────────────────────────
+
+def parseModule : List Token -> Either String Module
+def parseModule = { ts ->
+  bindRight (parseAllDecls ts) { {val = decls, rest = _} ->
+    Right (Module decls)
+  }
+}

@@ -1,0 +1,384 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Value.mlg"
+
+-- Self-hosted Malgo evaluator (tree-walking interpreter)
+--
+-- Two-environment design:
+--   gEnv = global module env (all top-level definitions)
+--   lEnv = local env (pattern-bound and let-bound variables)
+-- Variable lookup checks lEnv first, then gEnv.
+-- VClosure stores lEnv at closure-creation time (for lexical scoping).
+-- gEnv is threaded through at runtime so recursive lookups work.
+
+def boolVal : Bool -> Value
+def boolVal = {
+  True  -> VCon("True",  0i32, Nil),
+  False -> VCon("False", 0i32, Nil)
+}
+
+def isTrueCon : Value -> Bool
+def isTrueCon = {
+  (VCon name _ _) -> eqString name "True",
+  _ -> False
+}
+
+def envLookupBoth : String -> Env -> Env -> Maybe Value
+def envLookupBoth = { name lEnv gEnv ->
+  case (envLookup name lEnv) {
+    (Just v) -> Just v,
+    Nothing  -> envLookup name gEnv
+  }
+}
+
+-- ─── Pattern matching ────────────────────────────────────────────────────────
+
+def matchPat : Env -> Pat -> Value -> Either String Env
+def matchPat = { lEnv pat val ->
+  case pat {
+    (PatVar x)   -> Right (envExtend x val lEnv),
+    PatWild      -> Right lEnv,
+    (PatLit lit) -> matchLit lEnv lit val,
+    (PatCon cname cpats) ->
+      case val {
+        (VCon vname _ vargs) ->
+          if (eqString cname vname) { matchPats lEnv cpats vargs } { Left "mismatch" },
+        _ -> Left "mismatch"
+      },
+    (PatTuple ptups) ->
+      case val {
+        (VTuple vels) -> matchPats lEnv ptups vels,
+        _ -> Left "mismatch"
+      }
+  }
+}
+
+def matchLit : Env -> Lit -> Value -> Either String Env
+def matchLit = { lEnv lit val ->
+  case lit {
+    (LitInt32 n)  -> case val { (VInt32 m)  -> if (eqInt32 n m)  { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    (LitInt64 n)  -> case val { (VInt64 m)  -> if (eqInt64 n m)  { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    (LitChar c)   -> case val { (VChar d)   -> if (eqChar c d)   { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    (LitString s) -> case val { (VString t) -> if (eqString s t) { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    LitUnit       -> case val { VUnit -> Right lEnv, _ -> Left "mismatch" }
+  }
+}
+
+def matchPats : Env -> List Pat -> List Value -> Either String Env
+def matchPats = { lEnv pats vals ->
+  case pats {
+    Nil -> case vals { Nil -> Right lEnv, _ -> Left "mismatch" },
+    (Cons p ps) ->
+      case vals {
+        Nil -> Left "mismatch",
+        (Cons v vs) ->
+          bindRight (matchPat lEnv p v) { lEnv2 -> matchPats lEnv2 ps vs }
+      }
+  }
+}
+
+-- tryArms: try each arm in order, gEnv threaded for recursive lookups
+def tryArms : Env -> Env -> List Value -> List Expr -> Either String Value
+def tryArms = { gEnv lEnv args arms ->
+  case arms {
+    Nil -> Left "match failure: no arm matched",
+    (Cons arm rest) ->
+      case arm {
+        (ExArm pats body) ->
+          case (matchPats lEnv pats args) {
+            (Left err) ->
+              if (eqString err "mismatch") { tryArms gEnv lEnv args rest } { Left err },
+            (Right newLEnv) -> eval gEnv newLEnv body
+          },
+        _ -> tryArms gEnv lEnv args rest
+      }
+  }
+}
+
+-- force a thunk (0-arity VClosure): run its body with no args
+def forceThunk : Env -> Value -> Either String Value
+def forceThunk = { gEnv v ->
+  case v {
+    (VClosure lEnv _ arms) -> tryArms gEnv lEnv Nil arms,
+    _ -> Right v
+  }
+}
+
+-- ─── Core evaluator ─────────────────────────────────────────────────────────
+
+def eval : Env -> Env -> Expr -> Either String Value
+def eval = { gEnv lEnv expr ->
+  case expr {
+    (ExVar name) ->
+      case (envLookupBoth name lEnv gEnv) {
+        (Just v) -> Right v,
+        Nothing  -> Left (appendString "undefined: " name)
+      },
+    (ExLit lit) ->
+      case lit {
+        (LitInt32 n)  -> Right (VInt32 n),
+        (LitInt64 n)  -> Right (VInt64 n),
+        (LitChar c)   -> Right (VChar c),
+        (LitString s) -> Right (VString s),
+        LitUnit       -> Right VUnit
+      },
+    (ExApp f x) ->
+      bindRight (eval gEnv lEnv f) { fv ->
+        bindRight (eval gEnv lEnv x) { xv ->
+          apply gEnv fv xv
+        }
+      },
+    (ExArm _ _) -> Left "unexpected bare arm",
+    -- Case lambda captures current local env for lexical scoping
+    (ExCase arms) -> Right (VClosure(lEnv, Nil, arms)),
+    (ExLet name valE body) ->
+      bindRight (eval gEnv lEnv valE) { v ->
+        eval gEnv (envExtend name v lEnv) body
+      },
+    (ExTuple es) ->
+      bindRight (evalList gEnv lEnv es) { vs -> Right (VTuple vs) },
+    ExUnit -> Right VUnit
+  }
+}
+
+def evalList : Env -> Env -> List Expr -> Either String (List Value)
+def evalList = { gEnv lEnv es ->
+  case es {
+    Nil -> Right Nil,
+    (Cons e rest) ->
+      bindRight (eval gEnv lEnv e) { v ->
+        bindRight (evalList gEnv lEnv rest) { vs -> Right (Cons v vs) }
+      }
+  }
+}
+
+-- apply: apply fn to arg
+def apply : Env -> Value -> Value -> Either String Value
+def apply = { gEnv fn arg ->
+  case fn {
+    (VClosure cLEnv acc arms) ->
+      let arity = closureArity arms;
+      -- 0-arity = thunk: fire immediately, ignoring arg
+      if (eqInt32 arity 0i32)
+        { tryArms gEnv cLEnv Nil arms }
+        { let newAcc = append acc (Cons arg Nil);
+          if (eqInt32 (length newAcc) arity)
+            { tryArms gEnv cLEnv newAcc arms }
+            { Right (VClosure(cLEnv, newAcc, arms)) }
+        },
+    (VCon name arity acc) ->
+      Right (VCon(name, arity, append acc (Cons arg Nil))),
+    (VBuiltin name arity acc) ->
+      let newAcc = append acc (Cons arg Nil);
+      if (eqInt32 (length newAcc) arity)
+        { applyBuiltin gEnv name newAcc }
+        { Right (VBuiltin(name, arity, newAcc)) },
+    _ -> Left (appendString "cannot apply: " (showValue fn))
+  }
+}
+
+-- ─── Declaration processing ──────────────────────────────────────────────────
+
+def evalDecls : Env -> List Decl -> Either String Env
+def evalDecls = { gEnv decls ->
+  case decls {
+    Nil -> Right gEnv,
+    (Cons d rest) ->
+      bindRight (evalDecl gEnv d) { gEnv2 -> evalDecls gEnv2 rest }
+  }
+}
+
+-- evalDecl: top-level closures get empty lEnv so gEnv is the sole scope
+def evalDecl : Env -> Decl -> Either String Env
+def evalDecl = { gEnv decl ->
+  case decl {
+    (DeclDef name expr) ->
+      bindRight (eval gEnv EnvEmpty expr) { v ->
+        Right (envExtend name v gEnv)
+      },
+    (DeclData _ _ cons) ->
+      Right (addConstructors gEnv cons),
+    (DeclImport _) ->
+      Right gEnv,
+    (DeclForeign fname _) ->
+      let ar = foreignArity fname;
+      Right (envExtend fname (VBuiltin(fname, ar, Nil)) gEnv)
+  }
+}
+
+def addConstructors : Env -> List ConDecl -> Env
+def addConstructors = { gEnv cons ->
+  case cons {
+    Nil -> gEnv,
+    (Cons (ConDecl name arity) rest) ->
+      addConstructors (envExtend name (VCon(name, arity, Nil)) gEnv) rest
+  }
+}
+
+-- ─── Built-in implementations ────────────────────────────────────────────────
+
+def applyStr2 : (String -> String -> String) -> String -> List Value -> Either String Value
+def applyStr2 = { f fname args ->
+  case args {
+    (Cons (VString a) (Cons (VString b) Nil)) -> Right (VString (f a b)),
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+def applyInt2 : (Int32 -> Int32 -> Int32) -> String -> List Value -> Either String Value
+def applyInt2 = { f fname args ->
+  case args {
+    (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (VInt32 (f a b)),
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+def applyIntCmp : (Int32 -> Int32 -> Bool) -> String -> List Value -> Either String Value
+def applyIntCmp = { f fname args ->
+  case args {
+    (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (f a b)),
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+-- applyBuiltin now takes gEnv for if/thunk support
+def applyBuiltin : Env -> String -> List Value -> Either String Value
+def applyBuiltin = { gEnv name args ->
+  if (eqString name "appendString")  { applyStr2 appendString "appendString" args } {
+  if (eqString name "eqString")      { case args { (Cons (VString a) (Cons (VString b) Nil)) -> Right (boolVal (eqString a b)), _ -> Left "eqString: type error" } } {
+  if (eqString name "printString")   { case args { (Cons (VString s) Nil) -> let u = printString s; Right VUnit, _ -> Left "printString: type error" } } {
+  if (eqString name "printChar")     { case args { (Cons (VChar c) Nil) -> let u = printChar c; Right VUnit, _ -> Left "printChar: type error" } } {
+  if (eqString name "addInt32")      { applyInt2 addInt32 "addInt32" args } {
+  if (eqString name "subInt32")      { applyInt2 subInt32 "subInt32" args } {
+  if (eqString name "mulInt32")      { applyInt2 mulInt32 "mulInt32" args } {
+  if (eqString name "divInt32")      { applyInt2 divInt32 "divInt32" args } {
+    applyBuiltin2 gEnv name args
+  }}}}}}}}
+}
+
+def applyBuiltin2 : Env -> String -> List Value -> Either String Value
+def applyBuiltin2 = { gEnv name args ->
+  if (eqString name "eqInt32")       { applyIntCmp eqInt32 "eqInt32" args } {
+  if (eqString name "ltInt32")       { applyIntCmp ltInt32 "ltInt32" args } {
+  if (eqString name "leInt32")       { applyIntCmp leInt32 "leInt32" args } {
+  if (eqString name "toStringInt32") { case args { (Cons (VInt32 n) Nil) -> Right (VString (toStringInt32 n)), _ -> Left "toStringInt32: type error" } } {
+  if (eqString name "toStringInt64") { case args { (Cons (VInt64 n) Nil) -> Right (VString (toStringInt64 n)), _ -> Left "toStringInt64: type error" } } {
+  if (eqString name "lengthString")  { case args { (Cons (VString s) Nil) -> Right (VInt64 (lengthString s)), _ -> Left "lengthString: type error" } } {
+  if (eqString name "atString")      { case args { (Cons (VInt64 i) (Cons (VString s) Nil)) -> Right (VChar (atString i s)), _ -> Left "atString: type error" } } {
+  if (eqString name "consString")    { case args { (Cons (VChar c) (Cons (VString s) Nil)) -> Right (VString (consString c s)), _ -> Left "consString: type error" } } {
+    applyBuiltin3 gEnv name args
+  }}}}}}}}
+}
+
+def applyBuiltin3 : Env -> String -> List Value -> Either String Value
+def applyBuiltin3 = { gEnv name args ->
+  if (eqString name "substring")     { case args { (Cons (VString s) (Cons (VInt64 st) (Cons (VInt64 en) Nil))) -> Right (VString (substring s st en)), _ -> Left "substring: type error" } } {
+  if (eqString name "reverseString") { case args { (Cons (VString s) Nil) -> Right (VString (reverseString s)), _ -> Left "reverseString: type error" } } {
+  if (eqString name "isDigit")       { case args { (Cons (VChar c) Nil) -> Right (boolVal (isDigit c)),    _ -> Left "isDigit: type error" } } {
+  if (eqString name "isUpper")       { case args { (Cons (VChar c) Nil) -> Right (boolVal (isUpper c)),    _ -> Left "isUpper: type error" } } {
+  if (eqString name "isLower")       { case args { (Cons (VChar c) Nil) -> Right (boolVal (isLower c)),    _ -> Left "isLower: type error" } } {
+  if (eqString name "isAlphanum")    { case args { (Cons (VChar c) Nil) -> Right (boolVal (isAlphanum c)), _ -> Left "isAlphanum: type error" } } {
+  if (eqString name "ordChar")       { case args { (Cons (VChar c) Nil) -> Right (VInt32 (ordChar c)),     _ -> Left "ordChar: type error" } } {
+  if (eqString name "chrInt32")      { case args { (Cons (VInt32 n) Nil) -> Right (VChar (chrInt32 n)),    _ -> Left "chrInt32: type error" } } {
+    -- "if": Bool -> thunk -> thunk -> a
+    if (eqString name "if") {
+      case args {
+        (Cons cond (Cons thunkT (Cons thunkF Nil))) ->
+          if (isTrueCon cond) { apply gEnv thunkT VUnit } { apply gEnv thunkF VUnit },
+        _ -> Left "if: type error"
+      }
+    } {
+    -- "case": flip-apply (case x f = f x)
+    if (eqString name "case") {
+      case args {
+        (Cons x (Cons f Nil)) -> apply gEnv f x,
+        _ -> Left "case: type error"
+      }
+    } {
+    Left (appendString "unknown built-in: " name)
+    }
+  }}}}}}}}}
+}
+
+-- ─── Arity table ─────────────────────────────────────────────────────────────
+
+def foreignArity : String -> Int32
+def foreignArity = { name ->
+  if (eqString name "appendString")  { 2i32 } {
+  if (eqString name "eqString")      { 2i32 } {
+  if (eqString name "printString")   { 1i32 } {
+  if (eqString name "printChar")     { 1i32 } {
+  if (eqString name "addInt32")      { 2i32 } {
+  if (eqString name "subInt32")      { 2i32 } {
+  if (eqString name "mulInt32")      { 2i32 } {
+  if (eqString name "divInt32")      { 2i32 } {
+    foreignArity2 name
+  }}}}}}}}
+}
+
+def foreignArity2 : String -> Int32
+def foreignArity2 = { name ->
+  if (eqString name "eqInt32")       { 2i32 } {
+  if (eqString name "ltInt32")       { 2i32 } {
+  if (eqString name "leInt32")       { 2i32 } {
+  if (eqString name "toStringInt32") { 1i32 } {
+  if (eqString name "toStringInt64") { 1i32 } {
+  if (eqString name "lengthString")  { 1i32 } {
+  if (eqString name "atString")      { 2i32 } {
+  if (eqString name "consString")    { 2i32 } {
+    foreignArity3 name
+  }}}}}}}}
+}
+
+def foreignArity3 : String -> Int32
+def foreignArity3 = { name ->
+  if (eqString name "substring")     { 3i32 } {
+  if (eqString name "reverseString") { 1i32 } {
+  if (eqString name "isDigit")       { 1i32 } {
+  if (eqString name "isUpper")       { 1i32 } {
+  if (eqString name "isLower")       { 1i32 } {
+  if (eqString name "isAlphanum")    { 1i32 } {
+  if (eqString name "ordChar")       { 1i32 } {
+  if (eqString name "chrInt32")      { 1i32 } {
+  if (eqString name "if")            { 3i32 } {
+  if (eqString name "case")          { 2i32 } {
+    1i32
+  }}}}}}}}}}
+}
+
+-- ─── Base environment with built-ins ─────────────────────────────────────────
+
+def addBuiltin : Env -> String -> Env
+def addBuiltin = { env name ->
+  let ar = foreignArity name;
+  envExtend name (VBuiltin(name, ar, Nil)) env
+}
+
+def builtinNames : List String
+def builtinNames =
+  Cons "appendString" (Cons "eqString" (Cons "printString" (Cons "printChar" (
+  Cons "addInt32" (Cons "subInt32" (Cons "mulInt32" (Cons "divInt32" (
+  Cons "eqInt32" (Cons "ltInt32" (Cons "leInt32" (Cons "toStringInt32" (
+  Cons "toStringInt64" (Cons "lengthString" (Cons "atString" (Cons "consString" (
+  Cons "substring" (Cons "reverseString" (Cons "isDigit" (Cons "isUpper" (
+  Cons "isLower" (Cons "isAlphanum" (Cons "ordChar" (Cons "chrInt32" (
+  Cons "if" (Cons "case" Nil
+  )))))))))))))))))))))))))
+
+def makeBaseEnv : Env
+def makeBaseEnv = foldl addBuiltin EnvEmpty builtinNames
+
+-- ─── Entry points ─────────────────────────────────────────────────────────────
+
+def evalModule : Env -> Module -> Either String Env
+def evalModule = { baseEnv (Module decls) -> evalDecls baseEnv decls }
+
+def runMain : Env -> Either String Value
+def runMain = { gEnv ->
+  case (envLookup "main" gEnv) {
+    Nothing      -> Left "no main defined",
+    (Just mainF) -> apply gEnv mainF VUnit
+  }
+}

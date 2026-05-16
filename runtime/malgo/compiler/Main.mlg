@@ -10,10 +10,10 @@ module {..} = import "../../../runtime/malgo/compiler/Eval.mlg"
 
 -- ─── Pipeline ────────────────────────────────────────────────────────────────
 
--- Run Malgo source through the full self-hosted pipeline and print the result.
+-- Run Malgo source through the full self-hosted pipeline.
 -- IO side-effects inside the program (printString, printChar) execute via the
--- host builtins; the returned Value of main is printed afterwards unless it is
--- VUnit (the program printed its own output).
+-- host builtins. The Haskell golden tests capture stdout only, so the returned
+-- Value of main is intentionally ignored.
 def runSource : String -> ()
 def runSource = { src ->
   case (tokenize src) {
@@ -31,11 +31,8 @@ def runSource = { src ->
               case (runMain gEnv) {
                 (Left err) ->
                   printString (appendString "Runtime error: " (appendString err "\n")),
-                (Right VUnit) ->
-                  -- program printed its own output; nothing to show
-                  (),
-                (Right v) ->
-                  printString (appendString (showValue v) "\n")
+                (Right _) ->
+                  ()
               }
           }
       }

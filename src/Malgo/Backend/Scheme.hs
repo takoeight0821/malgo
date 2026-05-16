@@ -291,6 +291,26 @@ compilePrimitive name args ret = case name of
   "negate_i32" -> unaryop "-" args ret
   "negate_i64" -> unaryop "-" args ret
   "negate_f64" -> unaryop "-" args ret
+  -- malgo_* foreign import names
+  "malgo_read_file" ->
+    case args of
+      [path] -> "(" <> ret <> " (call-with-input-file " <> path <> " (lambda (p) (get-string-all p))))"
+      _ -> "(error 'prim \"malgo_read_file: wrong number of arguments\")"
+  "malgo_write_file" ->
+    case args of
+      [path, content] -> "(begin (call-with-output-file " <> path <> " (lambda (p) (put-string p " <> content <> "))) (" <> ret <> " '()))"
+      _ -> "(error 'prim \"malgo_write_file: wrong number of arguments\")"
+  "malgo_get_line" ->
+    "(" <> ret <> " (let ((line (read-line))) (if (eof-object? line) \"\" line)))"
+  "malgo_get_args" ->
+    "(" <> ret <> " (string-join (cdr (command-line)) \"\\n\"))"
+  "malgo_exit_success" -> "(exit 0)"
+  "malgo_stderr_string" ->
+    case args of
+      [s] -> "(begin (put-string (current-error-port) " <> s <> ") (" <> ret <> " '()))"
+      _ -> "(error 'prim \"malgo_stderr_string: wrong number of arguments\")"
+  "malgo_string_to_int32" -> unaryop "string->number" args ret
+  "malgo_string_to_int64" -> unaryop "string->number" args ret
   _ -> "(error 'prim \"unknown primitive: " <> name <> "\")"
   where
     binop :: Text -> [Text] -> Text -> Text

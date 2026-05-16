@@ -20,6 +20,13 @@ data Pat
   | PatCon(String, List Pat)  -- constructor: (Con p1 p2)
   | PatLit Lit                -- literal pattern: 42, 'a', "str"
   | PatTuple(List Pat)        -- tuple: (p1, p2, ...)
+  | PatRecord(List PatField)  -- record pattern: { x = p }
+
+data PatField = PatField(String, Pat)
+
+data CoSeg
+  = CoApply(List Pat)
+  | CoField String
 
 -- Expressions
 -- Note: ExArm represents one arm inside a case block.
@@ -31,9 +38,15 @@ data Expr
   | ExLit Lit                 -- literal value
   | ExArm(List Pat, Expr)     -- one case arm: pats -> body  (inside ExCase)
   | ExCase(List Expr)         -- case/lambda block: { arm1, arm2, ... }
+  | ExCoArm(List CoSeg, Expr) -- one copattern arm: #(...).field -> body
+  | ExCoCase(List Expr)       -- copattern block
+  | ExField(Expr, String)     -- field projection: expr.name
+  | ExRecord(List ExprField)  -- record literal: { x = e }
   | ExLet(String, Expr, Expr) -- let x = val; body
   | ExTuple(List Expr)        -- tuple: (e1, e2, ...)
   | ExUnit                    -- unit: ()
+
+data ExprField = ExprField(String, Expr)
 
 -- Constructor declaration: name + arity (number of fields)
 data ConDecl = ConDecl(String, Int32)
@@ -79,7 +92,24 @@ def showPat = {
   (PatCon n Nil) -> n,
   (PatCon n ps)  -> appendString "(" (appendString n (appendString " " (appendString (intercalate " " (mapList showPat ps)) ")"))),
   (PatLit l)     -> showLit l,
-  (PatTuple ps)  -> appendString "(" (appendString (intercalate ", " (mapList showPat ps)) ")")
+  (PatTuple ps)  -> appendString "(" (appendString (intercalate ", " (mapList showPat ps)) ")"),
+  (PatRecord fs) -> appendString "{ " (appendString (intercalate ", " (mapList showPatField fs)) " }")
+}
+
+def showPatField : PatField -> String
+def showPatField = {
+  (PatField name pat) -> appendString name (appendString " = " (showPat pat))
+}
+
+def showExprField : ExprField -> String
+def showExprField = {
+  (ExprField name expr) -> appendString name (appendString " = " (showExpr expr))
+}
+
+def showCoSeg : CoSeg -> String
+def showCoSeg = {
+  (CoApply ps) -> appendString "(" (appendString (intercalate ", " (mapList showPat ps)) ")"),
+  (CoField s) -> appendString "." s
 }
 
 def showExpr : Expr -> String
@@ -89,6 +119,10 @@ def showExpr = {
   (ExLit l)        -> showLit l,
   (ExArm ps body)  -> appendString (intercalate " " (mapList showPat ps)) (appendString " -> " (showExpr body)),
   (ExCase arms)    -> appendString "{ " (appendString (intercalate ", " (mapList showExpr arms)) " }"),
+  (ExCoArm segs body) -> appendString "#" (appendString (intercalate "" (mapList showCoSeg segs)) (appendString " -> " (showExpr body))),
+  (ExCoCase arms)  -> appendString "{ " (appendString (intercalate ", " (mapList showExpr arms)) " }"),
+  (ExField e field) -> appendString (showExpr e) (appendString "." field),
+  (ExRecord fs)    -> appendString "{ " (appendString (intercalate ", " (mapList showExprField fs)) " }"),
   (ExLet x v body) -> appendString "let " (appendString x (appendString " = " (appendString (showExpr v) (appendString "; " (showExpr body))))),
   (ExTuple es)     -> appendString "(" (appendString (intercalate ", " (mapList showExpr es)) ")"),
   ExUnit           -> "()"

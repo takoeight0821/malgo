@@ -20,6 +20,9 @@ data Value
   | VString String                -- string
   | VUnit                         -- unit ()
   | VTuple(List Value)            -- tuple (v1, v2, ...)
+  | VRecord(List ValueField)      -- record { x = v }
+  | VThunk(Env, Expr)             -- delayed definition with captured locals
+  | VCoClosure(Env, List Value, List Expr) -- copattern closure/object
   -- Constructor: name, expected total arity, args collected so far
   -- Complete when length(args) == arity; partial (still a function) otherwise
   | VCon(String, Int32, List Value)
@@ -28,6 +31,8 @@ data Value
   | VClosure(Env, List Value, List Expr)
   -- Built-in function: name, total arity, args collected so far
   | VBuiltin(String, Int32, List Value)
+
+data ValueField = ValueField(String, Value)
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- Environment operations
@@ -83,6 +88,9 @@ def showValue = {
   (VString s)            -> appendString "\"" (appendString s "\""),
   VUnit                  -> "()",
   (VTuple vs)            -> appendString "(" (appendString (intercalateVal ", " vs) ")"),
+  (VRecord fs)           -> appendString "{ " (appendString (intercalateValueFields ", " fs) " }"),
+  (VThunk _ _)           -> "<thunk>",
+  (VCoClosure _ _ _)     -> "<codata>",
   (VCon name _ Nil)      -> name,
   (VCon name _ vs)       -> appendString name (appendString "(" (appendString (intercalateVal ", " vs) ")")),
   (VClosure _ acc arms)  ->
@@ -99,4 +107,16 @@ def intercalateVal = {
   _ Nil -> "",
   _ (Cons v Nil) -> showValue v,
   sep (Cons v rest) -> appendString (showValue v) (appendString sep (intercalateVal sep rest))
+}
+
+def showValueField : ValueField -> String
+def showValueField = {
+  (ValueField name value) -> appendString name (appendString " = " (showValue value))
+}
+
+def intercalateValueFields : String -> List ValueField -> String
+def intercalateValueFields = {
+  _ Nil -> "",
+  _ (Cons f Nil) -> showValueField f,
+  sep (Cons f rest) -> appendString (showValueField f) (appendString sep (intercalateValueFields sep rest))
 }

@@ -36,7 +36,11 @@ def lexAll = { src acc ->
             { let rest = skipLineComment src;
               lexAll rest acc
             }
-            { if (isBlockCommentStart src)
+            { if (isPragmaStart src)
+                { let rest = skipLineComment src;
+                  lexAll rest acc
+                }
+                { if (isBlockCommentStart src)
                 { case (skipBlockComment src) {
                     (Left e)  -> Left e,
                     (Right r) -> lexAll r acc
@@ -48,6 +52,7 @@ def lexAll = { src acc ->
                       lexAll rest (Cons tok acc)
                   }
                 }
+              }
             }
         }
     }
@@ -73,7 +78,7 @@ def isIdentContCh = { c ->
 }
 
 def isOpCh : Char -> Bool
-def isOpCh = { c -> charInStr c "+-*/\\%=><:;|&!#." }
+def isOpCh = { c -> charInStr c "+-*/\\%=><:;|&!#.~" }
 
 -- ──────────────────────────────────────────────────────────
 -- Comment detection/skipping
@@ -111,6 +116,17 @@ def isBlockCommentStart = { src ->
     { False }
     { if (eqChar (atString 0i64 src) '{')
         { eqChar (atString 1i64 src) '-' }
+        { False }
+    }
+}
+
+def isPragmaStart : String -> Bool
+def isPragmaStart = { src ->
+  let len = lengthString src;
+  if (ltInt64 len 2i64)
+    { False }
+    { if (eqChar (atString 0i64 src) '#')
+        { isAlphanum (atString 1i64 src) }
         { False }
     }
 }
@@ -215,7 +231,7 @@ def lexString = { src acc ->
     { let c = atString 0i64 src;
       let tail = substring src 1i64 (lengthString src);
       if (eqChar c '"')
-        { Right {val = TkString (reverseString acc), rest = tail} }
+        { Right {val = TkString (reverseString acc), rest = dropUnboxedSuffix tail} }
         { if (eqChar c '\\')
             { case (lexEscape tail) {
                 (Left e)          -> Left e,
@@ -244,13 +260,13 @@ def lexChar = { src ->
             (Right {val = esc, rest = rest}) ->
               case (expectChar '\'' rest) {
                 (Left e)  -> Left e,
-                (Right r) -> Right {val = TkChar esc, rest = r}
+                (Right r) -> Right {val = TkChar esc, rest = dropUnboxedSuffix r}
               }
           }
         }
         { case (expectChar '\'' tail) {
             (Left e)  -> Left e,
-            (Right r) -> Right {val = TkChar c, rest = r}
+            (Right r) -> Right {val = TkChar c, rest = dropUnboxedSuffix r}
           }
         }
     }
@@ -297,11 +313,27 @@ def lexNumber = { src ->
   let digs = takeDigits src;
   let rest = dropDigits src;
   let n64 = digitsToInt64 digs 0i64;
-  if (hasI64Suffix rest)
-    { Right {val = TkInt64 n64, rest = substring rest 3i64 (lengthString rest)} }
+  if (hasDecimalSuffix rest)
+    { let frac = takeDigits (substring rest 1i64 (lengthString rest));
+      let rest2 = substring rest (addInt64 1i64 (lengthString frac)) (lengthString rest);
+      Right {val = TkString (appendString digs (appendString "." frac)), rest = dropUnboxedSuffix rest2}
+    }
+    { if (hasI64Suffix rest)
+    { Right {val = TkInt64 n64, rest = dropUnboxedSuffix (substring rest 3i64 (lengthString rest))} }
     { if (hasI32Suffix rest)
-        { Right {val = TkInt32 (parseIntString32 digs), rest = substring rest 3i64 (lengthString rest)} }
-        { Right {val = TkInt32 (parseIntString32 digs), rest = rest} }
+        { Right {val = TkInt32 (parseIntString32 digs), rest = dropUnboxedSuffix (substring rest 3i64 (lengthString rest))} }
+        { Right {val = TkInt32 (parseIntString32 digs), rest = dropUnboxedSuffix rest} }
+    }
+    }
+}
+
+def dropUnboxedSuffix : String -> String
+def dropUnboxedSuffix = { src ->
+  if (eqString src "")
+    { src }
+    { if (eqChar (atString 0i64 src) '#')
+        { substring src 1i64 (lengthString src) }
+        { src }
     }
 }
 
@@ -364,6 +396,17 @@ def hasI32Suffix = { src ->
             { eqChar (atString 2i64 src) '2' }
             { False }
         }
+        { False }
+    }
+}
+
+def hasDecimalSuffix : String -> Bool
+def hasDecimalSuffix = { src ->
+  let len = lengthString src;
+  if (ltInt64 len 2i64)
+    { False }
+    { if (eqChar (atString 0i64 src) '.')
+        { isDigit (atString 1i64 src) }
         { False }
     }
 }

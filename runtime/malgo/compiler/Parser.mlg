@@ -639,33 +639,33 @@ def parseParenArmPatsRest = { ts ->
 -- ────────────────────────────────────────────────────────────────────────────
 
 -- Parse an atom (non-left-recursive base expression)
-def parseAtom : List Token -> Either String {val: Expr, rest: List Token}
-def parseAtom = { ts ->
+def parseAtom : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseAtom = { ftable ts ->
   bindRight (nextTok ts) { {val = t, rest = ts2} ->
     case t {
       (TkIdent s)  ->
         if (eqString s "label")
-          { parseLabelExpr ts2 }
+          { parseLabelExpr ftable ts2 }
           { if (eqString s "not")
-              { parseNotExpr ts2 }
+              { parseNotExpr ftable ts2 }
               { parseIdentExpr s ts2 }
           },
       (TkInt32 n)  -> Right {val = ExLit (LitInt32 n), rest = ts2},
       (TkInt64 n)  -> Right {val = ExLit (LitInt64 n), rest = ts2},
       (TkChar c)   -> Right {val = ExLit (LitChar c), rest = ts2},
       (TkString s) -> Right {val = ExLit (LitString s), rest = ts2},
-      TkLParen     -> parseParenExpr ts2,
-      TkLBrace     -> parseCaseLambda ts2,
-      TkLBracket   -> parseListExpr ts2,
+      TkLParen     -> parseParenExpr ftable ts2,
+      TkLBrace     -> parseCaseLambda ftable ts2,
+      TkLBracket   -> parseListExpr ftable ts2,
       _ -> Left (appendString "expected expression but got " (showToken t))
     }
   }
 }
 
-def parseLabelExpr : List Token -> Either String {val: Expr, rest: List Token}
-def parseLabelExpr = { ts ->
+def parseLabelExpr : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseLabelExpr = { ftable ts ->
   bindRight (eatIdent ts) { {val = name, rest = ts2} ->
-    bindRight (parseApp ts2) { {val = body, rest = ts3} ->
+    bindRight (parseApp ftable ts2) { {val = body, rest = ts3} ->
       let valueName = "__label_value";
       let identity = ExCase(Cons (ExArm(Cons (PatVar valueName) Nil, ExVar valueName)) Nil);
       Right {val = ExLet(name, identity, body), rest = ts3}
@@ -673,9 +673,9 @@ def parseLabelExpr = { ts ->
   }
 }
 
-def parseNotExpr : List Token -> Either String {val: Expr, rest: List Token}
-def parseNotExpr = { ts ->
-  bindRight (parseApp ts) { {val = cond, rest = ts2} ->
+def parseNotExpr : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseNotExpr = { ftable ts ->
+  bindRight (parseApp ftable ts) { {val = cond, rest = ts2} ->
     let trueThunk = ExCase(Cons (ExArm(Cons PatWild Nil, ExVar "False")) Nil);
     let falseThunk = ExCase(Cons (ExArm(Cons PatWild Nil, ExVar "True")) Nil);
     Right {val = ExApp(ExApp(ExApp(ExVar "if", cond), trueThunk), falseThunk), rest = ts2}
@@ -688,7 +688,7 @@ def parseIdentExpr = { name ts ->
     (Cons (TkOp dot) (Cons (TkIdent field) rest)) ->
       if (eqString dot ".")
         { if (isUpperFirst name)
-            { Right {val = ExVar field, rest = rest} }
+            { Right {val = ExVar (appendString name (appendString "." field)), rest = rest} }
             { Right {val = ExField(ExVar name, field), rest = rest} }
         }
         { Right {val = ExVar name, rest = ts} },
@@ -696,24 +696,24 @@ def parseIdentExpr = { name ts ->
   }
 }
 
-def parseListExpr : List Token -> Either String {val: Expr, rest: List Token}
-def parseListExpr = { ts ->
+def parseListExpr : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseListExpr = { ftable ts ->
   if (isNextRBracket ts)
     { bindRight (nextTok ts) { {rest = ts2} -> Right {val = ExVar "Nil", rest = ts2} } }
-    { bindRight (parseOp ts) { {val = e, rest = ts2} ->
-        bindRight (parseListExprRest ts2) { {val = es, rest = ts3} ->
+    { bindRight (parseOp ftable ts) { {val = e, rest = ts2} ->
+        bindRight (parseListExprRest ftable ts2) { {val = es, rest = ts3} ->
           Right {val = listExprFromItems (Cons e es), rest = ts3}
         }
       }
     }
 }
 
-def parseListExprRest : List Token -> Either String {val: List Expr, rest: List Token}
-def parseListExprRest = { ts ->
+def parseListExprRest : List FixityEntry -> List Token -> Either String {val: List Expr, rest: List Token}
+def parseListExprRest = { ftable ts ->
   if (isNextComma ts)
     { bindRight (nextTok ts) { {rest = ts2} ->
-        bindRight (parseOp ts2) { {val = e, rest = ts3} ->
-          bindRight (parseListExprRest ts3) { {val = es, rest = ts4} ->
+        bindRight (parseOp ftable ts2) { {val = e, rest = ts3} ->
+          bindRight (parseListExprRest ftable ts3) { {val = es, rest = ts4} ->
             Right {val = Cons e es, rest = ts4}
           }
         }
@@ -729,19 +729,19 @@ def listExprFromItems = {
 }
 
 -- Parse expression inside '(' — unit, grouped, tuple, or operator reference
-def parseParenExpr : List Token -> Either String {val: Expr, rest: List Token}
-def parseParenExpr = { ts ->
+def parseParenExpr : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseParenExpr = { ftable ts ->
   if (isNextRParen ts)
     -- "()" unit
     { bindRight (nextTok ts) { {rest = ts2} -> Right {val = ExUnit, rest = ts2} } }
     {
       if (isNextIdentStr "let" ts)
-        { bindRight (parseStmts ts) { {val = body, rest = ts2} ->
+        { bindRight (parseStmts ftable ts) { {val = body, rest = ts2} ->
             bindRight (expectRParen ts2) { ts3 -> Right {val = body, rest = ts3} }
           }
         }
         { if (isNextIdentStr "with" ts)
-            { bindRight (parseStmts ts) { {val = body, rest = ts2} ->
+            { bindRight (parseStmts ftable ts) { {val = body, rest = ts2} ->
                 bindRight (expectRParen ts2) { ts3 -> Right {val = body, rest = ts3} }
               }
             }
@@ -752,13 +752,13 @@ def parseParenExpr = { ts ->
           if (isNextRParen ts2)
             { bindRight (nextTok ts2) { {rest = ts3} -> Right {val = ExVar s, rest = ts3} } }
             { -- Not a simple op ref; parse as expression
-              bindRight (parseOp ts) { {val = e, rest = ts2b} ->
-                parseTupleOrGroupedExpr e ts2b
+              bindRight (parseOp ftable ts) { {val = e, rest = ts2b} ->
+                parseTupleOrGroupedExpr ftable e ts2b
               }
             },
         _ ->
-          bindRight (parseOp ts) { {val = e, rest = ts2} ->
-            parseTupleOrGroupedExpr e ts2
+          bindRight (parseOp ftable ts) { {val = e, rest = ts2} ->
+            parseTupleOrGroupedExpr ftable e ts2
           }
       }
             }
@@ -767,11 +767,11 @@ def parseParenExpr = { ts ->
 }
 
 -- After first expr in parens: check for ',' (tuple) or ')' (grouped)
-def parseTupleOrGroupedExpr : Expr -> List Token -> Either String {val: Expr, rest: List Token}
-def parseTupleOrGroupedExpr = { e ts ->
+def parseTupleOrGroupedExpr : List FixityEntry -> Expr -> List Token -> Either String {val: Expr, rest: List Token}
+def parseTupleOrGroupedExpr = { ftable e ts ->
   if (isNextComma ts)
     { bindRight (nextTok ts) { {rest = ts2} ->
-        bindRight (parseTupleExprRest ts2) { {val = es, rest = ts3} ->
+        bindRight (parseTupleExprRest ftable ts2) { {val = es, rest = ts3} ->
           Right {val = ExTuple (Cons e es), rest = ts3}
         }
       }
@@ -801,12 +801,12 @@ def skipAscriptionToRParen = { depth ts ->
 }
 
 -- Parse remaining tuple elements: expr (',' expr)* ')'
-def parseTupleExprRest : List Token -> Either String {val: List Expr, rest: List Token}
-def parseTupleExprRest = { ts ->
-  bindRight (parseOp ts) { {val = e, rest = ts2} ->
+def parseTupleExprRest : List FixityEntry -> List Token -> Either String {val: List Expr, rest: List Token}
+def parseTupleExprRest = { ftable ts ->
+  bindRight (parseOp ftable ts) { {val = e, rest = ts2} ->
     if (isNextComma ts2)
       { bindRight (nextTok ts2) { {rest = ts3} ->
-          bindRight (parseTupleExprRest ts3) { {val = es, rest = ts4} ->
+          bindRight (parseTupleExprRest ftable ts3) { {val = es, rest = ts4} ->
             Right {val = Cons e es, rest = ts4}
           }
         }
@@ -819,22 +819,22 @@ def parseTupleExprRest = { ts ->
 }
 
 -- Parse a case/lambda block: '{' arms '}' (already past '{')
-def parseCaseLambda : List Token -> Either String {val: Expr, rest: List Token}
-def parseCaseLambda = { ts ->
+def parseCaseLambda : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseCaseLambda = { ftable ts ->
   if (isCopatternStart ts)
-    { bindRight (parseCoArms ts) { {val = arms, rest = ts2} ->
+    { bindRight (parseCoArms ftable ts) { {val = arms, rest = ts2} ->
         bindRight (expectRBrace ts2) { ts3 ->
           Right {val = ExCoCase arms, rest = ts3}
         }
       }
     }
     { if (isRecordStart ts)
-        { bindRight (parseRecordExprFields ts) { {val = fs, rest = ts2} ->
+        { bindRight (parseRecordExprFields ftable ts) { {val = fs, rest = ts2} ->
             Right {val = ExRecord fs, rest = ts2}
           }
         }
         { if (hasTopLevelArrow ts 0i32)
-    { bindRight (parseArms ts) { {val = arms, rest = ts2} ->
+    { bindRight (parseArms ftable ts) { {val = arms, rest = ts2} ->
         bindRight (expectRBrace ts2) { ts3 ->
           Right {val = ExCase arms, rest = ts3}
         }
@@ -845,10 +845,10 @@ def parseCaseLambda = { ts ->
             Right {val = ExCase (Cons (ExArm(Cons PatWild Nil, ExUnit)) Nil), rest = ts2}
           }
         }
-        { bindRight (parseStmts ts) { {val = body, rest = ts2} ->
+        { bindRight (parseStmts ftable ts) { {val = body, rest = ts2} ->
             if (isNextComma ts2)
               { bindRight (nextTok ts2) { {rest = ts3} ->
-                  bindRight (parseBracedTupleRest ts3) { {val = es, rest = ts4} ->
+                  bindRight (parseBracedTupleRest ftable ts3) { {val = es, rest = ts4} ->
                     Right {val = ExTuple (Cons body es), rest = ts4}
                   }
                 }
@@ -864,16 +864,16 @@ def parseCaseLambda = { ts ->
     }
 }
 
-def parseRecordExprFields : List Token -> Either String {val: List ExprField, rest: List Token}
-def parseRecordExprFields = { ts ->
+def parseRecordExprFields : List FixityEntry -> List Token -> Either String {val: List ExprField, rest: List Token}
+def parseRecordExprFields = { ftable ts ->
   bindRight (eatIdent ts) { {val = name, rest = ts2} ->
     bindRight (expectOp "=" ts2) { ts3 ->
-      bindRight (parseOp ts3) { {val = expr, rest = ts4} ->
+      bindRight (parseOp ftable ts3) { {val = expr, rest = ts4} ->
         if (isNextComma ts4)
           { bindRight (nextTok ts4) { {rest = ts5} ->
               if (isNextRBrace ts5)
                 { bindRight (expectRBrace ts5) { ts6 -> Right {val = Cons (ExprField(name, expr)) Nil, rest = ts6} } }
-                { bindRight (parseRecordExprFields ts5) { {val = fs, rest = ts6} ->
+                { bindRight (parseRecordExprFields ftable ts5) { {val = fs, rest = ts6} ->
                     Right {val = Cons (ExprField(name, expr)) fs, rest = ts6}
                   }
                 }
@@ -885,14 +885,14 @@ def parseRecordExprFields = { ts ->
   }
 }
 
-def parseCoArms : List Token -> Either String {val: List Expr, rest: List Token}
-def parseCoArms = { ts ->
-  bindRight (parseCoArm ts) { {val = arm, rest = ts2} ->
+def parseCoArms : List FixityEntry -> List Token -> Either String {val: List Expr, rest: List Token}
+def parseCoArms = { ftable ts ->
+  bindRight (parseCoArm ftable ts) { {val = arm, rest = ts2} ->
     if (isNextComma ts2)
       { bindRight (nextTok ts2) { {rest = ts3} ->
           if (isNextRBrace ts3)
             { Right {val = Cons arm Nil, rest = ts3} }
-            { bindRight (parseCoArms ts3) { {val = arms, rest = ts4} ->
+            { bindRight (parseCoArms ftable ts3) { {val = arms, rest = ts4} ->
                 Right {val = Cons arm arms, rest = ts4}
               }
             }
@@ -902,15 +902,15 @@ def parseCoArms = { ts ->
   }
 }
 
-def parseCoArm : List Token -> Either String {val: Expr, rest: List Token}
-def parseCoArm = { ts ->
+def parseCoArm : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseCoArm = { ftable ts ->
   bindRight (nextTok ts) { {val = t, rest = ts2} ->
     case t {
       (TkOp op) ->
         if (eqString op "#")
           { bindRight (parseCoSegments ts2) { {val = segs, rest = ts3} ->
               bindRight (expectOp "->" ts3) { ts4 ->
-                bindRight (parseStmts ts4) { {val = body, rest = ts5} ->
+                bindRight (parseStmts ftable ts4) { {val = body, rest = ts5} ->
                   Right {val = ExCoArm(segs, body), rest = ts5}
                 }
               }
@@ -920,7 +920,7 @@ def parseCoArm = { ts ->
               { bindRight (eatIdent ts2) { {val = field, rest = ts3} ->
                   bindRight (parseCoSegments ts3) { {val = segs, rest = ts4} ->
                     bindRight (expectOp "->" ts4) { ts5 ->
-                      bindRight (parseStmts ts5) { {val = body, rest = ts6} ->
+                      bindRight (parseStmts ftable ts5) { {val = body, rest = ts6} ->
                         Right {val = ExCoArm(Cons (CoField field) segs, body), rest = ts6}
                       }
                     }
@@ -961,12 +961,12 @@ def parseCoSegments = { ts ->
     }
 }
 
-def parseBracedTupleRest : List Token -> Either String {val: List Expr, rest: List Token}
-def parseBracedTupleRest = { ts ->
-  bindRight (parseOp ts) { {val = e, rest = ts2} ->
+def parseBracedTupleRest : List FixityEntry -> List Token -> Either String {val: List Expr, rest: List Token}
+def parseBracedTupleRest = { ftable ts ->
+  bindRight (parseOp ftable ts) { {val = e, rest = ts2} ->
     if (isNextComma ts2)
       { bindRight (nextTok ts2) { {rest = ts3} ->
-          bindRight (parseBracedTupleRest ts3) { {val = es, rest = ts4} ->
+          bindRight (parseBracedTupleRest ftable ts3) { {val = es, rest = ts4} ->
             Right {val = Cons e es, rest = ts4}
           }
         }
@@ -998,37 +998,37 @@ def hasTopLevelArrow = { ts depth ->
 }
 
 -- Parse function application chain: atom atom atom ...
-def parseApp : List Token -> Either String {val: Expr, rest: List Token}
-def parseApp = { ts ->
-  bindRight (parseAtom ts) { {val = f, rest = ts2} ->
-    parseAppRest f ts2
+def parseApp : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseApp = { ftable ts ->
+  bindRight (parseAtom ftable ts) { {val = f, rest = ts2} ->
+    parseAppRest ftable f ts2
   }
 }
 
 -- Continue application chain while next token starts an atom
-def parseAppRest : Expr -> List Token -> Either String {val: Expr, rest: List Token}
-def parseAppRest = { f ts ->
+def parseAppRest : List FixityEntry -> Expr -> List Token -> Either String {val: Expr, rest: List Token}
+def parseAppRest = { ftable f ts ->
   if (isNextDot ts)
     { bindRight (nextTok ts) { {rest = ts2} ->
         bindRight (eatIdent ts2) { {val = field, rest = ts3} ->
-          parseAppRest (ExField(f, field)) ts3
+          parseAppRest ftable (ExField(f, field)) ts3
         }
       }
     }
     { if (isNextLParen ts)
         { if (canCStyleCall f)
-    { bindRight (parseCStyleCallArgs ts) { {val = args, rest = ts2} ->
-        parseAppRest (applyExprArgs f args) ts2
+    { bindRight (parseCStyleCallArgs ftable ts) { {val = args, rest = ts2} ->
+        parseAppRest ftable (applyExprArgs f args) ts2
       }
     }
-          { bindRight (parseAtom ts) { {val = x, rest = ts2} ->
-              parseAppRest (ExApp(f, x)) ts2
+          { bindRight (parseAtom ftable ts) { {val = x, rest = ts2} ->
+              parseAppRest ftable (ExApp(f, x)) ts2
             }
           }
         }
     { if (isAtomStart ts)
-    { bindRight (parseAtom ts) { {val = x, rest = ts2} ->
-        parseAppRest (ExApp(f, x)) ts2
+    { bindRight (parseAtom ftable ts) { {val = x, rest = ts2} ->
+        parseAppRest ftable (ExApp(f, x)) ts2
       }
     }
     { Right {val = f, rest = ts} }
@@ -1043,13 +1043,13 @@ def canCStyleCall = {
   _ -> False
 }
 
-def parseCStyleCallArgs : List Token -> Either String {val: List Expr, rest: List Token}
-def parseCStyleCallArgs = { ts ->
+def parseCStyleCallArgs : List FixityEntry -> List Token -> Either String {val: List Expr, rest: List Token}
+def parseCStyleCallArgs = { ftable ts ->
   bindRight (expectLParen ts) { ts2 ->
     if (isNextRParen ts2)
       { bindRight (expectRParen ts2) { ts3 -> Right {val = Cons ExUnit Nil, rest = ts3} } }
-      { bindRight (parseOp ts2) { {val = e, rest = ts3} ->
-          bindRight (parseCStyleCallArgsRest ts3) { {val = es, rest = ts4} ->
+      { bindRight (parseOp ftable ts2) { {val = e, rest = ts3} ->
+          bindRight (parseCStyleCallArgsRest ftable ts3) { {val = es, rest = ts4} ->
             Right {val = Cons e es, rest = ts4}
           }
         }
@@ -1057,12 +1057,12 @@ def parseCStyleCallArgs = { ts ->
   }
 }
 
-def parseCStyleCallArgsRest : List Token -> Either String {val: List Expr, rest: List Token}
-def parseCStyleCallArgsRest = { ts ->
+def parseCStyleCallArgsRest : List FixityEntry -> List Token -> Either String {val: List Expr, rest: List Token}
+def parseCStyleCallArgsRest = { ftable ts ->
   if (isNextComma ts)
     { bindRight (nextTok ts) { {rest = ts2} ->
-        bindRight (parseOp ts2) { {val = e, rest = ts3} ->
-          bindRight (parseCStyleCallArgsRest ts3) { {val = es, rest = ts4} ->
+        bindRight (parseOp ftable ts2) { {val = e, rest = ts3} ->
+          bindRight (parseCStyleCallArgsRest ftable ts3) { {val = es, rest = ts4} ->
             Right {val = Cons e es, rest = ts4}
           }
         }
@@ -1079,27 +1079,136 @@ def applyExprArgs = { f args ->
   }
 }
 
--- Parse operator expression: app (op app)*
--- Left-associative, no precedence (simplified)
-def parseOp : List Token -> Either String {val: Expr, rest: List Token}
-def parseOp = { ts ->
-  bindRight (parseApp ts) { {val = lhs, rest = ts2} ->
-    parseOpRest lhs ts2
+-- ────────────────────────────────────────────────────────────────────────────
+-- Fixity table and Pratt operator parsing
+-- ────────────────────────────────────────────────────────────────────────────
+
+def defaultFixityTable : List FixityEntry
+def defaultFixityTable =
+  [ FixityEntry("<<", 9i32, AssocRight)
+  , FixityEntry(">>", 9i32, AssocLeft)
+  , FixityEntry("|>", 0i32, AssocLeft)
+  , FixityEntry("<|", 0i32, AssocRight)
+  , FixityEntry("++", 5i32, AssocRight)
+  , FixityEntry("==", 4i32, AssocNone)
+  , FixityEntry("/=", 4i32, AssocNone)
+  , FixityEntry("<", 4i32, AssocNone)
+  , FixityEntry(">", 4i32, AssocNone)
+  , FixityEntry("<=", 4i32, AssocNone)
+  , FixityEntry(">=", 4i32, AssocNone)
+  , FixityEntry("+", 6i32, AssocLeft)
+  , FixityEntry("-", 6i32, AssocLeft)
+  , FixityEntry("*", 7i32, AssocLeft)
+  , FixityEntry("/", 7i32, AssocLeft)
+  , FixityEntry("&&", 3i32, AssocRight)
+  , FixityEntry("||", 2i32, AssocRight)
+  , FixityEntry("$", 0i32, AssocRight)
+  , FixityEntry("<>", 6i32, AssocRight)
+  ]
+
+def lookupFixity : String -> List FixityEntry -> FixityEntry
+def lookupFixity = { op entries ->
+  case entries {
+    Nil -> FixityEntry(op, 9i32, AssocLeft),
+    (Cons (FixityEntry name prec assoc) rest) ->
+      if (eqString op name)
+        { FixityEntry(name, prec, assoc) }
+        { lookupFixity op rest }
   }
 }
 
--- Continue operator chain
-def parseOpRest : Expr -> List Token -> Either String {val: Expr, rest: List Token}
-def parseOpRest = { lhs ts ->
+def assocIsRight : Assoc -> Bool
+def assocIsRight = {
+  AssocRight -> True,
+  _ -> False
+}
+
+-- Collect fixity declarations from the token stream (pre-pass)
+def collectFixityTable : List Token -> List FixityEntry
+def collectFixityTable = { ts ->
+  case ts {
+    Nil -> Nil,
+    (Cons TkEof _) -> Nil,
+    (Cons (TkIdent kw) rest) ->
+      if (eqString kw "infixl")
+        { collectFixityEntry "left" rest }
+        { if (eqString kw "infixr")
+            { collectFixityEntry "right" rest }
+            { if (eqString kw "infix")
+                { collectFixityEntry "none" rest }
+                { collectFixityTable rest }
+            }
+        },
+    (Cons _ rest) -> collectFixityTable rest
+  }
+}
+
+def collectFixityEntry : String -> List Token -> List FixityEntry
+def collectFixityEntry = { assocStr ts ->
+  case ts {
+    (Cons (TkInt32 prec) (Cons (TkOp op) rest)) ->
+      let assoc = if (eqString assocStr "left") { AssocLeft } { if (eqString assocStr "right") { AssocRight } { AssocNone } };
+      Cons (FixityEntry(op, prec, assoc)) (collectFixityTable rest),
+    (Cons (TkInt32 prec) (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest)))) ->
+      let assoc = if (eqString assocStr "left") { AssocLeft } { if (eqString assocStr "right") { AssocRight } { AssocNone } };
+      Cons (FixityEntry(op, prec, assoc)) (collectFixityTable rest),
+    _ -> collectFixityTable ts
+  }
+}
+
+def mergeFixityTables : List FixityEntry -> List FixityEntry -> List FixityEntry
+def mergeFixityTables = { user defaults ->
+  append user (filterOutFixity defaults user)
+}
+
+def filterOutFixity : List FixityEntry -> List FixityEntry -> List FixityEntry
+def filterOutFixity = { defaults user ->
+  case defaults {
+    Nil -> Nil,
+    (Cons (FixityEntry name prec assoc) rest) ->
+      if (fixityTableHas name user)
+        { filterOutFixity rest user }
+        { Cons (FixityEntry(name, prec, assoc)) (filterOutFixity rest user) }
+  }
+}
+
+def fixityTableHas : String -> List FixityEntry -> Bool
+def fixityTableHas = { name entries ->
+  case entries {
+    Nil -> False,
+    (Cons (FixityEntry n _ _) rest) ->
+      if (eqString name n) { True } { fixityTableHas name rest }
+  }
+}
+
+-- Parse operator expression using Pratt parsing with precedence
+def parseOp : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseOp = { ftable ts ->
+  bindRight (parseApp ftable ts) { {val = lhs, rest = ts2} ->
+    parseOpPrecLoop 0i32 ftable lhs ts2
+  }
+}
+
+-- Pratt loop: consume binary ops with prec >= minPrec
+def parseOpPrecLoop : Int32 -> List FixityEntry -> Expr -> List Token -> Either String {val: Expr, rest: List Token}
+def parseOpPrecLoop = { minPrec ftable lhs ts ->
   if (isNextBinaryOp ts)
-    { bindRight (nextTok ts) { {val = t, rest = ts2} ->
-        case t {
-          (TkOp s) ->
-            bindRight (parseApp ts2) { {val = rhs, rest = ts3} ->
-              parseOpRest (ExApp(ExApp(ExVar s, lhs), rhs)) ts3
-            },
-          _ -> Right {val = lhs, rest = ts}
-        }
+    { case ts {
+        (Cons (TkOp opName) rest) ->
+          let fix = lookupFixity opName ftable;
+          case fix {
+            (FixityEntry _ prec assoc) ->
+              if (geInt32 prec minPrec)
+                { let nextMinPrec = if (assocIsRight assoc) { prec } { addInt32 prec 1i32 };
+                  bindRight (parseApp ftable rest) { {val = rhs, rest = ts3} ->
+                    bindRight (parseOpPrecLoop nextMinPrec ftable rhs ts3) { {val = rhs2, rest = ts4} ->
+                      parseOpPrecLoop minPrec ftable (ExApp(ExApp(ExVar opName, lhs), rhs2)) ts4
+                    }
+                  }
+                }
+                { Right {val = lhs, rest = ts} }
+          },
+        _ -> Right {val = lhs, rest = ts}
       }
     }
     { Right {val = lhs, rest = ts} }
@@ -1111,13 +1220,13 @@ def parseOpRest = { lhs ts ->
 
 -- Parse a sequence of statements ending in an expression.
 -- Stops at ',' or '}' without consuming them.
-def parseStmts : List Token -> Either String {val: Expr, rest: List Token}
-def parseStmts = { ts ->
+def parseStmts : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseStmts = { ftable ts ->
   if (isNextRBrace ts)
     { Right {val = ExUnit, rest = ts} }
     { if (isNextIdentStr "with" ts)
       { bindRight (nextTok ts) { {rest = ts2} ->
-          parseWithStmt ts2
+          parseWithStmt ftable ts2
         }
       }
       { if (isNextIdentStr "let" ts)
@@ -1125,10 +1234,10 @@ def parseStmts = { ts ->
       { bindRight (nextTok ts) { {rest = ts2} ->        -- consume 'let'
         bindRight (eatIdent ts2) { {val = name, rest = ts3} ->
           bindRight (expectOp "=" ts3) { ts4 ->
-            bindRight (parseOp ts4) { {val = val, rest = ts5} ->
+            bindRight (parseOp ftable ts4) { {val = val, rest = ts5} ->
               if (isNextOpStr ";" ts5)
                 { bindRight (nextTok ts5) { {rest = ts6} ->
-                    bindRight (parseStmts ts6) { {val = body, rest = ts7} ->
+                    bindRight (parseStmts ftable ts6) { {val = body, rest = ts7} ->
                       Right {val = ExLet(name, val, body), rest = ts7}
                     }
                   }
@@ -1136,7 +1245,7 @@ def parseStmts = { ts ->
                 { if (isNextRBrace ts5)
                     { Right {val = ExLet(name, val, ExUnit), rest = ts5} }
                     { bindRight (expectOp ";" ts5) { ts6 ->
-                        bindRight (parseStmts ts6) { {val = body, rest = ts7} ->
+                        bindRight (parseStmts ftable ts6) { {val = body, rest = ts7} ->
                           Right {val = ExLet(name, val, body), rest = ts7}
                         }
                       }
@@ -1148,10 +1257,10 @@ def parseStmts = { ts ->
       }
       }
       -- final expression or e; rest
-      { bindRight (parseOp ts) { {val = expr, rest = ts2} ->
+      { bindRight (parseOp ftable ts) { {val = expr, rest = ts2} ->
           if (isNextOpStr ";" ts2)
             { bindRight (nextTok ts2) { {rest = ts3} ->
-                bindRight (parseStmts ts3) { {val = body, rest = ts4} ->
+                bindRight (parseStmts ftable ts3) { {val = body, rest = ts4} ->
                   Right {val = ExLet("_", expr, body), rest = ts4}
                 }
               }
@@ -1163,14 +1272,14 @@ def parseStmts = { ts ->
       }
 }
 
-def parseWithStmt : List Token -> Either String {val: Expr, rest: List Token}
-def parseWithStmt = { ts ->
+def parseWithStmt : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseWithStmt = { ftable ts ->
   if (isWithBindStart ts)
     { bindRight (eatIdent ts) { {val = name, rest = ts2} ->
         bindRight (expectOp "=" ts2) { ts3 ->
-          bindRight (parseOp ts3) { {val = action, rest = ts4} ->
+          bindRight (parseOp ftable ts3) { {val = action, rest = ts4} ->
             bindRight (expectOp ";" ts4) { ts5 ->
-              bindRight (parseStmts ts5) { {val = body, rest = ts6} ->
+              bindRight (parseStmts ftable ts5) { {val = body, rest = ts6} ->
                 Right {val = ExApp(action, ExCase(Cons (ExArm(Cons (PatVar name) Nil, body)) Nil)), rest = ts6}
               }
             }
@@ -1178,9 +1287,9 @@ def parseWithStmt = { ts ->
         }
       }
     }
-    { bindRight (parseOp ts) { {val = action, rest = ts2} ->
+    { bindRight (parseOp ftable ts) { {val = action, rest = ts2} ->
         bindRight (expectOp ";" ts2) { ts3 ->
-          bindRight (parseStmts ts3) { {val = body, rest = ts4} ->
+          bindRight (parseStmts ftable ts3) { {val = body, rest = ts4} ->
             Right {val = ExApp(action, ExCase(Cons (ExArm(Cons PatWild Nil, body)) Nil)), rest = ts4}
           }
         }
@@ -1193,11 +1302,11 @@ def parseWithStmt = { ts ->
 -- ────────────────────────────────────────────────────────────────────────────
 
 -- Parse one case arm: pats -> stmts
-def parseArm : List Token -> Either String {val: Expr, rest: List Token}
-def parseArm = { ts ->
+def parseArm : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseArm = { ftable ts ->
   bindRight (parseArmPats ts) { {val = pats, rest = ts2} ->
     bindRight (expectOp "->" ts2) { ts3 ->
-      bindRight (parseStmts ts3) { {val = body, rest = ts4} ->
+      bindRight (parseStmts ftable ts3) { {val = body, rest = ts4} ->
         Right {val = ExArm(pats, body), rest = ts4}
       }
     }
@@ -1205,14 +1314,14 @@ def parseArm = { ts ->
 }
 
 -- Parse arms separated by ',' until '}' (does not consume '}')
-def parseArms : List Token -> Either String {val: List Expr, rest: List Token}
-def parseArms = { ts ->
-  bindRight (parseArm ts) { {val = arm, rest = ts2} ->
+def parseArms : List FixityEntry -> List Token -> Either String {val: List Expr, rest: List Token}
+def parseArms = { ftable ts ->
+  bindRight (parseArm ftable ts) { {val = arm, rest = ts2} ->
     if (isNextComma ts2)
       { bindRight (nextTok ts2) { {rest = ts3} ->
           if (isNextRBrace ts3)
             { Right {val = Cons arm Nil, rest = ts3} }
-            { bindRight (parseArms ts3) { {val = arms, rest = ts4} ->
+            { bindRight (parseArms ftable ts3) { {val = arms, rest = ts4} ->
                 Right {val = Cons arm arms, rest = ts4}
               }
             }
@@ -1438,18 +1547,36 @@ def collectTypeStrAcc = { acc ts ->
   }
 }
 
--- Parse a 'def name = expr' or 'def name : Type' (skip type annotation form)
-def parseDefDecl : List Token -> Either String {val: Maybe Decl, rest: List Token}
-def parseDefDecl = { ts ->
+-- Collect tokens as a raw type string until the next top-level declaration boundary.
+-- Skips the leading ':' or '=' if present, then collects everything until a decl-start keyword.
+def collectRawTypeStr : List Token -> {val: String, rest: List Token}
+def collectRawTypeStr = { ts ->
+  case ts {
+    (Cons (TkOp s) rest) ->
+      if (eqString s ":")
+        { collectTypeStr rest }
+        { if (eqString s "=")
+            { collectTypeStr rest }
+            { collectTypeStr ts }
+        },
+    _ -> collectTypeStr ts
+  }
+}
+
+-- Parse a 'def name = expr' or 'def name : Type' (preserve type sig)
+def parseDefDecl : List FixityEntry -> List Token -> Either String {val: Maybe Decl, rest: List Token}
+def parseDefDecl = { ftable ts ->
   bindRight (eatDefName ts) { {val = name, rest = ts2} ->
     if (isNextOpStr ":" ts2)
-      -- Type annotation: 'def name : Type' — skip it
-      { let ts3 = skipToNextDecl ts2;
-        Right {val = Nothing, rest = ts3}
+      -- Type annotation: 'def name : Type' — preserve as DeclTypeSig
+      { let r = collectRawTypeStr ts2;
+        case r { {val = tyStr, rest = ts3} ->
+          Right {val = Just (DeclTypeSig(name, tyStr)), rest = ts3}
+        }
       }
       { if (isNextOpStr "=" ts2)
           { bindRight (expectOp "=" ts2) { ts3 ->
-              bindRight (parseExpr ts3) { {val = expr, rest = ts4} ->
+              bindRight (parseExpr ftable ts3) { {val = expr, rest = ts4} ->
                 Right {val = Just (DeclDef(name, expr)), rest = ts4}
               }
             }
@@ -1471,8 +1598,8 @@ def skipNonRuntimeDecl : List Token -> Either String {val: Maybe Decl, rest: Lis
 def skipNonRuntimeDecl = { ts -> Right {val = Nothing, rest = skipToNextDecl ts} }
 
 -- Parse a full expression (entry point for expression parsing)
-def parseExpr : List Token -> Either String {val: Expr, rest: List Token}
-def parseExpr = { ts -> parseOp ts }
+def parseExpr : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
+def parseExpr = { ftable ts -> parseOp ftable ts }
 
 -- Parse a 'data Name Params = ConDecls' declaration
 def parseDataDecl : List Token -> Either String {val: Decl, rest: List Token}
@@ -1488,17 +1615,67 @@ def parseDataDecl = { ts ->
   }
 }
 
--- Parse 'module {..} = import "path"'
+-- Parse 'module {..} = import "path"', 'module Name = import "path"',
+-- or 'module {foo, (<|)} = import "path"'
 def parseModuleImport : List Token -> Either String {val: Decl, rest: List Token}
 def parseModuleImport = { ts ->
+  bindRight (parseImportTarget ts) { {val = target, rest = ts2} ->
+    bindRight (expectOp "=" ts2) { ts3 -> parseImportPath target ts3 }
+  }
+}
+
+def parseImportTarget : List Token -> Either String {val: ImportTarget, rest: List Token}
+def parseImportTarget = { ts ->
   case ts {
     (Cons TkLBrace rest) ->
-      bindRight (skipToRBrace rest) { ts2 ->
-        bindRight (expectOp "=" ts2) { ts3 -> parseImportPath ts3 }
-      },
-    (Cons (TkIdent _) rest) ->
-      bindRight (expectOp "=" rest) { ts2 -> parseImportPath ts2 },
+      parseBraceImportTarget rest,
+    (Cons (TkIdent alias) rest) ->
+      Right {val = ImportQualified alias, rest = rest},
     _ -> Left "expected module import target"
+  }
+}
+
+def parseBraceImportTarget : List Token -> Either String {val: ImportTarget, rest: List Token}
+def parseBraceImportTarget = { ts ->
+  case ts {
+    (Cons (TkOp dots) rest) ->
+      if (eqString dots "..")
+        { bindRight (expectRBrace rest) { ts2 -> Right {val = ImportAll, rest = ts2} } }
+        { parseImportOnly ts },
+    _ -> parseImportOnly ts
+  }
+}
+
+def parseImportOnly : List Token -> Either String {val: ImportTarget, rest: List Token}
+def parseImportOnly = { ts ->
+  bindRight (parseImportNames ts) { {val = names, rest = ts2} ->
+    Right {val = ImportOnly names, rest = ts2}
+  }
+}
+
+def parseImportNames : List Token -> Either String {val: List ImportName, rest: List Token}
+def parseImportNames = { ts ->
+  if (isNextRBrace ts)
+    { bindRight (expectRBrace ts) { ts2 -> Right {val = Nil, rest = ts2} } }
+    { bindRight (parseImportName ts) { {val = name, rest = ts2} ->
+        if (isNextComma ts2)
+          { bindRight (nextTok ts2) { {rest = ts3} ->
+              bindRight (parseImportNames ts3) { {val = names, rest = ts4} ->
+                Right {val = Cons name names, rest = ts4}
+              }
+            }
+          }
+          { bindRight (expectRBrace ts2) { ts3 -> Right {val = Cons name Nil, rest = ts3} } }
+      }
+    }
+}
+
+def parseImportName : List Token -> Either String {val: ImportName, rest: List Token}
+def parseImportName = { ts ->
+  case ts {
+    (Cons (TkIdent name) rest) -> Right {val = ImportName name, rest = rest},
+    (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest))) -> Right {val = ImportName op, rest = rest},
+    _ -> Left "expected import name"
   }
 }
 
@@ -1515,14 +1692,14 @@ def skipToRBrace = { ts ->
   }
 }
 
-def parseImportPath : List Token -> Either String {val: Decl, rest: List Token}
-def parseImportPath = { ts ->
+def parseImportPath : ImportTarget -> List Token -> Either String {val: Decl, rest: List Token}
+def parseImportPath = { target ts ->
   bindRight (eatIdent ts) { {val = kw, rest = ts2} ->
     if (eqString kw "import")
       { bindRight (nextTok ts2) { {val = t, rest = ts3} ->
           case t {
-            (TkString path) -> Right {val = DeclImport path, rest = ts3},
-            (TkIdent path) -> Right {val = DeclImport path, rest = ts3},
+            (TkString path) -> Right {val = DeclImport(target, path), rest = ts3},
+            (TkIdent path) -> Right {val = DeclImport(target, path), rest = ts3},
             _ -> Left (appendString "expected path string after 'import' but got " (showToken t))
           }
         }
@@ -1548,13 +1725,13 @@ def parseForeignDecl = { ts ->
 }
 
 -- Parse one declaration, returning Nothing for skipped forms
-def parseSingleDecl : List Token -> Either String {val: Maybe Decl, rest: List Token}
-def parseSingleDecl = { ts ->
+def parseSingleDecl : List FixityEntry -> List Token -> Either String {val: Maybe Decl, rest: List Token}
+def parseSingleDecl = { ftable ts ->
   bindRight (nextTok ts) { {val = t, rest = ts2} ->
     case t {
       (TkIdent s) ->
         if (eqString s "def")
-          { parseDefDecl ts2 }
+          { parseDefDecl ftable ts2 }
           { if (eqString s "data")
               { bindRight (parseDataDecl ts2) { {val = d, rest = ts3} ->
                   Right {val = Just d, rest = ts3}
@@ -1571,13 +1748,13 @@ def parseSingleDecl = { ts ->
                         }
                       }
                       { if (eqString s "type")
-                        { skipNonRuntimeDecl ts2 }
+                        { parseTypeSynonymDecl ts2 }
                         { if (eqString s "infix")
-                          { skipNonRuntimeDecl ts2 }
+                          { parseInfixDecl "none" ts2 }
                           { if (eqString s "infixl")
-                            { skipNonRuntimeDecl ts2 }
+                            { parseInfixDecl "left" ts2 }
                             { if (eqString s "infixr")
-                              { skipNonRuntimeDecl ts2 }
+                              { parseInfixDecl "right" ts2 }
                               { Left (appendString "expected declaration but got identifier '" (appendString s "'")) }
                             }
                           }
@@ -1592,13 +1769,40 @@ def parseSingleDecl = { ts ->
   }
 }
 
+-- Parse 'type Name params = rawType'
+def parseTypeSynonymDecl : List Token -> Either String {val: Maybe Decl, rest: List Token}
+def parseTypeSynonymDecl = { ts ->
+  bindRight (eatIdent ts) { {val = name, rest = ts2} ->
+    bindRight (parseTypeParams ts2) { {val = params, rest = ts3} ->
+      bindRight (expectOp "=" ts3) { ts4 ->
+        let r = collectTypeStr ts4;
+        case r { {val = tyStr, rest = ts5} ->
+          Right {val = Just (DeclTypeSynonym(name, params, tyStr)), rest = ts5}
+        }
+      }
+    }
+  }
+}
+
+-- Parse 'infix/infixl/infixr N op'
+def parseInfixDecl : String -> List Token -> Either String {val: Maybe Decl, rest: List Token}
+def parseInfixDecl = { assocStr ts ->
+  case ts {
+    (Cons (TkInt32 prec) (Cons (TkOp op) rest)) ->
+      Right {val = Just (DeclInfix(assocStr, prec, op)), rest = rest},
+    (Cons (TkInt32 prec) (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest)))) ->
+      Right {val = Just (DeclInfix(assocStr, prec, op)), rest = rest},
+    _ -> Right {val = Nothing, rest = skipToNextDecl ts}
+  }
+}
+
 -- Parse all declarations until EOF
-def parseAllDecls : List Token -> Either String {val: List Decl, rest: List Token}
-def parseAllDecls = { ts ->
+def parseAllDecls : List FixityEntry -> List Token -> Either String {val: List Decl, rest: List Token}
+def parseAllDecls = { ftable ts ->
   if (isNextEof ts)
     { Right {val = Nil, rest = ts} }
-    { bindRight (parseSingleDecl ts) { {val = md, rest = ts2} ->
-        bindRight (parseAllDecls ts2) { {val = ds, rest = ts3} ->
+    { bindRight (parseSingleDecl ftable ts) { {val = md, rest = ts2} ->
+        bindRight (parseAllDecls ftable ts2) { {val = ds, rest = ts3} ->
           case md {
             Nothing -> Right {val = ds, rest = ts3},
             (Just d) -> Right {val = Cons d ds, rest = ts3}
@@ -1614,7 +1818,9 @@ def parseAllDecls = { ts ->
 
 def parseModule : List Token -> Either String Module
 def parseModule = { ts ->
-  bindRight (parseAllDecls ts) { {val = decls, rest = _} ->
+  let userFixity = collectFixityTable ts;
+  let ftable = mergeFixityTables userFixity defaultFixityTable;
+  bindRight (parseAllDecls ftable ts) { {val = decls, rest = _} ->
     Right (Module decls)
   }
 }

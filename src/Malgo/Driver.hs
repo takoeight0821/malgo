@@ -69,6 +69,7 @@ compileFromAST srcPath parsedAst = do
       let stdin = fmap Just getChar `catch` \(_ :: IOException) -> pure Nothing
       let stdout = putChar
       let stderr = hPutChar IO.stderr
+      let arguments = flags.programArgs
       case flags.evalMode of
         EvalBigStep -> runPass BigStepEvalPass (modName, Handlers {..}, core)
         EvalSmallStep -> runPass EvalPass (modName, Handlers {..}, core)

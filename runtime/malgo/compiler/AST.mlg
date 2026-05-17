@@ -51,12 +51,28 @@ data ExprField = ExprField(String, Expr)
 -- Constructor declaration: name + arity (number of fields)
 data ConDecl = ConDecl(String, Int32)
 
+data ImportName = ImportName String
+
+data ImportTarget
+  = ImportAll
+  | ImportQualified String
+  | ImportOnly(List ImportName)
+
+-- Associativity for operator fixity declarations
+data Assoc = AssocLeft | AssocRight | AssocNone
+
+-- Fixity entry: (operator, precedence, associativity)
+data FixityEntry = FixityEntry(String, Int32, Assoc)
+
 -- Top-level declarations
 data Decl
   = DeclDef(String, Expr)                       -- def name = expr
   | DeclData(String, List String, List ConDecl) -- data Name params = C1 | C2(T)
-  | DeclImport String                           -- module {..} = import "path"
+  | DeclImport(ImportTarget, String)            -- module target = import "path"
   | DeclForeign(String, String)                 -- foreign import name : typeStr
+  | DeclTypeSig(String, String)                 -- def name : Type (preserved)
+  | DeclTypeSynonym(String, List String, String) -- type Name params = Type
+  | DeclInfix(String, Int32, String)            -- infix/infixl/infixr N op
 
 -- A complete module
 data Module = Module(List Decl)
@@ -133,6 +149,18 @@ def showConDecl = {
   (ConDecl name arity) -> appendString name (appendString "/" (toStringInt32 arity))
 }
 
+def showImportName : ImportName -> String
+def showImportName = {
+  (ImportName name) -> name
+}
+
+def showImportTarget : ImportTarget -> String
+def showImportTarget = {
+  ImportAll -> "{..}",
+  (ImportQualified name) -> name,
+  (ImportOnly names) -> appendString "{" (appendString (intercalate ", " (mapList showImportName names)) "}")
+}
+
 def showDecl : Decl -> String
 def showDecl = {
   (DeclDef name expr)         -> appendString "def " (appendString name (appendString " = " (showExpr expr))),
@@ -140,8 +168,12 @@ def showDecl = {
     appendString "data " (appendString name
       (appendString " " (appendString (intercalate " " params)
         (appendString " = " (intercalate " | " (mapList showConDecl cons)))))),
-  (DeclImport path)           -> appendString "module {..} = import \"" (appendString path "\""),
-  (DeclForeign name ty)       -> appendString "foreign import " (appendString name (appendString " : " ty))
+  (DeclImport target path)    -> appendString "module " (appendString (showImportTarget target) (appendString " = import \"" (appendString path "\""))),
+  (DeclForeign name ty)       -> appendString "foreign import " (appendString name (appendString " : " ty)),
+  (DeclTypeSig name ty)       -> appendString "def " (appendString name (appendString " : " ty)),
+  (DeclTypeSynonym name params body) ->
+    appendString "type " (appendString name (appendString " " (appendString (intercalate " " params) (appendString " = " body)))),
+  (DeclInfix assoc prec op)   -> appendString assoc (appendString " " (appendString (toStringInt32 prec) (appendString " " op)))
 }
 
 def showModule : Module -> String

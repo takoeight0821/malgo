@@ -38,7 +38,6 @@ import Malgo.Prelude hiding (getContents)
 import Malgo.SExpr (sShow)
 import Malgo.Sequent.Core.Join
 import Malgo.Sequent.Fun (Literal (..), Name, Pattern (..), Tag (..))
-import System.Environment (getArgs)
 import System.Exit (exitSuccess)
 
 data EvalPass = EvalPass
@@ -120,7 +119,8 @@ type Toplevels = Map Name (Name, Statement)
 data Handlers = Handlers
   { stdin :: IO (Maybe Char),
     stdout :: Char -> IO (),
-    stderr :: Char -> IO ()
+    stderr :: Char -> IO (),
+    arguments :: [String]
   }
 
 data Env = Env
@@ -542,8 +542,8 @@ fetchPrimitive "malgo_get_line" = \_ _ -> do
   line <- loop ""
   pure $ Immediate $ String line
 fetchPrimitive "malgo_get_args" = \_ _ -> do
-  args <- liftIO getArgs
-  pure $ Immediate $ String $ T.intercalate "\n" (map T.pack args)
+  Handlers {arguments} <- ask @Handlers
+  pure $ Immediate $ String $ T.intercalate "\n" (map T.pack arguments)
 fetchPrimitive "malgo_exit_success" = \_ _ ->
   liftIO exitSuccess
 fetchPrimitive "malgo_stderr_string" = \cases

@@ -14,8 +14,8 @@ module {..} = import "../../../runtime/malgo/compiler/Eval.mlg"
 -- IO side-effects inside the program (printString, printChar) execute via the
 -- host builtins. The Haskell golden tests capture stdout only, so the returned
 -- Value of main is intentionally ignored.
-def runSource : String -> ()
-def runSource = { src ->
+def runSourceAt : String -> String -> ()
+def runSourceAt = { sourcePath src ->
   case (tokenize src) {
     (Left err) ->
       printString (appendString "Lex error: " (appendString err "\n")),
@@ -24,7 +24,7 @@ def runSource = { src ->
         (Left err) ->
           printString (appendString "Parse error: " (appendString err "\n")),
         (Right m) ->
-          case (evalModule makeBaseEnv m) {
+          case (evalModuleAt makeBaseEnv sourcePath m) {
             (Left err) ->
               printString (appendString "Eval error: " (appendString err "\n")),
             (Right gEnv) ->
@@ -39,13 +39,55 @@ def runSource = { src ->
   }
 }
 
+def runSource : String -> ()
+def runSource = { src -> runSourceAt "" src }
+
 -- ─── Entry point ─────────────────────────────────────────────────────────────
 
--- Read source from stdin, evaluate it, and print the result.
--- Pipe a Malgo program in:
---   echo 'def main = { _ -> addInt32 1i32 2i32 }' \
---     | cabal run exe:malgo -- eval runtime/malgo/compiler/Main.mlg
+def firstArg : String -> Maybe String
+def firstArg = { raw ->
+  if (eqString raw "")
+    { Nothing }
+    { case (indexOfChar '\n' 0i64 raw) {
+        Nothing -> Just raw,
+        (Just i) -> Just (substring raw 0i64 i)
+      }
+    }
+}
+
+def indexOfChar : Char -> Int64 -> String -> Maybe Int64
+def indexOfChar = { c i s ->
+  if (geInt64 i (lengthString s))
+    { Nothing }
+    { if (eqChar c (atString i s))
+        { Just i }
+        { indexOfChar c (addInt64 i 1i64) s }
+    }
+}
+
+def sourceFromArgs : String -> String
+def sourceFromArgs = { raw ->
+  if (eqString raw "")
+    { getContents () }
+    { case (firstArg raw) {
+      Nothing -> getContents (),
+      (Just path) -> readFile path
+    }
+    }
+}
+
+def sourcePathFromArgs : String -> String
+def sourcePathFromArgs = { raw ->
+  case (firstArg raw) {
+    Nothing -> "",
+    (Just path) -> path
+  }
+}
+
+-- Read source from the first program argument when present, otherwise stdin.
+-- Passing a file path leaves stdin available to the evaluated program.
 def main = { _ ->
-  let src = getContents ();
-  runSource src
+  let rawArgs = getRawArgs ();
+  let src = sourceFromArgs rawArgs;
+  runSourceAt (sourcePathFromArgs rawArgs) src
 }

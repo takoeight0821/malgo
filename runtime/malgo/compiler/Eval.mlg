@@ -59,6 +59,20 @@ def forceValue : Env -> Value -> Either String Value
 def forceValue = { gEnv v ->
   case v {
     (VThunk thunkEnv expr) -> eval gEnv thunkEnv expr,
+    (VScoped scopedEnv inner) ->
+      case inner {
+        (VThunk _ e) ->
+          bindRight (eval scopedEnv EnvEmpty e) { result ->
+            case result {
+              (VClosure _ _ _) -> Right (VScoped scopedEnv result),
+              (VCoClosure _ _ _) -> Right (VScoped scopedEnv result),
+              _ -> Right result
+            }
+          },
+        (VClosure _ _ _) -> Right (VScoped scopedEnv inner),
+        (VCoClosure _ _ _) -> Right (VScoped scopedEnv inner),
+        _ -> forceValue scopedEnv inner
+      },
     _ -> Right v
   }
 }
@@ -218,7 +232,7 @@ def eval = { gEnv lEnv expr ->
         }
       },
     (ExArm _ _) -> Left "unexpected bare arm",
-    -- Case lambda captures current local env for lexical scoping
+    -- Case lambda: arms evaluated at call time using the current gEnv
     (ExCase arms) -> Right (VClosure(lEnv, Nil, arms)),
     (ExCoArm _ _) -> Left "unexpected bare copattern arm",
     (ExCoCase arms) -> Right (VCoClosure(lEnv, Nil, arms)),
@@ -266,6 +280,10 @@ def evalExprFields = { gEnv lEnv fields ->
 def apply : Env -> Value -> Value -> Either String Value
 def apply = { gEnv fn arg ->
   case fn {
+    (VScoped scopedEnv inner) ->
+      bindRight (apply scopedEnv inner arg) { result ->
+        Right (keepScopedValue scopedEnv result)
+      },
     (VClosure cLEnv acc arms) ->
       let arity = closureArity arms;
       -- 0-arity = thunk: fire immediately, ignoring arg
@@ -294,6 +312,15 @@ def apply = { gEnv fn arg ->
         { applyBuiltin gEnv name newAcc }
         { Right (VBuiltin(name, arity, newAcc)) },
     _ -> Left (appendString "cannot apply: " (showValue fn))
+  }
+}
+
+def keepScopedValue : Env -> Value -> Value
+def keepScopedValue = { scopedEnv v ->
+  case v {
+    (VClosure _ _ _) -> VScoped(scopedEnv, v),
+    (VCoClosure _ _ _) -> VScoped(scopedEnv, v),
+    _ -> v
   }
 }
 
@@ -337,6 +364,10 @@ def matchCoPrefix = { lEnv args field segs ->
 def projectValue : Env -> Value -> String -> Either String Value
 def projectValue = { gEnv value field ->
   case value {
+    (VScoped scopedEnv inner) ->
+      bindRight (projectValue scopedEnv inner field) { result ->
+        Right (keepScopedValue scopedEnv result)
+      },
     (VRecord fields) ->
       case (lookupValueField field fields) {
         Nothing -> Left "undefined: .",
@@ -413,31 +444,33 @@ def projectCoArms = { gEnv lEnv acc field arms conts contEnv ->
 
 -- ─── Declaration processing ──────────────────────────────────────────────────
 
-def evalDecls : Env -> List Decl -> Either String Env
-def evalDecls = { gEnv decls ->
+def evalDecls : Env -> CompilerState -> List Decl -> Either String {state: CompilerState, env: Env}
+def evalDecls = { gEnv state decls ->
   case decls {
-    Nil -> Right gEnv,
+    Nil -> Right {state = state, env = gEnv},
     (Cons d rest) ->
-      bindRight (evalDecl gEnv d) { gEnv2 -> evalDecls gEnv2 rest }
+      bindRight (evalDecl gEnv state d) { {state = state2, env = gEnv2} ->
+        evalDecls gEnv2 state2 rest
+      }
   }
 }
 
 -- evalDecl: top-level closures get empty lEnv so gEnv is the sole scope
-def evalDecl : Env -> Decl -> Either String Env
-def evalDecl = { gEnv decl ->
+def evalDecl : Env -> CompilerState -> Decl -> Either String {state: CompilerState, env: Env}
+def evalDecl = { gEnv state decl ->
   case decl {
     (DeclDef name expr) ->
-      Right (envExtend name (VThunk(EnvEmpty, expr)) gEnv),
+      Right {state = state, env = envExtend name (VThunk(EnvEmpty, expr)) gEnv},
     (DeclData _ _ cons) ->
-      Right (addConstructors gEnv cons),
+      Right {state = state, env = addConstructors gEnv cons},
     (DeclImport target path) ->
-      evalImport gEnv path,
+      evalImport gEnv state target path,
     (DeclForeign fname _) ->
       let ar = foreignArity fname;
-      Right (envExtend fname (VBuiltin(fname, ar, Nil)) gEnv),
-    (DeclTypeSig _ _) -> Right gEnv,
-    (DeclTypeSynonym _ _ _) -> Right gEnv,
-    (DeclInfix _ _ _) -> Right gEnv
+      Right {state = state, env = envExtend fname (VBuiltin(fname, ar, Nil)) gEnv},
+    (DeclTypeSig _ _) -> Right {state = state, env = gEnv},
+    (DeclTypeSynonym _ _ _) -> Right {state = state, env = gEnv},
+    (DeclInfix _ _ _) -> Right {state = state, env = gEnv}
   }
 }
 
@@ -470,23 +503,435 @@ def normalizeImportPath = { path ->
     }
 }
 
+-- ─── Path normalization utilities ────────────────────────────────────────────
+
+def splitPath : String -> List String
+def splitPath = { path ->
+  case (pathIndexOfChar '/' 0i64 path) {
+    Nothing -> Cons path Nil,
+    (Just i) ->
+      let next = addInt64 i 1i64;
+      Cons (substring path 0i64 i) (splitPath (substring path next (lengthString path)))
+  }
+}
+
+def pathIndexOfChar : Char -> Int64 -> String -> Maybe Int64
+def pathIndexOfChar = { c i s ->
+  if (geInt64 i (lengthString s))
+    { Nothing }
+    { if (eqChar c (atString i s))
+        { Just i }
+        { pathIndexOfChar c (addInt64 i 1i64) s }
+    }
+}
+
+def joinPathParts : List String -> String
+def joinPathParts = {
+  Nil -> "",
+  (Cons x Nil) -> x,
+  (Cons x rest) -> appendString x (appendString "/" (joinPathParts rest))
+}
+
+def normalizePath : String -> String
+def normalizePath = { path ->
+  let isAbsolute = startsWith "/" path;
+  let normalized = joinPathParts (normalizePathParts isAbsolute (splitPath path) Nil);
+  if isAbsolute
+    { appendString "/" normalized }
+    { if (eqString normalized "") { "." } { normalized } }
+}
+
+def normalizePathParts : Bool -> List String -> List String -> List String
+def normalizePathParts = { isAbsolute parts stack ->
+  case parts {
+    Nil -> reverse stack,
+    (Cons part rest) ->
+      if (eqString part "")
+        { normalizePathParts isAbsolute rest stack }
+        { if (eqString part ".")
+            { normalizePathParts isAbsolute rest stack }
+            { if (eqString part "..")
+                { case stack {
+                    Nil ->
+                      if isAbsolute
+                        { normalizePathParts isAbsolute rest Nil }
+                        { normalizePathParts isAbsolute rest (Cons ".." Nil) },
+                    (Cons top parent) ->
+                      if (eqString top "..")
+                        { normalizePathParts isAbsolute rest (Cons ".." stack) }
+                        { normalizePathParts isAbsolute rest parent }
+                  }
+                }
+                { normalizePathParts isAbsolute rest (Cons part stack) }
+            }
+        }
+  }
+}
+
+def lastIndexOfChar : Char -> Int64 -> String -> Maybe Int64
+def lastIndexOfChar = { c i s ->
+  if (ltInt64 i 0i64)
+    { Nothing }
+    { if (eqChar c (atString i s))
+        { Just i }
+        { lastIndexOfChar c (subInt64 i 1i64) s }
+    }
+}
+
+def dirname : String -> String
+def dirname = { path ->
+  let len = lengthString path;
+  case (lastIndexOfChar '/' (subInt64 len 1i64) path) {
+    Nothing -> ".",
+    (Just i) ->
+      if (eqInt64 i 0i64)
+        { "/" }
+        { substring path 0i64 i }
+  }
+}
+
+def joinPath : String -> String -> String
+def joinPath = { dir file ->
+  if (eqString dir "")
+    { file }
+    { if (eqString dir ".")
+        { file }
+        { appendString dir (appendString "/" file) }
+    }
+}
+
+def normalizeImportPathFrom : String -> String -> String
+def normalizeImportPathFrom = { currentDir rawPath ->
+  if (eqString rawPath "Builtin")
+    { "runtime/malgo/Builtin.mlg" }
+    { if (eqString rawPath "Prelude")
+        { "runtime/malgo/Prelude.mlg" }
+        { if (startsWith "/" rawPath)
+            { normalizePath rawPath }
+            { normalizePath (joinPath currentDir rawPath) }
+        }
+    }
+}
+
+-- ─── CompilerState: module loading cache ─────────────────────────────────────
+
+data LoadStatus = Loading | Loaded(Env, List ImportBinding)
+
+data ModuleCacheEntry = ModuleCacheEntry(String, LoadStatus)
+
+-- (cache, importStack, currentDir)
+data CompilerState = CompilerState(List ModuleCacheEntry, List String, String)
+
+data ImportBinding = ImportBinding(String, Value)
+
+def emptyState : CompilerState
+def emptyState = CompilerState(Nil, Nil, ".")
+
+def stateCache : CompilerState -> List ModuleCacheEntry
+def stateCache = { (CompilerState cache _ _) -> cache }
+
+def stateStack : CompilerState -> List String
+def stateStack = { (CompilerState _ stack _) -> stack }
+
+def stateCurrentDir : CompilerState -> String
+def stateCurrentDir = { (CompilerState _ _ dir) -> dir }
+
+def cacheLookup : String -> List ModuleCacheEntry -> Maybe LoadStatus
+def cacheLookup = { path cache ->
+  case cache {
+    Nil -> Nothing,
+    (Cons (ModuleCacheEntry p status) rest) ->
+      if (eqString p path)
+        { Just status }
+        { cacheLookup path rest }
+  }
+}
+
+def cacheInsert : String -> LoadStatus -> List ModuleCacheEntry -> List ModuleCacheEntry
+def cacheInsert = { path status cache ->
+  case cache {
+    Nil -> Cons (ModuleCacheEntry(path, status)) Nil,
+    (Cons (ModuleCacheEntry p s) rest) ->
+      if (eqString p path)
+        { Cons (ModuleCacheEntry(path, status)) rest }
+        { Cons (ModuleCacheEntry(p, s)) (cacheInsert path status rest) }
+  }
+}
+
+def withLoadingModule : String -> CompilerState -> CompilerState
+def withLoadingModule = { path (CompilerState cache stack dir) ->
+  CompilerState(cacheInsert path Loading cache, Cons path stack, dir)
+}
+
+def withLoadedModule : String -> Env -> List ImportBinding -> CompilerState -> CompilerState
+def withLoadedModule = { path env exports (CompilerState cache stack dir) ->
+  CompilerState(cacheInsert path (Loaded(env, exports)) cache, stack, dir)
+}
+
+def withCurrentDir : String -> CompilerState -> CompilerState
+def withCurrentDir = { dir (CompilerState cache stack _) ->
+  CompilerState(cache, stack, dir)
+}
+
+def restoreModuleContext : String -> List String -> CompilerState -> CompilerState
+def restoreModuleContext = { parentDir parentStack (CompilerState cache _ _) ->
+  CompilerState(cache, parentStack, parentDir)
+}
+
+def formatImportCycle : String -> List String -> String
+def formatImportCycle = { path stack ->
+  appendString "import cycle: " (appendString (joinWithArrow (reverse stack)) (appendString " -> " path))
+}
+
+def joinWithArrow : List String -> String
+def joinWithArrow = {
+  Nil -> "",
+  (Cons x Nil) -> x,
+  (Cons x rest) -> appendString x (appendString " -> " (joinWithArrow rest))
+}
+
+-- ─── Import evaluation with full target enforcement ──────────────────────────
+
 def isPreloadedImport : String -> Bool
 def isPreloadedImport = { path ->
   eqString path "runtime/malgo/Builtin.mlg"
 }
 
-def evalImport : Env -> String -> Either String Env
-def evalImport = { gEnv rawPath ->
-  let path = normalizeImportPath rawPath;
+def evalImport : Env -> CompilerState -> ImportTarget -> String -> Either String {state: CompilerState, env: Env}
+def evalImport = { gEnv state target rawPath ->
+  let path = normalizeImportPathFrom (stateCurrentDir state) rawPath;
   if (isPreloadedImport path)
-    { Right gEnv }
-    { let src = readFile path;
-      bindRight (tokenize src) { toks ->
-        bindRight (parseModule toks) { m ->
-          evalModule gEnv m
+    { let exports = collectPreloadedExports makeBaseEnv;
+      bindRight (validateImportTarget target exports) { _ ->
+        Right {state = state, env = extendImportedEnv target gEnv makeBaseEnv exports}
+      }
+    }
+    { case (cacheLookup path (stateCache state)) {
+        (Just Loading) -> Left (formatImportCycle path (stateStack state)),
+        (Just (Loaded moduleEnv exports)) ->
+          bindRight (validateImportTarget target exports) { _ ->
+            Right {state = state, env = extendImportedEnv target gEnv moduleEnv exports}
+          },
+        Nothing ->
+          bindRight (loadModule makeBaseEnv state path) { {state = nextState, moduleEnv = moduleEnv, exports = exports} ->
+            bindRight (validateImportTarget target exports) { _ ->
+              Right {state = nextState, env = extendImportedEnv target gEnv moduleEnv exports}
+            }
+          }
+      }
+    }
+}
+
+def collectPreloadedExports : Env -> List ImportBinding
+def collectPreloadedExports = { env ->
+  collectExportNamesUnchecked env builtinNames
+}
+
+def collectExportNamesUnchecked : Env -> List String -> List ImportBinding
+def collectExportNamesUnchecked = { env names ->
+  case names {
+    Nil -> Nil,
+    (Cons name rest) ->
+      case (envLookup name env) {
+        Nothing -> collectExportNamesUnchecked env rest,
+        (Just v) -> Cons (ImportBinding(name, v)) (collectExportNamesUnchecked env rest)
+      }
+  }
+}
+
+def loadModule : Env -> CompilerState -> String -> Either String {state: CompilerState, moduleEnv: Env, exports: List ImportBinding}
+def loadModule = { baseEnv state path ->
+  let parentDir = stateCurrentDir state;
+  let parentStack = stateStack state;
+  let loadingState = withCurrentDir (dirname path) (withLoadingModule path state);
+  let src = readFile path;
+  bindRight (tokenize src) { toks ->
+    bindRight (parseModule toks) { m ->
+      bindRight (evalModuleWithState baseEnv loadingState m) { {state = loadedState, env = moduleEnv} ->
+        bindRight (moduleExportsWithState loadedState moduleEnv m) { exports ->
+          let cachedState = withLoadedModule path moduleEnv exports loadedState;
+          Right {state = restoreModuleContext parentDir parentStack cachedState, moduleEnv = moduleEnv, exports = exports}
         }
       }
     }
+  }
+}
+
+-- ─── Export collection ────────────────────────────────────────────────────────
+
+def collectExportNames : Env -> List String -> Either String (List ImportBinding)
+def collectExportNames = { moduleEnv names ->
+  case names {
+    Nil -> Right Nil,
+    (Cons name rest) ->
+      case (envLookup name moduleEnv) {
+        Nothing -> collectExportNames moduleEnv rest,
+        (Just v) ->
+          bindRight (collectExportNames moduleEnv rest) { restBindings ->
+            Right (Cons (ImportBinding(name, v)) restBindings)
+          }
+      }
+  }
+}
+
+def moduleExportsWithState : CompilerState -> Env -> Module -> Either String (List ImportBinding)
+def moduleExportsWithState = { state moduleEnv (Module decls) ->
+  declExportBindings state moduleEnv decls
+}
+
+def declExportBindings : CompilerState -> Env -> List Decl -> Either String (List ImportBinding)
+def declExportBindings = { state moduleEnv decls ->
+  case decls {
+    Nil -> Right Nil,
+    (Cons decl rest) ->
+      bindRight (declExportBinding state moduleEnv decl) { bindings ->
+        bindRight (declExportBindings state moduleEnv rest) { restBindings ->
+          Right (append bindings restBindings)
+        }
+      }
+  }
+}
+
+def declExportBinding : CompilerState -> Env -> Decl -> Either String (List ImportBinding)
+def declExportBinding = { state moduleEnv decl ->
+  case decl {
+    (DeclDef name _) -> collectExportNames moduleEnv (Cons name Nil),
+    (DeclData _ _ cons) -> collectExportNames moduleEnv (conExportNames cons),
+    (DeclForeign name _) -> collectExportNames moduleEnv (Cons name Nil),
+    (DeclImport target path) -> importedExportBindings state moduleEnv target path,
+    (DeclTypeSig _ _) -> Right Nil,
+    (DeclTypeSynonym _ _ _) -> Right Nil,
+    (DeclInfix _ _ _) -> Right Nil
+  }
+}
+
+def conExportNames : List ConDecl -> List String
+def conExportNames = {
+  Nil -> Nil,
+  (Cons (ConDecl name _) rest) -> Cons name (conExportNames rest)
+}
+
+def importedExportBindings : CompilerState -> Env -> ImportTarget -> String -> Either String (List ImportBinding)
+def importedExportBindings = { state moduleEnv target rawPath ->
+  case target {
+    ImportAll ->
+      bindRight (exportsForImportPath state rawPath) { exports ->
+        collectExportBindings moduleEnv exports
+      },
+    (ImportQualified _) -> Right Nil,
+    (ImportOnly names) -> collectExportNames moduleEnv (importNameStrings names)
+  }
+}
+
+def exportsForImportPath : CompilerState -> String -> Either String (List ImportBinding)
+def exportsForImportPath = { state rawPath ->
+  let path = normalizeImportPathFrom (stateCurrentDir state) rawPath;
+  if (isPreloadedImport path)
+    { Right (collectPreloadedExports makeBaseEnv) }
+    { case (cacheLookup path (stateCache state)) {
+        (Just (Loaded _ exports)) -> Right exports,
+        (Just Loading) -> Left (formatImportCycle path (stateStack state)),
+        Nothing -> Left (appendString "import cache missing: " path)
+      }
+    }
+}
+
+def collectExportBindings : Env -> List ImportBinding -> Either String (List ImportBinding)
+def collectExportBindings = { moduleEnv exports ->
+  case exports {
+    Nil -> Right Nil,
+    (Cons (ImportBinding name _) rest) ->
+      bindRight (collectExportNames moduleEnv (Cons name Nil)) { binding ->
+        bindRight (collectExportBindings moduleEnv rest) { restBindings ->
+          Right (append binding restBindings)
+        }
+      }
+  }
+}
+
+def importNameStrings : List ImportName -> List String
+def importNameStrings = {
+  Nil -> Nil,
+  (Cons (ImportName name) rest) -> Cons name (importNameStrings rest)
+}
+
+-- ─── Import target validation and env extension ──────────────────────────────
+
+def validateImportTarget : ImportTarget -> List ImportBinding -> Either String ()
+def validateImportTarget = { target exports ->
+  case target {
+    ImportAll -> Right (),
+    (ImportQualified _) -> Right (),
+    (ImportOnly names) -> validateImportNames names exports
+  }
+}
+
+def validateImportNames : List ImportName -> List ImportBinding -> Either String ()
+def validateImportNames = { names exports ->
+  case names {
+    Nil -> Right (),
+    (Cons (ImportName name) rest) ->
+      if (exportNameMember name exports)
+        { validateImportNames rest exports }
+        { Left (appendString "import missing export: " name) }
+  }
+}
+
+def exportNameMember : String -> List ImportBinding -> Bool
+def exportNameMember = { name exports ->
+  case exports {
+    Nil -> False,
+    (Cons (ImportBinding exportedName _) rest) ->
+      if (eqString name exportedName)
+        { True }
+        { exportNameMember name rest }
+  }
+}
+
+def scopedImportValue : Env -> Value -> Value
+def scopedImportValue = { moduleEnv value -> VScoped(moduleEnv, value) }
+
+def extendImportedEnv : ImportTarget -> Env -> Env -> List ImportBinding -> Env
+def extendImportedEnv = { target callerEnv moduleEnv exports ->
+  case target {
+    ImportAll -> extendImportAll callerEnv moduleEnv exports,
+    (ImportQualified alias) -> extendImportQualified alias callerEnv moduleEnv exports,
+    (ImportOnly names) -> extendImportOnly names callerEnv moduleEnv exports
+  }
+}
+
+def extendImportAll : Env -> Env -> List ImportBinding -> Env
+def extendImportAll = { callerEnv moduleEnv exports ->
+  foldl { env (ImportBinding name value) ->
+    envExtend name (scopedImportValue moduleEnv value) env
+  } callerEnv exports
+}
+
+def extendImportQualified : String -> Env -> Env -> List ImportBinding -> Env
+def extendImportQualified = { alias callerEnv moduleEnv exports ->
+  foldl { env (ImportBinding name value) ->
+    let qualName = appendString alias (appendString "." name);
+    envExtend qualName (scopedImportValue moduleEnv value) env
+  } callerEnv exports
+}
+
+def extendImportOnly : List ImportName -> Env -> Env -> List ImportBinding -> Env
+def extendImportOnly = { names callerEnv moduleEnv exports ->
+  foldl { env (ImportName name) ->
+    case (findExport name exports) {
+      Nothing -> env,
+      (Just value) -> envExtend name (scopedImportValue moduleEnv value) env
+    }
+  } callerEnv names
+}
+
+def findExport : String -> List ImportBinding -> Maybe Value
+def findExport = { name exports ->
+  case exports {
+    Nil -> Nothing,
+    (Cons (ImportBinding n v) rest) ->
+      if (eqString n name) { Just v } { findExport name rest }
+  }
 }
 
 def addConstructors : Env -> List ConDecl -> Env
@@ -805,6 +1250,7 @@ def valueToText = {
   (VTuple vs) -> appendString "{" (appendString (intercalateText ", " vs) "}"),
   (VCon name _ Nil) -> name,
   (VCon name _ vs) -> appendString name (appendString "(" (appendString (intercalateText ", " vs) ")")),
+  (VScoped _ v) -> valueToText v,
   (VClosure _ _ _) -> "<function>",
   (VCoClosure _ _ _) -> "<codata>",
   (VRecord fields) -> showValue (VRecord fields),
@@ -1069,11 +1515,32 @@ def addBaseConstructors = { env ->
 
 -- ─── Entry points ─────────────────────────────────────────────────────────────
 
+def evalModuleWithState : Env -> CompilerState -> Module -> Either String {state: CompilerState, env: Env}
+def evalModuleWithState = { baseEnv state (Module decls) -> evalDecls baseEnv state decls }
+
 def evalModule : Env -> Module -> Either String Env
-def evalModule = { baseEnv (Module decls) -> evalDecls baseEnv decls }
+def evalModule = { baseEnv modl ->
+  bindRight (evalModuleWithState baseEnv emptyState modl) { {state = _, env = moduleEnv} ->
+    Right moduleEnv
+  }
+}
 
 def evalModuleAt : Env -> String -> Module -> Either String Env
-def evalModuleAt = { baseEnv sourcePath m -> evalModule baseEnv m }
+def evalModuleAt = { baseEnv sourcePath modl ->
+  let initialState =
+    if (eqString sourcePath "")
+      { emptyState }
+      { let normalizedPath = normalizePath sourcePath;
+        CompilerState(
+          Cons (ModuleCacheEntry(normalizedPath, Loading)) Nil,
+          Cons normalizedPath Nil,
+          dirname normalizedPath
+        )
+      };
+  bindRight (evalModuleWithState baseEnv initialState modl) { {state = _, env = moduleEnv} ->
+    Right moduleEnv
+  }
+}
 
 def runMain : Env -> Either String Value
 def runMain = { gEnv ->

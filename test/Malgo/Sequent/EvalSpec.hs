@@ -53,7 +53,8 @@ runEval moduleName program = do
           Handlers
             { stdin,
               stdout,
-              stderr
+              stderr,
+              arguments = []
             }
         $ evalProgram program
     case result of

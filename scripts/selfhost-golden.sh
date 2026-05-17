@@ -52,7 +52,7 @@ done
 
 log "precompile phase complete (${#precompile[@]} files)"
 
-mapfile -t cases < <(find .golden/Malgo.Sequent.Eval -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+mapfile -t cases < <(find .golden/Malgo.Sequent.Eval -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
 total_cases=${#cases[@]}
 log "starting golden checks: ${total_cases} cases (parallelism: ${PARALLEL_JOBS})"
 
@@ -80,7 +80,7 @@ for i in "${!cases[@]}"; do
     log "[$index/$total_cases] start: $dir"
     out=$(mktemp)
     err=$(mktemp)
-    if timeout "$CASE_TIMEOUT" $MALGO eval runtime/malgo/compiler/Main.mlg < "$src" >"$out" 2>"$err"; then
+    if printf 'Hello\n' | timeout "$CASE_TIMEOUT" $MALGO eval runtime/malgo/compiler/Main.mlg "$src" >"$out" 2>"$err"; then
       case_elapsed=$((SECONDS - case_start))
       if cmp -s "$out" "$expected"; then
         log "[$index/$total_cases] pass: $dir (${case_elapsed}s)"

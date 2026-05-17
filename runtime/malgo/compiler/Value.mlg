@@ -23,6 +23,7 @@ data Value
   | VRecord(List ValueField)      -- record { x = v }
   | VThunk(Env, Expr)             -- delayed definition with captured locals
   | VCoClosure(Env, List Value, List Expr) -- copattern closure/object
+  | VScoped(Env, Value)           -- value evaluated with an imported module env
   -- Constructor: name, expected total arity, args collected so far
   -- Complete when length(args) == arity; partial (still a function) otherwise
   | VCon(String, Int32, List Value)
@@ -91,6 +92,7 @@ def showValue = {
   (VRecord fs)           -> appendString "{ " (appendString (intercalateValueFields ", " fs) " }"),
   (VThunk _ _)           -> "<thunk>",
   (VCoClosure _ _ _)     -> "<codata>",
+  (VScoped _ value)      -> showValue value,
   (VCon name _ Nil)      -> name,
   (VCon name _ vs)       -> appendString name (appendString "(" (appendString (intercalateVal ", " vs) ")")),
   (VClosure _ acc arms)  ->

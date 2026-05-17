@@ -73,7 +73,7 @@ setupPrelude =
     Driver.compile preludePath
 
 flag :: Flag
-flag = Flag {noOptimize = False, lambdaLift = False, debugMode = False, testMode = True, target = TargetEval, evalMode = EvalSmallStep, useInfer = False}
+flag = Flag {noOptimize = False, lambdaLift = False, debugMode = False, testMode = True, target = TargetEval, evalMode = EvalSmallStep, useInfer = False, programArgs = []}
 
 -- | Test cases that retain full golden output across all passes.
 -- Other test cases use lightweight "compiles" tests instead.

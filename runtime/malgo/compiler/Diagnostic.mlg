@@ -1,0 +1,47 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Token.mlg"
+
+-- ──────────────────────────────────────────────────────────
+-- Structured diagnostic types for the self-hosted compiler
+-- ──────────────────────────────────────────────────────────
+
+-- Diagnostic severity
+data Severity = SevError | SevWarning | SevInfo
+
+-- A structured diagnostic message with optional source location
+data Diagnostic = Diagnostic(Severity, Maybe SourcePos, String)
+
+def mkError : String -> Diagnostic
+def mkError = { msg -> Diagnostic(SevError, Nothing, msg) }
+
+def mkErrorAt : SourcePos -> String -> Diagnostic
+def mkErrorAt = { pos msg -> Diagnostic(SevError, Just pos, msg) }
+
+def mkWarning : String -> Diagnostic
+def mkWarning = { msg -> Diagnostic(SevWarning, Nothing, msg) }
+
+def showSeverity : Severity -> String
+def showSeverity = {
+  SevError   -> "error",
+  SevWarning -> "warning",
+  SevInfo    -> "info"
+}
+
+def showDiagnostic : Diagnostic -> String
+def showDiagnostic = { (Diagnostic sev pos msg) ->
+  let sevStr = showSeverity sev;
+  case pos {
+    Nothing -> appendString sevStr (appendString ": " msg),
+    (Just p) -> appendString (showSourcePos p) (appendString ": " (appendString sevStr (appendString ": " msg)))
+  }
+}
+
+-- Format a list of diagnostics as a single string
+def showDiagnostics : List Diagnostic -> String
+def showDiagnostics = {
+  Nil -> "",
+  (Cons d Nil) -> showDiagnostic d,
+  (Cons d rest) -> appendString (showDiagnostic d) (appendString "\n" (showDiagnostics rest))
+}

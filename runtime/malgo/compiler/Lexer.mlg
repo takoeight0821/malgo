@@ -462,3 +462,77 @@ def opLen = { src i ->
 -- Convert Int32 to Int64 via string representation
 def int32ToInt64 : Int32 -> Int64
 def int32ToInt64 = { n -> parseIntString64 (toStringInt32 n) }
+
+-- ──────────────────────────────────────────────────────────
+-- Position-tracking lexer
+-- ──────────────────────────────────────────────────────────
+
+-- Advance a source position by one character
+def nextPos : SourcePos -> Char -> SourcePos
+def nextPos = { (SourcePos line col) c ->
+  if (eqChar c '\n')
+    { SourcePos(addInt64 line 1i64, 1i64) }
+    { SourcePos(line, addInt64 col 1i64) }
+}
+
+-- Advance a source position through an entire string
+def advancePosStr : SourcePos -> String -> SourcePos
+def advancePosStr = { pos src ->
+  if (eqString src "")
+    { pos }
+    { let c = atString 0i64 src;
+      advancePosStr (nextPos pos c) (substring src 1i64 (lengthString src))
+    }
+}
+
+-- tokenizeWithPos : String -> Either String (List Located)
+-- Returns Left(errorMsg) on failure, Right(located-tokens) on success.
+-- The list always ends with Located(TkEof, finalPos).
+-- The existing tokenize function is unchanged; this is purely additive.
+def tokenizeWithPos : String -> Either String (List Located)
+def tokenizeWithPos = { src ->
+  lexAllWithPos src (SourcePos(1i64, 1i64)) Nil
+}
+
+-- Lex all tokens with position tracking, accumulating into acc (reversed)
+def lexAllWithPos : String -> SourcePos -> List Located -> Either String (List Located)
+def lexAllWithPos = { src pos acc ->
+  if (eqString src "")
+    { Right (append (reverseList acc) (Cons (Located(TkEof, pos)) Nil)) }
+    { let c = atString 0i64 src;
+      if (isWhitespaceCh c)
+        { lexAllWithPos (substring src 1i64 (lengthString src)) (nextPos pos c) acc }
+        { if (isLineCommentStart src)
+            { let rest = skipLineComment src;
+              let consumed = substring src 0i64 (subInt64 (lengthString src) (lengthString rest));
+              let newPos = advancePosStr pos consumed;
+              lexAllWithPos rest newPos acc
+            }
+            { if (isPragmaStart src)
+                { let rest = skipLineComment src;
+                  let consumed = substring src 0i64 (subInt64 (lengthString src) (lengthString rest));
+                  let newPos = advancePosStr pos consumed;
+                  lexAllWithPos rest newPos acc
+                }
+                { if (isBlockCommentStart src)
+                { case (skipBlockComment src) {
+                    (Left e)  -> Left e,
+                    (Right rest) ->
+                      let consumed = substring src 0i64 (subInt64 (lengthString src) (lengthString rest));
+                      let newPos = advancePosStr pos consumed;
+                      lexAllWithPos rest newPos acc
+                  }
+                }
+                { case (lexOne src) {
+                    (Left e)         -> Left e,
+                    (Right {val = tok, rest = rest}) ->
+                      let consumed = substring src 0i64 (subInt64 (lengthString src) (lengthString rest));
+                      let newPos = advancePosStr pos consumed;
+                      lexAllWithPos rest newPos (Cons (Located(tok, pos)) acc)
+                  }
+                }
+              }
+            }
+        }
+    }
+}

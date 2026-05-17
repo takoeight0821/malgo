@@ -1,0 +1,61 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+
+-- Module interface: what a module exports.
+-- Used as input to the renamer when resolving imported names.
+data ModuleInterface = ModuleInterface(
+  String,       -- module path (normalized)
+  List String,  -- exported value names
+  List String,  -- exported type names
+  List String   -- exported constructor names
+)
+
+def emptyInterface : String -> ModuleInterface
+def emptyInterface = { path -> ModuleInterface(path, Nil, Nil, Nil) }
+
+def interfacePath : ModuleInterface -> String
+def interfacePath = { (ModuleInterface p _ _ _) -> p }
+
+def interfaceValues : ModuleInterface -> List String
+def interfaceValues = { (ModuleInterface _ vs _ _) -> vs }
+
+def interfaceTypes : ModuleInterface -> List String
+def interfaceTypes = { (ModuleInterface _ _ ts _) -> ts }
+
+def interfaceConstructors : ModuleInterface -> List String
+def interfaceConstructors = { (ModuleInterface _ _ _ cs) -> cs }
+
+-- Build an interface from a module's top-level declarations.
+def buildInterface : String -> List Decl -> ModuleInterface
+def buildInterface = { path decls ->
+  let vals  = concatMapIface valNames  decls;
+  let types = concatMapIface typeNames decls;
+  let cons  = concatMapIface conNames  decls;
+  ModuleInterface(path, vals, types, cons)
+}
+
+def valNames : Decl -> List String
+def valNames = {
+  (DeclDef name _)     -> Cons name Nil,
+  (DeclForeign name _) -> Cons name Nil,
+  _                    -> Nil
+}
+
+def typeNames : Decl -> List String
+def typeNames = {
+  (DeclData name _ _)         -> Cons name Nil,
+  (DeclTypeSynonym name _ _)  -> Cons name Nil,
+  _                           -> Nil
+}
+
+def conNames : Decl -> List String
+def conNames = {
+  (DeclData _ _ cons) -> mapList { (ConDecl n _) -> n } cons,
+  _                   -> Nil
+}
+
+def concatMapIface : (a -> List b) -> List a -> List b
+def concatMapIface = { f xs -> foldl { acc x -> append acc (f x) } Nil xs }
+
+def main = { _ -> putStrLn "Interface module OK" }

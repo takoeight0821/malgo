@@ -1,0 +1,176 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/compiler/FunIR.mlg"
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Name mangling
+-- ──────────────────────────────────────────────────────────────────────
+
+-- Mangle a Malgo name to a valid Scheme identifier
+def mangleName : String -> String
+def mangleName = { name ->
+  appendString "malgo-" (mangleChars name 0i64)
+}
+
+def mangleChars : String -> Int64 -> String
+def mangleChars = { s i ->
+  let len = lengthString s;
+  if (geInt64 i len)
+    { "" }
+    { let c = atString i s;
+      appendString (mangleChar c) (mangleChars s (addInt64 i 1i64))
+    }
+}
+
+def mangleChar : Char -> String
+def mangleChar = { c ->
+  if (eqChar c '.')
+    { "/" }
+    { if (eqChar c '_')
+        { "_" }
+        { if (eqChar c '-')
+            { "--" }
+            { if (isUpper c)
+                { appendString "!" (consString c "") }
+                { consString c "" }
+            }
+        }
+    }
+}
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Join strings with a separator
+-- ──────────────────────────────────────────────────────────────────────
+
+def joinSep : String -> List String -> String
+def joinSep = { sep xs ->
+  case xs {
+    Nil -> "",
+    (Cons x Nil) -> x,
+    (Cons x rest) -> appendString x (appendString sep (joinSep sep rest))
+  }
+}
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Emit Scheme expressions from Fun IR
+-- ──────────────────────────────────────────────────────────────────────
+
+def emitExpr : FunExpr -> String
+def emitExpr = { expr ->
+  case expr {
+    (FunVar name) -> mangleName name,
+    (FunInvoke name) -> mangleName name,
+    (FunLiteral lit) -> emitLit lit,
+    (FunLet name e1 e2) ->
+      appendString "(let ((" (appendString (mangleName name) (appendString " " (appendString (emitExpr e1) (appendString "))\n  " (appendString (emitExpr e2) ")"))))),
+    (FunLambda params body) ->
+      appendString "(lambda (" (appendString (joinSep " " (mapList mangleName params)) (appendString ")\n  " (appendString (emitExpr body) ")"))),
+    (FunApply f args) ->
+      appendString "(" (appendString (emitExpr f) (appendString " " (appendString (joinSep " " (mapList emitExpr args)) ")"))),
+    (FunConstruct tag args) ->
+      appendString "(list '" (appendString (emitTag tag) (appendString " " (appendString (joinSep " " (mapList emitExpr args)) ")"))),
+    (FunObject fields) ->
+      appendString "(list 'record " (appendString (joinSep " " (mapList emitField fields)) ")"),
+    (FunProject e field) ->
+      appendString "(malgo-project " (appendString (emitExpr e) (appendString " '" (appendString field ")"))),
+    (FunSelect e branches) ->
+      appendString "(malgo-select " (appendString (emitExpr e) (appendString "\n  " (appendString (joinSep "\n  " (mapList emitBranch branches)) ")"))),
+    (FunPrimitive name args) ->
+      appendString "(malgo-prim '" (appendString name (appendString " (list " (appendString (joinSep " " (mapList emitExpr args)) "))"))),
+    (FunFix name body) ->
+      appendString "(letrec ((" (appendString (mangleName name) (appendString " #f))\n  (set! " (appendString (mangleName name) (appendString "\n    " (appendString (emitExpr body) (appendString ")\n  " (appendString (mangleName name) ")")))))))
+  }
+}
+
+def emitLit : FunLit -> String
+def emitLit = {
+  (FunLitInt32 n) -> toStringInt32 n,
+  (FunLitInt64 n) -> toStringInt64 n,
+  (FunLitChar c) -> appendString "#\\" (consString c ""),
+  (FunLitString s) -> appendString "\"" (appendString (escapeString s 0i64) "\"")
+}
+
+def escapeString : String -> Int64 -> String
+def escapeString = { s i ->
+  let len = lengthString s;
+  if (geInt64 i len)
+    { "" }
+    { let c = atString i s;
+      appendString (escapeChar c) (escapeString s (addInt64 i 1i64))
+    }
+}
+
+def escapeChar : Char -> String
+def escapeChar = { c ->
+  if (eqChar c '"')
+    { "\\\"" }
+    { if (eqChar c '\\')
+        { "\\\\" }
+        { if (eqChar c '\n')
+            { "\\n" }
+            { consString c "" }
+        }
+    }
+}
+
+def emitTag : FunTag -> String
+def emitTag = {
+  FunTagTuple -> "tuple",
+  (FunTagCon name) -> name
+}
+
+def emitField : FunField -> String
+def emitField = { (FunField n e) ->
+  appendString "(cons '" (appendString n (appendString " " (appendString (emitExpr e) ")")))
+}
+
+def emitBranch : FunBranch -> String
+def emitBranch = { (FunBranch pat body) ->
+  appendString "(" (appendString (emitPat pat) (appendString " " (appendString (emitExpr body) ")")))
+}
+
+def emitPat : FunPat -> String
+def emitPat = {
+  (FunPVar name) -> mangleName name,
+  (FunPLit lit) -> emitLit lit,
+  (FunPDestruct tag pats) ->
+    appendString "(list '" (appendString (emitTag tag) (appendString " " (appendString (joinSep " " (mapList emitPat pats)) ")"))),
+  (FunPExpand fields) ->
+    appendString "(record " (appendString (joinSep " " (mapList emitPatField fields)) ")"),
+  FunPWild -> "_"
+}
+
+def emitPatField : FunPatField -> String
+def emitPatField = { (FunPatField n p) ->
+  appendString "(" (appendString n (appendString " " (appendString (emitPat p) ")")))
+}
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Emit a top-level definition
+-- ──────────────────────────────────────────────────────────────────────
+
+def emitDef : FunDef -> String
+def emitDef = { (FunDef name expr) ->
+  appendString "(define " (appendString (mangleName name) (appendString "\n  " (appendString (emitExpr expr) ")\n")))
+}
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Scheme runtime (embedded as a string)
+-- ──────────────────────────────────────────────────────────────────────
+
+def schemeRuntime : String
+def schemeRuntime = ";; Malgo runtime for Scheme\n(define (malgo-project record field)\n  (let loop ((r (cdr record)))\n    (cond\n      ((null? r) (error 'project (string-append \"field not found: \" (symbol->string field))))\n      ((eq? (caar r) field) (cdar r))\n      (else (loop (cdr r))))))\n\n(define (malgo-select val . branches)\n  (let loop ((bs branches))\n    (cond\n      ((null? bs) (error 'select \"no matching branch\"))\n      (else ((car bs) val)))))\n\n(define (malgo-prim name args)\n  (case name\n    ((appendString) (string-append (car args) (cadr args)))\n    ((eqString) (if (string=? (car args) (cadr args)) '(True) '(False)))\n    ((printString) (display (car args)) '(Unit))\n    ((printInt32) (display (car args)) '(Unit))\n    ((addInt32) (+ (car args) (cadr args)))\n    ((subInt32) (- (car args) (cadr args)))\n    ((mulInt32) (* (car args) (cadr args)))\n    ((eqInt32) (if (= (car args) (cadr args)) '(True) '(False)))\n    ((ltInt32) (if (< (car args) (cadr args)) '(True) '(False)))\n    (else (error 'prim (string-append \"unknown primitive: \" (symbol->string name))))))\n\n(define (malgo-print-result v)\n  (display v) (newline))\n\n"
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Top-level compile entry point
+-- ──────────────────────────────────────────────────────────────────────
+
+def compileToScheme : FunProgram -> String
+def compileToScheme = { (FunProgram defs _) ->
+  appendString schemeRuntime
+    (appendString "\n;; Definitions\n"
+      (appendString (joinSep "\n" (mapList emitDef defs))
+        "\n;; Run main\n(malgo-main malgo-print-result)\n"))
+}
+
+def main = { _ -> putStrLn "Scheme backend module OK" }

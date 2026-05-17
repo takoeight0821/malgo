@@ -444,33 +444,29 @@ def projectCoArms = { gEnv lEnv acc field arms conts contEnv ->
 
 -- ─── Declaration processing ──────────────────────────────────────────────────
 
+-- Process declarations without using bindRight for simple cases, reducing overhead.
+-- Only DeclImport uses bindRight since it's the only decl that can fail or update state.
 def evalDecls : Env -> CompilerState -> List Decl -> Either String {state: CompilerState, env: Env}
 def evalDecls = { gEnv state decls ->
   case decls {
     Nil -> Right {state = state, env = gEnv},
     (Cons d rest) ->
-      bindRight (evalDecl gEnv state d) { {state = state2, env = gEnv2} ->
-        evalDecls gEnv2 state2 rest
+      case d {
+        (DeclDef name expr) ->
+          evalDecls (envExtend name (VThunk(EnvEmpty, expr)) gEnv) state rest,
+        (DeclData _ _ cons) ->
+          evalDecls (addConstructors gEnv cons) state rest,
+        (DeclImport target path) ->
+          bindRight (evalImport gEnv state target path) { {state = state2, env = gEnv2} ->
+            evalDecls gEnv2 state2 rest
+          },
+        (DeclForeign fname _) ->
+          let ar = foreignArity fname;
+          evalDecls (envExtend fname (VBuiltin(fname, ar, Nil)) gEnv) state rest,
+        (DeclTypeSig _ _) -> evalDecls gEnv state rest,
+        (DeclTypeSynonym _ _ _) -> evalDecls gEnv state rest,
+        (DeclInfix _ _ _) -> evalDecls gEnv state rest
       }
-  }
-}
-
--- evalDecl: top-level closures get empty lEnv so gEnv is the sole scope
-def evalDecl : Env -> CompilerState -> Decl -> Either String {state: CompilerState, env: Env}
-def evalDecl = { gEnv state decl ->
-  case decl {
-    (DeclDef name expr) ->
-      Right {state = state, env = envExtend name (VThunk(EnvEmpty, expr)) gEnv},
-    (DeclData _ _ cons) ->
-      Right {state = state, env = addConstructors gEnv cons},
-    (DeclImport target path) ->
-      evalImport gEnv state target path,
-    (DeclForeign fname _) ->
-      let ar = foreignArity fname;
-      Right {state = state, env = envExtend fname (VBuiltin(fname, ar, Nil)) gEnv},
-    (DeclTypeSig _ _) -> Right {state = state, env = gEnv},
-    (DeclTypeSynonym _ _ _) -> Right {state = state, env = gEnv},
-    (DeclInfix _ _ _) -> Right {state = state, env = gEnv}
   }
 }
 
@@ -615,14 +611,12 @@ def normalizeImportPathFrom = { currentDir rawPath ->
 
 -- ─── CompilerState: module loading cache ─────────────────────────────────────
 
-data LoadStatus = Loading | Loaded(Env, List ImportBinding)
+data LoadStatus = Loading | Loaded(Env)
 
 data ModuleCacheEntry = ModuleCacheEntry(String, LoadStatus)
 
 -- (cache, importStack, currentDir)
 data CompilerState = CompilerState(List ModuleCacheEntry, List String, String)
-
-data ImportBinding = ImportBinding(String, Value)
 
 def emptyState : CompilerState
 def emptyState = CompilerState(Nil, Nil, ".")
@@ -663,9 +657,9 @@ def withLoadingModule = { path (CompilerState cache stack dir) ->
   CompilerState(cacheInsert path Loading cache, Cons path stack, dir)
 }
 
-def withLoadedModule : String -> Env -> List ImportBinding -> CompilerState -> CompilerState
-def withLoadedModule = { path env exports (CompilerState cache stack dir) ->
-  CompilerState(cacheInsert path (Loaded(env, exports)) cache, stack, dir)
+def withLoadedModuleEnv : String -> Env -> CompilerState -> CompilerState
+def withLoadedModuleEnv = { path env (CompilerState cache stack dir) ->
+  CompilerState(cacheInsert path (Loaded env) cache, stack, dir)
 }
 
 def withCurrentDir : String -> CompilerState -> CompilerState
@@ -701,45 +695,27 @@ def evalImport : Env -> CompilerState -> ImportTarget -> String -> Either String
 def evalImport = { gEnv state target rawPath ->
   let path = normalizeImportPathFrom (stateCurrentDir state) rawPath;
   if (isPreloadedImport path)
-    { let exports = collectPreloadedExports makeBaseEnv;
-      bindRight (validateImportTarget target exports) { _ ->
-        Right {state = state, env = extendImportedEnv target gEnv makeBaseEnv exports}
+    { bindRight (extendFromModuleEnv target gEnv makeBaseEnv) { newEnv ->
+        Right {state = state, env = newEnv}
       }
     }
     { case (cacheLookup path (stateCache state)) {
         (Just Loading) -> Left (formatImportCycle path (stateStack state)),
-        (Just (Loaded moduleEnv exports)) ->
-          bindRight (validateImportTarget target exports) { _ ->
-            Right {state = state, env = extendImportedEnv target gEnv moduleEnv exports}
+        (Just (Loaded moduleEnv)) ->
+          bindRight (extendFromModuleEnv target gEnv moduleEnv) { newEnv ->
+            Right {state = state, env = newEnv}
           },
         Nothing ->
-          bindRight (loadModule makeBaseEnv state path) { {state = nextState, moduleEnv = moduleEnv, exports = exports} ->
-            bindRight (validateImportTarget target exports) { _ ->
-              Right {state = nextState, env = extendImportedEnv target gEnv moduleEnv exports}
+          bindRight (loadModule makeBaseEnv state path) { {state = nextState, moduleEnv = moduleEnv} ->
+            bindRight (extendFromModuleEnv target gEnv moduleEnv) { newEnv ->
+              Right {state = nextState, env = newEnv}
             }
           }
       }
     }
 }
 
-def collectPreloadedExports : Env -> List ImportBinding
-def collectPreloadedExports = { env ->
-  collectExportNamesUnchecked env builtinNames
-}
-
-def collectExportNamesUnchecked : Env -> List String -> List ImportBinding
-def collectExportNamesUnchecked = { env names ->
-  case names {
-    Nil -> Nil,
-    (Cons name rest) ->
-      case (envLookup name env) {
-        Nothing -> collectExportNamesUnchecked env rest,
-        (Just v) -> Cons (ImportBinding(name, v)) (collectExportNamesUnchecked env rest)
-      }
-  }
-}
-
-def loadModule : Env -> CompilerState -> String -> Either String {state: CompilerState, moduleEnv: Env, exports: List ImportBinding}
+def loadModule : Env -> CompilerState -> String -> Either String {state: CompilerState, moduleEnv: Env}
 def loadModule = { baseEnv state path ->
   let parentDir = stateCurrentDir state;
   let parentStack = stateStack state;
@@ -748,189 +724,51 @@ def loadModule = { baseEnv state path ->
   bindRight (tokenize src) { toks ->
     bindRight (parseModule toks) { m ->
       bindRight (evalModuleWithState baseEnv loadingState m) { {state = loadedState, env = moduleEnv} ->
-        bindRight (moduleExportsWithState loadedState moduleEnv m) { exports ->
-          let cachedState = withLoadedModule path moduleEnv exports loadedState;
-          Right {state = restoreModuleContext parentDir parentStack cachedState, moduleEnv = moduleEnv, exports = exports}
-        }
+        let cachedState = withLoadedModuleEnv path moduleEnv loadedState;
+        Right {state = restoreModuleContext parentDir parentStack cachedState, moduleEnv = moduleEnv}
       }
     }
   }
 }
 
--- ─── Export collection ────────────────────────────────────────────────────────
+-- ─── Import env extension ─────────────────────────────────────────────────────
 
-def collectExportNames : Env -> List String -> Either String (List ImportBinding)
-def collectExportNames = { moduleEnv names ->
+def mergeEnvs : Env -> Env -> Env
+def mergeEnvs = { src dest ->
+  case src {
+    EnvEmpty -> dest,
+    (EnvBind name value rest) -> mergeEnvs rest (envExtend name value dest)
+  }
+}
+
+def addQualifiedEnv : String -> Env -> Env -> Env
+def addQualifiedEnv = { alias moduleEnv callerEnv ->
+  case moduleEnv {
+    EnvEmpty -> callerEnv,
+    (EnvBind name value rest) ->
+      let qualName = appendString alias (appendString "." name);
+      addQualifiedEnv alias rest (envExtend qualName value callerEnv)
+  }
+}
+
+def extendImportOnlyDirect : List ImportName -> Env -> Env -> Either String Env
+def extendImportOnlyDirect = { names callerEnv moduleEnv ->
   case names {
-    Nil -> Right Nil,
-    (Cons name rest) ->
-      case (envLookup name moduleEnv) {
-        Nothing -> collectExportNames moduleEnv rest,
-        (Just v) ->
-          bindRight (collectExportNames moduleEnv rest) { restBindings ->
-            Right (Cons (ImportBinding(name, v)) restBindings)
-          }
-      }
-  }
-}
-
-def moduleExportsWithState : CompilerState -> Env -> Module -> Either String (List ImportBinding)
-def moduleExportsWithState = { state moduleEnv (Module decls) ->
-  declExportBindings state moduleEnv decls
-}
-
-def declExportBindings : CompilerState -> Env -> List Decl -> Either String (List ImportBinding)
-def declExportBindings = { state moduleEnv decls ->
-  case decls {
-    Nil -> Right Nil,
-    (Cons decl rest) ->
-      bindRight (declExportBinding state moduleEnv decl) { bindings ->
-        bindRight (declExportBindings state moduleEnv rest) { restBindings ->
-          Right (append bindings restBindings)
-        }
-      }
-  }
-}
-
-def declExportBinding : CompilerState -> Env -> Decl -> Either String (List ImportBinding)
-def declExportBinding = { state moduleEnv decl ->
-  case decl {
-    (DeclDef name _) -> collectExportNames moduleEnv (Cons name Nil),
-    (DeclData _ _ cons) -> collectExportNames moduleEnv (conExportNames cons),
-    (DeclForeign name _) -> collectExportNames moduleEnv (Cons name Nil),
-    (DeclImport target path) -> importedExportBindings state moduleEnv target path,
-    (DeclTypeSig _ _) -> Right Nil,
-    (DeclTypeSynonym _ _ _) -> Right Nil,
-    (DeclInfix _ _ _) -> Right Nil
-  }
-}
-
-def conExportNames : List ConDecl -> List String
-def conExportNames = {
-  Nil -> Nil,
-  (Cons (ConDecl name _) rest) -> Cons name (conExportNames rest)
-}
-
-def importedExportBindings : CompilerState -> Env -> ImportTarget -> String -> Either String (List ImportBinding)
-def importedExportBindings = { state moduleEnv target rawPath ->
-  case target {
-    ImportAll ->
-      bindRight (exportsForImportPath state rawPath) { exports ->
-        collectExportBindings moduleEnv exports
-      },
-    (ImportQualified _) -> Right Nil,
-    (ImportOnly names) -> collectExportNames moduleEnv (importNameStrings names)
-  }
-}
-
-def exportsForImportPath : CompilerState -> String -> Either String (List ImportBinding)
-def exportsForImportPath = { state rawPath ->
-  let path = normalizeImportPathFrom (stateCurrentDir state) rawPath;
-  if (isPreloadedImport path)
-    { Right (collectPreloadedExports makeBaseEnv) }
-    { case (cacheLookup path (stateCache state)) {
-        (Just (Loaded _ exports)) -> Right exports,
-        (Just Loading) -> Left (formatImportCycle path (stateStack state)),
-        Nothing -> Left (appendString "import cache missing: " path)
-      }
-    }
-}
-
-def collectExportBindings : Env -> List ImportBinding -> Either String (List ImportBinding)
-def collectExportBindings = { moduleEnv exports ->
-  case exports {
-    Nil -> Right Nil,
-    (Cons (ImportBinding name _) rest) ->
-      bindRight (collectExportNames moduleEnv (Cons name Nil)) { binding ->
-        bindRight (collectExportBindings moduleEnv rest) { restBindings ->
-          Right (append binding restBindings)
-        }
-      }
-  }
-}
-
-def importNameStrings : List ImportName -> List String
-def importNameStrings = {
-  Nil -> Nil,
-  (Cons (ImportName name) rest) -> Cons name (importNameStrings rest)
-}
-
--- ─── Import target validation and env extension ──────────────────────────────
-
-def validateImportTarget : ImportTarget -> List ImportBinding -> Either String ()
-def validateImportTarget = { target exports ->
-  case target {
-    ImportAll -> Right (),
-    (ImportQualified _) -> Right (),
-    (ImportOnly names) -> validateImportNames names exports
-  }
-}
-
-def validateImportNames : List ImportName -> List ImportBinding -> Either String ()
-def validateImportNames = { names exports ->
-  case names {
-    Nil -> Right (),
+    Nil -> Right callerEnv,
     (Cons (ImportName name) rest) ->
-      if (exportNameMember name exports)
-        { validateImportNames rest exports }
-        { Left (appendString "import missing export: " name) }
+      case (envLookup name moduleEnv) {
+        Nothing -> Left (appendString "import missing export: " name),
+        (Just v) -> extendImportOnlyDirect rest (envExtend name v callerEnv) moduleEnv
+      }
   }
 }
 
-def exportNameMember : String -> List ImportBinding -> Bool
-def exportNameMember = { name exports ->
-  case exports {
-    Nil -> False,
-    (Cons (ImportBinding exportedName _) rest) ->
-      if (eqString name exportedName)
-        { True }
-        { exportNameMember name rest }
-  }
-}
-
-def scopedImportValue : Env -> Value -> Value
-def scopedImportValue = { moduleEnv value -> VScoped(moduleEnv, value) }
-
-def extendImportedEnv : ImportTarget -> Env -> Env -> List ImportBinding -> Env
-def extendImportedEnv = { target callerEnv moduleEnv exports ->
+def extendFromModuleEnv : ImportTarget -> Env -> Env -> Either String Env
+def extendFromModuleEnv = { target callerEnv moduleEnv ->
   case target {
-    ImportAll -> extendImportAll callerEnv moduleEnv exports,
-    (ImportQualified alias) -> extendImportQualified alias callerEnv moduleEnv exports,
-    (ImportOnly names) -> extendImportOnly names callerEnv moduleEnv exports
-  }
-}
-
-def extendImportAll : Env -> Env -> List ImportBinding -> Env
-def extendImportAll = { callerEnv moduleEnv exports ->
-  foldl { env (ImportBinding name value) ->
-    envExtend name (scopedImportValue moduleEnv value) env
-  } callerEnv exports
-}
-
-def extendImportQualified : String -> Env -> Env -> List ImportBinding -> Env
-def extendImportQualified = { alias callerEnv moduleEnv exports ->
-  foldl { env (ImportBinding name value) ->
-    let qualName = appendString alias (appendString "." name);
-    envExtend qualName (scopedImportValue moduleEnv value) env
-  } callerEnv exports
-}
-
-def extendImportOnly : List ImportName -> Env -> Env -> List ImportBinding -> Env
-def extendImportOnly = { names callerEnv moduleEnv exports ->
-  foldl { env (ImportName name) ->
-    case (findExport name exports) {
-      Nothing -> env,
-      (Just value) -> envExtend name (scopedImportValue moduleEnv value) env
-    }
-  } callerEnv names
-}
-
-def findExport : String -> List ImportBinding -> Maybe Value
-def findExport = { name exports ->
-  case exports {
-    Nil -> Nothing,
-    (Cons (ImportBinding n v) rest) ->
-      if (eqString n name) { Just v } { findExport name rest }
+    ImportAll -> Right (mergeEnvs moduleEnv callerEnv),
+    (ImportQualified alias) -> Right (addQualifiedEnv alias moduleEnv callerEnv),
+    (ImportOnly names) -> extendImportOnlyDirect names callerEnv moduleEnv
   }
 }
 

@@ -1,0 +1,124 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Fun IR: functional intermediate representation
+-- ──────────────────────────────────────────────────────────────────────
+
+-- Constructor tag
+data FunTag
+  = FunTagTuple
+  | FunTagCon String
+
+-- Literals
+data FunLit
+  = FunLitInt32 Int32
+  | FunLitInt64 Int64
+  | FunLitChar Char
+  | FunLitString String
+
+-- Fun IR expressions
+data FunExpr
+  = FunVar String                          -- local/global name reference
+  | FunInvoke String                       -- external module reference
+  | FunLiteral FunLit                      -- literal value
+  | FunLet(String, FunExpr, FunExpr)       -- let name = e1 in e2
+  | FunLambda(List String, FunExpr)        -- \params -> body
+  | FunApply(FunExpr, List FunExpr)        -- f args
+  | FunConstruct(FunTag, List FunExpr)     -- Tag(es)
+  | FunObject(List FunField)               -- {field = e, ...}
+  | FunProject(FunExpr, String)            -- e.field
+  | FunSelect(FunExpr, List FunBranch)     -- case e { pats -> e... }
+  | FunPrimitive(String, List FunExpr)     -- foreign primitive call
+  | FunFix(String, FunExpr)               -- fix point / label
+
+-- Record field in Fun IR
+data FunField = FunField(String, FunExpr)
+
+-- Pattern in Fun IR
+data FunPat
+  = FunPVar String                         -- variable pattern
+  | FunPLit FunLit                         -- literal pattern
+  | FunPDestruct(FunTag, List FunPat)      -- constructor pattern
+  | FunPExpand(List FunPatField)           -- record pattern
+  | FunPWild                               -- wildcard
+
+data FunPatField = FunPatField(String, FunPat)
+
+-- Branch in Fun IR
+data FunBranch = FunBranch(FunPat, FunExpr)
+
+-- A top-level definition
+data FunDef = FunDef(String, FunExpr)
+
+-- A complete Fun IR program
+data FunProgram = FunProgram(List FunDef, List String)  -- defs, dependencies
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Helpers
+-- ──────────────────────────────────────────────────────────────────────
+
+def joinWith : String -> List String -> String
+def joinWith = {
+  _ Nil -> "",
+  _ (Cons s Nil) -> s,
+  sep (Cons s rest) -> appendString s (appendString sep (joinWith sep rest))
+}
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Show functions for debugging
+-- ──────────────────────────────────────────────────────────────────────
+
+def showFunTag : FunTag -> String
+def showFunTag = {
+  FunTagTuple -> "tuple",
+  (FunTagCon s) -> s
+}
+
+def showFunLit : FunLit -> String
+def showFunLit = {
+  (FunLitInt32 n) -> toStringInt32 n,
+  (FunLitInt64 n) -> toStringInt64 n,
+  (FunLitChar c) -> appendString "'" (appendString (consString c "") "'"),
+  (FunLitString s) -> appendString "\"" (appendString s "\"")
+}
+
+def showFunExpr : FunExpr -> String
+def showFunExpr = {
+  (FunVar n) -> n,
+  (FunInvoke n) -> appendString "invoke(" (appendString n ")"),
+  (FunLiteral lit) -> showFunLit lit,
+  (FunLet n e1 e2) ->
+    appendString "let " (appendString n (appendString " = " (appendString (showFunExpr e1) (appendString " in " (showFunExpr e2))))),
+  (FunLambda params body) ->
+    appendString "\\[" (appendString (joinWith "," params) (appendString "] -> " (showFunExpr body))),
+  (FunApply f args) ->
+    appendString "(" (appendString (showFunExpr f) (appendString " " (appendString (joinWith " " (mapList showFunExpr args)) ")"))),
+  (FunConstruct tag args) ->
+    appendString (showFunTag tag) (appendString "[" (appendString (joinWith "," (mapList showFunExpr args)) "]")),
+  (FunObject fields) ->
+    appendString "{" (appendString (joinWith "," (mapList showFunField fields)) "}"),
+  (FunProject e field) ->
+    appendString (showFunExpr e) (appendString "." field),
+  (FunSelect e _) ->
+    appendString "case " (appendString (showFunExpr e) " {...}"),
+  (FunPrimitive name args) ->
+    appendString "prim(" (appendString name (appendString ",[" (appendString (joinWith "," (mapList showFunExpr args)) "])"))),
+  (FunFix name body) ->
+    appendString "fix " (appendString name (appendString " -> " (showFunExpr body)))
+}
+
+def showFunField : FunField -> String
+def showFunField = {
+  (FunField n e) -> appendString n (appendString " = " (showFunExpr e))
+}
+
+def showFunDef : FunDef -> String
+def showFunDef = {
+  (FunDef name expr) -> appendString "def " (appendString name (appendString " = " (showFunExpr expr)))
+}
+
+def showFunProgram : FunProgram -> String
+def showFunProgram = {
+  (FunProgram defs _) -> joinWith "\n" (mapList showFunDef defs)
+}

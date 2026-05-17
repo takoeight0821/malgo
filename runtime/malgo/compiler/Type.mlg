@@ -1,0 +1,221 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Type language for Malgo
+-- ──────────────────────────────────────────────────────────────────────
+
+-- Type variable: just a name/integer id for now
+data TyVar = TyVar(String)
+
+def eqTyVar : TyVar -> TyVar -> Bool
+def eqTyVar = { (TyVar a) (TyVar b) -> eqString a b }
+
+def showTyVar : TyVar -> String
+def showTyVar = { (TyVar name) -> name }
+
+-- Type constructors (base types)
+data TyCon
+  = TcInt32
+  | TcInt64
+  | TcChar
+  | TcString
+  | TcFloat
+  | TcDouble
+  | TcUnit
+  | TcBool
+  | TcFun
+  | TcTuple
+  | TcList
+  | TcNamed(String)
+
+-- The type language
+data Ty
+  = TVar(TyVar)
+  | TCon(TyCon)
+  | TApp(Ty, Ty)
+  | TArr(Ty, Ty)
+  | TRecord(List TyField)
+  | TVariant(List TyField)
+  | TTuple(List Ty)
+  | TForall(TyVar, Ty)
+  | TMu(TyVar, Ty)
+  | TBottom
+  | TRow(List TyField, Maybe TyVar)
+
+data TyField = TyField(String, Ty)
+
+-- Type scheme (polymorphic type)
+data Scheme = Scheme(List TyVar, Ty)
+
+def monoScheme : Ty -> Scheme
+def monoScheme = { ty -> Scheme(Nil, ty) }
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Substitutions
+-- ──────────────────────────────────────────────────────────────────────
+
+data TySub = TySub(List TySubEntry)
+data TySubEntry = TySubEntry(TyVar, Ty)
+
+def emptySub : TySub
+def emptySub = TySub Nil
+
+def singleSub : TyVar -> Ty -> TySub
+def singleSub = { v ty -> TySub(Cons (TySubEntry(v, ty)) Nil) }
+
+def subLookup : TyVar -> TySub -> Maybe Ty
+def subLookup = { v (TySub entries) ->
+  case entries {
+    Nil -> Nothing,
+    (Cons (TySubEntry u ty) rest) ->
+      if (eqTyVar v u) { Just ty } { subLookup v (TySub rest) }
+  }
+}
+
+def composeSub : TySub -> TySub -> TySub
+def composeSub = { (TySub s1) s2 ->
+  let applied = mapList { (TySubEntry v ty) -> TySubEntry(v, applySubTy s2 ty) } s1;
+  TySub (append applied (subEntries s2))
+}
+
+def subEntries : TySub -> List TySubEntry
+def subEntries = { (TySub es) -> es }
+
+-- Apply a substitution to a type
+def applySubTy : TySub -> Ty -> Ty
+def applySubTy = { sub ty ->
+  case ty {
+    (TVar v) ->
+      case (subLookup v sub) {
+        Nothing -> ty,
+        (Just t) -> applySubTy sub t
+      },
+    (TCon _) -> ty,
+    (TApp t1 t2) -> TApp(applySubTy sub t1, applySubTy sub t2),
+    (TArr t1 t2) -> TArr(applySubTy sub t1, applySubTy sub t2),
+    (TRecord fields) -> TRecord(mapList (applySubField sub) fields),
+    (TVariant fields) -> TVariant(mapList (applySubField sub) fields),
+    (TTuple ts) -> TTuple(mapList (applySubTy sub) ts),
+    (TForall v body) ->
+      let sub2 = removeSub v sub;
+      TForall(v, applySubTy sub2 body),
+    (TMu v body) ->
+      let sub2 = removeSub v sub;
+      TMu(v, applySubTy sub2 body),
+    TBottom -> TBottom,
+    (TRow fields rest) ->
+      let fields2 = mapList (applySubField sub) fields;
+      let rest2 = case rest {
+        Nothing -> Nothing,
+        (Just rv) ->
+          case (subLookup rv sub) {
+            Nothing -> Just rv,
+            (Just (TVar rv2)) -> Just rv2,
+            (Just _) -> Nothing
+          }
+      };
+      TRow(fields2, rest2)
+  }
+}
+
+def applySubField : TySub -> TyField -> TyField
+def applySubField = { sub (TyField name ty) -> TyField(name, applySubTy sub ty) }
+
+def removeSub : TyVar -> TySub -> TySub
+def removeSub = { v (TySub entries) ->
+  TySub (filter { (TySubEntry u _) -> not (eqTyVar v u) } entries)
+}
+
+-- Free type variables in a type
+def freeTyVars : Ty -> List TyVar
+def freeTyVars = { ty ->
+  case ty {
+    (TVar v) -> Cons v Nil,
+    (TCon _) -> Nil,
+    (TApp t1 t2) -> append (freeTyVars t1) (freeTyVars t2),
+    (TArr t1 t2) -> append (freeTyVars t1) (freeTyVars t2),
+    (TRecord fields) -> concatMapTy freeTyVarsField fields,
+    (TVariant fields) -> concatMapTy freeTyVarsField fields,
+    (TTuple ts) -> concatMapTy freeTyVars ts,
+    (TForall v body) -> filter { u -> not (eqTyVar v u) } (freeTyVars body),
+    (TMu v body) -> filter { u -> not (eqTyVar v u) } (freeTyVars body),
+    TBottom -> Nil,
+    (TRow fields rest) ->
+      let fieldVars = concatMapTy freeTyVarsField fields;
+      case rest {
+        Nothing -> fieldVars,
+        (Just rv) -> append fieldVars (Cons rv Nil)
+      }
+  }
+}
+
+def freeTyVarsField : TyField -> List TyVar
+def freeTyVarsField = { (TyField _ ty) -> freeTyVars ty }
+
+def tyVarMember : TyVar -> List TyVar -> Bool
+def tyVarMember = { v vs ->
+  case vs {
+    Nil -> False,
+    (Cons u rest) -> if (eqTyVar v u) { True } { tyVarMember v rest }
+  }
+}
+
+-- ──────────────────────────────────────────────────────────────────────
+-- Show functions
+-- ──────────────────────────────────────────────────────────────────────
+
+def showTyCon : TyCon -> String
+def showTyCon = {
+  TcInt32 -> "Int32",
+  TcInt64 -> "Int64",
+  TcChar -> "Char",
+  TcString -> "String",
+  TcFloat -> "Float",
+  TcDouble -> "Double",
+  TcUnit -> "()",
+  TcBool -> "Bool",
+  TcFun -> "(->)",
+  TcTuple -> "(,)",
+  TcList -> "[]",
+  (TcNamed n) -> n
+}
+
+def showTy : Ty -> String
+def showTy = { ty ->
+  case ty {
+    (TVar v) -> showTyVar v,
+    (TCon c) -> showTyCon c,
+    (TApp t1 t2) -> appendString "(" (appendString (showTy t1) (appendString " " (appendString (showTy t2) ")"))),
+    (TArr t1 t2) -> appendString (showTy t1) (appendString " -> " (showTy t2)),
+    (TRecord fields) -> appendString "{" (appendString (joinTyFields fields) "}"),
+    (TVariant fields) -> appendString "(|" (appendString (joinTyFields fields) "|)"),
+    (TTuple ts) -> appendString "(" (appendString (joinTys ", " ts) ")"),
+    (TForall v body) -> appendString "forall " (appendString (showTyVar v) (appendString ". " (showTy body))),
+    (TMu v body) -> appendString "mu " (appendString (showTyVar v) (appendString ". " (showTy body))),
+    TBottom -> "Bottom",
+    (TRow fields rest) ->
+      let restStr = case rest { Nothing -> "", (Just rv) -> appendString " | " (showTyVar rv) };
+      appendString "(row " (appendString (joinTyFields fields) (appendString restStr ")"))
+  }
+}
+
+def joinTyFields : List TyField -> String
+def joinTyFields = {
+  Nil -> "",
+  (Cons (TyField n ty) Nil) -> appendString n (appendString ": " (showTy ty)),
+  (Cons (TyField n ty) rest) -> appendString n (appendString ": " (appendString (showTy ty) (appendString ", " (joinTyFields rest))))
+}
+
+def joinTys : String -> List Ty -> String
+def joinTys = { sep ts ->
+  case ts {
+    Nil -> "",
+    (Cons t Nil) -> showTy t,
+    (Cons t rest) -> appendString (showTy t) (appendString sep (joinTys sep rest))
+  }
+}
+
+def concatMapTy : (a -> List b) -> List a -> List b
+def concatMapTy = { f xs -> concatList (mapList f xs) }

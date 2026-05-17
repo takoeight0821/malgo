@@ -8,6 +8,7 @@ MALGO=${MALGO:-cabal exec malgo --}
 CASE_TIMEOUT=${CASE_TIMEOUT:-20}
 PRECOMPILE_TIMEOUT=${PRECOMPILE_TIMEOUT:-180}
 KEEP_WORK=${KEEP_WORK:-0}
+PARALLEL_JOBS=${PARALLEL_JOBS:-$(nproc 2>/dev/null || echo 4)}
 
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
@@ -51,67 +52,107 @@ done
 
 log "precompile phase complete (${#precompile[@]} files)"
 
+mapfile -t cases < <(find .golden/Malgo.Sequent.Eval -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+total_cases=${#cases[@]}
+log "starting golden checks: ${total_cases} cases (parallelism: ${PARALLEL_JOBS})"
+
+result_dir=$(mktemp -d)
+trap 'rm -rf "$result_dir"' EXIT
+
+# Run each test case in a background subshell, throttled to PARALLEL_JOBS
+# concurrent workers. Results are written to per-case temp files and
+# aggregated after all workers finish.
+active_jobs=0
+for i in "${!cases[@]}"; do
+  dir="${cases[$i]}"
+  index=$((i + 1))
+  src="test/testcases/malgo/$dir.mlg"
+  expected=".golden/Malgo.Sequent.Eval/$dir/golden"
+  result_file="$result_dir/$i"
+
+  if [[ ! -f "$src" ]]; then
+    echo "skip" > "$result_file"
+    continue
+  fi
+
+  (
+    case_start=$SECONDS
+    log "[$index/$total_cases] start: $dir"
+    out=$(mktemp)
+    err=$(mktemp)
+    if timeout "$CASE_TIMEOUT" $MALGO eval runtime/malgo/compiler/Main.mlg < "$src" >"$out" 2>"$err"; then
+      case_elapsed=$((SECONDS - case_start))
+      if cmp -s "$out" "$expected"; then
+        log "[$index/$total_cases] pass: $dir (${case_elapsed}s)"
+        echo "pass" > "$result_file"
+      else
+        log "[$index/$total_cases] fail(mismatch): $dir (${case_elapsed}s)"
+        first=$(head -n 1 "$out")
+        [[ -n "$first" ]] || first="<empty>"
+        printf '%s\001mismatch\001%s\n' "$dir" "$first" > "$result_file"
+      fi
+    else
+      status=$?
+      case_elapsed=$((SECONDS - case_start))
+      if [[ $status -eq 124 ]]; then
+        log "[$index/$total_cases] fail(timeout): $dir (${case_elapsed}s)"
+        printf '%s\001timeout\001<timeout>\n' "$dir" > "$result_file"
+      else
+        first=$(head -n 1 "$err")
+        [[ -n "$first" ]] || first=$(head -n 1 "$out")
+        [[ -n "$first" ]] || first="<empty>"
+        log "[$index/$total_cases] fail(error $status): $dir (${case_elapsed}s)"
+        printf '%s\001error\001%s\n' "$dir" "$first" > "$result_file"
+      fi
+    fi
+    rm -f "$out" "$err"
+  ) &
+  active_jobs=$((active_jobs + 1))
+  if [[ $active_jobs -ge $PARALLEL_JOBS ]]; then
+    wait -n 2>/dev/null || wait
+    active_jobs=$((active_jobs - 1))
+  fi
+done
+wait
+
+log "golden checks complete"
+
 pass=0
 fail=0
 timeout_count=0
 printed=0
 max_print=${MAX_FAILURES:-40}
 
-mapfile -t cases < <(find .golden/Malgo.Sequent.Eval -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
-total_cases=${#cases[@]}
-log "starting golden checks: ${total_cases} cases"
-
-index=0
-for dir in "${cases[@]}"; do
-  index=$((index + 1))
-  src="test/testcases/malgo/$dir.mlg"
-  expected=".golden/Malgo.Sequent.Eval/$dir/golden"
-  [[ -f "$src" ]] || continue
-
-  case_start=$SECONDS
-  log "[$index/$total_cases] start: $dir"
-
-  out=$(mktemp)
-  err=$(mktemp)
-  if timeout "$CASE_TIMEOUT" $MALGO eval runtime/malgo/compiler/Main.mlg < "$src" >"$out" 2>"$err"; then
-    if cmp -s "$out" "$expected"; then
+for i in "${!cases[@]}"; do
+  result_file="$result_dir/$i"
+  [[ -f "$result_file" ]] || continue
+  result=$(< "$result_file")
+  case "$result" in
+    pass)
       pass=$((pass + 1))
-      case_elapsed=$((SECONDS - case_start))
-      log "[$index/$total_cases] pass: $dir (${case_elapsed}s)"
-    else
+      ;;
+    skip)
+      ;;
+    *)
       fail=$((fail + 1))
-      case_elapsed=$((SECONDS - case_start))
-      log "[$index/$total_cases] fail(mismatch): $dir (${case_elapsed}s)"
+      dir=$(cut -d $'\001' -f1 <<< "$result")
+      kind=$(cut -d $'\001' -f2 <<< "$result")
+      msg=$(cut -d $'\001' -f3 <<< "$result")
+      if [[ "$kind" == "timeout" ]]; then
+        timeout_count=$((timeout_count + 1))
+        reason="TIMEOUT :: <timeout>"
+      elif [[ "$kind" == "mismatch" ]]; then
+        reason="MISMATCH :: $msg"
+      else
+        reason="ERR :: $msg"
+      fi
       if [[ $printed -lt $max_print ]]; then
-        first=$(head -n 1 "$out")
-        [[ -n "$first" ]] || first="<empty>"
-        printf '%s :: MISMATCH :: %s\n' "$dir" "$first"
+        printf '%s :: %s\n' "$dir" "$reason"
         printed=$((printed + 1))
       fi
-    fi
-  else
-    status=$?
-    fail=$((fail + 1))
-    case_elapsed=$((SECONDS - case_start))
-    if [[ $status -eq 124 ]]; then
-      timeout_count=$((timeout_count + 1))
-      reason="TIMEOUT :: <timeout>"
-      log "[$index/$total_cases] fail(timeout): $dir (${case_elapsed}s)"
-    else
-      first=$(head -n 1 "$err")
-      [[ -n "$first" ]] || first=$(head -n 1 "$out")
-      [[ -n "$first" ]] || first="<empty>"
-      reason="ERR($status) :: $first"
-      log "[$index/$total_cases] fail(error $status): $dir (${case_elapsed}s)"
-    fi
-    if [[ $printed -lt $max_print ]]; then
-      printf '%s :: %s\n' "$dir" "$reason"
-      printed=$((printed + 1))
-    fi
-  fi
-  rm -f "$out" "$err"
+      ;;
+  esac
 done
 
-log "golden checks complete"
 printf 'PASS: %s\nFAIL: %s\nTIMEOUT: %s\n' "$pass" "$fail" "$timeout_count"
 [[ $fail -eq 0 ]]

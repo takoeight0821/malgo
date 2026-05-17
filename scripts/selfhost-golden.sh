@@ -37,12 +37,16 @@ precompile=(
   runtime/malgo/compiler/Parser.mlg
   runtime/malgo/compiler/Value.mlg
   runtime/malgo/compiler/Eval.mlg
+  runtime/malgo/compiler/FunIR.mlg
+  runtime/malgo/compiler/Rename.mlg
+  runtime/malgo/compiler/ToFun.mlg
+  runtime/malgo/compiler/Main.mlg
 )
 
 for file in "${precompile[@]}"; do
   start=$SECONDS
   log "precompile start: $file"
-  if ! timeout "$PRECOMPILE_TIMEOUT" $MALGO eval "$file" >/dev/null; then
+  if ! timeout "$PRECOMPILE_TIMEOUT" $MALGO eval "$file" </dev/null >/dev/null; then
     log "precompile failed: $file"
     exit 1
   fi

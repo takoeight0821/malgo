@@ -7,6 +7,9 @@ module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
 module {..} = import "../../../runtime/malgo/compiler/Parser.mlg"
 module {..} = import "../../../runtime/malgo/compiler/Value.mlg"
 module {..} = import "../../../runtime/malgo/compiler/Eval.mlg"
+module {emptyScope, checkModule, printRenameErrors} = import "../../../runtime/malgo/compiler/Rename.mlg"
+module {lowerModule} = import "../../../runtime/malgo/compiler/ToFun.mlg"
+module {showFunProgram} = import "../../../runtime/malgo/compiler/FunIR.mlg"
 
 -- ─── Pipeline ────────────────────────────────────────────────────────────────
 
@@ -42,6 +45,47 @@ def runSourceAt = { sourcePath src ->
 def runSource : String -> ()
 def runSource = { src -> runSourceAt "" src }
 
+-- ─── Check mode ──────────────────────────────────────────────────────────────
+
+-- Parse source from path, run rename check, report errors or "OK".
+def runCheck : String -> ()
+def runCheck = { path ->
+  let src = readFile path;
+  case (tokenize src) {
+    (Left err) -> putStrLn (appendString "Lex error: " err),
+    (Right toks) ->
+      case (parseModule toks) {
+        (Left err) -> putStrLn (appendString "Parse error: " err),
+        (Right m) ->
+          let errors = checkModule emptyScope m;
+          case errors {
+            Nil -> putStrLn "OK: no errors found",
+            _ ->
+              let _ = putStrLn "Rename errors:";
+              printRenameErrors errors
+          }
+      }
+  }
+}
+
+-- ─── Lower mode ──────────────────────────────────────────────────────────────
+
+-- Parse source from path, lower to Fun IR, and print the program.
+def runLower : String -> ()
+def runLower = { path ->
+  let src = readFile path;
+  case (tokenize src) {
+    (Left err) -> putStrLn (appendString "Lex error: " err),
+    (Right toks) ->
+      case (parseModule toks) {
+        (Left err) -> putStrLn (appendString "Parse error: " err),
+        (Right m) ->
+          let prog = lowerModule m;
+          putStrLn (showFunProgram prog)
+      }
+  }
+}
+
 -- ─── Entry point ─────────────────────────────────────────────────────────────
 
 def firstArg : String -> Maybe String
@@ -65,29 +109,56 @@ def indexOfChar = { c i s ->
     }
 }
 
-def sourceFromArgs : String -> String
-def sourceFromArgs = { raw ->
-  if (eqString raw "")
-    { getContents () }
-    { case (firstArg raw) {
-      Nothing -> getContents (),
-      (Just path) -> readFile path
-    }
-    }
-}
-
-def sourcePathFromArgs : String -> String
-def sourcePathFromArgs = { raw ->
-  case (firstArg raw) {
-    Nothing -> "",
-    (Just path) -> path
+def secondArg : String -> Maybe String
+def secondArg = { raw ->
+  case (indexOfChar '\n' 0i64 raw) {
+    Nothing -> Nothing,
+    (Just i) ->
+      let rest = substring raw (addInt64 i 1i64) (lengthString raw);
+      if (eqString rest "")
+        { Nothing }
+        { case (indexOfChar '\n' 0i64 rest) {
+            Nothing -> Just rest,
+            (Just j) -> Just (substring rest 0i64 j)
+          }
+        }
   }
 }
 
+def isCommand : String -> Bool
+def isCommand = { s ->
+  if (eqString s "eval") { True }
+    { if (eqString s "check") { True }
+        { if (eqString s "lower") { True }
+            { False }
+        }
+    }
+}
+
+
 -- Read source from the first program argument when present, otherwise stdin.
 -- Passing a file path leaves stdin available to the evaluated program.
+-- If the first arg is a command keyword (eval/check/lower), dispatch accordingly.
 def main = { _ ->
   let rawArgs = getRawArgs ();
-  let src = sourceFromArgs rawArgs;
-  runSourceAt (sourcePathFromArgs rawArgs) src
+  case (firstArg rawArgs) {
+    Nothing ->
+      -- no args: read from stdin and eval
+      runSourceAt "" (getContents ()),
+    (Just arg1) ->
+      if (isCommand arg1)
+        { case (secondArg rawArgs) {
+            Nothing -> putStrLn (appendString "Missing source file for command: " arg1),
+            (Just src) ->
+              if (eqString arg1 "eval")
+                { runSourceAt src (readFile src) }
+                { if (eqString arg1 "check")
+                    { runCheck src }
+                    { runLower src }
+                }
+          }
+        }
+        -- backward compat: treat first arg as source path
+        { runSourceAt arg1 (readFile arg1) }
+  }
 }

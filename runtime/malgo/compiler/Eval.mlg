@@ -430,11 +430,14 @@ def evalDecl = { gEnv decl ->
       Right (envExtend name (VThunk(EnvEmpty, expr)) gEnv),
     (DeclData _ _ cons) ->
       Right (addConstructors gEnv cons),
-    (DeclImport path) ->
+    (DeclImport target path) ->
       evalImport gEnv path,
     (DeclForeign fname _) ->
       let ar = foreignArity fname;
-      Right (envExtend fname (VBuiltin(fname, ar, Nil)) gEnv)
+      Right (envExtend fname (VBuiltin(fname, ar, Nil)) gEnv),
+    (DeclTypeSig _ _) -> Right gEnv,
+    (DeclTypeSynonym _ _ _) -> Right gEnv,
+    (DeclInfix _ _ _) -> Right gEnv
   }
 }
 
@@ -742,8 +745,54 @@ def applyBuiltin7 = { gEnv name args ->
   if (eqString name "subDouble#") { applyStr2 doubleSubString "subDouble#" args } {
   if (eqString name "mulDouble#") { applyStr2 doubleMulString "mulDouble#" args } {
   if (eqString name "goto") { case args { (Cons x (Cons k Nil)) -> apply gEnv k x, _ -> Left "goto: type error" } } {
-    Left (appendString "unknown built-in: " name)
+    applyBuiltin8 gEnv name args
   }}}}}}}}}}}}}
+}
+
+def applyBuiltin8 : Env -> String -> List Value -> Either String Value
+def applyBuiltin8 = { gEnv name args ->
+  if (eqString name "eqChar") { case args { (Cons (VChar a) (Cons (VChar b) Nil)) -> Right (boolVal (eqChar a b)), _ -> Left "eqChar: type error" } } {
+  if (eqString name "geInt32") { case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (geInt32 a b)), _ -> Left "geInt32: type error" } } {
+  if (eqString name "neInt32") { case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (neInt32 a b)), _ -> Left "neInt32: type error" } } {
+  if (eqString name "neInt64") { case args { (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (neInt64 a b)), _ -> Left "neInt64: type error" } } {
+  if (eqString name "geInt64") { case args { (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (geInt64 a b)), _ -> Left "geInt64: type error" } } {
+  if (eqString name "negInt64") { case args { (Cons (VInt64 n) Nil) -> Right (VInt64 (negInt64 n)), _ -> Left "negInt64: type error" } } {
+  if (eqString name "modInt64") { applyInt64_2 modInt64 "modInt64" args } {
+  if (eqString name "exitSuccess") { Left "exitSuccess" } {
+  if (eqString name "malgo_exit_success") { Left "exitSuccess" } {
+  if (eqString name "malgo_panic") { case args { (Cons (VString s) Nil) -> Left (appendString "panic: " s), (Cons x Nil) -> Left (appendString "panic: " (valueToText x)), _ -> Left "panic" } } {
+    applyBuiltin9 gEnv name args
+  }}}}}}}}}}
+}
+
+def applyBuiltin9 : Env -> String -> List Value -> Either String Value
+def applyBuiltin9 = { gEnv name args ->
+  if (eqString name "malgo_unsafe_cast") { case args { (Cons x Nil) -> Right x, _ -> Left "malgo_unsafe_cast: type error" } } {
+  if (eqString name "getRawArgs") { case args { (Cons VUnit Nil) -> Right (VString (getRawArgs ())), _ -> Left "getRawArgs: type error" } } {
+  if (eqString name "readFile") { case args { (Cons (VString path) Nil) -> Right (VString (readFile path)), _ -> Left "readFile: type error" } } {
+  if (eqString name "charToString") { case args { (Cons (VChar c) Nil) -> Right (VString (consString c "")), _ -> Left "charToString: type error" } } {
+  if (eqString name "modInt64#") { applyInt64_2 modInt64 "modInt64#" args } {
+  if (eqString name "malgo_mod_int64_t") { applyInt64_2 modInt64 "malgo_mod_int64_t" args } {
+  if (eqString name "malgo_neg_int64_t") { case args { (Cons (VInt64 n) Nil) -> Right (VInt64 (negInt64 n)), _ -> Left "malgo_neg_int64_t: type error" } } {
+  if (eqString name "malgo_mod_int32_t") { applyInt2 modInt32 "malgo_mod_int32_t" args } {
+  if (eqString name "malgo_neg_int32_t") { case args { (Cons (VInt32 n) Nil) -> Right (VInt32 (negInt32 n)), _ -> Left "malgo_neg_int32_t: type error" } } {
+  if (eqString name "malgo_gt_int32_t") { applyIntCmp gtInt32 "malgo_gt_int32_t" args } {
+    applyBuiltin10 gEnv name args
+  }}}}}}}}}}
+}
+
+def applyBuiltin10 : Env -> String -> List Value -> Either String Value
+def applyBuiltin10 = { gEnv name args ->
+  if (eqString name "malgo_ge_int32_t") { applyIntCmp geInt32 "malgo_ge_int32_t" args } {
+  if (eqString name "malgo_ne_int32_t") { case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (neInt32 a b)), _ -> Left "malgo_ne_int32_t: type error" } } {
+  if (eqString name "malgo_eq_int64_t") { applyInt64Cmp eqInt64 "malgo_eq_int64_t" args } {
+  if (eqString name "malgo_lt_int64_t") { applyInt64Cmp ltInt64 "malgo_lt_int64_t" args } {
+  if (eqString name "malgo_le_int64_t") { applyInt64Cmp leInt64 "malgo_le_int64_t" args } {
+  if (eqString name "malgo_gt_int64_t") { applyInt64Cmp gtInt64 "malgo_gt_int64_t" args } {
+  if (eqString name "malgo_ge_int64_t") { case args { (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (geInt64 a b)), _ -> Left "malgo_ge_int64_t: type error" } } {
+  if (eqString name "malgo_ne_int64_t") { case args { (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (neInt64 a b)), _ -> Left "malgo_ne_int64_t: type error" } } {
+    Left (appendString "unknown built-in: " name)
+  }}}}}}}}
 }
 
 def valueToText : Value -> String
@@ -892,8 +941,48 @@ def foreignArity7 = { name ->
   if (eqString name "subDouble#") { 2i32 } {
   if (eqString name "mulDouble#") { 2i32 } {
   if (eqString name "goto") { 2i32 } {
-    1i32
+    foreignArity8 name
   }}}}}}}}}}}}}
+}
+
+def foreignArity8 : String -> Int32
+def foreignArity8 = { name ->
+  if (eqString name "eqChar") { 2i32 } {
+  if (eqString name "geInt32") { 2i32 } {
+  if (eqString name "neInt32") { 2i32 } {
+  if (eqString name "neInt64") { 2i32 } {
+  if (eqString name "geInt64") { 2i32 } {
+  if (eqString name "negInt64") { 1i32 } {
+  if (eqString name "modInt64") { 2i32 } {
+  if (eqString name "exitSuccess") { 1i32 } {
+  if (eqString name "malgo_exit_success") { 1i32 } {
+  if (eqString name "malgo_panic") { 1i32 } {
+    foreignArity9 name
+  }}}}}}}}}}
+}
+
+def foreignArity9 : String -> Int32
+def foreignArity9 = { name ->
+  if (eqString name "malgo_unsafe_cast") { 1i32 } {
+  if (eqString name "getRawArgs") { 1i32 } {
+  if (eqString name "readFile") { 1i32 } {
+  if (eqString name "charToString") { 1i32 } {
+  if (eqString name "modInt64#") { 2i32 } {
+  if (eqString name "malgo_mod_int64_t") { 2i32 } {
+  if (eqString name "malgo_neg_int64_t") { 1i32 } {
+  if (eqString name "malgo_mod_int32_t") { 2i32 } {
+  if (eqString name "malgo_neg_int32_t") { 1i32 } {
+  if (eqString name "malgo_gt_int32_t") { 2i32 } {
+  if (eqString name "malgo_ge_int32_t") { 2i32 } {
+  if (eqString name "malgo_ne_int32_t") { 2i32 } {
+  if (eqString name "malgo_eq_int64_t") { 2i32 } {
+  if (eqString name "malgo_lt_int64_t") { 2i32 } {
+  if (eqString name "malgo_le_int64_t") { 2i32 } {
+  if (eqString name "malgo_gt_int64_t") { 2i32 } {
+  if (eqString name "malgo_ge_int64_t") { 2i32 } {
+  if (eqString name "malgo_ne_int64_t") { 2i32 } {
+    1i32
+  }}}}}}}}}}}}}}}}}}
 }
 
 -- ─── Base environment with built-ins ─────────────────────────────────────────
@@ -956,9 +1045,15 @@ def wrapperBuiltinNames =
 def preludeBuiltinNames : List String
 def preludeBuiltinNames =
   Cons "max" (Cons "min" (Cons "abs" (Cons "const" (Cons "getContents" (Cons "print" (Cons "malgo_print" (Cons "toStringDouble" (Cons "negInt32" (
-  Cons "addDouble#" (Cons "subDouble#" (Cons "mulDouble#" (Cons "goto" Nil
-  ))))))))))))
-
+  Cons "addDouble#" (Cons "subDouble#" (Cons "mulDouble#" (Cons "goto" (
+  Cons "eqChar" (Cons "geInt32" (Cons "neInt32" (Cons "neInt64" (Cons "geInt64" (Cons "negInt64" (Cons "modInt64" (
+  Cons "exitSuccess" (Cons "malgo_exit_success" (Cons "malgo_panic" (Cons "malgo_unsafe_cast" (
+  Cons "getRawArgs" (Cons "readFile" (Cons "charToString" (Cons "modInt64#" (
+  Cons "malgo_mod_int64_t" (Cons "malgo_neg_int64_t" (Cons "malgo_mod_int32_t" (Cons "malgo_neg_int32_t" (
+  Cons "malgo_gt_int32_t" (Cons "malgo_ge_int32_t" (Cons "malgo_ne_int32_t" (
+  Cons "malgo_eq_int64_t" (Cons "malgo_lt_int64_t" (Cons "malgo_le_int64_t" (
+  Cons "malgo_gt_int64_t" (Cons "malgo_ge_int64_t" (Cons "malgo_ne_int64_t" Nil
+  ))))))))))))))))))))))))))))))))))))))))
 def makeBaseEnv : Env
 def makeBaseEnv = addBaseConstructors (foldl addBuiltin EnvEmpty builtinNames)
 
@@ -976,6 +1071,9 @@ def addBaseConstructors = { env ->
 
 def evalModule : Env -> Module -> Either String Env
 def evalModule = { baseEnv (Module decls) -> evalDecls baseEnv decls }
+
+def evalModuleAt : Env -> String -> Module -> Either String Env
+def evalModuleAt = { baseEnv sourcePath m -> evalModule baseEnv m }
 
 def runMain : Env -> Either String Value
 def runMain = { gEnv ->

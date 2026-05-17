@@ -33,6 +33,7 @@ precompile=(
   runtime/malgo/Either.mlg
   runtime/malgo/compiler/AST.mlg
   runtime/malgo/compiler/Token.mlg
+  runtime/malgo/compiler/Diagnostic.mlg
   runtime/malgo/compiler/Lexer.mlg
   runtime/malgo/compiler/Parser.mlg
   runtime/malgo/compiler/Value.mlg

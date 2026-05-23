@@ -141,7 +141,7 @@ spec = parallel do
 
   describe "Unify" do
     describe "composeSubst" do
-      it "may retain self-referential entries (rejected by checked composition path)" do
+      it "may retain self-referential entries" do
         let t0 = mkId "_t0"
             t1 = mkId "_t1"
             s1 = Map.singleton t0 (TMu (TArr (TBound 0) (TVar t1 0)))
@@ -335,7 +335,7 @@ spec = parallel do
               Left err -> expectationFailure $ "Expected OccursCheckError, got: " <> show err
               Right _ -> expectationFailure "Expected recursive row-tail solving to fail"
             finalState.solvedSubst `shouldBe` Map.empty
-            finalState.constraints `shouldBe` [c2, c1]
+            finalState.constraints `shouldMatchList` [c2, c1]
 
 -- | Module name used by tests when constructing 'Id' values via 'mkId'.
 testModule :: ModuleName

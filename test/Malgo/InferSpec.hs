@@ -246,7 +246,7 @@ spec = parallel do
           Left _ -> pure ()
           Right _ -> expectationFailure "Expected recursive forall codomain mismatch to fail"
 
-    describe "iso-recursive prototype mode" do
+    describe "iso-recursive mode" do
       it "baseline: equi-recursive mode allows recursive type unification" do
         let tvar = mkId "_t0"
         result <- runUnifyWithMode EquiRecursive dummyRange (TVar tvar 0) (TArr (TVar tvar 0) tyInt32)
@@ -274,6 +274,26 @@ spec = parallel do
             t2 = TMu (TArr (TBound 0) tyInt32)
         result <- runUnifyWithMode IsoRecursive dummyRange t1 t2
         result `shouldSatisfy` isRight
+
+      it "rejects cyclic row-tail constraints instead of synthesizing mu substitutions" do
+        let a = mkId "_rowA"
+            b = mkId "_rowB"
+            c1 = CUnify dummyRange (TVar a 0) (TRecord [("x", tyInt32)] (Just (TVar b 0)))
+            c2 = CUnify dummyRange (TVar b 0) (TRecord [("y", tyString)] (Just (TVar a 0)))
+            initState =
+              GenState
+                { constraints = [c2, c1],
+                  currentLevel = 0,
+                  solvedSubst = Map.empty,
+                  recursionMode = IsoRecursive
+                }
+        (result, finalState) <- runSolveConstraints initState
+        case result of
+          Left OccursCheckError {} -> pure ()
+          Left err -> expectationFailure $ "Expected OccursCheckError, got: " <> show err
+          Right _ -> expectationFailure "Expected iso-recursive cyclic row-tail solving to fail"
+        finalState.solvedSubst `shouldBe` Map.empty
+        finalState.constraints `shouldBe` [c2, c1]
 
     describe "bottom type" do
       it "bottom unifies with any type" do

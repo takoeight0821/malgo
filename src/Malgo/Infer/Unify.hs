@@ -147,12 +147,12 @@ unifyInternal pos t1 (TMu body) = do
 unifyInternal pos (TArr a1 b1) (TArr a2 b2) = do
   s1 <- unifyTypes pos a1 a2
   s2 <- unifyTypes pos (applySubst s1 b1) (applySubst s1 b2)
-  pure (composeSubst s2 s1)
+  composeSubstChecked s2 s1
 -- Type application
 unifyInternal pos (TApp f1 a1) (TApp f2 a2) = do
   s1 <- unifyTypes pos f1 f2
   s2 <- unifyTypes pos (applySubst s1 a1) (applySubst s1 a2)
-  pure (composeSubst s2 s1)
+  composeSubstChecked s2 s1
 -- Tuples
 unifyInternal pos (TTuple ts1) (TTuple ts2)
   | length ts1 == length ts2 = unifyList pos ts1 ts2
@@ -178,7 +178,7 @@ unifyList _ [] [] = pure Map.empty
 unifyList pos (t1 : ts1) (t2 : ts2) = do
   s1 <- unifyTypes pos t1 t2
   s2 <- unifyList pos (map (applySubst s1) ts1) (map (applySubst s1) ts2)
-  pure (composeSubst s2 s1)
+  composeSubstChecked s2 s1
 unifyList _ _ _ = pure Map.empty
 
 -- | Record row unification
@@ -204,7 +204,7 @@ unifyRecords pos fs1 r1 fs2 r2 = do
           let t1 = applySubst s $ lookupField name fs1
               t2 = applySubst s $ lookupField name fs2
           s' <- unifyTypes pos t1 t2
-          pure (composeSubst s' s)
+          composeSubstChecked s' s
       )
       Map.empty
       commonNames
@@ -220,14 +220,14 @@ unifyRecords pos fs1 r1 fs2 r2 = do
         then do
           let only2' = map (second (applySubst commonSubst)) only2
           s <- unifyTypes pos (applySubst commonSubst row1) (TRecord only2' Nothing)
-          pure (composeSubst s commonSubst)
+          composeSubstChecked s commonSubst
         else throwError $ UnificationError pos (TRecord fs1 r1) (TRecord fs2 r2) "Record field mismatch: left has extra fields"
     (Nothing, Just row2) ->
       if null only2
         then do
           let only1' = map (second (applySubst commonSubst)) only1
           s <- unifyTypes pos (applySubst commonSubst row2) (TRecord only1' Nothing)
-          pure (composeSubst s commonSubst)
+          composeSubstChecked s commonSubst
         else throwError $ UnificationError pos (TRecord fs1 r1) (TRecord fs2 r2) "Record field mismatch: right has extra fields"
     (Just row1, Just row2) -> do
       -- Both have tails: create fresh row variable
@@ -235,8 +235,10 @@ unifyRecords pos fs1 r1 fs2 r2 = do
       let only2' = map (second (applySubst commonSubst)) only2
           only1' = map (second (applySubst commonSubst)) only1
       s1 <- unifyTypes pos (applySubst commonSubst row1) (TRecord only2' (Just freshRow))
-      s2 <- unifyTypes pos (applySubst (composeSubst s1 commonSubst) row2) (applySubst s1 (TRecord only1' (Just freshRow)))
-      pure (composeSubst s2 (composeSubst s1 commonSubst))
+      s1c <- composeSubstChecked s1 commonSubst
+      s2 <- unifyTypes pos (applySubst s1c row2) (applySubst s1 (TRecord only1' (Just freshRow)))
+      s2s1 <- composeSubstChecked s2 s1
+      composeSubstChecked s2s1 commonSubst
 
 -- | Variant row unification
 unifyVariants ::
@@ -264,7 +266,7 @@ unifyVariants pos cs1 r1 cs2 r2 = do
             then throwError $ UnificationError pos (TVariant cs1 r1) (TVariant cs2 r2) $ "Constructor '" <> name <> "' has different arities"
             else do
               s' <- unifyList pos (map (applySubst s) tys1) (map (applySubst s) tys2)
-              pure (composeSubst s' s)
+              composeSubstChecked s' s
       )
       Map.empty
       commonNames
@@ -279,19 +281,21 @@ unifyVariants pos cs1 r1 cs2 r2 = do
       if null only1
         then do
           s <- unifyTypes pos (applySubst commonSubst row1) (TVariant only2 Nothing)
-          pure (composeSubst s commonSubst)
+          composeSubstChecked s commonSubst
         else throwError $ UnificationError pos (TVariant cs1 r1) (TVariant cs2 r2) "Variant mismatch: left has extra constructors"
     (Nothing, Just row2) ->
       if null only2
         then do
           s <- unifyTypes pos (applySubst commonSubst row2) (TVariant only1 Nothing)
-          pure (composeSubst s commonSubst)
+          composeSubstChecked s commonSubst
         else throwError $ UnificationError pos (TVariant cs1 r1) (TVariant cs2 r2) "Variant mismatch: right has extra constructors"
     (Just row1, Just row2) -> do
       freshRow <- freshTyVar
       s1 <- unifyTypes pos (applySubst commonSubst row1) (TVariant only2 (Just freshRow))
-      s2 <- unifyTypes pos (applySubst (composeSubst s1 commonSubst) row2) (applySubst s1 (TVariant only1 (Just freshRow)))
-      pure (composeSubst s2 (composeSubst s1 commonSubst))
+      s1c <- composeSubstChecked s1 commonSubst
+      s2 <- unifyTypes pos (applySubst s1c row2) (applySubst s1 (TVariant only1 (Just freshRow)))
+      s2s1 <- composeSubstChecked s2 s1
+      composeSubstChecked s2s1 commonSubst
 
 -- | Solve all constraints
 solveConstraints :: (UnifyEffs es) => Eff es Subst
@@ -306,13 +310,13 @@ solveConstraints = do
   where
     solveOne :: (UnifyEffs es, State (Set (Ty, Ty)) :> es) => Subst -> Subst -> TyConstraint -> Eff es Subst
     solveOne baseSubst acc (CUnify pos t1 t2) = do
-      let subst = composeSubst acc baseSubst
+      subst <- composeSubstChecked acc baseSubst
       let t1' = applySubst subst t1
           t2' = applySubst subst t2
       s <- unifyTypes pos t1' t2'
-      pure $ composeSubst s acc
+      composeSubstChecked s acc
     solveOne baseSubst acc (CBottomProp sources target) = do
-      let subst = composeSubst acc baseSubst
+      subst <- composeSubstChecked acc baseSubst
           sources' = map (applySubst subst) sources
           target' = applySubst subst target
       -- If any source is bottom, target should also be bottom
@@ -320,14 +324,16 @@ solveConstraints = do
         then case target' of
           TVar _ _ -> do
             s <- unifyTypes dummyRange target' TBottom
-            pure $ composeSubst s acc
+            composeSubstChecked s acc
           _ -> pure acc
         else pure acc
 
 -- | Commit a successfully-computed substitution to the global inference state.
-commitSubst :: (State GenState :> es) => Subst -> Eff es ()
-commitSubst s =
-  modify (\st -> st {solvedSubst = composeSubst s st.solvedSubst})
+commitSubst :: (UnifyEffs es) => Subst -> Eff es ()
+commitSubst s = do
+  st <- get @GenState
+  composed <- composeSubstChecked s st.solvedSubst
+  modify (\_ -> st {solvedSubst = composed})
 
 -- | Check if a type is bottom (after substitution)
 isBottom :: Ty -> Bool
@@ -340,12 +346,29 @@ isBottom _ = False
 -- applySubst to loop infinitely when it chases k.  We normalise by
 -- wrapping any such self-referential value in TMu via abstractVar.
 composeSubst :: Subst -> Subst -> Subst
-composeSubst s2 s1 = Map.mapWithKey normalizeRecursive (Map.map (applySubst s2) s1) <> s2
+composeSubst s2 s1 = composeSubstWithMode EquiRecursive s2 s1
+
+composeSubstWithMode :: RecursionMode -> Subst -> Subst -> Subst
+composeSubstWithMode mode s2 s1 = Map.mapWithKey normalizeByMode (Map.map (applySubst s2) s1) <> s2
   where
-    normalizeRecursive k v
+    normalizeByMode k v
       | not (occursIn k v) = v
-      | TMu body <- v = TMu (abstractVar k body)
-      | otherwise = TMu (abstractVar k v)
+      | mode == EquiRecursive =
+          case v of
+            TMu body -> TMu (abstractVar k body)
+            _ -> TMu (abstractVar k v)
+      | otherwise = v
+
+composeSubstChecked :: (UnifyEffs es) => Subst -> Subst -> Eff es Subst
+composeSubstChecked s2 s1 = do
+  mode <- gets @GenState (.recursionMode)
+  let composed = composeSubstWithMode mode s2 s1
+  case mode of
+    EquiRecursive -> pure composed
+    IsoRecursive ->
+      case find (\(k, v) -> occursIn k v) (Map.toList composed) of
+        Nothing -> pure composed
+        Just (k, v) -> throwError $ OccursCheckError dummyRange k v
 
 -- | Look up a field type in a field list
 lookupField :: T.Text -> [(T.Text, Ty)] -> Ty

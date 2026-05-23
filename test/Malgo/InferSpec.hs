@@ -246,6 +246,30 @@ spec = parallel do
           Left _ -> pure ()
           Right _ -> expectationFailure "Expected recursive forall codomain mismatch to fail"
 
+    describe "iso-recursive prototype mode" do
+      it "rejects self-recursive variable unification via occurs check" do
+        let v = mkId "_t0"
+        result <- runUnifyWithMode IsoRecursive dummyRange (TVar v 0) (TArr (TVar v 0) tyInt32)
+        case result of
+          Left OccursCheckError {} -> pure ()
+          Left err -> expectationFailure $ "Expected OccursCheckError, got: " <> show err
+          Right _ -> expectationFailure "Expected iso-recursive occurs check to fail"
+
+      it "rejects mu-vs-non-mu unification without implicit unfold" do
+        let t1 = TMu (TArr (TBound 0) tyInt32)
+            t2 = TArr tyInt32 tyInt32
+        result <- runUnifyWithMode IsoRecursive dummyRange t1 t2
+        case result of
+          Left UnificationError {} -> pure ()
+          Left err -> expectationFailure $ "Expected UnificationError, got: " <> show err
+          Right _ -> expectationFailure "Expected iso-recursive mu-vs-non-mu mismatch to fail"
+
+      it "accepts alpha-equivalent mu types structurally" do
+        let t1 = TMu (TArr (TBound 0) tyInt32)
+            t2 = TMu (TArr (TBound 0) tyInt32)
+        result <- runUnifyWithMode IsoRecursive dummyRange t1 t2
+        result `shouldSatisfy` isRight
+
     describe "bottom type" do
       it "bottom unifies with any type" do
         result <- runUnify (dummyRange) TBottom tyInt32
@@ -294,7 +318,8 @@ spec = parallel do
               GenState
                 { constraints = [],
                   currentLevel = 0,
-                  solvedSubst = initialSubst
+                  solvedSubst = initialSubst,
+                  recursionMode = EquiRecursive
                 }
             t1 = TArr (TVar inferred 0) tyInt32
             t2 = TArr tyString tyFloat
@@ -316,7 +341,8 @@ spec = parallel do
               GenState
                 { constraints = initialConstraints,
                   currentLevel = 0,
-                  solvedSubst = initialSubst
+                  solvedSubst = initialSubst,
+                  recursionMode = EquiRecursive
                 }
         (result, finalState) <- runSolveConstraints initState
         case result of
@@ -334,7 +360,8 @@ spec = parallel do
               GenState
                 { constraints = [c2, c1],
                   currentLevel = 0,
-                  solvedSubst = Map.empty
+                  solvedSubst = Map.empty,
+                  recursionMode = EquiRecursive
                 }
             timeoutMicros = 1_000_000
         timed <- timeout timeoutMicros $ runSolveConstraints initState
@@ -360,7 +387,28 @@ runUnify pos t1 t2 = pure (stripCallStack result)
       GenState
         { constraints = [],
           currentLevel = 0,
-          solvedSubst = Map.empty
+          solvedSubst = Map.empty,
+          recursionMode = EquiRecursive
+        }
+    result =
+      runPureEff
+        $ runReader testModule
+        $ evalState (Uniq 0)
+        $ evalState initState
+        $ runError @InferError
+        $ unify pos t1 t2
+    stripCallStack (Left (_, err)) = Left err
+    stripCallStack (Right x) = Right x
+
+runUnifyWithMode :: RecursionMode -> Range -> Ty -> Ty -> IO (Either InferError Subst)
+runUnifyWithMode mode pos t1 t2 = pure (stripCallStack result)
+  where
+    initState =
+      GenState
+        { constraints = [],
+          currentLevel = 0,
+          solvedSubst = Map.empty,
+          recursionMode = mode
         }
     result =
       runPureEff

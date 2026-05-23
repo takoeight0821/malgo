@@ -13,7 +13,7 @@ import Data.Text qualified as T
 import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error, throwError)
 import Effectful.Reader.Static (Reader)
-import Effectful.State.Static.Local (State, evalState, get, modify)
+import Effectful.State.Static.Local (State, evalState, get, gets, modify)
 import Malgo.Id (Id)
 import Malgo.Infer.Constraint
 import Malgo.Module (ModuleName)
@@ -106,20 +106,43 @@ unifyInternal pos (TCon c1) (TCon c2)
 unifyInternal _ (TVar x _) (TVar y _)
   | x == y = pure Map.empty
 -- Variable on the left
-unifyInternal _ (TVar x _) t
-  | occursIn x t =
-      -- Equi-recursive unification: abstract x out of t to form the TMu body
-      pure $ Map.singleton x (TMu (abstractVar x t))
+unifyInternal pos (TVar x _) t
+  | occursIn x t = do
+      mode <- gets @GenState (.recursionMode)
+      case mode of
+        EquiRecursive ->
+          -- Equi-recursive unification: abstract x out of t to form the TMu body
+          pure $ Map.singleton x (TMu (abstractVar x t))
+        IsoRecursive ->
+          throwError $ OccursCheckError pos x t
   | otherwise =
       pure $ Map.singleton x t
 -- Variable on the right
 unifyInternal pos t (TVar x l) = unifyTypes pos (TVar x l) t
+-- TMu on both sides
+unifyInternal pos (TMu body1) (TMu body2) = do
+  mode <- gets @GenState (.recursionMode)
+  case mode of
+    EquiRecursive ->
+      unifyTypes pos (substBound 0 (TMu body1) body1) (substBound 0 (TMu body2) body2)
+    IsoRecursive ->
+      unifyTypes pos body1 body2
 -- TMu on the left: unroll and unify
-unifyInternal pos (TMu body) t2 =
-  unifyTypes pos (substBound 0 (TMu body) body) t2
+unifyInternal pos (TMu body) t2 = do
+  mode <- gets @GenState (.recursionMode)
+  case mode of
+    EquiRecursive ->
+      unifyTypes pos (substBound 0 (TMu body) body) t2
+    IsoRecursive ->
+      throwError $ UnificationError pos (TMu body) t2 "Iso-recursive mismatch: explicit fold/unfold required"
 -- TMu on the right: unroll and unify
-unifyInternal pos t1 (TMu body) =
-  unifyTypes pos t1 (substBound 0 (TMu body) body)
+unifyInternal pos t1 (TMu body) = do
+  mode <- gets @GenState (.recursionMode)
+  case mode of
+    EquiRecursive ->
+      unifyTypes pos t1 (substBound 0 (TMu body) body)
+    IsoRecursive ->
+      throwError $ UnificationError pos t1 (TMu body) "Iso-recursive mismatch: explicit fold/unfold required"
 -- Arrow types
 unifyInternal pos (TArr a1 b1) (TArr a2 b2) = do
   s1 <- unifyTypes pos a1 a2

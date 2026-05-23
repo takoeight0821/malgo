@@ -8,6 +8,7 @@ module Malgo.Infer.Constraint
     Scheme (..),
     Subst,
     Level,
+    RecursionMode (..),
 
     -- * Constraint types
     TyConstraint (..),
@@ -101,6 +102,12 @@ data Ty
     -- the self-reference.
     TMu Ty
   deriving stock (Eq, Show, Ord)
+
+-- | Strategy used by unification for recursive types.
+data RecursionMode
+  = EquiRecursive
+  | IsoRecursive
+  deriving stock (Eq, Show)
 
 instance Pretty Ty where
   pretty = prettyTyWith []
@@ -259,7 +266,8 @@ data TyConstraint
 data GenState = GenState
   { constraints :: [TyConstraint],
     currentLevel :: Level,
-    solvedSubst :: Subst
+    solvedSubst :: Subst,
+    recursionMode :: RecursionMode
   }
   deriving stock (Show)
 

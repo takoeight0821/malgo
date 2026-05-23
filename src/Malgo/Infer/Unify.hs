@@ -134,7 +134,7 @@ unifyInternal pos (TMu body) t2 = do
     EquiRecursive ->
       unifyTypes pos (substBound 0 (TMu body) body) t2
     IsoRecursive ->
-      throwError $ UnificationError pos (TMu body) t2 "Iso-recursive mismatch: explicit fold/unfold required"
+      throwError $ UnificationError pos (TMu body) t2 "iso-recursive mismatch: explicit fold/unfold required"
 -- TMu on the right: unroll and unify
 unifyInternal pos t1 (TMu body) = do
   mode <- gets @GenState (.recursionMode)
@@ -142,7 +142,7 @@ unifyInternal pos t1 (TMu body) = do
     EquiRecursive ->
       unifyTypes pos t1 (substBound 0 (TMu body) body)
     IsoRecursive ->
-      throwError $ UnificationError pos t1 (TMu body) "Iso-recursive mismatch: explicit fold/unfold required"
+      throwError $ UnificationError pos t1 (TMu body) "iso-recursive mismatch: explicit fold/unfold required"
 -- Arrow types
 unifyInternal pos (TArr a1 b1) (TArr a2 b2) = do
   s1 <- unifyTypes pos a1 a2

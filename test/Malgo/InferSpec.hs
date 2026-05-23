@@ -247,6 +247,11 @@ spec = parallel do
           Right _ -> expectationFailure "Expected recursive forall codomain mismatch to fail"
 
     describe "iso-recursive prototype mode" do
+      it "still allows recursive tying in equi mode via helper" do
+        let tvar = mkId "_t0"
+        result <- runUnifyWithMode EquiRecursive dummyRange (TVar tvar 0) (TArr (TVar tvar 0) tyInt32)
+        result `shouldSatisfy` isRight
+
       it "rejects self-recursive variable unification via occurs check" do
         let tvar = mkId "_t0"
         result <- runUnifyWithMode IsoRecursive dummyRange (TVar tvar 0) (TArr (TVar tvar 0) tyInt32)

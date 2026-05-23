@@ -41,6 +41,8 @@ instance Pass InferPass where
       )
 
   runPassImpl _ (importedEnv, bindGroup) = do
+    -- Parsed pragma `#experimental-iso-recursive-unify` appears here as
+    -- `Experimental "iso-recursive-unify"` because '#' is stripped by parser wrapper.
     useIso <- hasFeature (Experimental "iso-recursive-unify")
     let mode = if useIso then IsoRecursive else EquiRecursive
     evalState (initGenState mode) do

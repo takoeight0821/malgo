@@ -248,8 +248,8 @@ spec = parallel do
 
     describe "iso-recursive prototype mode" do
       it "rejects self-recursive variable unification via occurs check" do
-        let v = mkId "_t0"
-        result <- runUnifyWithMode IsoRecursive dummyRange (TVar v 0) (TArr (TVar v 0) tyInt32)
+        let tvar = mkId "_t0"
+        result <- runUnifyWithMode IsoRecursive dummyRange (TVar tvar 0) (TArr (TVar tvar 0) tyInt32)
         case result of
           Left OccursCheckError {} -> pure ()
           Left err -> expectationFailure $ "Expected OccursCheckError, got: " <> show err

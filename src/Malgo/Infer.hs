@@ -41,7 +41,7 @@ instance Pass InferPass where
       )
 
   runPassImpl _ (importedEnv, bindGroup) = do
-    -- Check experimental iso-recursive unification feature flag.
+    -- Checks experimental iso-recursive unification feature flag.
     useIso <- hasFeature (Experimental "iso-recursive-unify")
     let mode = if useIso then IsoRecursive else EquiRecursive
     evalState (initGenState mode) do

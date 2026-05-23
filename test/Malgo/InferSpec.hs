@@ -247,7 +247,7 @@ spec = parallel do
           Right _ -> expectationFailure "Expected recursive forall codomain mismatch to fail"
 
     describe "iso-recursive prototype mode" do
-      it "allows recursive type unification in equi-recursive mode" do
+      it "baseline: equi-recursive mode allows recursive type unification" do
         let tvar = mkId "_t0"
         result <- runUnifyWithMode EquiRecursive dummyRange (TVar tvar 0) (TArr (TVar tvar 0) tyInt32)
         result `shouldSatisfy` isRight

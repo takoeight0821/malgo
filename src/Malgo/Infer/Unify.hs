@@ -134,7 +134,7 @@ unifyInternal pos (TMu body) t2 = do
     EquiRecursive ->
       unifyTypes pos (substBound 0 (TMu body) body) t2
     IsoRecursive ->
-      throwError $ UnificationError pos (TMu body) t2 "iso-recursive mismatch: cannot unify TMu with non-recursive type (prototype requires explicit fold/unfold elaboration)"
+      throwError $ UnificationError pos (TMu body) t2 "iso-recursive mismatch: cannot unify TMu with non-recursive type because implicit mu unfolding is disabled in this mode"
 -- TMu on the right: unroll and unify
 unifyInternal pos t1 (TMu body) = do
   mode <- gets @GenState (.recursionMode)
@@ -142,7 +142,7 @@ unifyInternal pos t1 (TMu body) = do
     EquiRecursive ->
       unifyTypes pos t1 (substBound 0 (TMu body) body)
     IsoRecursive ->
-      throwError $ UnificationError pos t1 (TMu body) "iso-recursive mismatch: cannot unify non-recursive type with TMu (prototype requires explicit fold/unfold elaboration)"
+      throwError $ UnificationError pos t1 (TMu body) "iso-recursive mismatch: cannot unify non-recursive type with TMu because implicit mu unfolding is disabled in this mode"
 -- Arrow types
 unifyInternal pos (TArr a1 b1) (TArr a2 b2) = do
   s1 <- unifyTypes pos a1 a2

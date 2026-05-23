@@ -16,7 +16,6 @@ import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error, throwError)
 import Effectful.Reader.Static (Reader, ask, runReader)
 import Effectful.State.Static.Local (State, evalState, get)
-import Malgo.Features (Feature (Experimental), Features, hasFeature)
 import Malgo.Id (Id (..))
 import Malgo.Infer.Constraint
 import Malgo.Infer.Unify (solveConstraints)
@@ -36,26 +35,20 @@ instance Pass InferPass where
   type
     Effects InferPass es =
       ( State Uniq :> es,
-        Reader ModuleName :> es,
-        Features :> es
+        Reader ModuleName :> es
       )
 
-  runPassImpl _ (importedEnv, bindGroup) = do
-    -- Checks experimental iso-recursive unification feature flag.
-    useIso <- hasFeature (Experimental "iso-recursive-unify")
-    let mode = if useIso then IsoRecursive else EquiRecursive
-    evalState (initGenState mode) do
-      finalEnv <- inferBindGroup importedEnv bindGroup
-      pure (bindGroup, finalEnv)
+  runPassImpl _ (importedEnv, bindGroup) = evalState initGenState do
+    finalEnv <- inferBindGroup importedEnv bindGroup
+    pure (bindGroup, finalEnv)
 
 -- | Initial generation state
-initGenState :: RecursionMode -> GenState
-initGenState mode =
+initGenState :: GenState
+initGenState =
   GenState
     { constraints = [],
       currentLevel = 0,
-      solvedSubst = Map.empty,
-      recursionMode = mode
+      solvedSubst = Map.empty
     }
 
 -- | Type environment mapping identifiers to type schemes

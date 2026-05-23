@@ -13,8 +13,7 @@ import Data.Text qualified as T
 import Effectful (Eff, (:>))
 import Effectful.Error.Static (Error, throwError)
 import Effectful.Reader.Static (Reader)
-import Effectful.State.Static.Local (State, evalState, get, gets, modify)
-import Malgo.Id (Id)
+import Effectful.State.Static.Local (State, evalState, get, modify)
 import Malgo.Infer.Constraint
 import Malgo.Module (ModuleName)
 import Malgo.Prelude hiding (Constraint)
@@ -51,27 +50,6 @@ substBound t r (TVariant cs row) =
 substBound t r (TForall body) = TForall (substBound (t + 1) r body)
 substBound t r (TMu body) = TMu (substBound (t + 1) r body)
 
--- | Abstract free metavariable @x@ out of @ty@, replacing each free
--- occurrence with 'TBound depth' where @depth@ counts the binders
--- crossed while descending into @ty@.  The result is the body of a
--- new 'TMu' that closes over @x@.
-abstractVar :: Id -> Ty -> Ty
-abstractVar x = go 0
-  where
-    go depth (TVar v l)
-      | v == x = TBound depth
-      | otherwise = TVar v l
-    go _ (TBound i) = TBound i
-    go _ (TCon c) = TCon c
-    go _ TBottom = TBottom
-    go d (TArr a b) = TArr (go d a) (go d b)
-    go d (TApp f a) = TApp (go d f) (go d a)
-    go d (TTuple ts) = TTuple (map (go d) ts)
-    go d (TRecord fs row) = TRecord (map (second (go d)) fs) (fmap (go d) row)
-    go d (TVariant cs row) = TVariant (map (second (map (go d))) cs) (fmap (go d) row)
-    go d (TForall body) = TForall (go (d + 1) body)
-    go d (TMu body) = TMu (go (d + 1) body)
-
 -- | Unify two types, returning a substitution
 unify :: (UnifyEffs es) => Range -> Ty -> Ty -> Eff es Subst
 unify pos t1 t2 = do
@@ -107,42 +85,20 @@ unifyInternal _ (TVar x _) (TVar y _)
   | x == y = pure Map.empty
 -- Variable on the left
 unifyInternal pos (TVar x _) t
-  | occursIn x t = do
-      mode <- gets @GenState (.recursionMode)
-      case mode of
-        EquiRecursive ->
-          -- Equi-recursive unification: abstract x out of t to form the TMu body
-          pure $ Map.singleton x (TMu (abstractVar x t))
-        IsoRecursive ->
-          throwError $ OccursCheckError pos x t
+  | occursIn x t = throwError $ OccursCheckError pos x t
   | otherwise =
       pure $ Map.singleton x t
 -- Variable on the right
 unifyInternal pos t (TVar x l) = unifyTypes pos (TVar x l) t
 -- TMu on both sides
-unifyInternal pos (TMu body1) (TMu body2) = do
-  mode <- gets @GenState (.recursionMode)
-  case mode of
-    EquiRecursive ->
-      unifyTypes pos (substBound 0 (TMu body1) body1) (substBound 0 (TMu body2) body2)
-    IsoRecursive ->
-      unifyTypes pos body1 body2
+unifyInternal pos (TMu body1) (TMu body2) =
+  unifyTypes pos body1 body2
 -- TMu on the left: unroll and unify
-unifyInternal pos (TMu body) t2 = do
-  mode <- gets @GenState (.recursionMode)
-  case mode of
-    EquiRecursive ->
-      unifyTypes pos (substBound 0 (TMu body) body) t2
-    IsoRecursive ->
-      throwError $ UnificationError pos (TMu body) t2 "iso-recursive mode does not support implicit TMu unfolding"
+unifyInternal pos (TMu body) t2 =
+  throwError $ UnificationError pos (TMu body) t2 "iso-recursive mode does not support implicit TMu unfolding"
 -- TMu on the right: unroll and unify
-unifyInternal pos t1 (TMu body) = do
-  mode <- gets @GenState (.recursionMode)
-  case mode of
-    EquiRecursive ->
-      unifyTypes pos t1 (substBound 0 (TMu body) body)
-    IsoRecursive ->
-      throwError $ UnificationError pos t1 (TMu body) "iso-recursive mode does not support implicit TMu unfolding"
+unifyInternal pos t1 (TMu body) =
+  throwError $ UnificationError pos t1 (TMu body) "iso-recursive mode does not support implicit TMu unfolding"
 -- Arrow types
 unifyInternal pos (TArr a1 b1) (TArr a2 b2) = do
   s1 <- unifyTypes pos a1 a2
@@ -341,34 +297,15 @@ isBottom TBottom = True
 isBottom _ = False
 
 -- | Compose two substitutions: s2 after s1.
--- After applying s2 to each value in s1, a key k may appear free in its
--- own value (e.g. k ↦ TMu(... TVar k ...)).  Leaving that in place causes
--- applySubst to loop infinitely when it chases k.  We normalise by
--- wrapping any such self-referential value in TMu via abstractVar.
 composeSubst :: Subst -> Subst -> Subst
-composeSubst s2 s1 = composeSubstWithMode EquiRecursive s2 s1
-
-composeSubstWithMode :: RecursionMode -> Subst -> Subst -> Subst
-composeSubstWithMode mode s2 s1 = Map.mapWithKey normalizeByMode (Map.map (applySubst s2) s1) <> s2
-  where
-    normalizeByMode k v
-      | not (occursIn k v) = v
-      | mode == EquiRecursive =
-          case v of
-            TMu body -> TMu (abstractVar k body)
-            _ -> TMu (abstractVar k v)
-      | otherwise = v
+composeSubst s2 s1 = Map.map (applySubst s2) s1 <> s2
 
 composeSubstChecked :: (UnifyEffs es) => Subst -> Subst -> Eff es Subst
 composeSubstChecked s2 s1 = do
-  mode <- gets @GenState (.recursionMode)
-  let composed = composeSubstWithMode mode s2 s1
-  case mode of
-    EquiRecursive -> pure composed
-    IsoRecursive ->
-      case find (\(k, v) -> occursIn k v) (Map.toList composed) of
-        Nothing -> pure composed
-        Just (k, v) -> throwError $ OccursCheckError dummyRange k v
+  let composed = composeSubst s2 s1
+  case find (\(k, v) -> occursIn k v) (Map.toList composed) of
+    Nothing -> pure composed
+    Just (k, v) -> throwError $ OccursCheckError dummyRange k v
 
 -- | Look up a field type in a field list
 lookupField :: T.Text -> [(T.Text, Ty)] -> Ty

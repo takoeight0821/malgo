@@ -141,12 +141,7 @@ spec = parallel do
 
   describe "Unify" do
     describe "composeSubst" do
-      it "does not create self-referential entry when TMu value gains free key via composition" do
-        -- Regression for issue #330:
-        -- s1 = {_t0 ↦ TMu(TBound 0 -> _t1)}  (from: _t0 = _t0 -> _t1)
-        -- s2 = {_t1 ↦ _t0 -> Int32}            (from: _t1 = _t0 -> Int32, no occurs check)
-        -- Naive composeSubst s2 s1 produces {_t0 ↦ TMu(TBound 0 -> (_t0 -> Int32))}
-        -- where _t0 is free in its own value, causing applySubst to loop.
+      it "may retain self-referential entries (rejected by checked composition path)" do
         let t0 = mkId "_t0"
             t1 = mkId "_t1"
             s1 = Map.singleton t0 (TMu (TArr (TBound 0) (TVar t1 0)))
@@ -154,7 +149,7 @@ spec = parallel do
             composed = composeSubst s2 s1
         case Map.lookup t0 composed of
           Nothing -> expectationFailure "Expected _t0 binding in composed substitution"
-          Just v -> occursIn t0 v `shouldBe` False
+          Just v -> occursIn t0 v `shouldBe` True
 
       it "composeSubst is idempotent on normal (non-recursive) entries" do
         let t0 = mkId "_t0"
@@ -188,21 +183,15 @@ spec = parallel do
           Right _ -> pure ()
           Left err -> expectationFailure $ show err
 
-      it "allows equi-recursive types (relaxed occurs check)" do
+      it "rejects self-recursive unification via occurs check" do
         result <- runUnify (dummyRange) (TVar (mkId "_t0") 0) (TArr (TVar (mkId "_t0") 0) tyInt32)
-        result `shouldSatisfy` isRight
-
-      it "unifies recursive types to TMu" do
-        let v = mkId "_t0"
-            t = TArr (TVar v 0) tyInt32
-        result <- runUnify (dummyRange) (TVar v 0) t
         case result of
-          Right subst -> Map.lookup v subst `shouldBe` Just (TMu (TArr (TBound 0) tyInt32))
-          Left err -> expectationFailure $ show err
+          Left OccursCheckError {} -> pure ()
+          Left err -> expectationFailure $ "Expected OccursCheckError, got: " <> show err
+          Right _ -> expectationFailure "Expected occurs-check failure"
 
       it "rejects (μa.a→Int) vs (Int→Int)" do
-        -- μ(TBound 0→Int) unrolls to (μ(TBound 0→Int))→Int, never collapses to Int.
-        -- Final mismatch (TArr vs TCon Int) must surface.
+        -- Iso-recursive mode forbids implicit unfolding between TMu and non-TMu.
         let t1 = TMu (TArr (TBound 0) tyInt32)
             t2 = TArr tyInt32 tyInt32
         result <- runUnify (dummyRange) t1 t2
@@ -245,55 +234,6 @@ spec = parallel do
         case result of
           Left _ -> pure ()
           Right _ -> expectationFailure "Expected recursive forall codomain mismatch to fail"
-
-    describe "iso-recursive mode" do
-      it "baseline: equi-recursive mode allows recursive type unification" do
-        let tvar = mkId "_t0"
-        result <- runUnifyWithMode EquiRecursive dummyRange (TVar tvar 0) (TArr (TVar tvar 0) tyInt32)
-        result `shouldSatisfy` isRight
-
-      it "rejects self-recursive variable unification via occurs check" do
-        let tvar = mkId "_t0"
-        result <- runUnifyWithMode IsoRecursive dummyRange (TVar tvar 0) (TArr (TVar tvar 0) tyInt32)
-        case result of
-          Left OccursCheckError {} -> pure ()
-          Left err -> expectationFailure $ "Expected OccursCheckError, got: " <> show err
-          Right _ -> expectationFailure "Expected iso-recursive occurs check to fail"
-
-      it "rejects mu-vs-non-mu unification without implicit unfold" do
-        let t1 = TMu (TArr (TBound 0) tyInt32)
-            t2 = TArr tyInt32 tyInt32
-        result <- runUnifyWithMode IsoRecursive dummyRange t1 t2
-        case result of
-          Left UnificationError {} -> pure ()
-          Left err -> expectationFailure $ "Expected UnificationError, got: " <> show err
-          Right _ -> expectationFailure "Expected iso-recursive mu-vs-non-mu mismatch to fail"
-
-      it "accepts alpha-equivalent mu types structurally" do
-        let t1 = TMu (TArr (TBound 0) tyInt32)
-            t2 = TMu (TArr (TBound 0) tyInt32)
-        result <- runUnifyWithMode IsoRecursive dummyRange t1 t2
-        result `shouldSatisfy` isRight
-
-      it "rejects cyclic row-tail constraints instead of synthesizing mu substitutions" do
-        let a = mkId "_rowA"
-            b = mkId "_rowB"
-            c1 = CUnify dummyRange (TVar a 0) (TRecord [("x", tyInt32)] (Just (TVar b 0)))
-            c2 = CUnify dummyRange (TVar b 0) (TRecord [("y", tyString)] (Just (TVar a 0)))
-            initState =
-              GenState
-                { constraints = [c2, c1],
-                  currentLevel = 0,
-                  solvedSubst = Map.empty,
-                  recursionMode = IsoRecursive
-                }
-        (result, finalState) <- runSolveConstraints initState
-        case result of
-          Left OccursCheckError {} -> pure ()
-          Left err -> expectationFailure $ "Expected OccursCheckError, got: " <> show err
-          Right _ -> expectationFailure "Expected iso-recursive cyclic row-tail solving to fail"
-        finalState.solvedSubst `shouldBe` Map.empty
-        finalState.constraints `shouldBe` [c2, c1]
 
     describe "bottom type" do
       it "bottom unifies with any type" do
@@ -343,8 +283,7 @@ spec = parallel do
               GenState
                 { constraints = [],
                   currentLevel = 0,
-                  solvedSubst = initialSubst,
-                  recursionMode = EquiRecursive
+                  solvedSubst = initialSubst
                 }
             t1 = TArr (TVar inferred 0) tyInt32
             t2 = TArr tyString tyFloat
@@ -366,8 +305,7 @@ spec = parallel do
               GenState
                 { constraints = initialConstraints,
                   currentLevel = 0,
-                  solvedSubst = initialSubst,
-                  recursionMode = EquiRecursive
+                  solvedSubst = initialSubst
                 }
         (result, finalState) <- runSolveConstraints initState
         case result of
@@ -376,7 +314,7 @@ spec = parallel do
         finalState.solvedSubst `shouldBe` initialSubst
         finalState.constraints `shouldBe` initialConstraints
 
-      it "terminates when row-tail constraints recurse across constraint boundaries" do
+      it "fails when row-tail constraints recurse across constraint boundaries" do
         let a = mkId "_rowA"
             b = mkId "_rowB"
             c1 = CUnify dummyRange (TVar a 0) (TRecord [("x", tyInt32)] (Just (TVar b 0)))
@@ -385,15 +323,19 @@ spec = parallel do
               GenState
                 { constraints = [c2, c1],
                   currentLevel = 0,
-                  solvedSubst = Map.empty,
-                  recursionMode = EquiRecursive
+                  solvedSubst = Map.empty
                 }
             timeoutMicros = 1_000_000
         timed <- timeout timeoutMicros $ runSolveConstraints initState
         case timed of
           Nothing -> expectationFailure $ "Expected solveConstraints to terminate within " <> show timeoutMicros <> " microseconds"
-          Just (result, _) ->
-            result `shouldSatisfy` isRight
+          Just (result, finalState) -> do
+            case result of
+              Left OccursCheckError {} -> pure ()
+              Left err -> expectationFailure $ "Expected OccursCheckError, got: " <> show err
+              Right _ -> expectationFailure "Expected recursive row-tail solving to fail"
+            finalState.solvedSubst `shouldBe` Map.empty
+            finalState.constraints `shouldBe` [c2, c1]
 
 -- | Module name used by tests when constructing 'Id' values via 'mkId'.
 testModule :: ModuleName
@@ -412,28 +354,7 @@ runUnify pos t1 t2 = pure (stripCallStack result)
       GenState
         { constraints = [],
           currentLevel = 0,
-          solvedSubst = Map.empty,
-          recursionMode = EquiRecursive
-        }
-    result =
-      runPureEff
-        $ runReader testModule
-        $ evalState (Uniq 0)
-        $ evalState initState
-        $ runError @InferError
-        $ unify pos t1 t2
-    stripCallStack (Left (_, err)) = Left err
-    stripCallStack (Right x) = Right x
-
-runUnifyWithMode :: RecursionMode -> Range -> Ty -> Ty -> IO (Either InferError Subst)
-runUnifyWithMode mode pos t1 t2 = pure (stripCallStack result)
-  where
-    initState =
-      GenState
-        { constraints = [],
-          currentLevel = 0,
-          solvedSubst = Map.empty,
-          recursionMode = mode
+          solvedSubst = Map.empty
         }
     result =
       runPureEff

@@ -47,7 +47,7 @@ compileToScheme modName program =
     <> "\n\n;; Run main\n"
     <> "("
     <> mainName
-    <> " malgo-finish)\n"
+    <> " (lambda (fn) (fn (list 'tuple) malgo-finish)))\n"
   where
     mainName = mangleText (moduleNameToString modName <> ".main")
 
@@ -126,11 +126,7 @@ compileConsumer (Join.Label _ name) = mangleId name
 compileConsumer (Join.Apply _ producers returns) =
   let prodStrs = map compileProducer producers
       retStrs = map mangleId returns
-   in "(lambda (%fn)"
-        <> " ("
-        <> applyChain "%fn" prodStrs
-        <> concatArgs retStrs
-        <> "))"
+   in "(lambda (%fn) (%fn" <> concatArgs (prodStrs <> retStrs) <> "))"
 compileConsumer (Join.Project _ field returnName) =
   let retStr = mangleId returnName
    in "(lambda (%rec) (let ((%v (cdr (assq '"
@@ -318,6 +314,132 @@ compilePrimitive name args ret = case name of
       _ -> "(error 'prim \"malgo_stderr_string: wrong number of arguments\")"
   "malgo_string_to_int32" -> unaryop "string->number" args ret
   "malgo_string_to_int64" -> unaryop "string->number" args ret
+  -- Arithmetic (malgo_* foreign import names from Builtin.mlg)
+  "malgo_add_int32_t" -> binop "+" args ret
+  "malgo_sub_int32_t" -> binop "-" args ret
+  "malgo_mul_int32_t" -> binop "*" args ret
+  "malgo_div_int32_t" -> binop "quotient" args ret
+  "malgo_mod_int32_t" -> binop "modulo" args ret
+  "malgo_neg_int32_t" -> unaryop "-" args ret
+  "malgo_add_int64_t" -> binop "+" args ret
+  "malgo_sub_int64_t" -> binop "-" args ret
+  "malgo_mul_int64_t" -> binop "*" args ret
+  "malgo_div_int64_t" -> binop "quotient" args ret
+  "malgo_mod_int64_t" -> binop "modulo" args ret
+  "malgo_neg_int64_t" -> unaryop "-" args ret
+  "malgo_add_float" -> binop "+" args ret
+  "malgo_sub_float" -> binop "-" args ret
+  "malgo_mul_float" -> binop "*" args ret
+  "malgo_div_float" -> binop "/" args ret
+  "malgo_neg_float" -> unaryop "-" args ret
+  "malgo_add_double" -> binop "+" args ret
+  "malgo_sub_double" -> binop "-" args ret
+  "malgo_mul_double" -> binop "*" args ret
+  "malgo_div_double" -> binop "/" args ret
+  "malgo_neg_double" -> unaryop "-" args ret
+  -- Comparisons return Int32# (1=true, 0=false) to match isTrue# pattern matching
+  "malgo_eq_int32_t" -> cmpop "equal?" args ret
+  "malgo_ne_int32_t" -> cmpopNeg "equal?" args ret
+  "malgo_lt_int32_t" -> cmpop "<" args ret
+  "malgo_le_int32_t" -> cmpop "<=" args ret
+  "malgo_gt_int32_t" -> cmpop ">" args ret
+  "malgo_ge_int32_t" -> cmpop ">=" args ret
+  "malgo_eq_int64_t" -> cmpop "equal?" args ret
+  "malgo_ne_int64_t" -> cmpopNeg "equal?" args ret
+  "malgo_lt_int64_t" -> cmpop "<" args ret
+  "malgo_le_int64_t" -> cmpop "<=" args ret
+  "malgo_gt_int64_t" -> cmpop ">" args ret
+  "malgo_ge_int64_t" -> cmpop ">=" args ret
+  "malgo_eq_float" -> cmpop "equal?" args ret
+  "malgo_ne_float" -> cmpopNeg "equal?" args ret
+  "malgo_lt_float" -> cmpop "<" args ret
+  "malgo_le_float" -> cmpop "<=" args ret
+  "malgo_gt_float" -> cmpop ">" args ret
+  "malgo_ge_float" -> cmpop ">=" args ret
+  "malgo_eq_double" -> cmpop "equal?" args ret
+  "malgo_ne_double" -> cmpopNeg "equal?" args ret
+  "malgo_lt_double" -> cmpop "<" args ret
+  "malgo_le_double" -> cmpop "<=" args ret
+  "malgo_gt_double" -> cmpop ">" args ret
+  "malgo_ge_double" -> cmpop ">=" args ret
+  "malgo_eq_char" -> cmpop "char=?" args ret
+  "malgo_ne_char" -> cmpopNeg "char=?" args ret
+  "malgo_lt_char" -> cmpop "char<?" args ret
+  "malgo_le_char" -> cmpop "char<=?" args ret
+  "malgo_gt_char" -> cmpop "char>?" args ret
+  "malgo_ge_char" -> cmpop "char>=?" args ret
+  "malgo_eq_string" -> cmpop "string=?" args ret
+  "malgo_ne_string" -> cmpopNeg "string=?" args ret
+  "malgo_lt_string" -> cmpop "string<?" args ret
+  "malgo_le_string" -> cmpop "string<=?" args ret
+  "malgo_gt_string" -> cmpop "string>?" args ret
+  "malgo_ge_string" -> cmpop "string>=?" args ret
+  -- Char/string operations
+  "malgo_char_ord" -> unaryop "char->integer" args ret
+  "malgo_int32_t_to_char" -> unaryop "integer->char" args ret
+  "malgo_char_to_string" -> unaryop "string" args ret
+  "malgo_is_digit" -> cmpBool "char-numeric?" args ret
+  "malgo_is_lower" -> cmpBool "char-lower-case?" args ret
+  "malgo_is_upper" -> cmpBool "char-upper-case?" args ret
+  "malgo_is_alphanum" ->
+    case args of
+      [c] -> "(" <> ret <> " (if (or (char-alphabetic? " <> c <> ") (char-numeric? " <> c <> ")) 1 0))"
+      _ -> "(error 'prim \"malgo_is_alphanum: wrong number of arguments\")"
+  "malgo_string_append" -> binop "string-append" args ret
+  "malgo_string_length" -> unaryop "string-length" args ret
+  "malgo_string_at" ->
+    case args of
+      [i, s] -> "(" <> ret <> " (string-ref " <> s <> " " <> i <> "))"
+      _ -> "(error 'prim \"malgo_string_at: wrong number of arguments\")"
+  "malgo_string_cons" ->
+    case args of
+      [c, s] -> "(" <> ret <> " (string-append (string " <> c <> ") " <> s <> "))"
+      _ -> "(error 'prim \"malgo_string_cons: wrong number of arguments\")"
+  "malgo_substring" ->
+    case args of
+      [s, start, end_] -> "(" <> ret <> " (substring " <> s <> " " <> start <> " " <> end_ <> "))"
+      _ -> "(error 'prim \"malgo_substring: wrong number of arguments\")"
+  "malgo_string_reverse" ->
+    case args of
+      [s] -> "(" <> ret <> " (list->string (reverse (string->list " <> s <> "))))"
+      _ -> "(error 'prim \"malgo_string_reverse: wrong number of arguments\")"
+  -- Conversion
+  "malgo_int32_t_to_string" -> unaryop "number->string" args ret
+  "malgo_int64_t_to_string" -> unaryop "number->string" args ret
+  "malgo_float_to_string" -> unaryop "number->string" args ret
+  "malgo_double_to_string" -> unaryop "number->string" args ret
+  -- IO
+  "malgo_print_string" ->
+    case args of
+      [s] -> "(begin (display " <> s <> ") (" <> ret <> " (list 'tuple)))"
+      _ -> "(error 'prim \"malgo_print_string: wrong number of arguments\")"
+  "malgo_print_char" ->
+    case args of
+      [c] -> "(begin (display " <> c <> ") (" <> ret <> " (list 'tuple)))"
+      _ -> "(error 'prim \"malgo_print_char: wrong number of arguments\")"
+  "malgo_print" ->
+    case args of
+      [v] -> "(begin (malgo-print-value " <> v <> ") (" <> ret <> " (list 'tuple)))"
+      _ -> "(error 'prim \"malgo_print: wrong number of arguments\")"
+  "malgo_newline" -> "(begin (newline) (" <> ret <> " (list 'tuple)))"
+  "malgo_flush" -> "(begin (flush-output-port) (" <> ret <> " (list 'tuple)))"
+  "malgo_get_char" ->
+    "(" <> ret <> " (let ((c (read-char))) (if (eof-object? c) #\\nul c)))"
+  "malgo_get_contents" ->
+    "(" <> ret <> " (get-string-all (current-input-port)))"
+  -- Error / control
+  "malgo_panic" ->
+    case args of
+      [msg] -> "(error 'panic " <> msg <> ")"
+      _ -> "(error 'panic \"panic\")"
+  "malgo_unsafe_cast" ->
+    case args of
+      [x] -> "(" <> ret <> " " <> x <> ")"
+      _ -> "(error 'prim \"malgo_unsafe_cast: wrong number of arguments\")"
+  "malgo_exit_failure" -> "(exit 1)"
+  -- Math
+  "sqrt" -> unaryop "sqrt" args ret
+  "sqrtf" -> unaryop "sqrt" args ret
   _ -> "(error 'prim \"unknown primitive: " <> name <> "\")"
   where
     binop :: Text -> [Text] -> Text -> Text
@@ -327,6 +449,21 @@ compilePrimitive name args ret = case name of
     unaryop :: Text -> [Text] -> Text -> Text
     unaryop op [a] r = "(" <> r <> " (" <> op <> " " <> a <> "))"
     unaryop op _ r = "(" <> r <> " (error 'prim \"" <> op <> ": wrong number of arguments\"))"
+
+    -- comparison returning 1/0 instead of #t/#f
+    cmpop :: Text -> [Text] -> Text -> Text
+    cmpop op [a, b] r = "(" <> r <> " (if (" <> op <> " " <> a <> " " <> b <> ") 1 0))"
+    cmpop op _ r = "(" <> r <> " (error 'prim \"" <> op <> ": wrong number of arguments\"))"
+
+    -- negated comparison returning 1/0
+    cmpopNeg :: Text -> [Text] -> Text -> Text
+    cmpopNeg op [a, b] r = "(" <> r <> " (if (not (" <> op <> " " <> a <> " " <> b <> ")) 1 0))"
+    cmpopNeg op _ r = "(" <> r <> " (error 'prim \"not-" <> op <> ": wrong number of arguments\"))"
+
+    -- unary predicate returning 1/0
+    cmpBool :: Text -> [Text] -> Text -> Text
+    cmpBool op [a] r = "(" <> r <> " (if (" <> op <> " " <> a <> ") 1 0))"
+    cmpBool op _ r = "(" <> r <> " (error 'prim \"" <> op <> ": wrong number of arguments\"))"
 
 -- | Compile a literal to a Scheme expression.
 compileLiteral :: Literal -> Text
@@ -397,12 +534,6 @@ mangleText = T.concatMap mangleChar
     mangleChar c
       | isAlphaNum c || c == '_' = T.singleton c
       | otherwise = "_u" <> convertString (show (ord c)) <> "_"
-
--- | Apply a function to a chain of arguments.
-applyChain :: Text -> [Text] -> Text
-applyChain fn [] = fn
-applyChain fn [x] = "(" <> fn <> " " <> x <> ")"
-applyChain fn (x : xs) = applyChain ("(" <> fn <> " " <> x <> ")") xs
 
 -- | Concatenate arguments with spaces, prepending a space if non-empty.
 concatArgs :: [Text] -> Text

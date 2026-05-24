@@ -83,7 +83,7 @@ spec = do
           result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "define"
       result `shouldContain` "42"
-      result `shouldContain` "Test_dot_main malgo-finish"
+      result `shouldContain` "Test_dot_main (lambda (fn) (fn (list 'tuple) malgo-finish))"
 
     it "compiles lambda expressions" do
       let xId = mkInternalId "x" 0

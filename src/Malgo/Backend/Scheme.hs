@@ -103,7 +103,7 @@ compileProducer (Join.Cocase _ branches) =
             <> ") "
             <> if null bindings
               then bodyStr <> ")"
-              else "(let (" <> T.intercalate " " bindings <> ") " <> bodyStr <> "))"
+              else "(let* (" <> T.intercalate " " bindings <> ") " <> bodyStr <> "))"
 compileProducer (Join.Object _ fields) =
   let fieldStrs = map compileField (Map.toList fields)
    in "(list " <> T.intercalate " " fieldStrs <> ")"
@@ -173,14 +173,14 @@ compileBranch (Join.Branch _ pat body) =
                 <> "))"
                 <> if null bindings
                   then " " <> bodyStr <> ")"
-                  else " (let (" <> T.intercalate " " bindings <> ") " <> bodyStr <> "))"
+                  else " (let* (" <> T.intercalate " " bindings <> ") " <> bodyStr <> "))"
           where
             mkBinding :: Int -> Pattern -> Text
             mkBinding idx (PVar _ n) = "(" <> mangleId n <> " (list-ref %v " <> convertString (show idx) <> "))"
             mkBinding idx _ = "(%unused_" <> convertString (show idx) <> " (list-ref %v " <> convertString (show idx) <> "))"
         Expand _ fieldPats ->
           let bindings = map mkFieldBinding (Map.toList fieldPats)
-           in "(#t (let ("
+           in "(#t (let* ("
                 <> T.intercalate " " bindings
                 <> ") "
                 <> bodyStr

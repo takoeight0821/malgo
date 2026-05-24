@@ -151,42 +151,43 @@ compileConsumer (Join.Select _ branches) =
   let branchStrs = map compileBranch branches
    in "(lambda (%v) (cond " <> T.intercalate " " branchStrs <> " (else (error 'select \"no matching branch\"))))"
 
+-- | Compile a pattern against a scrutinee expression.
+-- Returns (guard_condition, let*_bindings) where guard is a Scheme boolean
+-- expression and bindings are sequential let* entries.
+compilePattern :: Text -> Pattern -> (Text, [(Text, Text)])
+compilePattern scrutinee (PVar _ n) =
+  ("#t", [(mangleId n, scrutinee)])
+compilePattern scrutinee (PLiteral _ lit) =
+  ("(equal? " <> scrutinee <> " " <> compileLiteral lit <> ")", [])
+compilePattern scrutinee (Destruct _ tag pats) =
+  let tagStr = compileTag tag
+      tagCheck = "(and (pair? " <> scrutinee <> ") (eq? (car " <> scrutinee <> ") '" <> tagStr <> "))"
+      subResults = zipWith (\i p -> compilePattern ("(list-ref " <> scrutinee <> " " <> convertString (show (i :: Int)) <> ")") p) [1 ..] pats
+      subGuards = filter (/= "#t") (map fst subResults)
+      subBindings = concatMap snd subResults
+      fullGuard = case subGuards of
+        [] -> tagCheck
+        gs -> "(and " <> T.intercalate " " (tagCheck : gs) <> ")"
+  in (fullGuard, subBindings)
+compilePattern scrutinee (Expand _ fieldPats) =
+  let subResults = map (\(fname, p) -> compilePattern ("(cdr (assq '" <> mangleText fname <> " " <> scrutinee <> "))") p) (Map.toList fieldPats)
+      subGuards = filter (/= "#t") (map fst subResults)
+      subBindings = concatMap snd subResults
+      fullGuard = case subGuards of
+        [] -> "#t"
+        [g] -> g
+        gs -> "(and " <> T.intercalate " " gs <> ")"
+  in (fullGuard, subBindings)
+
 compileBranch :: Join.Branch -> Text
 compileBranch (Join.Branch _ pat body) =
   let bodyStr = compileStatement body
-   in case pat of
-        PVar _ name ->
-          let nameStr = mangleId name
-           in "(#t (let ((" <> nameStr <> " %v)) " <> bodyStr <> "))"
-        PLiteral _ lit ->
-          let litStr = compileLiteral lit
-           in "((equal? %v " <> litStr <> ") " <> bodyStr <> ")"
-        Destruct _ tag pats ->
-          let tagStr = compileTag tag
-              bindings = zipWith mkBinding [1 :: Int ..] pats
-           in "((and (pair? %v) (eq? (car %v) '"
-                <> tagStr
-                <> "))"
-                <> if null bindings
-                  then " " <> bodyStr <> ")"
-                  else " (let* (" <> T.intercalate " " bindings <> ") " <> bodyStr <> "))"
-          where
-            mkBinding :: Int -> Pattern -> Text
-            mkBinding idx (PVar _ n) = "(" <> mangleId n <> " (list-ref %v " <> convertString (show idx) <> "))"
-            mkBinding idx _ = "(%unused_" <> convertString (show idx) <> " (list-ref %v " <> convertString (show idx) <> "))"
-        Expand _ fieldPats ->
-          let bindings = map mkFieldBinding (Map.toList fieldPats)
-           in "(#t (let* ("
-                <> T.intercalate " " bindings
-                <> ") "
-                <> bodyStr
-                <> "))"
-          where
-            mkFieldBinding :: (Text, Pattern) -> Text
-            mkFieldBinding (fieldName, PVar _ n) =
-              "(" <> mangleId n <> " (cdr (assq '" <> mangleText fieldName <> " %v)))"
-            mkFieldBinding (fieldName, _) =
-              "(%unused (cdr (assq '" <> mangleText fieldName <> " %v)))"
+      (guard, bindings) = compilePattern "%v" pat
+      withBindings =
+        if null bindings
+          then bodyStr
+          else "(let* (" <> T.intercalate " " (map (\(n, e) -> "(" <> n <> " " <> e <> ")") bindings) <> ") " <> bodyStr <> ")"
+  in "(" <> guard <> " " <> withBindings <> ")"
 
 -- | Compile a Statement to a Scheme expression.
 compileStatement :: Join.Statement -> Text

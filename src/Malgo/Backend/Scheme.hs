@@ -170,7 +170,35 @@ compilePattern scrutinee (Destruct _ tag pats) =
         gs -> "(and " <> T.intercalate " " (tagCheck : gs) <> ")"
    in (fullGuard, subBindings)
 compilePattern scrutinee (Expand _ fieldPats) =
-  let subResults = map (\(fname, p) -> compilePattern ("(cdr (assq '" <> mangleText fname <> " " <> scrutinee <> "))") p) (Map.toList fieldPats)
+  let subResults =
+        map
+          ( \(fname, p) ->
+              let mangledFname = mangleText fname
+                  raw = "(cdr (assq '" <> mangledFname <> " " <> scrutinee <> "))"
+                  tmpName = "%fv_" <> mangledFname
+                  tmpName2 = "%fvr_" <> mangledFname
+                  -- Object fields are stored as thunks; force them before pattern matching
+                  forced =
+                    "(let (("
+                      <> tmpName
+                      <> " "
+                      <> raw
+                      <> ")) "
+                      <> "(if (procedure? "
+                      <> tmpName
+                      <> ") "
+                      <> "("
+                      <> tmpName
+                      <> " (lambda ("
+                      <> tmpName2
+                      <> ") "
+                      <> tmpName2
+                      <> ")) "
+                      <> tmpName
+                      <> "))"
+               in compilePattern forced p
+          )
+          (Map.toList fieldPats)
       subGuards = filter (/= "#t") (map fst subResults)
       subBindings = concatMap snd subResults
       fullGuard = case subGuards of

@@ -9,10 +9,11 @@ where
 import Control.Exception (Exception (..))
 import Data.Map qualified as Map
 import Data.Text qualified as T
-import Effectful ()
+import Effectful
 import Effectful.Error.Static ()
+import Effectful.Reader.Static (Reader, ask)
 import Malgo.Id
-import Malgo.Module (moduleNameToString)
+import Malgo.Module (ModuleName, moduleNameToString)
 import Malgo.Pass
 import Malgo.Prelude
 import Malgo.Sequent.Core.Join qualified as Join
@@ -25,9 +26,11 @@ instance Pass SchemePass where
   type Input SchemePass = Join.Program
   type Output SchemePass = Text
   type ErrorType SchemePass = SchemeError
-  type Effects SchemePass es = ()
+  type Effects SchemePass es = Reader ModuleName :> es
 
-  runPassImpl _ program = pure $ compileToScheme program
+  runPassImpl _ program = do
+    modName <- ask @ModuleName
+    pure $ compileToScheme modName program
 
 data SchemeError = SchemeError Text
   deriving stock (Show)
@@ -36,13 +39,17 @@ instance Exception SchemeError where
   displayException (SchemeError msg) = "Scheme backend error: " <> convertString msg
 
 -- | Compile a Join IR program to Scheme source code.
-compileToScheme :: Join.Program -> Text
-compileToScheme program =
+compileToScheme :: ModuleName -> Join.Program -> Text
+compileToScheme modName program =
   schemeRuntime
     <> "\n;; Definitions\n"
     <> T.intercalate "\n" (map compileDefinition program.definitions)
     <> "\n\n;; Run main\n"
-    <> "(malgo-main malgo-print-result)\n"
+    <> "("
+    <> mainName
+    <> " malgo-finish)\n"
+  where
+    mainName = mangleText (moduleNameToString modName <> ".main")
 
 compileDefinition :: (Range, Name, Name, Join.Statement) -> Text
 compileDefinition (_, name, returnName, body) =

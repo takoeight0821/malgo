@@ -63,7 +63,7 @@ compileFromAST srcPath parsedAst = do
   core <- runQueryDB db $ fetch (LinkedProgram modName)
   case flags.target of
     TargetScheme -> do
-      schemeCode <- runPass SchemePass core
+      schemeCode <- runReader modName $ runPass SchemePass core
       liftIO $ putStr $ convertString schemeCode
     TargetEval -> do
       let stdin = fmap Just getChar `catch` \(_ :: IOException) -> pure Nothing

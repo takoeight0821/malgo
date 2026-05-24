@@ -120,7 +120,12 @@ for dir in "${level2_cases[@]}"; do
     else
       case_elapsed=$((SECONDS - case_start))
       log "fail(mismatch): $dir (${case_elapsed}s)"
-      printf '%s :: MISMATCH :: %s\n' "$dir" "$(head -n 1 "$out")"
+      out_lines=$(wc -l < "$out" | tr -d ' ')
+      err_lines=$(wc -l < "$err" | tr -d ' ')
+      out_first=$(head -n 3 "$out" | tr '\n' '|')
+      err_first=$(head -n 3 "$err" | tr '\n' '|')
+      printf '%s :: MISMATCH :: stdout(%s lines): %s | stderr(%s lines): %s\n' \
+        "$dir" "$out_lines" "$out_first" "$err_lines" "$err_first"
       fail=$((fail + 1))
     fi
   else

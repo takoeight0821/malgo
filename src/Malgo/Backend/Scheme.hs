@@ -161,7 +161,7 @@ compileBranch (Join.Branch _ pat body) =
    in case pat of
         PVar _ name ->
           let nameStr = mangleId name
-           in "(else (let ((" <> nameStr <> " %v)) " <> bodyStr <> "))"
+           in "(#t (let ((" <> nameStr <> " %v)) " <> bodyStr <> "))"
         PLiteral _ lit ->
           let litStr = compileLiteral lit
            in "((equal? %v " <> litStr <> ") " <> bodyStr <> ")"
@@ -180,7 +180,7 @@ compileBranch (Join.Branch _ pat body) =
             mkBinding idx _ = "(%unused_" <> convertString (show idx) <> " (list-ref %v " <> convertString (show idx) <> "))"
         Expand _ fieldPats ->
           let bindings = map mkFieldBinding (Map.toList fieldPats)
-           in "(else (let ("
+           in "(#t (let ("
                 <> T.intercalate " " bindings
                 <> ") "
                 <> bodyStr

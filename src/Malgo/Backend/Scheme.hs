@@ -149,7 +149,7 @@ compileConsumer (Join.Destructor _ dName producers returnName) =
    in "(lambda (%cocase) (%cocase '" <> mangledName <> argList <> "))"
 compileConsumer (Join.Select _ branches) =
   let branchStrs = map compileBranch branches
-   in "(lambda (%v) (cond " <> T.intercalate " " branchStrs <> " (else (error 'select \"no matching branch\"))))"
+   in "(lambda (%v) (cond " <> T.intercalate " " branchStrs <> " (else (error 'select \"no matching branch\" %v))))"
 
 -- | Compile a pattern against a scrutinee expression.
 -- Returns (guard_condition, let*_bindings) where guard is a Scheme boolean
@@ -168,7 +168,7 @@ compilePattern scrutinee (Destruct _ tag pats) =
       fullGuard = case subGuards of
         [] -> tagCheck
         gs -> "(and " <> T.intercalate " " (tagCheck : gs) <> ")"
-  in (fullGuard, subBindings)
+   in (fullGuard, subBindings)
 compilePattern scrutinee (Expand _ fieldPats) =
   let subResults = map (\(fname, p) -> compilePattern ("(cdr (assq '" <> mangleText fname <> " " <> scrutinee <> "))") p) (Map.toList fieldPats)
       subGuards = filter (/= "#t") (map fst subResults)
@@ -177,7 +177,7 @@ compilePattern scrutinee (Expand _ fieldPats) =
         [] -> "#t"
         [g] -> g
         gs -> "(and " <> T.intercalate " " gs <> ")"
-  in (fullGuard, subBindings)
+   in (fullGuard, subBindings)
 
 compileBranch :: Join.Branch -> Text
 compileBranch (Join.Branch _ pat body) =
@@ -187,7 +187,7 @@ compileBranch (Join.Branch _ pat body) =
         if null bindings
           then bodyStr
           else "(let* (" <> T.intercalate " " (map (\(n, e) -> "(" <> n <> " " <> e <> ")") bindings) <> ") " <> bodyStr <> ")"
-  in "(" <> guard <> " " <> withBindings <> ")"
+   in "(" <> guard <> " " <> withBindings <> ")"
 
 -- | Compile a Statement to a Scheme expression.
 compileStatement :: Join.Statement -> Text
@@ -480,6 +480,8 @@ escapeChar ' ' = "space"
 escapeChar '\n' = "newline"
 escapeChar '\t' = "tab"
 escapeChar '\r' = "return"
+escapeChar '\0' = "nul"
+escapeChar '\DEL' = "delete"
 escapeChar c = T.singleton c
 
 -- | Escape special characters in a string for Scheme output.

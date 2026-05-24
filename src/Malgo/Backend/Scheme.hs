@@ -306,7 +306,7 @@ compilePrimitive name args ret = case name of
   "malgo_get_line" ->
     "(" <> ret <> " (let ((line (read-line))) (if (eof-object? line) \"\" line)))"
   "malgo_get_args" ->
-    "(" <> ret <> " (string-join (cdr (command-line)) \"\\n\"))"
+    "(" <> ret <> " (malgo-string-join (cdr (command-line)) \"\\n\"))"
   "malgo_exit_success" -> "(exit 0)"
   "malgo_stderr_string" ->
     case args of
@@ -603,6 +603,13 @@ schemeRuntime =
       "",
       ";; Not-equal operator",
       "(define (malgo-ne a b) (not (equal? a b)))",
+      "",
+      ";; String join (SRFI-13 not available in Chez Scheme)",
+      "(define (malgo-string-join lst sep)",
+      "  (if (null? lst) \"\"",
+      "    (let loop ((rest (cdr lst)) (acc (car lst)))",
+      "      (if (null? rest) acc",
+      "        (loop (cdr rest) (string-append acc sep (car rest)))))))",
       "",
       ";; Finish continuation (halt)",
       "(define (malgo-finish v) v)",

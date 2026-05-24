@@ -1000,6 +1000,8 @@ def applyBuiltin6 = { gEnv name args ->
   if (eqString name "toStringInt32#")          { case args { (Cons (VInt32 n) Nil) -> Right (VString (toStringInt32 n)), _ -> Left "toStringInt32#: type error" } } {
   if (eqString name "malgo_int32_t_to_string") { case args { (Cons (VInt32 n) Nil) -> Right (VString (toStringInt32 n)), _ -> Left "malgo_int32_t_to_string: type error" } } {
   if (eqString name "toStringDouble#")          { case args { (Cons (VString s) Nil) -> Right (VString s), _ -> Left "toStringDouble#: type error" } } {
+  if (eqString name "parseIntString32")         { case args { (Cons (VString s) Nil) -> Right (VInt32 (parseIntString32 s)), _ -> Left "parseIntString32: type error" } } {
+  if (eqString name "parseIntString64")         { case args { (Cons (VString s) Nil) -> Right (VInt64 (parseIntString64 s)), _ -> Left "parseIntString64: type error" } } {
   if (eqString name "|>") {
     case args { (Cons x (Cons f Nil)) -> apply gEnv f x, _ -> Left "|>: type error" }
   } {
@@ -1010,7 +1012,7 @@ def applyBuiltin6 = { gEnv name args ->
     case args { (Cons x Nil) -> Right x, _ -> Left (appendString name ": type error") }
   } {
     applyBuiltin7 gEnv name args
-  }}}}}}}}}}}}}}}
+  }}}}}}}}}}}}}}}}}
 }
 
 def applyBuiltin7 : Env -> String -> List Value -> Either String Value
@@ -1048,10 +1050,25 @@ def applyBuiltin8 = { gEnv name args ->
   }}}}}}}}}}
 }
 
+-- Drop the first newline-separated entry from a getRawArgs string.
+-- Used by applyBuiltin "getRawArgs" so that when the host evaluator runs
+-- `main.scm Main.mlg <case>`, the inner Main.mlg sees `<case>` (its own arg)
+-- rather than re-evaluating Main.mlg recursively. This is what enables a
+-- level-2 metacircular invocation. No test program currently calls getRawArgs
+-- inside the inner evaluator, so dropping the first arg is observable only
+-- by level-2 chains.
+def dropFirstLine : String -> String
+def dropFirstLine = { s ->
+  case (pathIndexOfChar '\n' 0i64 s) {
+    Nothing -> "",
+    (Just i) -> substring s (addInt64 i 1i64) (lengthString s)
+  }
+}
+
 def applyBuiltin9 : Env -> String -> List Value -> Either String Value
 def applyBuiltin9 = { gEnv name args ->
   if (eqString name "malgo_unsafe_cast") { case args { (Cons x Nil) -> Right x, _ -> Left "malgo_unsafe_cast: type error" } } {
-  if (eqString name "getRawArgs") { case args { (Cons VUnit Nil) -> Right (VString (getRawArgs ())), _ -> Left "getRawArgs: type error" } } {
+  if (eqString name "getRawArgs") { case args { (Cons VUnit Nil) -> Right (VString (dropFirstLine (getRawArgs ()))), _ -> Left "getRawArgs: type error" } } {
   if (eqString name "readFile") { case args { (Cons (VString path) Nil) -> Right (VString (readFile path)), _ -> Left "readFile: type error" } } {
   if (eqString name "charToString") { case args { (Cons (VChar c) Nil) -> Right (VString (consString c "")), _ -> Left "charToString: type error" } } {
   if (eqString name "modInt64#") { applyInt64_2 modInt64 "modInt64#" args } {
@@ -1318,8 +1335,9 @@ def rawInt32BuiltinNames =
 
 def stringConvBuiltinNames : List String
 def stringConvBuiltinNames =
-  Cons "toStringInt64#" (Cons "malgo_int64_t_to_string" (Cons "toStringInt32#" (Cons "malgo_int32_t_to_string" (Cons "toStringDouble#" Nil
-  ))))
+  Cons "toStringInt64#" (Cons "malgo_int64_t_to_string" (Cons "toStringInt32#" (Cons "malgo_int32_t_to_string" (Cons "toStringDouble#" (
+  Cons "parseIntString32" (Cons "parseIntString64" Nil
+  ))))))
 
 def wrapperBuiltinNames : List String
 def wrapperBuiltinNames =

@@ -68,21 +68,23 @@ EvalPass (Interpreter)
 
 ## Self-Hosting Levels
 
-Malgo has two conceptual self-hosting levels:
+Malgo has two self-hosting levels, each tested by a CI job:
 
-| Level | Description | Script | Status |
+| Level | Description | Script | CI job |
 |-------|-------------|--------|--------|
-| Level 1 | The Malgo evaluator written in Malgo (`runtime/malgo/compiler/`) evaluates arbitrary Malgo programs | `scripts/selfhost-golden.sh` | CI green (`self-hosted golden` job) |
-| Level 2 | Level 1 evaluator evaluates `Main.mlg` which evaluates a Malgo program (metacircular interpreter) | `scripts/selfhost-level2.sh` | Experimental — not in CI |
+| Level 1 | The Malgo evaluator written in Malgo (`runtime/malgo/compiler/`) evaluates arbitrary Malgo programs | `scripts/selfhost-golden.sh` | `self-hosted golden` |
+| Level 2 | Level 1 evaluator evaluates `Main.mlg` which evaluates a Malgo program (metacircular interpreter) | `scripts/selfhost-level2.sh` | `self-hosted level 2 metacircular` |
 
 ```bash
 # Level 1: scheme --script main.scm <testcase.mlg>
 bash scripts/selfhost-golden.sh
 
 # Level 2: scheme --script main.scm runtime/malgo/compiler/Main.mlg <testcase.mlg>
-# Currently fails — the inner evaluator's makeBaseEnv lacks wrapper functions
-# (parseIntString32/64) defined in Builtin.mlg, and the recursive command-line
-# handling causes the inner Main.mlg to re-evaluate Main.mlg itself.
+# In level 2, the inner Main.mlg's applyBuiltin "getRawArgs" drops the first
+# arg (which is Main.mlg's own path) so that the inner sees only the test case
+# argument. parseIntString32/64 are added to the inner evaluator's makeBaseEnv
+# so that the inner Lexer can tokenize integer literals when evaluating
+# nested Malgo sources.
 bash scripts/selfhost-level2.sh
 ```
 

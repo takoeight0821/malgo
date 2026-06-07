@@ -453,7 +453,10 @@ def evalDecls = { gEnv state decls ->
     (Cons d rest) ->
       case d {
         (DeclDef name expr) ->
-          evalDecls (envExtend name (VThunk(EnvEmpty, expr)) gEnv) state rest,
+          case (envLookup name gEnv) {
+            (Just (VBuiltin _ _ _)) -> evalDecls gEnv state rest,
+            _ -> evalDecls (envExtend name (VThunk(EnvEmpty, expr)) gEnv) state rest
+          },
         (DeclData _ _ cons) ->
           evalDecls (addConstructors gEnv cons) state rest,
         (DeclImport target path) ->
@@ -826,10 +829,10 @@ def applyInt64Cmp = { f fname args ->
 def printStringValue : String -> List Value -> Either String Value
 def printStringValue = { fname args ->
   case args {
-    (Cons (VString s) Nil) -> let u = printString s; Right VUnit,
+    (Cons (VString s) Nil) -> let _ = printString s; Right VUnit,
     (Cons (VCon cname _ (Cons (VString s) Nil)) Nil) ->
       if (eqString cname "String#")
-        { let u = printString s; Right VUnit }
+        { let _ = printString s; Right VUnit }
         { Left (appendString fname ": type error") },
     _ -> Left (appendString fname ": type error")
   }
@@ -838,7 +841,7 @@ def printStringValue = { fname args ->
 def printStringLineValue : String -> List Value -> Either String Value
 def printStringLineValue = { fname args ->
   bindRight (printStringValue fname args) { _ ->
-    let n = newline ();
+    let _ = newline ();
     Right VUnit
   }
 }
@@ -893,7 +896,7 @@ def applyBuiltin = { gEnv name args ->
   if (eqString name "appendString")  { applyStr2 appendString "appendString" args } {
   if (eqString name "eqString")      { case args { (Cons (VString a) (Cons (VString b) Nil)) -> Right (boolVal (eqString a b)), _ -> Left "eqString: type error" } } {
   if (eqString name "printString")   { printStringValue "printString" args } {
-  if (eqString name "printChar")     { case args { (Cons (VChar c) Nil) -> let u = printChar c; Right VUnit, _ -> Left "printChar: type error" } } {
+  if (eqString name "printChar")     { case args { (Cons (VChar c) Nil) -> let _ = printChar c; Right VUnit, _ -> Left "printChar: type error" } } {
   if (eqString name "addInt32")      { applyInt2 addInt32 "addInt32" args } {
   if (eqString name "subInt32")      { applyInt2 subInt32 "subInt32" args } {
   if (eqString name "mulInt32")      { applyInt2 mulInt32 "mulInt32" args } {
@@ -956,8 +959,8 @@ def applyBuiltin4 = { gEnv name args ->
   if (eqString name "malgo_print_string")  { printStringValue "malgo_print_string" args } {
   if (eqString name "printInt32")           { printInt32Value "printInt32" args } {
   if (eqString name "printInt64")           { printInt64Value "printInt64" args } {
-  if (eqString name "newline")             { case args { (Cons VUnit Nil) -> let n = newline (); Right VUnit, _ -> Left "newline: type error" } } {
-  if (eqString name "malgo_newline")       { case args { (Cons VUnit Nil) -> let n = newline (); Right VUnit, _ -> Left "malgo_newline: type error" } } {
+  if (eqString name "newline")             { case args { (Cons VUnit Nil) -> let _ = newline (); Right VUnit, _ -> Left "newline: type error" } } {
+  if (eqString name "malgo_newline")       { case args { (Cons VUnit Nil) -> let _ = newline (); Right VUnit, _ -> Left "malgo_newline: type error" } } {
   if (eqString name "exitFailure")         { Left "exitFailure" } {
   if (eqString name "malgo_exit_failure")  { Left "exitFailure" } {
     applyBuiltin5 gEnv name args
@@ -1022,8 +1025,8 @@ def applyBuiltin7 = { gEnv name args ->
   if (eqString name "abs") { case args { (Cons (VInt32 n) Nil) -> if (ltInt32 n 0i32) { Right (VInt32 (negInt32 n)) } { Right (VInt32 n) }, _ -> Left "abs: type error" } } {
   if (eqString name "const") { case args { (Cons x (Cons _ Nil)) -> Right x, _ -> Left "const: type error" } } {
   if (eqString name "getContents") { case args { (Cons _ Nil) -> Right (VString "Hello\n"), _ -> Left "getContents: type error" } } {
-  if (eqString name "print") { case args { (Cons x Nil) -> let u = printString (valueToText x); Right VUnit, _ -> Left "print: type error" } } {
-  if (eqString name "malgo_print") { case args { (Cons x Nil) -> let u = printString (valueToText x); Right VUnit, _ -> Left "malgo_print: type error" } } {
+  if (eqString name "print") { case args { (Cons x Nil) -> let _ = printString (valueToText x); Right VUnit, _ -> Left "print: type error" } } {
+  if (eqString name "malgo_print") { case args { (Cons x Nil) -> let _ = printString (valueToText x); Right VUnit, _ -> Left "malgo_print: type error" } } {
   if (eqString name "toStringDouble") { case args { (Cons (VString s) Nil) -> Right (VString s), (Cons (VInt32 n) Nil) -> Right (VString (toStringInt32 n)), _ -> Left "toStringDouble: type error" } } {
   if (eqString name "negInt32") { case args { (Cons (VInt32 n) Nil) -> Right (VInt32 (negInt32 n)), _ -> Left "negInt32: type error" } } {
   if (eqString name "addDouble#") { applyStr2 doubleAddString "addDouble#" args } {

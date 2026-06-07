@@ -1,3 +1,9 @@
+---
+paths:
+  - "runtime/malgo/**/*.mlg"
+  - "scripts/selfhost*.sh"
+---
+
 # Malgo コーディングガイドライン
 
 `runtime/malgo/compiler/` 以下の自己ホスト型コンパイラ・インタープリタを

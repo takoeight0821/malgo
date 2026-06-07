@@ -1,59 +1,110 @@
-# 自己ホスト型インタープリタの開発ガイドライン
+# Malgo コーディングガイドライン
 
-`runtime/malgo/compiler/Eval.mlg` および自己ホスト型コンパイラモジュールを編集する際に守るべきルール。
+`runtime/malgo/compiler/` 以下の自己ホスト型コンパイラ・インタープリタを
+編集する際に守るべきルール。
 
-## 1. IO 副作用には必ず `let _ = ...` を使う
+---
 
-自己ホスト型評価器はデフォルトで **遅延評価** を行う。
-`let name = expr; body` は `name` が `body` 内で参照されなければ `expr` を評価しない（VThunk のまま放置される）。
+## 1. IO 副作用は必ず `let _ = ...` で束縛する
 
-**悪い例（副作用が実行されない）:**
+### 背景
+
+自己ホスト型評価器（`Eval.mlg`）は **遅延評価** を採用している。
+`eval` の `ExLet` 分岐では:
+
+- `let _ = expr; body` → `expr` を即時評価し、結果を捨ててから `body` へ進む
+- `let x = expr; body` → `expr` を VThunk に包んで `x` に束縛し、`body` へ進む
+
+後者では `x` が `body` 内で参照されなければ `expr` は **永遠に評価されない**。
+
+### ルール
+
+戻り値を使わない IO 操作（出力・終了など）には必ず `_` を束縛変数にする。
+
 ```malgo
-let u = printString s; Right VUnit
-let n = newline ();     Right VUnit
+-- 悪い例: printString が実行されないことがある
+let u       = printString s; Right VUnit
+let printed = printString (toStringInt32 n); Right VUnit
+let n       = newline ();    Right VUnit
+
+-- 良い例: 確実に副作用が実行される
+let _ = printString s;                Right VUnit
+let _ = printString (toStringInt32 n); Right VUnit
+let _ = newline ();                    Right VUnit
 ```
 
-**良い例（副作用が確実に実行される）:**
-```malgo
-let _ = printString s; Right VUnit
-let _ = newline ();     Right VUnit
-```
+対象関数: `printString`, `printChar`, `printInt32`, `printInt64`,
+`newline`, `print`, `malgo_print`, `malgo_newline`, `putStr`, `putStrLn` など。
 
-`_` を束縛変数にすると評価器が即時に式を評価してから `body` に進む
-（`eval` の `ExLet` 分岐で `name == "_"` のとき `bindRight` で eager 評価する）。
+---
 
-対象: `printString`, `printChar`, `newline`, `print`, `malgo_print`,
-`malgo_newline`, `putStr`, `putStrLn`, `printInt32`, `printInt64` など
-戻り値を使わない IO 操作すべて。
+## 2. ビルトイン追加時は 3 箇所をセットで更新する
 
-## 2. `makeBaseEnv` に登録したビルトインは上書きしない
+### 背景
 
-`makeBaseEnv` は `builtinNames` にある名前を `VBuiltin` として登録する。
-`evalDecls` の `DeclDef` 処理で既存の `VBuiltin` を上書きしてはならない。
+ビルトインの登録は以下の 3 か所で分散管理されている。
+どれか一つが欠けると「名前はあるが実装がない」か「実装はあるが呼び出せない」
+という状態になる。
 
-**理由:** Level 2（メタ循環インタープリタ）実行時、内側の評価器が
-Main.mlg のモジュールを読み込む際、Malgo ソース定義が
-`makeBaseEnv` の VBuiltin を上書きすると、`parseIntString32/64` など
-字句解析に必要なビルトインが消失して整数リテラルのトークン化に失敗する。
+### ルール
 
-**チェックリスト:**
-- 新しいビルトインを追加するときは `builtinNames` の適切なリストに追加する
-- `applyBuiltin` チェーンにも対応するハンドラを追加する
-- 既存の Malgo ソース定義と名前が重複する場合は `evalDecls` の VBuiltin チェックが保護してくれるが、意図的な上書きでないことを確認する
+新しいビルトイン `foo` を追加するときは必ず以下をすべて更新する:
 
-## 3. Level 2 動作確認手順
+| 場所 | 目的 |
+|------|------|
+| `builtinNames` の対応リスト | `makeBaseEnv` が `VBuiltin("foo", ...)` を登録 |
+| `foreignArity` / `foreignArity2/3/4/...` | 引数の個数を返す |
+| `applyBuiltin` / `applyBuiltin2/3/...` の `if` チェーン | 実際の処理実装 |
 
-変更後は以下で Level 2 の動作を確認する:
+---
+
+## 3. `makeBaseEnv` に登録したビルトインは上書きしない
+
+### 背景
+
+Level 2（メタ循環インタープリタ）では、内側の評価器が
+`makeBaseEnv` を初期環境として Main.mlg のモジュール群を読み込む。
+このとき Malgo ソース定義（`DeclDef`）が VBuiltin エントリを
+VThunk で上書きすると、字句解析に必要な `parseIntString32/64` などが
+消えて整数リテラルのトークン化が失敗する。
+
+### ルール
+
+`evalDecls` の `DeclDef` 処理では既存の VBuiltin を上書きしない
+（現在の実装は `envLookup` で VBuiltin を検出したらスキップする）。
+
+Malgo ソースに定義があるにもかかわらずビルトインとしても登録したい関数を
+追加する場合は、この保護機構が正しく機能することを確認する。
+
+---
+
+## 4. Level 2 動作確認手順
+
+### 背景
+
+Level 1（Haskell 評価器）では通る変更が、Level 2（Scheme → Malgo → Malgo）
+では失敗することがある。評価意味論が異なるため、自己ホスト型コンパイラを
+変更したら必ず Level 2 を手動確認する。
+
+### 手順
 
 ```bash
-# キャッシュが温まっている前提（malgo eval で各ファイルをプリコンパイル済み）
+# 1. 依存モジュールをプリコンパイル（初回のみ時間がかかる）
+for f in runtime/malgo/Builtin.mlg runtime/malgo/Prelude.mlg \
+          runtime/malgo/Either.mlg \
+          runtime/malgo/compiler/{AST,Token,Diagnostic,Lexer,Parser,Value,Eval,FunIR,Rename,ToFun,Main}.mlg; do
+  cabal exec malgo -- eval "$f" </dev/null >/dev/null
+done
+
+# 2. Level 1 評価器を Scheme にコンパイル
 cabal exec malgo -- eval --target scheme runtime/malgo/compiler/Main.mlg > /tmp/main.scm
 
-# 各テストケースを検証
-printf 'Hello\n' | scheme --script /tmp/main.scm runtime/malgo/compiler/Main.mlg test/testcases/malgo/Echo.mlg
+# 3. Level 2 テスト（例: Echo）
+printf 'Hello\n' | scheme --script /tmp/main.scm \
+  runtime/malgo/compiler/Main.mlg test/testcases/malgo/Echo.mlg
 
-# フルスクリプト（PRECOMPILE_TIMEOUT を長めに設定）
+# 4. フルスクリプト
 PRECOMPILE_TIMEOUT=300 CASE_TIMEOUT=600 bash scripts/selfhost-level2.sh
 ```
 
-Level 2 は Level 1 より 50〜200 倍遅いため、タイムアウトは余裕を持たせること。
+Level 2 は Level 1 より 50〜200 倍遅い。タイムアウトは余裕を持たせること。

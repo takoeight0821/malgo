@@ -1,0 +1,538 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Token.mlg"
+
+-- ──────────────────────────────────────────────────────────
+-- Lexer state: remaining source and accumulated tokens
+-- ──────────────────────────────────────────────────────────
+
+-- tokenize : String -> Either String (List Token)
+-- Returns Left(errorMsg) on failure, Right(tokens) on success.
+-- The list always ends with TkEof.
+
+def tokenize : String -> Either String (List Token)
+def tokenize = { src ->
+  let result = lexAll src Nil;
+  case result {
+    (Left e)     -> Left e,
+    (Right toks) -> Right (append (reverseList toks) (Cons TkEof Nil))
+  }
+}
+
+-- Reverse a list
+def reverseList : List a -> List a
+def reverseList = { xs -> foldl { acc x -> Cons x acc } Nil xs }
+
+-- Lex all tokens from src, accumulating into acc (reversed)
+def lexAll : String -> List Token -> Either String (List Token)
+def lexAll = { src acc ->
+  if (eqString src "")
+    { Right acc }
+    { let c = atString 0i64 src;
+      if (isWhitespaceCh c)
+        { lexAll (substring src 1i64 (lengthString src)) acc }
+        { if (isLineCommentStart src)
+            { let rest = skipLineComment src;
+              lexAll rest acc
+            }
+            { if (isPragmaStart src)
+                { let rest = skipLineComment src;
+                  lexAll rest acc
+                }
+                { if (isBlockCommentStart src)
+                { case (skipBlockComment src) {
+                    (Left e)  -> Left e,
+                    (Right r) -> lexAll r acc
+                  }
+                }
+                { case (lexOne src) {
+                    (Left e)         -> Left e,
+                    (Right {val = tok, rest = rest}) ->
+                      lexAll rest (Cons tok acc)
+                  }
+                }
+              }
+            }
+        }
+    }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Character classification
+-- ──────────────────────────────────────────────────────────
+
+def isWhitespaceCh : Char -> Bool
+def isWhitespaceCh = { c -> charInStr c " \n\t\r" }
+
+def isIdentStartCh : Char -> Bool
+def isIdentStartCh = { c ->
+  if (isAlphanum c) { True } { eqChar c '_' }
+}
+
+def isIdentContCh : Char -> Bool
+def isIdentContCh = { c ->
+  if (isAlphanum c) { True }
+  { if (eqChar c '_') { True }
+  { eqChar c '#' }}
+}
+
+def isOpCh : Char -> Bool
+def isOpCh = { c -> charInStr c "+-*/\\%=><:;|&!#.~" }
+
+-- ──────────────────────────────────────────────────────────
+-- Comment detection/skipping
+-- ──────────────────────────────────────────────────────────
+
+-- Check if src starts with "--"
+def isLineCommentStart : String -> Bool
+def isLineCommentStart = { src ->
+  let len = lengthString src;
+  if (ltInt64 len 2i64)
+    { False }
+    { if (eqChar (atString 0i64 src) '-')
+        { eqChar (atString 1i64 src) '-' }
+        { False }
+    }
+}
+
+-- Skip until end of line (newline or end of string)
+def skipLineComment : String -> String
+def skipLineComment = { src ->
+  if (eqString src "")
+    { src }
+    { let c = atString 0i64 src;
+      if (eqChar c '\n')
+        { substring src 1i64 (lengthString src) }
+        { skipLineComment (substring src 1i64 (lengthString src)) }
+    }
+}
+
+-- Check if src starts with "{-"
+def isBlockCommentStart : String -> Bool
+def isBlockCommentStart = { src ->
+  let len = lengthString src;
+  if (ltInt64 len 2i64)
+    { False }
+    { if (eqChar (atString 0i64 src) '{')
+        { eqChar (atString 1i64 src) '-' }
+        { False }
+    }
+}
+
+def isPragmaStart : String -> Bool
+def isPragmaStart = { src ->
+  let len = lengthString src;
+  if (ltInt64 len 2i64)
+    { False }
+    { if (eqChar (atString 0i64 src) '#')
+        { isAlphanum (atString 1i64 src) }
+        { False }
+    }
+}
+
+-- Check if src starts with "-}"
+def isBlockCommentEnd : String -> Bool
+def isBlockCommentEnd = { src ->
+  let len = lengthString src;
+  if (ltInt64 len 2i64)
+    { False }
+    { if (eqChar (atString 0i64 src) '-')
+        { eqChar (atString 1i64 src) '}' }
+        { False }
+    }
+}
+
+-- Skip block comment, handling nesting
+def skipBlockComment : String -> Either String String
+def skipBlockComment = { src ->
+  -- src should start with "{-"
+  let inner = substring src 2i64 (lengthString src);
+  skipBlockCommentInner inner 1
+}
+
+def skipBlockCommentInner : String -> Int32 -> Either String String
+def skipBlockCommentInner = { src depth ->
+  if (eqString src "")
+    { Left "unterminated block comment" }
+    { if (isBlockCommentEnd src)
+        { let rest = substring src 2i64 (lengthString src);
+          if (eqInt32 depth 1)
+            { Right rest }
+            { skipBlockCommentInner rest (subInt32 depth 1) }
+        }
+        { if (isBlockCommentStart src)
+            { let rest = substring src 2i64 (lengthString src);
+              skipBlockCommentInner rest (addInt32 depth 1)
+            }
+            { skipBlockCommentInner (substring src 1i64 (lengthString src)) depth }
+        }
+    }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Single token lexer
+-- ──────────────────────────────────────────────────────────
+
+-- Result of lexing one token: the token and the remaining source
+def lexOne : String -> Either String {val: Token, rest: String}
+def lexOne = { src ->
+  if (eqString src "")
+    { Right {val = TkEof, rest = src} }
+    { let c = atString 0i64 src;
+      if (eqChar c '{')
+        { Right {val = TkLBrace, rest = substring src 1i64 (lengthString src)} }
+        { if (eqChar c '}')
+            { Right {val = TkRBrace, rest = substring src 1i64 (lengthString src)} }
+            { if (eqChar c '(')
+                { Right {val = TkLParen, rest = substring src 1i64 (lengthString src)} }
+                { if (eqChar c ')')
+                    { Right {val = TkRParen, rest = substring src 1i64 (lengthString src)} }
+                    { if (eqChar c '[')
+                        { Right {val = TkLBracket, rest = substring src 1i64 (lengthString src)} }
+                        { if (eqChar c ']')
+                            { Right {val = TkRBracket, rest = substring src 1i64 (lengthString src)} }
+                            { if (eqChar c ',')
+                                { Right {val = TkComma, rest = substring src 1i64 (lengthString src)} }
+                                { if (eqChar c '"')
+                                    { lexString (substring src 1i64 (lengthString src)) "" }
+                                    { if (eqChar c '\'')
+                                        { lexChar (substring src 1i64 (lengthString src)) }
+                                        { if (isDigit c)
+                                            { lexNumber src }
+                                            { if (isIdentStartCh c)
+                                                { lexIdent src }
+                                                { if (isOpCh c)
+                                                    { lexOp src }
+                                                    { Left (appendString "unexpected character: " (consString c "")) }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- String literal lexer
+-- ──────────────────────────────────────────────────────────
+
+-- src is after the opening quote; acc accumulates chars (reversed string)
+def lexString : String -> String -> Either String {val: Token, rest: String}
+def lexString = { src acc ->
+  if (eqString src "")
+    { Left "unterminated string literal" }
+    { let c = atString 0i64 src;
+      let tail = substring src 1i64 (lengthString src);
+      if (eqChar c '"')
+        { Right {val = TkString (reverseString acc), rest = dropUnboxedSuffix tail} }
+        { if (eqChar c '\\')
+            { case (lexEscape tail) {
+                (Left e)          -> Left e,
+                (Right {val = esc, rest = rest}) ->
+                  lexString rest (consString esc acc)
+              }
+            }
+            { lexString tail (consString c acc) }
+        }
+    }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Char literal lexer
+-- ──────────────────────────────────────────────────────────
+
+def lexChar : String -> Either String {val: Token, rest: String}
+def lexChar = { src ->
+  if (eqString src "")
+    { Left "unterminated char literal" }
+    { let c = atString 0i64 src;
+      let tail = substring src 1i64 (lengthString src);
+      if (eqChar c '\\')
+        { case (lexEscape tail) {
+            (Left e) -> Left e,
+            (Right {val = esc, rest = rest}) ->
+              case (expectChar '\'' rest) {
+                (Left e)  -> Left e,
+                (Right r) -> Right {val = TkChar esc, rest = dropUnboxedSuffix r}
+              }
+          }
+        }
+        { case (expectChar '\'' tail) {
+            (Left e)  -> Left e,
+            (Right r) -> Right {val = TkChar c, rest = dropUnboxedSuffix r}
+          }
+        }
+    }
+}
+
+def expectChar : Char -> String -> Either String String
+def expectChar = { expected src ->
+  if (eqString src "")
+    { Left (appendString "expected '" (consString expected "'")) }
+    { if (eqChar (atString 0i64 src) expected)
+        { Right (substring src 1i64 (lengthString src)) }
+        { Left (appendString "expected '" (appendString (consString expected "") (appendString "' but got '" (consString (atString 0i64 src) "'")))) }
+    }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Escape sequence lexer
+-- ──────────────────────────────────────────────────────────
+
+-- src is after the backslash
+def lexEscape : String -> Either String {val: Char, rest: String}
+def lexEscape = { src ->
+  if (eqString src "")
+    { Left "unexpected end after backslash" }
+    { let c = atString 0i64 src;
+      let rest = substring src 1i64 (lengthString src);
+      if (eqChar c 'n')  { Right {val = '\n', rest = rest} }
+      { if (eqChar c 't')  { Right {val = '\t', rest = rest} }
+      { if (eqChar c 'r')  { Right {val = '\r', rest = rest} }
+      { if (eqChar c '\\') { Right {val = '\\', rest = rest} }
+      { if (eqChar c '"')  { Right {val = '"',  rest = rest} }
+      { if (eqChar c '\'') { Right {val = '\'', rest = rest} }
+      { if (eqChar c '0')  { Right {val = '\0', rest = rest} }
+      { Left (appendString "unknown escape: \\" (consString c "")) }}}}}}}
+    }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Number literal lexer
+-- ──────────────────────────────────────────────────────────
+
+def lexNumber : String -> Either String {val: Token, rest: String}
+def lexNumber = { src ->
+  let digs = takeDigits src;
+  let rest = dropDigits src;
+  let n64 = digitsToInt64 digs 0i64;
+  if (hasDecimalSuffix rest)
+    { let frac = takeDigits (substring rest 1i64 (lengthString rest));
+      let rest2 = substring rest (addInt64 1i64 (lengthString frac)) (lengthString rest);
+      Right {val = TkString (appendString digs (appendString "." frac)), rest = dropUnboxedSuffix rest2}
+    }
+    { if (hasI64Suffix rest)
+    { Right {val = TkInt64 n64, rest = dropUnboxedSuffix (substring rest 3i64 (lengthString rest))} }
+    { if (hasI32Suffix rest)
+        { Right {val = TkInt32 (parseIntString32 digs), rest = dropUnboxedSuffix (substring rest 3i64 (lengthString rest))} }
+        { Right {val = TkInt32 (parseIntString32 digs), rest = dropUnboxedSuffix rest} }
+    }
+    }
+}
+
+def dropUnboxedSuffix : String -> String
+def dropUnboxedSuffix = { src ->
+  if (eqString src "")
+    { src }
+    { if (eqChar (atString 0i64 src) '#')
+        { substring src 1i64 (lengthString src) }
+        { src }
+    }
+}
+
+def takeDigits : String -> String
+def takeDigits = { src ->
+  let i = countDigits src 0i64;
+  substring src 0i64 i
+}
+
+def dropDigits : String -> String
+def dropDigits = { src ->
+  let i = countDigits src 0i64;
+  substring src i (lengthString src)
+}
+
+def countDigits : String -> Int64 -> Int64
+def countDigits = { src i ->
+  if (geInt64 i (lengthString src))
+    { i }
+    { if (isDigit (atString i src))
+        { countDigits src (addInt64 i 1i64) }
+        { i }
+    }
+}
+
+def digitsToInt64 : String -> Int64 -> Int64
+def digitsToInt64 = { digs acc ->
+  if (eqString digs "")
+    { acc }
+    { let d = atString 0i64 digs;
+      let v = int32ToInt64 (subInt32 (ordChar d) (ordChar '0'));
+      let newAcc = addInt64 (mulInt64 acc 10i64) v;
+      digitsToInt64 (substring digs 1i64 (lengthString digs)) newAcc
+    }
+}
+
+-- Check if src starts with "i64"
+def hasI64Suffix : String -> Bool
+def hasI64Suffix = { src ->
+  let len = lengthString src;
+  if (ltInt64 len 3i64)
+    { False }
+    { if (eqChar (atString 0i64 src) 'i')
+        { if (eqChar (atString 1i64 src) '6')
+            { eqChar (atString 2i64 src) '4' }
+            { False }
+        }
+        { False }
+    }
+}
+
+-- Check if src starts with "i32"
+def hasI32Suffix : String -> Bool
+def hasI32Suffix = { src ->
+  let len = lengthString src;
+  if (ltInt64 len 3i64)
+    { False }
+    { if (eqChar (atString 0i64 src) 'i')
+        { if (eqChar (atString 1i64 src) '3')
+            { eqChar (atString 2i64 src) '2' }
+            { False }
+        }
+        { False }
+    }
+}
+
+def hasDecimalSuffix : String -> Bool
+def hasDecimalSuffix = { src ->
+  let len = lengthString src;
+  if (ltInt64 len 2i64)
+    { False }
+    { if (eqChar (atString 0i64 src) '.')
+        { isDigit (atString 1i64 src) }
+        { False }
+    }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Identifier lexer
+-- ──────────────────────────────────────────────────────────
+
+def lexIdent : String -> Either String {val: Token, rest: String}
+def lexIdent = { src ->
+  let len = identLen src 0i64;
+  let name = substring src 0i64 len;
+  let rest = substring src len (lengthString src);
+  Right {val = TkIdent name, rest = rest}
+}
+
+def identLen : String -> Int64 -> Int64
+def identLen = { src i ->
+  if (geInt64 i (lengthString src))
+    { i }
+    { if (isIdentContCh (atString i src))
+        { identLen src (addInt64 i 1i64) }
+        { i }
+    }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Operator lexer
+-- ──────────────────────────────────────────────────────────
+
+def lexOp : String -> Either String {val: Token, rest: String}
+def lexOp = { src ->
+  let len = opLen src 0i64;
+  let op = substring src 0i64 len;
+  let rest = substring src len (lengthString src);
+  Right {val = TkOp op, rest = rest}
+}
+
+def opLen : String -> Int64 -> Int64
+def opLen = { src i ->
+  if (geInt64 i (lengthString src))
+    { i }
+    { if (isOpCh (atString i src))
+        { opLen src (addInt64 i 1i64) }
+        { i }
+    }
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Helpers
+-- ──────────────────────────────────────────────────────────
+
+-- Convert Int32 to Int64 via string representation
+def int32ToInt64 : Int32 -> Int64
+def int32ToInt64 = { n -> parseIntString64 (toStringInt32 n) }
+
+-- ──────────────────────────────────────────────────────────
+-- Position-tracking lexer
+-- ──────────────────────────────────────────────────────────
+
+-- Advance a source position by one character
+def nextPos : SourcePos -> Char -> SourcePos
+def nextPos = { (SourcePos line col) c ->
+  if (eqChar c '\n')
+    { SourcePos(addInt64 line 1i64, 1i64) }
+    { SourcePos(line, addInt64 col 1i64) }
+}
+
+-- Advance a source position through an entire string
+def advancePosStr : SourcePos -> String -> SourcePos
+def advancePosStr = { pos src ->
+  if (eqString src "")
+    { pos }
+    { let c = atString 0i64 src;
+      advancePosStr (nextPos pos c) (substring src 1i64 (lengthString src))
+    }
+}
+
+-- tokenizeWithPos : String -> Either String (List Located)
+-- Returns Left(errorMsg) on failure, Right(located-tokens) on success.
+-- The list always ends with Located(TkEof, finalPos).
+-- The existing tokenize function is unchanged; this is purely additive.
+def tokenizeWithPos : String -> Either String (List Located)
+def tokenizeWithPos = { src ->
+  lexAllWithPos src (SourcePos(1i64, 1i64)) Nil
+}
+
+-- Lex all tokens with position tracking, accumulating into acc (reversed)
+def lexAllWithPos : String -> SourcePos -> List Located -> Either String (List Located)
+def lexAllWithPos = { src pos acc ->
+  if (eqString src "")
+    { Right (append (reverseList acc) (Cons (Located(TkEof, pos)) Nil)) }
+    { let c = atString 0i64 src;
+      if (isWhitespaceCh c)
+        { lexAllWithPos (substring src 1i64 (lengthString src)) (nextPos pos c) acc }
+        { if (isLineCommentStart src)
+            { let rest = skipLineComment src;
+              let consumed = substring src 0i64 (subInt64 (lengthString src) (lengthString rest));
+              let newPos = advancePosStr pos consumed;
+              lexAllWithPos rest newPos acc
+            }
+            { if (isPragmaStart src)
+                { let rest = skipLineComment src;
+                  let consumed = substring src 0i64 (subInt64 (lengthString src) (lengthString rest));
+                  let newPos = advancePosStr pos consumed;
+                  lexAllWithPos rest newPos acc
+                }
+                { if (isBlockCommentStart src)
+                { case (skipBlockComment src) {
+                    (Left e)  -> Left e,
+                    (Right rest) ->
+                      let consumed = substring src 0i64 (subInt64 (lengthString src) (lengthString rest));
+                      let newPos = advancePosStr pos consumed;
+                      lexAllWithPos rest newPos acc
+                  }
+                }
+                { case (lexOne src) {
+                    (Left e)         -> Left e,
+                    (Right {val = tok, rest = rest}) ->
+                      let consumed = substring src 0i64 (subInt64 (lengthString src) (lengthString rest));
+                      let newPos = advancePosStr pos consumed;
+                      lexAllWithPos rest newPos (Cons (Located(tok, pos)) acc)
+                  }
+                }
+              }
+            }
+        }
+    }
+}

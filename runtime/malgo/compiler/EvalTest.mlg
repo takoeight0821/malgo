@@ -1,0 +1,55 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Token.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Lexer.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Parser.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Value.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Eval.mlg"
+
+-- Show an Either String Value result
+def showEither : Either String Value -> String
+def showEither = {
+  (Left err) -> appendString "ERROR: " err,
+  (Right v)  -> showValue v
+}
+
+-- Parse + eval a source string and run main with makeBaseEnv
+def runSource : String -> Either String Value
+def runSource = { src ->
+  bindRight (tokenize src) { toks ->
+    bindRight (parseModule toks) { m ->
+      bindRight (evalModule makeBaseEnv m) { gEnv ->
+        runMain gEnv
+      }
+    }
+  }
+}
+
+-- Print a named test result ('tag' avoids the 'label' keyword conflict)
+def testRun : String -> String -> ()
+def testRun = { tag src ->
+  let _ = printString (appendString tag ": ");
+  printString (appendString (showEither (runSource src)) "\n")
+}
+
+def main = {
+  -- Test 1: literal return
+  let u = testRun "literal" "def main = { _ -> 42i32 }";
+
+  -- Test 2: let binding
+  let u = testRun "let" "def main = { _ -> let x = 10i32; x }";
+
+  -- Test 3: higher-order function using addInt32 builtin (multi-def separated by newline)
+  let u = testRun "HOF" "def add = { x y -> addInt32 x y }\ndef main = { _ -> add 3i32 4i32 }";
+
+  -- Test 4: case on ADT constructor (multi-def separated by newline)
+  let u = testRun "case-con" "data MyB = MTrue | MFalse\ndef main = { _ -> case MTrue { MTrue -> 1i32, MFalse -> 0i32 } }";
+
+  -- Test 5: if builtin with 1-arg thunks { _ -> expr }
+  let u = testRun "if-true" "def main = { _ -> if (eqInt32 1i32 1i32) { _ -> 99i32 } { _ -> 0i32 } }";
+
+  -- Test 6: recursive fibonacci with { _ -> expr } thunks
+  testRun "fib-6" "def fib = { n -> if (ltInt32 n 2i32) { _ -> n } { _ -> addInt32 (fib (subInt32 n 1i32)) (fib (subInt32 n 2i32)) } }\ndef main = { _ -> fib 6i32 }"
+}

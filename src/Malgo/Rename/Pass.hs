@@ -1,9 +1,9 @@
 -- | Name resolution and simple desugar transformation
 module Malgo.Rename.Pass (RenamePass (..)) where
 
-import Data.List (intersect, nub)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Effectful (Eff, IOE, (:>))
@@ -445,19 +445,24 @@ genToplevelEnv :: (IOE :> es, Reader ModuleName :> es, QueryDB :> es, Workspace 
 genToplevelEnv (ds :: [Decl (Malgo Parse)]) env = do
   execState env (traverse aux ds)
   where
+    -- Only an existing *Implicit* (same-module) binding counts as a true duplicate.
+    -- Names imported via 'module Alias = import ...' carry Explicit visibility
+    -- and must not prevent the current module from defining a same-named identifier.
+    hasImplicitBinding name m = any (\(Qualified visi _) -> visi == Implicit) $ fromMaybe [] $ Map.lookup name m
     aux (ScDef pos x _) = do
       env <- gets @RnEnv (.resolvedVarIdentMap)
-      when (x `elem` Map.keys env) do
+      when (hasImplicitBinding x env) do
         throwError $ DuplicateName pos x
       x' <- resolveGlobalName x
       modify $ insertVarIdent [(x, Qualified Implicit x')]
     aux ScSig {} = pass
     aux (DataDef pos x _ cs) = do
       env <- get @RnEnv
-      when (x `elem` Map.keys env.resolvedTypeIdentMap) do
+      when (hasImplicitBinding x env.resolvedTypeIdentMap) do
         throwError $ DuplicateName pos x
-      unless (Set.null $ Set.fromList (map (view _2) cs) `Set.intersection` Set.fromList (Map.keys env.resolvedVarIdentMap)) do
-        throwError $ DuplicateNames pos (map (view _2) cs `intersect` Map.keys env.resolvedVarIdentMap)
+      let conConflicts = filter (\c -> hasImplicitBinding c env.resolvedVarIdentMap) (map (view _2) cs)
+      unless (null conConflicts) do
+        throwError $ DuplicateNames pos conConflicts
       x' <- resolveGlobalName x
       xs' <- traverse (resolveGlobalName . view _2) cs
       modify $ insertVarIdent (zip (map (view _2) cs) $ map (Qualified Implicit) xs')
@@ -465,13 +470,13 @@ genToplevelEnv (ds :: [Decl (Malgo Parse)]) env = do
       modify $ insertTypeIdent [(x, Qualified Implicit x')]
     aux (TypeSynonym pos x _ _) = do
       env <- get @RnEnv
-      when (x `elem` Map.keys env.resolvedTypeIdentMap) do
+      when (hasImplicitBinding x env.resolvedTypeIdentMap) do
         throwError $ DuplicateName pos x
       x' <- resolveGlobalName x
       modify $ insertTypeIdent [(x, Qualified Implicit x')]
     aux (Foreign pos x _) = do
       env <- get @RnEnv
-      when (x `elem` Map.keys env.resolvedVarIdentMap) do
+      when (hasImplicitBinding x env.resolvedVarIdentMap) do
         throwError $ DuplicateName pos x
       x' <- resolveGlobalName x
       modify $ insertVarIdent [(x, Qualified Implicit x')]

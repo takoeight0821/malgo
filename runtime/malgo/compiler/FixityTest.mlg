@@ -1,0 +1,33 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Token.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Lexer.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Parser.mlg"
+
+-- Count DeclInfix entries in a declaration list
+def countDeclInfix : List Decl -> Int32
+def countDeclInfix = {
+  Nil -> 0i32,
+  (Cons (DeclInfix _ _ _) rest) -> addInt32 1i32 (countDeclInfix rest),
+  (Cons _ rest) -> countDeclInfix rest
+}
+
+def testSource : String
+def testSource = "infixl 6 (+)\ninfixl 7 (*)\ndef result = 1i32"
+
+def main = {
+  case (tokenize testSource) {
+    (Left err) -> putStrLn (appendString "FAIL: lex error: " err),
+    (Right toks) ->
+      case (parseModule toks) {
+        (Left err) -> putStrLn (appendString "FAIL: parse error: " err),
+        (Right (Module decls)) ->
+          let n = countDeclInfix decls;
+          if (eqInt32 n 2i32)
+            { putStrLn "PASS: 2 infixl declarations parsed" }
+            { putStrLn (appendString "FAIL: expected 2 DeclInfix, got " (toStringInt32 n)) }
+      }
+  }
+}

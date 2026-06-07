@@ -1,0 +1,124 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Runtime values for the self-hosted Malgo evaluator
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- An environment: association list of (name, Value) pairs
+-- Declared before Value so Value can reference it
+data Env
+  = EnvEmpty
+  | EnvBind(String, Value, Env)   -- name, value, parent env
+
+-- Runtime values
+data Value
+  = VInt32 Int32                  -- 32-bit integer
+  | VInt64 Int64                  -- 64-bit integer
+  | VChar Char                    -- character
+  | VString String                -- string
+  | VUnit                         -- unit ()
+  | VTuple(List Value)            -- tuple (v1, v2, ...)
+  | VRecord(List ValueField)      -- record { x = v }
+  | VThunk(Env, Expr)             -- delayed definition with captured locals
+  | VCoClosure(Env, List Value, List Expr) -- copattern closure/object
+  | VScoped(Env, Value)           -- value evaluated with an imported module env
+  -- Constructor: name, expected total arity, args collected so far
+  -- Complete when length(args) == arity; partial (still a function) otherwise
+  | VCon(String, Int32, List Value)
+  -- Closure: captured env, accumulated args, arms (ExArm expressions)
+  -- Arity = number of patterns in first arm
+  | VClosure(Env, List Value, List Expr)
+  -- Built-in function: name, total arity, args collected so far
+  | VBuiltin(String, Int32, List Value)
+
+data ValueField = ValueField(String, Value)
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Environment operations
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- Look up a name in the environment
+def envLookup : String -> Env -> Maybe Value
+def envLookup = { name env ->
+  case env {
+    EnvEmpty -> Nothing,
+    (EnvBind n v rest) ->
+      if (eqString name n)
+        { Just v }
+        { envLookup name rest }
+  }
+}
+
+-- Extend environment with a new binding
+def envExtend : String -> Value -> Env -> Env
+def envExtend = { name val env -> EnvBind(name, val, env) }
+
+-- Extend environment with multiple parallel bindings (same-length lists)
+def envExtendList : List String -> List Value -> Env -> Env
+def envExtendList = { names vals env ->
+  case names {
+    Nil -> env,
+    (Cons n ns) ->
+      case vals {
+        Nil -> env,
+        (Cons v vs) ->
+          envExtendList ns vs (EnvBind(n, v, env))
+      }
+  }
+}
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Show functions (for debugging)
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- Get the arity of a closure (patterns in first arm)
+def closureArity : List Expr -> Int32
+def closureArity = {
+  Nil -> 0i32,
+  (Cons (ExArm pats _) _) -> length pats,
+  (Cons _ _) -> 0i32
+}
+
+def showValue : Value -> String
+def showValue = {
+  (VInt32 n)             -> toStringInt32 n,
+  (VInt64 n)             -> appendString (toStringInt64 n) "i64",
+  (VChar c)              -> appendString "'" (appendString (consString c "") "'"),
+  (VString s)            -> appendString "\"" (appendString s "\""),
+  VUnit                  -> "()",
+  (VTuple vs)            -> appendString "(" (appendString (intercalateVal ", " vs) ")"),
+  (VRecord fs)           -> appendString "{ " (appendString (intercalateValueFields ", " fs) " }"),
+  (VThunk _ _)           -> "<thunk>",
+  (VCoClosure _ _ _)     -> "<codata>",
+  (VScoped _ value)      -> showValue value,
+  (VCon name _ Nil)      -> name,
+  (VCon name _ vs)       -> appendString name (appendString "(" (appendString (intercalateVal ", " vs) ")")),
+  (VClosure _ acc arms)  ->
+    appendString "<closure/" (appendString (toStringInt32 (closureArity arms))
+      (appendString "+" (appendString (toStringInt32 (length acc)) ">"))),
+  (VBuiltin name _ acc)  ->
+    appendString "<builtin:" (appendString name
+      (appendString "+" (appendString (toStringInt32 (length acc)) ">")))
+}
+
+-- Helper to intercalate show-Value strings
+def intercalateVal : String -> List Value -> String
+def intercalateVal = {
+  _ Nil -> "",
+  _ (Cons v Nil) -> showValue v,
+  sep (Cons v rest) -> appendString (showValue v) (appendString sep (intercalateVal sep rest))
+}
+
+def showValueField : ValueField -> String
+def showValueField = {
+  (ValueField name value) -> appendString name (appendString " = " (showValue value))
+}
+
+def intercalateValueFields : String -> List ValueField -> String
+def intercalateValueFields = {
+  _ Nil -> "",
+  _ (Cons f Nil) -> showValueField f,
+  sep (Cons f rest) -> appendString (showValueField f) (appendString sep (intercalateValueFields sep rest))
+}

@@ -23,7 +23,8 @@ lspFlag =
       testMode = False,
       target = TargetEval,
       evalMode = EvalSmallStep,
-      useInfer = False
+      useInfer = False,
+      programArgs = []
     }
 
 -- | Run the Malgo LSP server over stdin/stdout.

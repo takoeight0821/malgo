@@ -1,0 +1,164 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Token.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Lexer.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Parser.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Value.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Eval.mlg"
+module {emptyScope, checkModule, printRenameErrors} = import "../../../runtime/malgo/compiler/Rename.mlg"
+module {lowerModule} = import "../../../runtime/malgo/compiler/ToFun.mlg"
+module {showFunProgram} = import "../../../runtime/malgo/compiler/FunIR.mlg"
+
+-- ─── Pipeline ────────────────────────────────────────────────────────────────
+
+-- Run Malgo source through the full self-hosted pipeline.
+-- IO side-effects inside the program (printString, printChar) execute via the
+-- host builtins. The Haskell golden tests capture stdout only, so the returned
+-- Value of main is intentionally ignored.
+def runSourceAt : String -> String -> ()
+def runSourceAt = { sourcePath src ->
+  case (tokenize src) {
+    (Left err) ->
+      printString (appendString "Lex error: " (appendString err "\n")),
+    (Right toks) ->
+      case (parseModule toks) {
+        (Left err) ->
+          printString (appendString "Parse error: " (appendString err "\n")),
+        (Right m) ->
+          case (evalModuleAt makeBaseEnv sourcePath m) {
+            (Left err) ->
+              printString (appendString "Eval error: " (appendString err "\n")),
+            (Right gEnv) ->
+              case (runMain gEnv) {
+                (Left err) ->
+                  printString (appendString "Runtime error: " (appendString err "\n")),
+                (Right _) ->
+                  ()
+              }
+          }
+      }
+  }
+}
+
+def runSource : String -> ()
+def runSource = { src -> runSourceAt "" src }
+
+-- ─── Check mode ──────────────────────────────────────────────────────────────
+
+-- Parse source from path, run rename check, report errors or "OK".
+def runCheck : String -> ()
+def runCheck = { path ->
+  let src = readFile path;
+  case (tokenize src) {
+    (Left err) -> putStrLn (appendString "Lex error: " err),
+    (Right toks) ->
+      case (parseModule toks) {
+        (Left err) -> putStrLn (appendString "Parse error: " err),
+        (Right m) ->
+          let errors = checkModule emptyScope m;
+          case errors {
+            Nil -> putStrLn "OK: no errors found",
+            _ ->
+              let _ = putStrLn "Rename errors:";
+              printRenameErrors errors
+          }
+      }
+  }
+}
+
+-- ─── Lower mode ──────────────────────────────────────────────────────────────
+
+-- Parse source from path, lower to Fun IR, and print the program.
+def runLower : String -> ()
+def runLower = { path ->
+  let src = readFile path;
+  case (tokenize src) {
+    (Left err) -> putStrLn (appendString "Lex error: " err),
+    (Right toks) ->
+      case (parseModule toks) {
+        (Left err) -> putStrLn (appendString "Parse error: " err),
+        (Right m) ->
+          let prog = lowerModule m;
+          putStrLn (showFunProgram prog)
+      }
+  }
+}
+
+-- ─── Entry point ─────────────────────────────────────────────────────────────
+
+def firstArg : String -> Maybe String
+def firstArg = { raw ->
+  if (eqString raw "")
+    { Nothing }
+    { case (indexOfChar '\n' 0i64 raw) {
+        Nothing -> Just raw,
+        (Just i) -> Just (substring raw 0i64 i)
+      }
+    }
+}
+
+def indexOfChar : Char -> Int64 -> String -> Maybe Int64
+def indexOfChar = { c i s ->
+  if (geInt64 i (lengthString s))
+    { Nothing }
+    { if (eqChar c (atString i s))
+        { Just i }
+        { indexOfChar c (addInt64 i 1i64) s }
+    }
+}
+
+def secondArg : String -> Maybe String
+def secondArg = { raw ->
+  case (indexOfChar '\n' 0i64 raw) {
+    Nothing -> Nothing,
+    (Just i) ->
+      let rest = substring raw (addInt64 i 1i64) (lengthString raw);
+      if (eqString rest "")
+        { Nothing }
+        { case (indexOfChar '\n' 0i64 rest) {
+            Nothing -> Just rest,
+            (Just j) -> Just (substring rest 0i64 j)
+          }
+        }
+  }
+}
+
+def isCommand : String -> Bool
+def isCommand = { s ->
+  if (eqString s "eval") { True }
+    { if (eqString s "check") { True }
+        { if (eqString s "lower") { True }
+            { False }
+        }
+    }
+}
+
+
+-- Read source from the first program argument when present, otherwise stdin.
+-- Passing a file path leaves stdin available to the evaluated program.
+-- If the first arg is a command keyword (eval/check/lower), dispatch accordingly.
+def main = { _ ->
+  let rawArgs = getRawArgs ();
+  case (firstArg rawArgs) {
+    Nothing ->
+      -- no args: read from stdin and eval
+      runSourceAt "" (getContents ()),
+    (Just arg1) ->
+      if (isCommand arg1)
+        { case (secondArg rawArgs) {
+            Nothing -> putStrLn (appendString "Missing source file for command: " arg1),
+            (Just src) ->
+              if (eqString arg1 "eval")
+                { runSourceAt src (readFile src) }
+                { if (eqString arg1 "check")
+                    { runCheck src }
+                    { runLower src }
+                }
+          }
+        }
+        -- backward compat: treat first arg as source path
+        { runSourceAt arg1 (readFile arg1) }
+  }
+}

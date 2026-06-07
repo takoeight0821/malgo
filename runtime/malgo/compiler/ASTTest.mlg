@@ -1,0 +1,46 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Token.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Lexer.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Parser.mlg"
+
+-- Count type signature declarations
+def countDeclTypeSig : List Decl -> Int32
+def countDeclTypeSig = {
+  Nil -> 0i32,
+  (Cons (DeclTypeSig _ _) rest) -> addInt32 1i32 (countDeclTypeSig rest),
+  (Cons _ rest) -> countDeclTypeSig rest
+}
+
+-- Count def declarations
+def countDeclDef : List Decl -> Int32
+def countDeclDef = {
+  Nil -> 0i32,
+  (Cons (DeclDef _ _) rest) -> addInt32 1i32 (countDeclDef rest),
+  (Cons _ rest) -> countDeclDef rest
+}
+
+-- Source: one type sig + one def
+def testSource : String
+def testSource = "def foo : Int32 -> Int32\ndef foo = { x -> x }"
+
+def main = {
+  case (tokenize testSource) {
+    (Left err) -> putStrLn (appendString "FAIL: lex error: " err),
+    (Right toks) ->
+      case (parseModule toks) {
+        (Left err) -> putStrLn (appendString "FAIL: parse error: " err),
+        (Right (Module decls)) ->
+          let sigCount = countDeclTypeSig decls;
+          let defCount = countDeclDef decls;
+          if (eqInt32 sigCount 1i32)
+            { if (eqInt32 defCount 1i32)
+                { putStrLn "PASS: type sig and def both present" }
+                { putStrLn (appendString "FAIL: expected 1 def, got " (toStringInt32 defCount)) }
+            }
+            { putStrLn (appendString "FAIL: expected 1 type sig, got " (toStringInt32 sigCount)) }
+      }
+  }
+}

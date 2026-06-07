@@ -63,12 +63,13 @@ compileFromAST srcPath parsedAst = do
   core <- runQueryDB db $ fetch (LinkedProgram modName)
   case flags.target of
     TargetScheme -> do
-      schemeCode <- runPass SchemePass core
+      schemeCode <- runReader modName $ runPass SchemePass core
       liftIO $ putStr $ convertString schemeCode
     TargetEval -> do
       let stdin = fmap Just getChar `catch` \(_ :: IOException) -> pure Nothing
       let stdout = putChar
       let stderr = hPutChar IO.stderr
+      let arguments = flags.programArgs
       case flags.evalMode of
         EvalBigStep -> runPass BigStepEvalPass (modName, Handlers {..}, core)
         EvalSmallStep -> runPass EvalPass (modName, Handlers {..}, core)

@@ -70,7 +70,8 @@ runEval evaluator moduleName program = do
           Handlers
             { stdin,
               stdout,
-              stderr
+              stderr,
+              arguments = []
             }
         $ evaluator program
     case result of

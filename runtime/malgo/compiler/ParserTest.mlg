@@ -1,0 +1,36 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Token.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Lexer.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Parser.mlg"
+
+-- Helper: show Either String Module
+def showResult : Either String Module -> String
+def showResult = {
+  (Left err) -> appendString "ERROR: " err,
+  (Right m)  -> showModule m
+}
+
+-- Helper: parse a source string and print the result
+def testParse : String -> ()
+def testParse = { src ->
+  case (tokenize src) {
+    (Left err) -> printString (appendString "Lex error: " err),
+    (Right tokens) ->
+      printString (showResult (parseModule tokens))
+  }
+}
+
+def main : () -> ()
+def main = { _ ->
+  -- Test 1: simple def
+  testParse "def foo = { x -> x }";
+  printString "---";
+  -- Test 2: data declaration with C-style constructor
+  testParse "data Maybe a = Nothing | Just a";
+  printString "---";
+  -- Test 3: let binding in clause body
+  testParse "def add = { x y -> let r = x + y; r }"
+}

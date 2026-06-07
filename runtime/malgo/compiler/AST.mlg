@@ -1,0 +1,182 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- AST for the self-hosted Malgo subset evaluator
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- Literal values
+data Lit
+  = LitInt32 Int32
+  | LitInt64 Int64
+  | LitChar Char
+  | LitString String
+  | LitUnit
+
+-- Patterns (used in case arm patterns)
+data Pat
+  = PatVar String              -- variable pattern: x
+  | PatWild                   -- wildcard: _
+  | PatCon(String, List Pat)  -- constructor: (Con p1 p2)
+  | PatLit Lit                -- literal pattern: 42, 'a', "str"
+  | PatTuple(List Pat)        -- tuple: (p1, p2, ...)
+  | PatRecord(List PatField)  -- record pattern: { x = p }
+
+data PatField = PatField(String, Pat)
+
+data CoSeg
+  = CoApply(List Pat)
+  | CoField String
+
+-- Expressions
+-- Note: ExArm represents one arm inside a case block.
+-- ExCase contains a list of ExArm expressions.
+-- This avoids mutual recursion between Expr and a separate Arm type.
+data Expr
+  = ExVar String              -- variable or constructor reference
+  | ExApp(Expr, Expr)         -- function application: f x
+  | ExLit Lit                 -- literal value
+  | ExArm(List Pat, Expr)     -- one case arm: pats -> body  (inside ExCase)
+  | ExCase(List Expr)         -- case/lambda block: { arm1, arm2, ... }
+  | ExCoArm(List CoSeg, Expr) -- one copattern arm: #(...).field -> body
+  | ExCoCase(List Expr)       -- copattern block
+  | ExField(Expr, String)     -- field projection: expr.name
+  | ExRecord(List ExprField)  -- record literal: { x = e }
+  | ExLet(String, Expr, Expr) -- let x = val; body
+  | ExTuple(List Expr)        -- tuple: (e1, e2, ...)
+  | ExUnit                    -- unit: ()
+
+data ExprField = ExprField(String, Expr)
+
+-- Constructor declaration: name + arity (number of fields)
+data ConDecl = ConDecl(String, Int32)
+
+data ImportName = ImportName String
+
+data ImportTarget
+  = ImportAll
+  | ImportQualified String
+  | ImportOnly(List ImportName)
+
+-- Associativity for operator fixity declarations
+data Assoc = AssocLeft | AssocRight | AssocNone
+
+-- Fixity entry: (operator, precedence, associativity)
+data FixityEntry = FixityEntry(String, Int32, Assoc)
+
+-- Top-level declarations
+data Decl
+  = DeclDef(String, Expr)                       -- def name = expr
+  | DeclData(String, List String, List ConDecl) -- data Name params = C1 | C2(T)
+  | DeclImport(ImportTarget, String)            -- module target = import "path"
+  | DeclForeign(String, String)                 -- foreign import name : typeStr
+  | DeclTypeSig(String, String)                 -- def name : Type (preserved)
+  | DeclTypeSynonym(String, List String, String) -- type Name params = Type
+  | DeclInfix(String, Int32, String)            -- infix/infixl/infixr N op
+
+-- A complete module
+data Module = Module(List Decl)
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Helper: join a list of strings with a separator
+-- ────────────────────────────────────────────────────────────────────────────
+
+def intercalate : String -> List String -> String
+def intercalate = {
+  _ Nil -> "",
+  _ (Cons s Nil) -> s,
+  sep (Cons s rest) -> appendString s (appendString sep (intercalate sep rest))
+}
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Show functions (for debugging / pretty-printing)
+-- ────────────────────────────────────────────────────────────────────────────
+
+def showLit : Lit -> String
+def showLit = {
+  (LitInt32 n)  -> toStringInt32 n,
+  (LitInt64 n)  -> appendString (toStringInt64 n) "i64",
+  (LitChar c)   -> appendString "'" (appendString (consString c "") "'"),
+  (LitString s) -> appendString "\"" (appendString s "\""),
+  LitUnit       -> "()"
+}
+
+def showPat : Pat -> String
+def showPat = {
+  (PatVar s)     -> s,
+  PatWild        -> "_",
+  (PatCon n Nil) -> n,
+  (PatCon n ps)  -> appendString "(" (appendString n (appendString " " (appendString (intercalate " " (mapList showPat ps)) ")"))),
+  (PatLit l)     -> showLit l,
+  (PatTuple ps)  -> appendString "(" (appendString (intercalate ", " (mapList showPat ps)) ")"),
+  (PatRecord fs) -> appendString "{ " (appendString (intercalate ", " (mapList showPatField fs)) " }")
+}
+
+def showPatField : PatField -> String
+def showPatField = {
+  (PatField name pat) -> appendString name (appendString " = " (showPat pat))
+}
+
+def showExprField : ExprField -> String
+def showExprField = {
+  (ExprField name expr) -> appendString name (appendString " = " (showExpr expr))
+}
+
+def showCoSeg : CoSeg -> String
+def showCoSeg = {
+  (CoApply ps) -> appendString "(" (appendString (intercalate ", " (mapList showPat ps)) ")"),
+  (CoField s) -> appendString "." s
+}
+
+def showExpr : Expr -> String
+def showExpr = {
+  (ExVar s)        -> s,
+  (ExApp f x)      -> appendString "(" (appendString (showExpr f) (appendString " " (appendString (showExpr x) ")"))),
+  (ExLit l)        -> showLit l,
+  (ExArm ps body)  -> appendString (intercalate " " (mapList showPat ps)) (appendString " -> " (showExpr body)),
+  (ExCase arms)    -> appendString "{ " (appendString (intercalate ", " (mapList showExpr arms)) " }"),
+  (ExCoArm segs body) -> appendString "#" (appendString (intercalate "" (mapList showCoSeg segs)) (appendString " -> " (showExpr body))),
+  (ExCoCase arms)  -> appendString "{ " (appendString (intercalate ", " (mapList showExpr arms)) " }"),
+  (ExField e field) -> appendString (showExpr e) (appendString "." field),
+  (ExRecord fs)    -> appendString "{ " (appendString (intercalate ", " (mapList showExprField fs)) " }"),
+  (ExLet x v body) -> appendString "let " (appendString x (appendString " = " (appendString (showExpr v) (appendString "; " (showExpr body))))),
+  (ExTuple es)     -> appendString "(" (appendString (intercalate ", " (mapList showExpr es)) ")"),
+  ExUnit           -> "()"
+}
+
+def showConDecl : ConDecl -> String
+def showConDecl = {
+  (ConDecl name arity) -> appendString name (appendString "/" (toStringInt32 arity))
+}
+
+def showImportName : ImportName -> String
+def showImportName = {
+  (ImportName name) -> name
+}
+
+def showImportTarget : ImportTarget -> String
+def showImportTarget = {
+  ImportAll -> "{..}",
+  (ImportQualified name) -> name,
+  (ImportOnly names) -> appendString "{" (appendString (intercalate ", " (mapList showImportName names)) "}")
+}
+
+def showDecl : Decl -> String
+def showDecl = {
+  (DeclDef name expr)         -> appendString "def " (appendString name (appendString " = " (showExpr expr))),
+  (DeclData name params cons) ->
+    appendString "data " (appendString name
+      (appendString " " (appendString (intercalate " " params)
+        (appendString " = " (intercalate " | " (mapList showConDecl cons)))))),
+  (DeclImport target path)    -> appendString "module " (appendString (showImportTarget target) (appendString " = import \"" (appendString path "\""))),
+  (DeclForeign name ty)       -> appendString "foreign import " (appendString name (appendString " : " ty)),
+  (DeclTypeSig name ty)       -> appendString "def " (appendString name (appendString " : " ty)),
+  (DeclTypeSynonym name params body) ->
+    appendString "type " (appendString name (appendString " " (appendString (intercalate " " params) (appendString " = " body)))),
+  (DeclInfix assoc prec op)   -> appendString assoc (appendString " " (appendString (toStringInt32 prec) (appendString " " op)))
+}
+
+def showModule : Module -> String
+def showModule = {
+  (Module decls) -> intercalate "\n" (mapList showDecl decls)
+}

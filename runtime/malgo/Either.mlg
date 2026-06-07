@@ -1,0 +1,45 @@
+module {..} = import "../../runtime/malgo/Builtin.mlg"
+
+data Either a b = Left a | Right b
+
+def mapRight : (b -> c) -> Either a b -> Either a c
+def mapRight = {
+  _ (Left e)  -> Left e,
+  f (Right x) -> Right (f x)
+}
+
+def bindRight : Either a b -> (b -> Either a c) -> Either a c
+def bindRight = {
+  (Left e)  _ -> Left e,
+  (Right x) f -> f x
+}
+
+def fromRight : b -> Either a b -> b
+def fromRight = {
+  d (Left _)  -> d,
+  _ (Right x) -> x
+}
+
+def fromLeft : a -> Either a b -> a
+def fromLeft = {
+  _ (Left e)  -> e,
+  d (Right _) -> d
+}
+
+def isRight : Either a b -> Bool
+def isRight = { (Right _) -> True, _ -> False }
+
+def isLeft : Either a b -> Bool
+def isLeft = { (Left _) -> True, _ -> False }
+
+def mapLeft : (a -> c) -> Either a b -> Either c b
+def mapLeft = {
+  f (Left e)  -> Left (f e),
+  _ (Right x) -> Right x
+}
+
+def either : (a -> c) -> (b -> c) -> Either a b -> c
+def either = {
+  f _ (Left e)  -> f e,
+  _ g (Right x) -> g x
+}

@@ -17,7 +17,8 @@ data EvalOpt = EvalOpt
     debugMode :: Bool,
     target :: Target,
     evalMode :: EvalMode,
-    useInfer :: Bool
+    useInfer :: Bool,
+    programArgs :: [String]
   }
 
 main :: IO ()
@@ -34,7 +35,8 @@ main = do
               Flag.testMode = False,
               Flag.target = opt.target,
               Flag.evalMode = opt.evalMode,
-              Flag.useInfer = opt.useInfer
+              Flag.useInfer = opt.useInfer,
+              Flag.programArgs = opt.programArgs
             }
 
 targetOpt :: Parser Target
@@ -73,6 +75,7 @@ evalOpt =
       <*> targetOpt
       <*> evalModeOpt
       <*> switch (long "infer" <> help "Run type inference pass")
+      <*> many (strArgument (metavar "ARG" <> help "Argument visible to the evaluated program"))
   )
     <**> helper
 

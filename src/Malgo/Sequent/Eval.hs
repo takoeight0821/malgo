@@ -21,6 +21,8 @@ module Malgo.Sequent.Eval
 where
 
 import Control.Exception (Exception)
+import Data.ByteString qualified as BS
+import Data.Char qualified as Char
 import Data.IntMap.Strict qualified as IntMap
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
@@ -36,6 +38,7 @@ import Malgo.Prelude hiding (getContents)
 import Malgo.SExpr (sShow)
 import Malgo.Sequent.Core.Join
 import Malgo.Sequent.Fun (Literal (..), Name, Pattern (..), Tag (..))
+import System.Exit (exitSuccess)
 
 data EvalPass = EvalPass
 
@@ -116,7 +119,8 @@ type Toplevels = Map Name (Name, Statement)
 data Handlers = Handlers
   { stdin :: IO (Maybe Char),
     stdout :: Char -> IO (),
-    stderr :: Char -> IO ()
+    stderr :: Char -> IO (),
+    arguments :: [String]
   }
 
 data Env = Env
@@ -499,6 +503,65 @@ fetchPrimitive "malgo_int_to_rune" = \cases
 fetchPrimitive "malgo_rune_to_int" = \cases
   _ [Immediate (Char c)] -> pure $ Immediate $ Int64 $ fromIntegral $ fromEnum c
   range values -> throwError $ InvalidArguments range "malgo_rune_to_int" values
+fetchPrimitive "malgo_is_digit" = \cases
+  _ [Immediate (Char c)] -> pure $ Immediate $ Int32 $ if Char.isDigit c then 1 else 0
+  range values -> throwError $ InvalidArguments range "malgo_is_digit" values
+fetchPrimitive "malgo_is_lower" = \cases
+  _ [Immediate (Char c)] -> pure $ Immediate $ Int32 $ if Char.isLower c then 1 else 0
+  range values -> throwError $ InvalidArguments range "malgo_is_lower" values
+fetchPrimitive "malgo_is_upper" = \cases
+  _ [Immediate (Char c)] -> pure $ Immediate $ Int32 $ if Char.isUpper c then 1 else 0
+  range values -> throwError $ InvalidArguments range "malgo_is_upper" values
+fetchPrimitive "malgo_is_alphanum" = \cases
+  _ [Immediate (Char c)] -> pure $ Immediate $ Int32 $ if Char.isAlphaNum c then 1 else 0
+  range values -> throwError $ InvalidArguments range "malgo_is_alphanum" values
+fetchPrimitive "malgo_char_ord" = \cases
+  _ [Immediate (Char c)] -> pure $ Immediate $ Int32 $ fromIntegral $ fromEnum c
+  range values -> throwError $ InvalidArguments range "malgo_char_ord" values
+fetchPrimitive "malgo_int32_t_to_char" = \cases
+  _ [Immediate (Int32 n)] -> pure $ Immediate $ Char $ toEnum $ fromIntegral n
+  range values -> throwError $ InvalidArguments range "malgo_int32_t_to_char" values
+fetchPrimitive "malgo_read_file" = \cases
+  _ [Immediate (String path)] -> do
+    contents <- liftIO $ BS.readFile (T.unpack path)
+    pure $ Immediate $ String $ convertString contents
+  range values -> throwError $ InvalidArguments range "malgo_read_file" values
+fetchPrimitive "malgo_write_file" = \cases
+  _ [Immediate (String path), Immediate (String content)] -> do
+    liftIO $ BS.writeFile (T.unpack path) (convertString content)
+    pure $ Struct Tuple []
+  range values -> throwError $ InvalidArguments range "malgo_write_file" values
+fetchPrimitive "malgo_get_line" = \_ _ -> do
+  Handlers {stdin} <- ask @Handlers
+  let loop acc = do
+        mc <- liftIO stdin
+        case mc of
+          Just '\n' -> pure $ T.reverse acc
+          Just c -> loop (T.cons c acc)
+          Nothing -> pure $ T.reverse acc
+  line <- loop ""
+  pure $ Immediate $ String line
+fetchPrimitive "malgo_get_args" = \_ _ -> do
+  Handlers {arguments} <- ask @Handlers
+  pure $ Immediate $ String $ T.intercalate "\n" (map T.pack arguments)
+fetchPrimitive "malgo_exit_success" = \_ _ ->
+  liftIO exitSuccess
+fetchPrimitive "malgo_stderr_string" = \cases
+  _ [Immediate (String text)] -> do
+    Handlers {stderr} <- ask @Handlers
+    putTextTo stderr text
+    pure $ Struct Tuple []
+  range values -> throwError $ InvalidArguments range "malgo_stderr_string" values
+fetchPrimitive "malgo_string_to_int32" = \cases
+  range [Immediate (String s)] -> case reads (T.unpack s) of
+    [(n, "")] -> pure $ Immediate $ Int32 n
+    _ -> throwError $ InvalidArguments range "malgo_string_to_int32" [Immediate (String s)]
+  range values -> throwError $ InvalidArguments range "malgo_string_to_int32" values
+fetchPrimitive "malgo_string_to_int64" = \cases
+  range [Immediate (String s)] -> case reads (T.unpack s) of
+    [(n, "")] -> pure $ Immediate $ Int64 n
+    _ -> throwError $ InvalidArguments range "malgo_string_to_int64" [Immediate (String s)]
+  range values -> throwError $ InvalidArguments range "malgo_string_to_int64" values
 fetchPrimitive name = \range values -> throwError $ PrimitiveNotImplemented range name values
 
 getContents :: (IOE :> es, Reader Handlers :> es) => Eff es Text

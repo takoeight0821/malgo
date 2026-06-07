@@ -1,0 +1,133 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+
+-- ──────────────────────────────────────────────────────────
+-- Token types for the self-hosted Malgo lexer
+-- ──────────────────────────────────────────────────────────
+
+-- All identifier-like tokens (keywords and plain identifiers) are TkIdent.
+-- The parser distinguishes keywords by checking the string value.
+
+data Token
+  = TkIdent String     -- identifier or keyword (e.g. "def", "data", "foo")
+  | TkOp String        -- operator (e.g. "->", "=", "|", "+")
+  | TkInt32 Int32      -- integer literal without suffix (default Int32)
+  | TkInt64 Int64      -- integer literal with i64 suffix
+  | TkChar Char        -- char literal
+  | TkString String    -- string literal
+  | TkLBrace           -- {
+  | TkRBrace           -- }
+  | TkLParen           -- (
+  | TkRParen           -- )
+  | TkLBracket         -- [
+  | TkRBracket         -- ]
+  | TkComma            -- ,
+  | TkEof              -- end of input
+
+-- ──────────────────────────────────────────────────────────
+-- Token utilities
+-- ──────────────────────────────────────────────────────────
+
+def showToken : Token -> String
+def showToken = {
+  (TkIdent s)  -> appendString "TkIdent(" (appendString s ")"),
+  (TkOp s)     -> appendString "TkOp(" (appendString s ")"),
+  (TkInt32 _)  -> "TkInt32",
+  (TkInt64 _)  -> "TkInt64",
+  (TkChar _)   -> "TkChar",
+  (TkString s) -> appendString "TkString(\"" (appendString s "\")"),
+  TkLBrace     -> "TkLBrace",
+  TkRBrace     -> "TkRBrace",
+  TkLParen     -> "TkLParen",
+  TkRParen     -> "TkRParen",
+  TkLBracket   -> "TkLBracket",
+  TkRBracket   -> "TkRBracket",
+  TkComma      -> "TkComma",
+  TkEof        -> "TkEof"
+}
+
+def eqToken : Token -> Token -> Bool
+def eqToken = {
+  (TkIdent a)  (TkIdent b)  -> eqString a b,
+  (TkOp a)     (TkOp b)     -> eqString a b,
+  (TkInt32 a)  (TkInt32 b)  -> eqInt32 a b,
+  (TkInt64 a)  (TkInt64 b)  -> eqInt64 a b,
+  (TkChar a)   (TkChar b)   -> eqChar a b,
+  (TkString a) (TkString b) -> eqString a b,
+  TkLBrace     TkLBrace     -> True,
+  TkRBrace     TkRBrace     -> True,
+  TkLParen     TkLParen     -> True,
+  TkRParen     TkRParen     -> True,
+  TkLBracket   TkLBracket   -> True,
+  TkRBracket   TkRBracket   -> True,
+  TkComma      TkComma      -> True,
+  TkEof        TkEof        -> True,
+  _            _            -> False
+}
+
+-- Check if character is in a string (for membership tests)
+def charInStr : Char -> String -> Bool
+def charInStr = { c s ->
+  if (eqString s "")
+    { False }
+    { if (eqChar c (atString 0i64 s))
+        { True }
+        { charInStr c (substring s 1i64 (lengthString s)) }
+    }
+}
+
+-- Check if a String value is in a list of String values
+def strInList : String -> List String -> Bool
+def strInList = { s xs ->
+  case xs {
+    Nil -> False,
+    (Cons h t) -> if (eqString s h) { True } { strInList s t }
+  }
+}
+
+-- Check if a string is a reserved keyword (parser still uses TkIdent)
+def isKeyword : String -> Bool
+def isKeyword = { s ->
+  strInList s (Cons "case" (Cons "class" (Cons "data" (Cons "def"
+    (Cons "exists" (Cons "forall" (Cons "foreign" (Cons "goto"
+    (Cons "impl" (Cons "import" (Cons "infix" (Cons "infixl"
+    (Cons "infixr" (Cons "label" (Cons "let" (Cons "module"
+    (Cons "type" (Cons "with" Nil))))))))))))))))))
+}
+
+-- ──────────────────────────────────────────────────────────
+-- Source positions and located tokens
+-- ──────────────────────────────────────────────────────────
+
+-- Source position: 1-based line and column
+data SourcePos = SourcePos(Int64, Int64)  -- line, col
+
+-- Source span: start and end positions
+data Span = Span(SourcePos, SourcePos)
+
+-- A token with its source position
+data Located = Located(Token, SourcePos)
+
+def noPos : SourcePos
+def noPos = SourcePos(0i64, 0i64)
+
+def noSpan : Span
+def noSpan = Span(noPos, noPos)
+
+def locatedToken : Located -> Token
+def locatedToken = { (Located tok _) -> tok }
+
+def locatedPos : Located -> SourcePos
+def locatedPos = { (Located _ pos) -> pos }
+
+def showSourcePos : SourcePos -> String
+def showSourcePos = { (SourcePos line col) ->
+  appendString (toStringInt64 line) (appendString ":" (toStringInt64 col))
+}
+
+def stripLocation : List Located -> List Token
+def stripLocation = {
+  Nil -> Nil,
+  (Cons loc rest) -> Cons (locatedToken loc) (stripLocation rest)
+}

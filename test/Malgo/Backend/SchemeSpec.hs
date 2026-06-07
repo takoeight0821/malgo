@@ -80,10 +80,10 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "define"
       result `shouldContain` "42"
-      result `shouldContain` "malgo-main"
+      result `shouldContain` "Test_dot_main (lambda (fn) (fn (list 'tuple) malgo-finish))"
 
     it "compiles lambda expressions" do
       let xId = mkInternalId "x" 0
@@ -98,7 +98,7 @@ spec = do
               { definitions = [(dummyRange, mainId, mainRet, mainBody)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "lambda"
 
     it "compiles construct expressions" do
@@ -110,7 +110,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "'Just"
 
     it "compiles object expressions" do
@@ -125,7 +125,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "cons"
       result `shouldContain` "'x"
 
@@ -140,7 +140,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "+"
 
     it "compiles invoke statements" do
@@ -153,7 +153,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "Test_dot_f"
 
     it "compiles select with pattern matching" do
@@ -180,7 +180,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "cond"
       result `shouldContain` "equal?"
 
@@ -196,7 +196,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "lambda"
       result `shouldContain` "7"
 
@@ -213,7 +213,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "cond"
       result `shouldContain` "'head"
       result `shouldContain` "'tail"
@@ -232,7 +232,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "'head"
       result `shouldContain` "cocase"
 
@@ -245,7 +245,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "display"
       result `shouldContain` "hi"
 
@@ -260,7 +260,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "+"
       result `shouldContain` "3"
       result `shouldContain` "4"
@@ -277,7 +277,7 @@ spec = do
               { definitions = [(dummyRange, mainId, retId, body)],
                 dependencies = []
               }
-          result = T.unpack $ compileToScheme program
+          result = T.unpack $ compileToScheme (ModuleName "Test") program
       result `shouldContain` "eqv?"
       result `shouldContain` "0"
       result `shouldContain` "zero"
@@ -306,4 +306,4 @@ compileTestcaseToScheme testcase = do
     (renamed, _) <- runPass RenamePass (parsed, rnEnv)
     fun <- runReader renamed.moduleName $ runPass ToFunPass renamed.moduleDefinition
     program <- runReader renamed.moduleName $ toCore fun >>= flatProgram >>= Join.joinProgram
-    pure $ T.unpack $ compileToScheme program
+    pure $ T.unpack $ compileToScheme renamed.moduleName program

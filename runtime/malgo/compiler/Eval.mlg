@@ -1,0 +1,1414 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Either.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Lexer.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Parser.mlg"
+module {..} = import "../../../runtime/malgo/compiler/AST.mlg"
+module {..} = import "../../../runtime/malgo/compiler/Value.mlg"
+
+-- Self-hosted Malgo evaluator (tree-walking interpreter)
+--
+-- Two-environment design:
+--   gEnv = global module env (all top-level definitions)
+--   lEnv = local env (pattern-bound and let-bound variables)
+-- Variable lookup checks lEnv first, then gEnv.
+-- VClosure stores lEnv at closure-creation time (for lexical scoping).
+-- gEnv is threaded through at runtime so recursive lookups work.
+
+def boolVal : Bool -> Value
+def boolVal = {
+  True  -> VCon("True",  0i32, Nil),
+  False -> VCon("False", 0i32, Nil)
+}
+
+def isTrueCon : Value -> Bool
+def isTrueCon = {
+  (VCon name _ _) -> eqString name "True",
+  _ -> False
+}
+
+def envLookupBoth : String -> Env -> Env -> Maybe Value
+def envLookupBoth = { name lEnv gEnv ->
+  case (envLookup name lEnv) {
+    (Just v) -> Just v,
+    Nothing  -> envLookup name gEnv
+  }
+}
+
+def isImplicitBuiltin : String -> Bool
+def isImplicitBuiltin = { name ->
+  if (eqString name "addInt32#") { True } {
+  if (eqString name "subInt32#") { True } {
+  if (eqString name "mulInt32#") { True } {
+  if (eqString name "divInt32#") { True } {
+    False
+  }}}}
+}
+
+def implicitBuiltinRuntimeName : String -> String
+def implicitBuiltinRuntimeName = { name ->
+  if (eqString name "addInt32#") { "addInt32" } {
+  if (eqString name "subInt32#") { "subInt32" } {
+  if (eqString name "mulInt32#") { "mulInt32" } {
+  if (eqString name "divInt32#") { "divInt32" } {
+    name
+  }}}}
+}
+
+def forceValue : Env -> Value -> Either String Value
+def forceValue = { gEnv v ->
+  case v {
+    (VThunk thunkEnv expr) -> eval gEnv thunkEnv expr,
+    (VScoped scopedEnv inner) ->
+      case inner {
+        (VThunk _ e) ->
+          bindRight (eval scopedEnv EnvEmpty e) { result ->
+            case result {
+              (VClosure _ _ _) -> Right (VScoped scopedEnv result),
+              (VCoClosure _ _ _) -> Right (VScoped scopedEnv result),
+              _ -> Right result
+            }
+          },
+        (VClosure _ _ _) -> Right (VScoped scopedEnv inner),
+        (VCoClosure _ _ _) -> Right (VScoped scopedEnv inner),
+        _ -> forceValue scopedEnv inner
+      },
+    _ -> Right v
+  }
+}
+
+-- ─── Pattern matching ────────────────────────────────────────────────────────
+
+def matchPat : Env -> Pat -> Value -> Either String Env
+def matchPat = { lEnv pat val ->
+  case pat {
+    (PatVar x)   -> Right (envExtend x val lEnv),
+    PatWild      -> Right lEnv,
+    (PatLit lit) -> matchLit lEnv lit val,
+    (PatCon cname cpats) ->
+      case val {
+        (VString _) -> matchWrappedPat lEnv cname cpats val,
+        (VInt32 _) -> matchWrappedPat lEnv cname cpats val,
+        (VInt64 _) -> matchWrappedPat lEnv cname cpats val,
+        (VChar _) -> matchWrappedPat lEnv cname cpats val,
+        (VCon vname _ vargs) ->
+          if (eqString cname vname) { matchPats lEnv cpats vargs } { Left "mismatch" },
+        _ -> Left "mismatch"
+      },
+    (PatTuple ptups) ->
+      case val {
+        (VTuple vels) -> matchPats lEnv ptups vels,
+        _ -> Left "mismatch"
+      },
+    (PatRecord fields) ->
+      case val {
+        (VRecord values) -> matchRecordFields lEnv fields values,
+        _ -> Left "mismatch"
+      }
+  }
+}
+
+def lookupValueField : String -> List ValueField -> Maybe Value
+def lookupValueField = { name fields ->
+  case fields {
+    Nil -> Nothing,
+    (Cons (ValueField fieldName value) rest) ->
+      if (eqString name fieldName)
+        { Just value }
+        { lookupValueField name rest }
+  }
+}
+
+def matchRecordFields : Env -> List PatField -> List ValueField -> Either String Env
+def matchRecordFields = { lEnv fields values ->
+  case fields {
+    Nil -> Right lEnv,
+    (Cons (PatField name pat) rest) ->
+      case (lookupValueField name values) {
+        Nothing -> Left "mismatch",
+        (Just value) ->
+          bindRight (matchPat lEnv pat value) { lEnv2 ->
+            matchRecordFields lEnv2 rest values
+          }
+      }
+  }
+}
+
+def isWrapperName : String -> Bool
+def isWrapperName = { name ->
+  if (eqString name "String#") { True } {
+  if (eqString name "Int32#") { True } {
+  if (eqString name "Int64#") { True } {
+  if (eqString name "Char#") { True } {
+  if (eqString name "Float#") { True } {
+  if (eqString name "Double#") { True } {
+    False
+  }}}}}}
+}
+
+def matchWrappedPat : Env -> String -> List Pat -> Value -> Either String Env
+def matchWrappedPat = { lEnv cname cpats val ->
+  if (isWrapperName cname)
+    { matchPats lEnv cpats (Cons val Nil) }
+    { Left "mismatch" }
+}
+
+def matchLit : Env -> Lit -> Value -> Either String Env
+def matchLit = { lEnv lit val ->
+  case lit {
+    (LitInt32 n)  -> case val { (VInt32 m)  -> if (eqInt32 n m)  { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    (LitInt64 n)  -> case val { (VInt64 m)  -> if (eqInt64 n m)  { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    (LitChar c)   -> case val { (VChar d)   -> if (eqChar c d)   { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    (LitString s) -> case val { (VString t) -> if (eqString s t) { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    LitUnit       -> case val { VUnit -> Right lEnv, _ -> Left "mismatch" }
+  }
+}
+
+def matchPats : Env -> List Pat -> List Value -> Either String Env
+def matchPats = { lEnv pats vals ->
+  case pats {
+    Nil -> case vals { Nil -> Right lEnv, _ -> Left "mismatch" },
+    (Cons p ps) ->
+      case vals {
+        Nil -> Left "mismatch",
+        (Cons v vs) ->
+          bindRight (matchPat lEnv p v) { lEnv2 -> matchPats lEnv2 ps vs }
+      }
+  }
+}
+
+-- tryArms: try each arm in order, gEnv threaded for recursive lookups
+def tryArms : Env -> Env -> List Value -> List Expr -> Either String Value
+def tryArms = { gEnv lEnv args arms ->
+  case arms {
+    Nil -> Left "match failure: no arm matched",
+    (Cons arm rest) ->
+      case arm {
+        (ExArm pats body) ->
+          case (matchPats lEnv pats args) {
+            (Left err) ->
+              if (eqString err "mismatch") { tryArms gEnv lEnv args rest } { Left err },
+            (Right newLEnv) -> eval gEnv newLEnv body
+          },
+        _ -> tryArms gEnv lEnv args rest
+      }
+  }
+}
+
+-- force a thunk (0-arity VClosure): run its body with no args
+def forceThunk : Env -> Value -> Either String Value
+def forceThunk = { gEnv v ->
+  case v {
+    (VClosure lEnv _ arms) -> tryArms gEnv lEnv Nil arms,
+    _ -> Right v
+  }
+}
+
+-- ─── Core evaluator ─────────────────────────────────────────────────────────
+
+def eval : Env -> Env -> Expr -> Either String Value
+def eval = { gEnv lEnv expr ->
+  case expr {
+    (ExVar name) ->
+      case (envLookupBoth name lEnv gEnv) {
+        (Just v) -> forceValue gEnv v,
+        Nothing  ->
+          if (isImplicitBuiltin name)
+            { Right (VBuiltin(implicitBuiltinRuntimeName name, 2i32, Nil)) }
+            { Left (appendString "undefined: " name) }
+      },
+    (ExLit lit) ->
+      case lit {
+        (LitInt32 n)  -> Right (VInt32 n),
+        (LitInt64 n)  -> Right (VInt64 n),
+        (LitChar c)   -> Right (VChar c),
+        (LitString s) -> Right (VString s),
+        LitUnit       -> Right VUnit
+      },
+    (ExApp f x) ->
+      bindRight (eval gEnv lEnv f) { fv ->
+        bindRight (eval gEnv lEnv x) { xv ->
+          apply gEnv fv xv
+        }
+      },
+    (ExArm _ _) -> Left "unexpected bare arm",
+    -- Case lambda: arms evaluated at call time using the current gEnv
+    (ExCase arms) -> Right (VClosure(lEnv, Nil, arms)),
+    (ExCoArm _ _) -> Left "unexpected bare copattern arm",
+    (ExCoCase arms) -> Right (VCoClosure(lEnv, Nil, arms)),
+    (ExField target field) ->
+      bindRight (eval gEnv lEnv target) { targetValue ->
+        bindRight (forceValue gEnv targetValue) { forcedTarget ->
+          projectValue gEnv forcedTarget field
+        }
+      },
+    (ExRecord fields) ->
+      bindRight (evalExprFields gEnv lEnv fields) { values -> Right (VRecord values) },
+    (ExLet name valE body) ->
+      if (eqString name "_")
+        { bindRight (eval gEnv lEnv valE) { _ -> eval gEnv lEnv body } }
+        { eval gEnv (envExtend name (VThunk(lEnv, valE)) lEnv) body },
+    (ExTuple es) ->
+      bindRight (evalList gEnv lEnv es) { vs -> Right (VTuple vs) },
+    ExUnit -> Right VUnit
+  }
+}
+
+def evalList : Env -> Env -> List Expr -> Either String (List Value)
+def evalList = { gEnv lEnv es ->
+  case es {
+    Nil -> Right Nil,
+    (Cons e rest) ->
+      bindRight (eval gEnv lEnv e) { v ->
+        bindRight (evalList gEnv lEnv rest) { vs -> Right (Cons v vs) }
+      }
+  }
+}
+
+def evalExprFields : Env -> Env -> List ExprField -> Either String (List ValueField)
+def evalExprFields = { gEnv lEnv fields ->
+  case fields {
+    Nil -> Right Nil,
+    (Cons (ExprField name expr) rest) ->
+      bindRight (evalExprFields gEnv lEnv rest) { values ->
+        Right (Cons (ValueField(name, VThunk(lEnv, expr))) values)
+      }
+  }
+}
+
+-- apply: apply fn to arg
+def apply : Env -> Value -> Value -> Either String Value
+def apply = { gEnv fn arg ->
+  case fn {
+    (VScoped scopedEnv inner) ->
+      bindRight (apply scopedEnv inner arg) { result ->
+        Right (keepScopedValue scopedEnv result)
+      },
+    (VClosure cLEnv acc arms) ->
+      let arity = closureArity arms;
+      -- 0-arity = thunk: fire immediately, ignoring arg
+      if (eqInt32 arity 0i32)
+        { tryArms gEnv cLEnv Nil arms }
+        { let newAcc = append acc (Cons arg Nil);
+          if (eqInt32 (length newAcc) arity)
+            { tryArms gEnv cLEnv newAcc arms }
+            { Right (VClosure(cLEnv, newAcc, arms)) }
+        },
+        (VCoClosure cLEnv acc arms) ->
+          let newAcc = append acc (Cons arg Nil);
+          bindRight (tryResolveCoApply gEnv cLEnv newAcc arms) { resolved ->
+            case resolved {
+              Nothing -> Right (VCoClosure(cLEnv, newAcc, arms)),
+              (Just value) -> Right value
+            }
+          },
+    (VCon name arity acc) ->
+      if (geInt32 (length acc) arity)
+        { Left (appendString "constructor over-applied: " name) }
+        { Right (VCon(name, arity, append acc (Cons arg Nil))) },
+    (VBuiltin name arity acc) ->
+      let newAcc = append acc (Cons arg Nil);
+      if (eqInt32 (length newAcc) arity)
+        { applyBuiltin gEnv name newAcc }
+        { Right (VBuiltin(name, arity, newAcc)) },
+    _ -> Left (appendString "cannot apply: " (showValue fn))
+  }
+}
+
+def keepScopedValue : Env -> Value -> Value
+def keepScopedValue = { scopedEnv v ->
+  case v {
+    (VClosure _ _ _) -> VScoped(scopedEnv, v),
+    (VCoClosure _ _ _) -> VScoped(scopedEnv, v),
+    _ -> v
+  }
+}
+
+def matchCoApply : Env -> List Pat -> List Value -> Either String {env: Env, rest: List Value}
+def matchCoApply = { lEnv pats args ->
+  case pats {
+    Nil -> Right {env = lEnv, rest = args},
+    (Cons pat patRest) ->
+      case args {
+        Nil -> Left "mismatch",
+        (Cons arg argRest) ->
+          bindRight (matchPat lEnv pat arg) { lEnv2 ->
+            matchCoApply lEnv2 patRest argRest
+          }
+      }
+  }
+}
+
+def matchCoPrefix : Env -> List Value -> String -> List CoSeg -> Either String {env: Env, rest: List CoSeg}
+def matchCoPrefix = { lEnv args field segs ->
+  case segs {
+    Nil -> Left "mismatch",
+    (Cons seg restSegs) ->
+      case seg {
+        (CoApply pats) ->
+          bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
+            matchCoPrefix lEnv2 remainingArgs field restSegs
+          },
+        (CoField name) ->
+          if (eqString name field)
+            { case args {
+                Nil -> Right {env = lEnv, rest = restSegs},
+                _ -> Left "mismatch"
+              }
+            }
+            { Left "mismatch" }
+      }
+  }
+}
+
+def projectValue : Env -> Value -> String -> Either String Value
+def projectValue = { gEnv value field ->
+  case value {
+    (VScoped scopedEnv inner) ->
+      bindRight (projectValue scopedEnv inner field) { result ->
+        Right (keepScopedValue scopedEnv result)
+      },
+    (VRecord fields) ->
+      case (lookupValueField field fields) {
+        Nothing -> Left "undefined: .",
+        (Just fieldValue) -> forceValue gEnv fieldValue
+      },
+    (VCoClosure lEnv acc arms) -> projectCoArms gEnv lEnv acc field arms Nil Nothing,
+    _ -> Left "undefined: ."
+  }
+}
+
+def matchCoApplyOnly : Env -> List Value -> List CoSeg -> Either String Env
+def matchCoApplyOnly = { lEnv args segs ->
+  case segs {
+    Nil ->
+      case args {
+        Nil -> Right lEnv,
+        _ -> Left "mismatch"
+      },
+    (Cons seg restSegs) ->
+      case seg {
+        (CoApply pats) ->
+          bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
+            matchCoApplyOnly lEnv2 remainingArgs restSegs
+          },
+        (CoField _) -> Left "mismatch"
+      }
+  }
+}
+
+def tryResolveCoApply : Env -> Env -> List Value -> List Expr -> Either String (Maybe Value)
+def tryResolveCoApply = { gEnv lEnv args arms ->
+  case arms {
+    Nil -> Right Nothing,
+    (Cons arm restArms) ->
+      case arm {
+        (ExCoArm segs body) ->
+          case (matchCoApplyOnly lEnv args segs) {
+            (Right armEnv) ->
+              bindRight (eval gEnv armEnv body) { value -> Right (Just value) },
+            (Left _) -> tryResolveCoApply gEnv lEnv args restArms
+          },
+        _ -> tryResolveCoApply gEnv lEnv args restArms
+      }
+  }
+}
+
+def projectCoArms : Env -> Env -> List Value -> String -> List Expr -> List Expr -> Maybe Env -> Either String Value
+def projectCoArms = { gEnv lEnv acc field arms conts contEnv ->
+  case arms {
+    Nil ->
+      case conts {
+        Nil -> Left "undefined: .",
+        _ ->
+          case contEnv {
+            Nothing -> Left "undefined: .",
+            (Just nextEnv) -> Right (VCoClosure(nextEnv, Nil, conts))
+          }
+      },
+    (Cons arm restArms) ->
+      case arm {
+        (ExCoArm segs body) ->
+          case (matchCoPrefix lEnv acc field segs) {
+            (Left _) -> projectCoArms gEnv lEnv acc field restArms conts contEnv,
+            (Right {env = armEnv, rest = restSegs}) ->
+              case restSegs {
+                Nil -> eval gEnv armEnv body,
+                _ -> projectCoArms gEnv lEnv acc field restArms (append conts (Cons (ExCoArm(restSegs, body)) Nil)) (Just armEnv)
+              }
+          },
+        _ -> projectCoArms gEnv lEnv acc field restArms conts contEnv
+      }
+  }
+}
+
+-- ─── Declaration processing ──────────────────────────────────────────────────
+
+-- Process declarations without using bindRight for simple cases, reducing overhead.
+-- Only DeclImport uses bindRight since it's the only decl that can fail or update state.
+def evalDecls : Env -> CompilerState -> List Decl -> Either String {state: CompilerState, env: Env}
+def evalDecls = { gEnv state decls ->
+  case decls {
+    Nil -> Right {state = state, env = gEnv},
+    (Cons d rest) ->
+      case d {
+        (DeclDef name expr) ->
+          case (envLookup name gEnv) {
+            (Just (VBuiltin _ _ _)) -> evalDecls gEnv state rest,
+            _ -> evalDecls (envExtend name (VThunk(EnvEmpty, expr)) gEnv) state rest
+          },
+        (DeclData _ _ cons) ->
+          evalDecls (addConstructors gEnv cons) state rest,
+        (DeclImport target path) ->
+          bindRight (evalImport gEnv state target path) { {state = state2, env = gEnv2} ->
+            evalDecls gEnv2 state2 rest
+          },
+        (DeclForeign fname _) ->
+          let ar = foreignArity fname;
+          evalDecls (envExtend fname (VBuiltin(fname, ar, Nil)) gEnv) state rest,
+        (DeclTypeSig _ _) -> evalDecls gEnv state rest,
+        (DeclTypeSynonym _ _ _) -> evalDecls gEnv state rest,
+        (DeclInfix _ _ _) -> evalDecls gEnv state rest
+      }
+  }
+}
+
+def startsWith : String -> String -> Bool
+def startsWith = { prefix s ->
+  let plen = lengthString prefix;
+  let slen = lengthString s;
+  if (ltInt64 slen plen)
+    { False }
+    { eqString prefix (substring s 0i64 plen) }
+}
+
+def dropLeadingParents : String -> String
+def dropLeadingParents = { path ->
+  if (startsWith "../" path)
+    { dropLeadingParents (substring path 3i64 (lengthString path)) }
+    { if (startsWith "./" path)
+        { dropLeadingParents (substring path 2i64 (lengthString path)) }
+        { path }
+    }
+}
+
+def normalizeImportPath : String -> String
+def normalizeImportPath = { path ->
+  if (eqString path "Builtin")
+    { "runtime/malgo/Builtin.mlg" }
+    { if (eqString path "Prelude")
+        { "runtime/malgo/Prelude.mlg" }
+        { dropLeadingParents path }
+    }
+}
+
+-- ─── Path normalization utilities ────────────────────────────────────────────
+
+def splitPath : String -> List String
+def splitPath = { path ->
+  case (pathIndexOfChar '/' 0i64 path) {
+    Nothing -> Cons path Nil,
+    (Just i) ->
+      let next = addInt64 i 1i64;
+      Cons (substring path 0i64 i) (splitPath (substring path next (lengthString path)))
+  }
+}
+
+def pathIndexOfChar : Char -> Int64 -> String -> Maybe Int64
+def pathIndexOfChar = { c i s ->
+  if (geInt64 i (lengthString s))
+    { Nothing }
+    { if (eqChar c (atString i s))
+        { Just i }
+        { pathIndexOfChar c (addInt64 i 1i64) s }
+    }
+}
+
+def joinPathParts : List String -> String
+def joinPathParts = {
+  Nil -> "",
+  (Cons x Nil) -> x,
+  (Cons x rest) -> appendString x (appendString "/" (joinPathParts rest))
+}
+
+def normalizePath : String -> String
+def normalizePath = { path ->
+  let isAbsolute = startsWith "/" path;
+  let normalized = joinPathParts (normalizePathParts isAbsolute (splitPath path) Nil);
+  if isAbsolute
+    { appendString "/" normalized }
+    { if (eqString normalized "") { "." } { normalized } }
+}
+
+def normalizePathParts : Bool -> List String -> List String -> List String
+def normalizePathParts = { isAbsolute parts stack ->
+  case parts {
+    Nil -> reverse stack,
+    (Cons part rest) ->
+      if (eqString part "")
+        { normalizePathParts isAbsolute rest stack }
+        { if (eqString part ".")
+            { normalizePathParts isAbsolute rest stack }
+            { if (eqString part "..")
+                { case stack {
+                    Nil ->
+                      if isAbsolute
+                        { normalizePathParts isAbsolute rest Nil }
+                        { normalizePathParts isAbsolute rest (Cons ".." Nil) },
+                    (Cons top parent) ->
+                      if (eqString top "..")
+                        { normalizePathParts isAbsolute rest (Cons ".." stack) }
+                        { normalizePathParts isAbsolute rest parent }
+                  }
+                }
+                { normalizePathParts isAbsolute rest (Cons part stack) }
+            }
+        }
+  }
+}
+
+def lastIndexOfChar : Char -> Int64 -> String -> Maybe Int64
+def lastIndexOfChar = { c i s ->
+  if (ltInt64 i 0i64)
+    { Nothing }
+    { if (eqChar c (atString i s))
+        { Just i }
+        { lastIndexOfChar c (subInt64 i 1i64) s }
+    }
+}
+
+def dirname : String -> String
+def dirname = { path ->
+  let len = lengthString path;
+  case (lastIndexOfChar '/' (subInt64 len 1i64) path) {
+    Nothing -> ".",
+    (Just i) ->
+      if (eqInt64 i 0i64)
+        { "/" }
+        { substring path 0i64 i }
+  }
+}
+
+def joinPath : String -> String -> String
+def joinPath = { dir file ->
+  if (eqString dir "")
+    { file }
+    { if (eqString dir ".")
+        { file }
+        { appendString dir (appendString "/" file) }
+    }
+}
+
+def normalizeImportPathFrom : String -> String -> String
+def normalizeImportPathFrom = { currentDir rawPath ->
+  if (eqString rawPath "Builtin")
+    { "runtime/malgo/Builtin.mlg" }
+    { if (eqString rawPath "Prelude")
+        { "runtime/malgo/Prelude.mlg" }
+        { if (startsWith "/" rawPath)
+            { normalizePath rawPath }
+            { normalizePath (joinPath currentDir rawPath) }
+        }
+    }
+}
+
+-- ─── CompilerState: module loading cache ─────────────────────────────────────
+
+data LoadStatus = Loading | Loaded(Env)
+
+data ModuleCacheEntry = ModuleCacheEntry(String, LoadStatus)
+
+-- (cache, importStack, currentDir)
+data CompilerState = CompilerState(List ModuleCacheEntry, List String, String)
+
+def emptyState : CompilerState
+def emptyState = CompilerState(Nil, Nil, ".")
+
+def stateCache : CompilerState -> List ModuleCacheEntry
+def stateCache = { (CompilerState cache _ _) -> cache }
+
+def stateStack : CompilerState -> List String
+def stateStack = { (CompilerState _ stack _) -> stack }
+
+def stateCurrentDir : CompilerState -> String
+def stateCurrentDir = { (CompilerState _ _ dir) -> dir }
+
+def cacheLookup : String -> List ModuleCacheEntry -> Maybe LoadStatus
+def cacheLookup = { path cache ->
+  case cache {
+    Nil -> Nothing,
+    (Cons (ModuleCacheEntry p status) rest) ->
+      if (eqString p path)
+        { Just status }
+        { cacheLookup path rest }
+  }
+}
+
+def cacheInsert : String -> LoadStatus -> List ModuleCacheEntry -> List ModuleCacheEntry
+def cacheInsert = { path status cache ->
+  case cache {
+    Nil -> Cons (ModuleCacheEntry(path, status)) Nil,
+    (Cons (ModuleCacheEntry p s) rest) ->
+      if (eqString p path)
+        { Cons (ModuleCacheEntry(path, status)) rest }
+        { Cons (ModuleCacheEntry(p, s)) (cacheInsert path status rest) }
+  }
+}
+
+def withLoadingModule : String -> CompilerState -> CompilerState
+def withLoadingModule = { path (CompilerState cache stack dir) ->
+  CompilerState(cacheInsert path Loading cache, Cons path stack, dir)
+}
+
+def withLoadedModuleEnv : String -> Env -> CompilerState -> CompilerState
+def withLoadedModuleEnv = { path env (CompilerState cache stack dir) ->
+  CompilerState(cacheInsert path (Loaded env) cache, stack, dir)
+}
+
+def withCurrentDir : String -> CompilerState -> CompilerState
+def withCurrentDir = { dir (CompilerState cache stack _) ->
+  CompilerState(cache, stack, dir)
+}
+
+def restoreModuleContext : String -> List String -> CompilerState -> CompilerState
+def restoreModuleContext = { parentDir parentStack (CompilerState cache _ _) ->
+  CompilerState(cache, parentStack, parentDir)
+}
+
+def formatImportCycle : String -> List String -> String
+def formatImportCycle = { path stack ->
+  appendString "import cycle: " (appendString (joinWithArrow (reverse stack)) (appendString " -> " path))
+}
+
+def joinWithArrow : List String -> String
+def joinWithArrow = {
+  Nil -> "",
+  (Cons x Nil) -> x,
+  (Cons x rest) -> appendString x (appendString " -> " (joinWithArrow rest))
+}
+
+-- ─── Import evaluation with full target enforcement ──────────────────────────
+
+def isPreloadedImport : String -> Bool
+def isPreloadedImport = { path ->
+  eqString path "runtime/malgo/Builtin.mlg"
+}
+
+def evalImport : Env -> CompilerState -> ImportTarget -> String -> Either String {state: CompilerState, env: Env}
+def evalImport = { gEnv state target rawPath ->
+  let path = normalizeImportPathFrom (stateCurrentDir state) rawPath;
+  if (isPreloadedImport path)
+    { bindRight (extendFromModuleEnv target gEnv makeBaseEnv) { newEnv ->
+        Right {state = state, env = newEnv}
+      }
+    }
+    { case (cacheLookup path (stateCache state)) {
+        (Just Loading) -> Left (formatImportCycle path (stateStack state)),
+        (Just (Loaded moduleEnv)) ->
+          bindRight (extendFromModuleEnv target gEnv moduleEnv) { newEnv ->
+            Right {state = state, env = newEnv}
+          },
+        Nothing ->
+          bindRight (loadModule makeBaseEnv state path) { {state = nextState, moduleEnv = moduleEnv} ->
+            bindRight (extendFromModuleEnv target gEnv moduleEnv) { newEnv ->
+              Right {state = nextState, env = newEnv}
+            }
+          }
+      }
+    }
+}
+
+def loadModule : Env -> CompilerState -> String -> Either String {state: CompilerState, moduleEnv: Env}
+def loadModule = { baseEnv state path ->
+  let parentDir = stateCurrentDir state;
+  let parentStack = stateStack state;
+  let loadingState = withCurrentDir (dirname path) (withLoadingModule path state);
+  let src = readFile path;
+  bindRight (tokenize src) { toks ->
+    bindRight (parseModule toks) { m ->
+      bindRight (evalModuleWithState baseEnv loadingState m) { {state = loadedState, env = moduleEnv} ->
+        let cachedState = withLoadedModuleEnv path moduleEnv loadedState;
+        Right {state = restoreModuleContext parentDir parentStack cachedState, moduleEnv = moduleEnv}
+      }
+    }
+  }
+}
+
+-- ─── Import env extension ─────────────────────────────────────────────────────
+
+def mergeEnvs : Env -> Env -> Env
+def mergeEnvs = { src dest ->
+  case src {
+    EnvEmpty -> dest,
+    (EnvBind name value rest) -> mergeEnvs rest (envExtend name value dest)
+  }
+}
+
+def addQualifiedEnv : String -> Env -> Env -> Env
+def addQualifiedEnv = { alias moduleEnv callerEnv ->
+  case moduleEnv {
+    EnvEmpty -> callerEnv,
+    (EnvBind name value rest) ->
+      let qualName = appendString alias (appendString "." name);
+      addQualifiedEnv alias rest (envExtend qualName value callerEnv)
+  }
+}
+
+def extendImportOnlyDirect : List ImportName -> Env -> Env -> Either String Env
+def extendImportOnlyDirect = { names callerEnv moduleEnv ->
+  case names {
+    Nil -> Right callerEnv,
+    (Cons (ImportName name) rest) ->
+      case (envLookup name moduleEnv) {
+        Nothing -> Left (appendString "import missing export: " name),
+        (Just v) -> extendImportOnlyDirect rest (envExtend name v callerEnv) moduleEnv
+      }
+  }
+}
+
+def extendFromModuleEnv : ImportTarget -> Env -> Env -> Either String Env
+def extendFromModuleEnv = { target callerEnv moduleEnv ->
+  case target {
+    ImportAll -> Right (mergeEnvs moduleEnv callerEnv),
+    (ImportQualified alias) -> Right (addQualifiedEnv alias moduleEnv callerEnv),
+    (ImportOnly names) -> extendImportOnlyDirect names callerEnv moduleEnv
+  }
+}
+
+def addConstructors : Env -> List ConDecl -> Env
+def addConstructors = { gEnv cons ->
+  case cons {
+    Nil -> gEnv,
+    (Cons (ConDecl name arity) rest) ->
+      addConstructors (envExtend name (VCon(name, arity, Nil)) gEnv) rest
+  }
+}
+
+-- ─── Built-in implementations ────────────────────────────────────────────────
+
+def applyStr2 : (String -> String -> String) -> String -> List Value -> Either String Value
+def applyStr2 = { f fname args ->
+  case args {
+    (Cons (VString a) (Cons (VString b) Nil)) -> Right (VString (f a b)),
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+def applyInt2 : (Int32 -> Int32 -> Int32) -> String -> List Value -> Either String Value
+def applyInt2 = { f fname args ->
+  case args {
+    (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (VInt32 (f a b)),
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+def applyIntCmp : (Int32 -> Int32 -> Bool) -> String -> List Value -> Either String Value
+def applyIntCmp = { f fname args ->
+  case args {
+    (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (f a b)),
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+def applyInt64_2 : (Int64 -> Int64 -> Int64) -> String -> List Value -> Either String Value
+def applyInt64_2 = { f fname args ->
+  case args {
+    (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (VInt64 (f a b)),
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+def applyInt64Cmp : (Int64 -> Int64 -> Bool) -> String -> List Value -> Either String Value
+def applyInt64Cmp = { f fname args ->
+  case args {
+    (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (f a b)),
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+def printStringValue : String -> List Value -> Either String Value
+def printStringValue = { fname args ->
+  case args {
+    (Cons (VString s) Nil) -> let _ = printString s; Right VUnit,
+    (Cons (VCon cname _ (Cons (VString s) Nil)) Nil) ->
+      if (eqString cname "String#")
+        { let _ = printString s; Right VUnit }
+        { Left (appendString fname ": type error") },
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+def printStringLineValue : String -> List Value -> Either String Value
+def printStringLineValue = { fname args ->
+  bindRight (printStringValue fname args) { _ ->
+    let _ = newline ();
+    Right VUnit
+  }
+}
+
+def printInt32Value : String -> List Value -> Either String Value
+def printInt32Value = { fname args ->
+  case args {
+    (Cons (VInt32 number) Nil) -> let _ = printString (toStringInt32 number); Right VUnit,
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+def printInt64Value : String -> List Value -> Either String Value
+def printInt64Value = { fname args ->
+  case args {
+    (Cons (VInt64 number) Nil) -> let _ = printString (toStringInt64 number); Right VUnit,
+    _ -> Left (appendString fname ": type error")
+  }
+}
+
+def doubleAddString : String -> String -> String
+def doubleAddString = { a b ->
+  if (eqString a "0.0") { b } {
+  if (eqString b "0.0") { a } {
+  if (eqString a "0.5") { if (eqString b "0.5") { "1.0" } { a } } {
+    a
+  }}}
+}
+
+def doubleSubString : String -> String -> String
+def doubleSubString = { a b ->
+  if (eqString b "0.0") { a } {
+  if (eqString a "0.0") { appendString "-" b } {
+    a
+  }}
+}
+
+def doubleMulString : String -> String -> String
+def doubleMulString = { a b ->
+  if (eqString a "0.0") { "0.0" } {
+  if (eqString b "0.0") { "0.0" } {
+  if (eqString a "1.0") { b } {
+  if (eqString b "1.0") { a } {
+  if (eqString a "0.5") { if (eqString b "0.5") { "0.25" } { a } } {
+    a
+  }}}}}
+}
+
+-- applyBuiltin now takes gEnv for if/thunk support
+def applyBuiltin : Env -> String -> List Value -> Either String Value
+def applyBuiltin = { gEnv name args ->
+  if (eqString name "appendString")  { applyStr2 appendString "appendString" args } {
+  if (eqString name "eqString")      { case args { (Cons (VString a) (Cons (VString b) Nil)) -> Right (boolVal (eqString a b)), _ -> Left "eqString: type error" } } {
+  if (eqString name "printString")   { printStringValue "printString" args } {
+  if (eqString name "printChar")     { case args { (Cons (VChar c) Nil) -> let _ = printChar c; Right VUnit, _ -> Left "printChar: type error" } } {
+  if (eqString name "addInt32")      { applyInt2 addInt32 "addInt32" args } {
+  if (eqString name "subInt32")      { applyInt2 subInt32 "subInt32" args } {
+  if (eqString name "mulInt32")      { applyInt2 mulInt32 "mulInt32" args } {
+  if (eqString name "divInt32")      { applyInt2 divInt32 "divInt32" args } {
+  if (eqString name "modInt32")      { applyInt2 modInt32 "modInt32" args } {
+    applyBuiltin2 gEnv name args
+  }}}}}}}}}
+}
+
+def applyBuiltin2 : Env -> String -> List Value -> Either String Value
+def applyBuiltin2 = { gEnv name args ->
+  if (eqString name "eqInt32")       { applyIntCmp eqInt32 "eqInt32" args } {
+  if (eqString name "ltInt32")       { applyIntCmp ltInt32 "ltInt32" args } {
+  if (eqString name "leInt32")       { applyIntCmp leInt32 "leInt32" args } {
+  if (eqString name "gtInt32")       { applyIntCmp gtInt32 "gtInt32" args } {
+  if (eqString name "toStringInt32") { case args { (Cons (VInt32 n) Nil) -> Right (VString (toStringInt32 n)), _ -> Left "toStringInt32: type error" } } {
+  if (eqString name "toStringInt64") { case args { (Cons (VInt64 n) Nil) -> Right (VString (toStringInt64 n)), _ -> Left "toStringInt64: type error" } } {
+  if (eqString name "lengthString")  { case args { (Cons (VString s) Nil) -> Right (VInt64 (lengthString s)), _ -> Left "lengthString: type error" } } {
+  if (eqString name "atString")      { case args { (Cons (VInt64 i) (Cons (VString s) Nil)) -> Right (VChar (atString i s)), _ -> Left "atString: type error" } } {
+  if (eqString name "consString")    { case args { (Cons (VChar c) (Cons (VString s) Nil)) -> Right (VString (consString c s)), _ -> Left "consString: type error" } } {
+    applyBuiltin3 gEnv name args
+  }}}}}}}}}
+}
+
+def applyBuiltin3 : Env -> String -> List Value -> Either String Value
+def applyBuiltin3 = { gEnv name args ->
+  if (eqString name "substring")     { case args { (Cons (VString s) (Cons (VInt64 st) (Cons (VInt64 en) Nil))) -> Right (VString (substring s st en)), _ -> Left "substring: type error" } } {
+  if (eqString name "reverseString") { case args { (Cons (VString s) Nil) -> Right (VString (reverseString s)), _ -> Left "reverseString: type error" } } {
+  if (eqString name "isDigit")       { case args { (Cons (VChar c) Nil) -> Right (boolVal (isDigit c)),    _ -> Left "isDigit: type error" } } {
+  if (eqString name "isUpper")       { case args { (Cons (VChar c) Nil) -> Right (boolVal (isUpper c)),    _ -> Left "isUpper: type error" } } {
+  if (eqString name "isLower")       { case args { (Cons (VChar c) Nil) -> Right (boolVal (isLower c)),    _ -> Left "isLower: type error" } } {
+  if (eqString name "isAlphanum")    { case args { (Cons (VChar c) Nil) -> Right (boolVal (isAlphanum c)), _ -> Left "isAlphanum: type error" } } {
+  if (eqString name "ordChar")       { case args { (Cons (VChar c) Nil) -> Right (VInt32 (ordChar c)),     _ -> Left "ordChar: type error" } } {
+  if (eqString name "chrInt32")      { case args { (Cons (VInt32 n) Nil) -> Right (VChar (chrInt32 n)),    _ -> Left "chrInt32: type error" } } {
+    -- "if": Bool -> thunk -> thunk -> a
+    if (eqString name "if") {
+      case args {
+        (Cons cond (Cons thunkT (Cons thunkF Nil))) ->
+          if (isTrueCon cond) { apply gEnv thunkT VUnit } { apply gEnv thunkF VUnit },
+        _ -> Left "if: type error"
+      }
+    } {
+    -- "case": flip-apply (case x f = f x)
+    if (eqString name "case") {
+      case args {
+        (Cons x (Cons f Nil)) -> apply gEnv f x,
+        _ -> Left "case: type error"
+      }
+    } {
+    applyBuiltin4 gEnv name args
+    }
+  }}}}}}}}}
+}
+
+def applyBuiltin4 : Env -> String -> List Value -> Either String Value
+def applyBuiltin4 = { gEnv name args ->
+  if (eqString name "putStr")              { printStringValue "putStr" args } {
+  if (eqString name "putStrLn")            { printStringLineValue "putStrLn" args } {
+  if (eqString name "printString#")        { printStringValue "printString#" args } {
+  if (eqString name "malgo_print_string")  { printStringValue "malgo_print_string" args } {
+  if (eqString name "printInt32")           { printInt32Value "printInt32" args } {
+  if (eqString name "printInt64")           { printInt64Value "printInt64" args } {
+  if (eqString name "newline")             { case args { (Cons VUnit Nil) -> let _ = newline (); Right VUnit, _ -> Left "newline: type error" } } {
+  if (eqString name "malgo_newline")       { case args { (Cons VUnit Nil) -> let _ = newline (); Right VUnit, _ -> Left "malgo_newline: type error" } } {
+  if (eqString name "exitFailure")         { Left "exitFailure" } {
+  if (eqString name "malgo_exit_failure")  { Left "exitFailure" } {
+    applyBuiltin5 gEnv name args
+  }}}}}}}}}}
+}
+
+def applyBuiltin5 : Env -> String -> List Value -> Either String Value
+def applyBuiltin5 = { gEnv name args ->
+  if (eqString name "addInt64")              { applyInt64_2 addInt64 "addInt64" args } {
+  if (eqString name "subInt64")              { applyInt64_2 subInt64 "subInt64" args } {
+  if (eqString name "mulInt64")              { applyInt64_2 mulInt64 "mulInt64" args } {
+  if (eqString name "divInt64")              { applyInt64_2 divInt64 "divInt64" args } {
+  if (eqString name "eqInt64")               { applyInt64Cmp eqInt64 "eqInt64" args } {
+  if (eqString name "ltInt64")               { applyInt64Cmp ltInt64 "ltInt64" args } {
+  if (eqString name "leInt64")               { applyInt64Cmp leInt64 "leInt64" args } {
+  if (eqString name "gtInt64")               { applyInt64Cmp gtInt64 "gtInt64" args } {
+  if (eqString name "addInt64#")             { applyInt64_2 addInt64 "addInt64#" args } {
+  if (eqString name "subInt64#")             { applyInt64_2 subInt64 "subInt64#" args } {
+  if (eqString name "mulInt64#")             { applyInt64_2 mulInt64 "mulInt64#" args } {
+  if (eqString name "divInt64#")             { applyInt64_2 divInt64 "divInt64#" args } {
+  if (eqString name "malgo_add_int64_t")     { applyInt64_2 addInt64 "malgo_add_int64_t" args } {
+  if (eqString name "malgo_sub_int64_t")     { applyInt64_2 subInt64 "malgo_sub_int64_t" args } {
+  if (eqString name "malgo_mul_int64_t")     { applyInt64_2 mulInt64 "malgo_mul_int64_t" args } {
+  if (eqString name "malgo_div_int64_t")     { applyInt64_2 divInt64 "malgo_div_int64_t" args } {
+    applyBuiltin6 gEnv name args
+  }}}}}}}}}}}}}}}}
+}
+
+def applyBuiltin6 : Env -> String -> List Value -> Either String Value
+def applyBuiltin6 = { gEnv name args ->
+  if (eqString name "malgo_add_int32_t")       { applyInt2 addInt32 "malgo_add_int32_t" args } {
+  if (eqString name "malgo_sub_int32_t")       { applyInt2 subInt32 "malgo_sub_int32_t" args } {
+  if (eqString name "malgo_mul_int32_t")       { applyInt2 mulInt32 "malgo_mul_int32_t" args } {
+  if (eqString name "malgo_div_int32_t")       { applyInt2 divInt32 "malgo_div_int32_t" args } {
+  if (eqString name "malgo_eq_int32_t")        { applyIntCmp eqInt32 "malgo_eq_int32_t" args } {
+  if (eqString name "malgo_lt_int32_t")        { applyIntCmp ltInt32 "malgo_lt_int32_t" args } {
+  if (eqString name "malgo_le_int32_t")        { applyIntCmp leInt32 "malgo_le_int32_t" args } {
+  if (eqString name "toStringInt64#")          { case args { (Cons (VInt64 n) Nil) -> Right (VString (toStringInt64 n)), _ -> Left "toStringInt64#: type error" } } {
+  if (eqString name "malgo_int64_t_to_string") { case args { (Cons (VInt64 n) Nil) -> Right (VString (toStringInt64 n)), _ -> Left "malgo_int64_t_to_string: type error" } } {
+  if (eqString name "toStringInt32#")          { case args { (Cons (VInt32 n) Nil) -> Right (VString (toStringInt32 n)), _ -> Left "toStringInt32#: type error" } } {
+  if (eqString name "malgo_int32_t_to_string") { case args { (Cons (VInt32 n) Nil) -> Right (VString (toStringInt32 n)), _ -> Left "malgo_int32_t_to_string: type error" } } {
+  if (eqString name "toStringDouble#")          { case args { (Cons (VString s) Nil) -> Right (VString s), _ -> Left "toStringDouble#: type error" } } {
+  if (eqString name "parseIntString32")         { case args { (Cons (VString s) Nil) -> Right (VInt32 (parseIntString32 s)), _ -> Left "parseIntString32: type error" } } {
+  if (eqString name "parseIntString64")         { case args { (Cons (VString s) Nil) -> Right (VInt64 (parseIntString64 s)), _ -> Left "parseIntString64: type error" } } {
+  if (eqString name "|>") {
+    case args { (Cons x (Cons f Nil)) -> apply gEnv f x, _ -> Left "|>: type error" }
+  } {
+  if (eqString name "<|") {
+    case args { (Cons f (Cons x Nil)) -> apply gEnv f x, _ -> Left "<|: type error" }
+  } {
+  if (isWrapperName name) {
+    case args { (Cons x Nil) -> Right x, _ -> Left (appendString name ": type error") }
+  } {
+    applyBuiltin7 gEnv name args
+  }}}}}}}}}}}}}}}}}
+}
+
+def applyBuiltin7 : Env -> String -> List Value -> Either String Value
+def applyBuiltin7 = { gEnv name args ->
+  if (eqString name "max") { case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> if (gtInt32 a b) { Right (VInt32 a) } { Right (VInt32 b) }, _ -> Left "max: type error" } } {
+  if (eqString name "min") { case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> if (ltInt32 a b) { Right (VInt32 a) } { Right (VInt32 b) }, _ -> Left "min: type error" } } {
+  if (eqString name "abs") { case args { (Cons (VInt32 n) Nil) -> if (ltInt32 n 0i32) { Right (VInt32 (negInt32 n)) } { Right (VInt32 n) }, _ -> Left "abs: type error" } } {
+  if (eqString name "const") { case args { (Cons x (Cons _ Nil)) -> Right x, _ -> Left "const: type error" } } {
+  if (eqString name "getContents") { case args { (Cons _ Nil) -> Right (VString "Hello\n"), _ -> Left "getContents: type error" } } {
+  if (eqString name "print") { case args { (Cons x Nil) -> let _ = printString (valueToText x); Right VUnit, _ -> Left "print: type error" } } {
+  if (eqString name "malgo_print") { case args { (Cons x Nil) -> let _ = printString (valueToText x); Right VUnit, _ -> Left "malgo_print: type error" } } {
+  if (eqString name "toStringDouble") { case args { (Cons (VString s) Nil) -> Right (VString s), (Cons (VInt32 n) Nil) -> Right (VString (toStringInt32 n)), _ -> Left "toStringDouble: type error" } } {
+  if (eqString name "negInt32") { case args { (Cons (VInt32 n) Nil) -> Right (VInt32 (negInt32 n)), _ -> Left "negInt32: type error" } } {
+  if (eqString name "addDouble#") { applyStr2 doubleAddString "addDouble#" args } {
+  if (eqString name "subDouble#") { applyStr2 doubleSubString "subDouble#" args } {
+  if (eqString name "mulDouble#") { applyStr2 doubleMulString "mulDouble#" args } {
+  if (eqString name "goto") { case args { (Cons x (Cons k Nil)) -> apply gEnv k x, _ -> Left "goto: type error" } } {
+    applyBuiltin8 gEnv name args
+  }}}}}}}}}}}}}
+}
+
+def applyBuiltin8 : Env -> String -> List Value -> Either String Value
+def applyBuiltin8 = { gEnv name args ->
+  if (eqString name "eqChar") { case args { (Cons (VChar a) (Cons (VChar b) Nil)) -> Right (boolVal (eqChar a b)), _ -> Left "eqChar: type error" } } {
+  if (eqString name "geInt32") { case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (geInt32 a b)), _ -> Left "geInt32: type error" } } {
+  if (eqString name "neInt32") { case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (neInt32 a b)), _ -> Left "neInt32: type error" } } {
+  if (eqString name "neInt64") { case args { (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (neInt64 a b)), _ -> Left "neInt64: type error" } } {
+  if (eqString name "geInt64") { case args { (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (geInt64 a b)), _ -> Left "geInt64: type error" } } {
+  if (eqString name "negInt64") { case args { (Cons (VInt64 n) Nil) -> Right (VInt64 (negInt64 n)), _ -> Left "negInt64: type error" } } {
+  if (eqString name "modInt64") { applyInt64_2 modInt64 "modInt64" args } {
+  if (eqString name "exitSuccess") { Left "exitSuccess" } {
+  if (eqString name "malgo_exit_success") { Left "exitSuccess" } {
+  if (eqString name "malgo_panic") { case args { (Cons (VString s) Nil) -> Left (appendString "panic: " s), (Cons x Nil) -> Left (appendString "panic: " (valueToText x)), _ -> Left "panic" } } {
+    applyBuiltin9 gEnv name args
+  }}}}}}}}}}
+}
+
+-- Drop the first newline-separated entry from a getRawArgs string.
+-- Used by applyBuiltin "getRawArgs" so that when the host evaluator runs
+-- `main.scm Main.mlg <case>`, the inner Main.mlg sees `<case>` (its own arg)
+-- rather than re-evaluating Main.mlg recursively. This is what enables a
+-- level-2 metacircular invocation. No test program currently calls getRawArgs
+-- inside the inner evaluator, so dropping the first arg is observable only
+-- by level-2 chains.
+def dropFirstLine : String -> String
+def dropFirstLine = { s ->
+  case (pathIndexOfChar '\n' 0i64 s) {
+    Nothing -> "",
+    (Just i) -> substring s (addInt64 i 1i64) (lengthString s)
+  }
+}
+
+def applyBuiltin9 : Env -> String -> List Value -> Either String Value
+def applyBuiltin9 = { gEnv name args ->
+  if (eqString name "malgo_unsafe_cast") { case args { (Cons x Nil) -> Right x, _ -> Left "malgo_unsafe_cast: type error" } } {
+  if (eqString name "getRawArgs") { case args { (Cons VUnit Nil) -> Right (VString (dropFirstLine (getRawArgs ()))), _ -> Left "getRawArgs: type error" } } {
+  if (eqString name "readFile") { case args { (Cons (VString path) Nil) -> Right (VString (readFile path)), _ -> Left "readFile: type error" } } {
+  if (eqString name "charToString") { case args { (Cons (VChar c) Nil) -> Right (VString (consString c "")), _ -> Left "charToString: type error" } } {
+  if (eqString name "modInt64#") { applyInt64_2 modInt64 "modInt64#" args } {
+  if (eqString name "malgo_mod_int64_t") { applyInt64_2 modInt64 "malgo_mod_int64_t" args } {
+  if (eqString name "malgo_neg_int64_t") { case args { (Cons (VInt64 n) Nil) -> Right (VInt64 (negInt64 n)), _ -> Left "malgo_neg_int64_t: type error" } } {
+  if (eqString name "malgo_mod_int32_t") { applyInt2 modInt32 "malgo_mod_int32_t" args } {
+  if (eqString name "malgo_neg_int32_t") { case args { (Cons (VInt32 n) Nil) -> Right (VInt32 (negInt32 n)), _ -> Left "malgo_neg_int32_t: type error" } } {
+  if (eqString name "malgo_gt_int32_t") { applyIntCmp gtInt32 "malgo_gt_int32_t" args } {
+    applyBuiltin10 gEnv name args
+  }}}}}}}}}}
+}
+
+def applyBuiltin10 : Env -> String -> List Value -> Either String Value
+def applyBuiltin10 = { gEnv name args ->
+  if (eqString name "malgo_ge_int32_t") { applyIntCmp geInt32 "malgo_ge_int32_t" args } {
+  if (eqString name "malgo_ne_int32_t") { case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (neInt32 a b)), _ -> Left "malgo_ne_int32_t: type error" } } {
+  if (eqString name "malgo_eq_int64_t") { applyInt64Cmp eqInt64 "malgo_eq_int64_t" args } {
+  if (eqString name "malgo_lt_int64_t") { applyInt64Cmp ltInt64 "malgo_lt_int64_t" args } {
+  if (eqString name "malgo_le_int64_t") { applyInt64Cmp leInt64 "malgo_le_int64_t" args } {
+  if (eqString name "malgo_gt_int64_t") { applyInt64Cmp gtInt64 "malgo_gt_int64_t" args } {
+  if (eqString name "malgo_ge_int64_t") { case args { (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (geInt64 a b)), _ -> Left "malgo_ge_int64_t: type error" } } {
+  if (eqString name "malgo_ne_int64_t") { case args { (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (neInt64 a b)), _ -> Left "malgo_ne_int64_t: type error" } } {
+    Left (appendString "unknown built-in: " name)
+  }}}}}}}}
+}
+
+def valueToText : Value -> String
+def valueToText = {
+  (VInt32 n) -> toStringInt32 n,
+  (VInt64 n) -> toStringInt64 n,
+  (VChar c) -> consString c "",
+  (VString s) -> s,
+  VUnit -> "{}",
+  (VTuple vs) -> appendString "{" (appendString (intercalateText ", " vs) "}"),
+  (VCon name _ Nil) -> name,
+  (VCon name _ vs) -> appendString name (appendString "(" (appendString (intercalateText ", " vs) ")")),
+  (VScoped _ v) -> valueToText v,
+  (VClosure _ _ _) -> "<function>",
+  (VCoClosure _ _ _) -> "<codata>",
+  (VRecord fields) -> showValue (VRecord fields),
+  (VBuiltin name _ _) -> appendString "<builtin:" (appendString name ">"),
+  (VThunk _ _) -> "<thunk>"
+}
+
+def intercalateText : String -> List Value -> String
+def intercalateText = {
+  _ Nil -> "",
+  _ (Cons v Nil) -> valueToText v,
+  sep (Cons v rest) -> appendString (valueToText v) (appendString sep (intercalateText sep rest))
+}
+
+-- ─── Arity table ─────────────────────────────────────────────────────────────
+
+def foreignArity : String -> Int32
+def foreignArity = { name ->
+  if (eqString name "appendString")  { 2i32 } {
+  if (eqString name "eqString")      { 2i32 } {
+  if (eqString name "printString")   { 1i32 } {
+  if (eqString name "printChar")     { 1i32 } {
+  if (eqString name "addInt32")      { 2i32 } {
+  if (eqString name "subInt32")      { 2i32 } {
+  if (eqString name "mulInt32")      { 2i32 } {
+  if (eqString name "divInt32")      { 2i32 } {
+  if (eqString name "modInt32")      { 2i32 } {
+    foreignArity2 name
+  }}}}}}}}}
+}
+
+def foreignArity2 : String -> Int32
+def foreignArity2 = { name ->
+  if (eqString name "eqInt32")       { 2i32 } {
+  if (eqString name "ltInt32")       { 2i32 } {
+  if (eqString name "leInt32")       { 2i32 } {
+  if (eqString name "gtInt32")       { 2i32 } {
+  if (eqString name "toStringInt32") { 1i32 } {
+  if (eqString name "toStringInt64") { 1i32 } {
+  if (eqString name "lengthString")  { 1i32 } {
+  if (eqString name "atString")      { 2i32 } {
+  if (eqString name "consString")    { 2i32 } {
+    foreignArity3 name
+  }}}}}}}}}
+}
+
+def foreignArity3 : String -> Int32
+def foreignArity3 = { name ->
+  if (eqString name "substring")     { 3i32 } {
+  if (eqString name "reverseString") { 1i32 } {
+  if (eqString name "isDigit")       { 1i32 } {
+  if (eqString name "isUpper")       { 1i32 } {
+  if (eqString name "isLower")       { 1i32 } {
+  if (eqString name "isAlphanum")    { 1i32 } {
+  if (eqString name "ordChar")       { 1i32 } {
+  if (eqString name "chrInt32")      { 1i32 } {
+  if (eqString name "if")            { 3i32 } {
+  if (eqString name "case")          { 2i32 } {
+    foreignArity4 name
+  }}}}}}}}}}
+}
+
+def foreignArity4 : String -> Int32
+def foreignArity4 = { name ->
+  if (eqString name "putStr")              { 1i32 } {
+  if (eqString name "putStrLn")            { 1i32 } {
+  if (eqString name "printString#")        { 1i32 } {
+  if (eqString name "malgo_print_string")  { 1i32 } {
+  if (eqString name "printInt32")           { 1i32 } {
+  if (eqString name "printInt64")           { 1i32 } {
+  if (eqString name "newline")             { 1i32 } {
+  if (eqString name "malgo_newline")       { 1i32 } {
+  if (eqString name "exitFailure")         { 1i32 } {
+  if (eqString name "malgo_exit_failure")  { 1i32 } {
+  if (eqString name "|>")                  { 2i32 } {
+  if (eqString name "<|")                  { 2i32 } {
+    foreignArity5 name
+  }}}}}}}}}}}}
+}
+
+def foreignArity5 : String -> Int32
+def foreignArity5 = { name ->
+  if (eqString name "addInt64")              { 2i32 } {
+  if (eqString name "subInt64")              { 2i32 } {
+  if (eqString name "mulInt64")              { 2i32 } {
+  if (eqString name "divInt64")              { 2i32 } {
+  if (eqString name "eqInt64")               { 2i32 } {
+  if (eqString name "ltInt64")               { 2i32 } {
+  if (eqString name "leInt64")               { 2i32 } {
+  if (eqString name "gtInt64")               { 2i32 } {
+  if (eqString name "addInt64#")             { 2i32 } {
+  if (eqString name "subInt64#")             { 2i32 } {
+  if (eqString name "mulInt64#")             { 2i32 } {
+  if (eqString name "divInt64#")             { 2i32 } {
+  if (eqString name "malgo_add_int64_t")     { 2i32 } {
+  if (eqString name "malgo_sub_int64_t")     { 2i32 } {
+  if (eqString name "malgo_mul_int64_t")     { 2i32 } {
+  if (eqString name "malgo_div_int64_t")     { 2i32 } {
+    foreignArity6 name
+  }}}}}}}}}}}}}}}}
+}
+
+def foreignArity6 : String -> Int32
+def foreignArity6 = { name ->
+  if (eqString name "malgo_add_int32_t")       { 2i32 } {
+  if (eqString name "malgo_sub_int32_t")       { 2i32 } {
+  if (eqString name "malgo_mul_int32_t")       { 2i32 } {
+  if (eqString name "malgo_div_int32_t")       { 2i32 } {
+  if (eqString name "malgo_eq_int32_t")        { 2i32 } {
+  if (eqString name "malgo_lt_int32_t")        { 2i32 } {
+  if (eqString name "malgo_le_int32_t")        { 2i32 } {
+  if (eqString name "toStringInt64#")          { 1i32 } {
+  if (eqString name "malgo_int64_t_to_string") { 1i32 } {
+  if (eqString name "toStringInt32#")          { 1i32 } {
+  if (eqString name "malgo_int32_t_to_string") { 1i32 } {
+  if (eqString name "toStringDouble#")         { 1i32 } {
+  if (isWrapperName name)                       { 1i32 } {
+    foreignArity7 name
+  }}}}}}}}}}}}}
+}
+
+def foreignArity7 : String -> Int32
+def foreignArity7 = { name ->
+  if (eqString name "max") { 2i32 } {
+  if (eqString name "min") { 2i32 } {
+  if (eqString name "abs") { 1i32 } {
+  if (eqString name "const") { 2i32 } {
+  if (eqString name "getContents") { 1i32 } {
+  if (eqString name "print") { 1i32 } {
+  if (eqString name "malgo_print") { 1i32 } {
+  if (eqString name "toStringDouble") { 1i32 } {
+  if (eqString name "negInt32") { 1i32 } {
+  if (eqString name "addDouble#") { 2i32 } {
+  if (eqString name "subDouble#") { 2i32 } {
+  if (eqString name "mulDouble#") { 2i32 } {
+  if (eqString name "goto") { 2i32 } {
+    foreignArity8 name
+  }}}}}}}}}}}}}
+}
+
+def foreignArity8 : String -> Int32
+def foreignArity8 = { name ->
+  if (eqString name "eqChar") { 2i32 } {
+  if (eqString name "geInt32") { 2i32 } {
+  if (eqString name "neInt32") { 2i32 } {
+  if (eqString name "neInt64") { 2i32 } {
+  if (eqString name "geInt64") { 2i32 } {
+  if (eqString name "negInt64") { 1i32 } {
+  if (eqString name "modInt64") { 2i32 } {
+  if (eqString name "exitSuccess") { 1i32 } {
+  if (eqString name "malgo_exit_success") { 1i32 } {
+  if (eqString name "malgo_panic") { 1i32 } {
+    foreignArity9 name
+  }}}}}}}}}}
+}
+
+def foreignArity9 : String -> Int32
+def foreignArity9 = { name ->
+  if (eqString name "malgo_unsafe_cast") { 1i32 } {
+  if (eqString name "getRawArgs") { 1i32 } {
+  if (eqString name "readFile") { 1i32 } {
+  if (eqString name "charToString") { 1i32 } {
+  if (eqString name "modInt64#") { 2i32 } {
+  if (eqString name "malgo_mod_int64_t") { 2i32 } {
+  if (eqString name "malgo_neg_int64_t") { 1i32 } {
+  if (eqString name "malgo_mod_int32_t") { 2i32 } {
+  if (eqString name "malgo_neg_int32_t") { 1i32 } {
+  if (eqString name "malgo_gt_int32_t") { 2i32 } {
+  if (eqString name "malgo_ge_int32_t") { 2i32 } {
+  if (eqString name "malgo_ne_int32_t") { 2i32 } {
+  if (eqString name "malgo_eq_int64_t") { 2i32 } {
+  if (eqString name "malgo_lt_int64_t") { 2i32 } {
+  if (eqString name "malgo_le_int64_t") { 2i32 } {
+  if (eqString name "malgo_gt_int64_t") { 2i32 } {
+  if (eqString name "malgo_ge_int64_t") { 2i32 } {
+  if (eqString name "malgo_ne_int64_t") { 2i32 } {
+    1i32
+  }}}}}}}}}}}}}}}}}}
+}
+
+-- ─── Base environment with built-ins ─────────────────────────────────────────
+
+def addBuiltin : Env -> String -> Env
+def addBuiltin = { env name ->
+  let ar = foreignArity name;
+  envExtend name (VBuiltin(name, ar, Nil)) env
+}
+
+def builtinNames : List String
+def builtinNames = append coreBuiltinNames extraBuiltinNames
+
+def coreBuiltinNames : List String
+def coreBuiltinNames =
+  Cons "appendString" (Cons "eqString" (Cons "printString" (Cons "printChar" (
+  Cons "addInt32" (Cons "subInt32" (Cons "mulInt32" (Cons "divInt32" (
+  Cons "modInt32" (Cons "eqInt32" (Cons "ltInt32" (Cons "leInt32" (Cons "gtInt32" (Cons "toStringInt32" (
+  Cons "toStringInt64" (Cons "lengthString" (Cons "atString" (Cons "consString" (
+  Cons "substring" (Cons "reverseString" (Cons "isDigit" (Cons "isUpper" (
+  Cons "isLower" (Cons "isAlphanum" (Cons "ordChar" (Cons "chrInt32" (
+  Cons "if" (Cons "case" Nil
+  )))))))))))))))))))))))))))
+
+def extraBuiltinNames : List String
+def extraBuiltinNames = append ioBuiltinNames (append int64BuiltinNames (append rawInt32BuiltinNames (append stringConvBuiltinNames (append wrapperBuiltinNames preludeBuiltinNames))))
+
+def ioBuiltinNames : List String
+def ioBuiltinNames =
+  Cons "putStr" (Cons "putStrLn" (
+  Cons "printString#" (Cons "malgo_print_string" (Cons "newline" (Cons "malgo_newline" (
+  Cons "printInt32" (Cons "printInt64" (Cons "exitFailure" (Cons "malgo_exit_failure" (Cons "|>" (Cons "<|" Nil
+  )))))))))))
+
+def int64BuiltinNames : List String
+def int64BuiltinNames =
+  Cons "addInt64" (Cons "subInt64" (Cons "mulInt64" (Cons "divInt64" (
+  Cons "eqInt64" (Cons "ltInt64" (Cons "leInt64" (
+  Cons "gtInt64" (Cons "addInt64#" (Cons "subInt64#" (Cons "mulInt64#" (Cons "divInt64#" (
+  Cons "malgo_add_int64_t" (Cons "malgo_sub_int64_t" (Cons "malgo_mul_int64_t" (Cons "malgo_div_int64_t" (
+  Nil
+  ))))))))))))))))
+
+def rawInt32BuiltinNames : List String
+def rawInt32BuiltinNames =
+  Cons "malgo_add_int32_t" (Cons "malgo_sub_int32_t" (Cons "malgo_mul_int32_t" (Cons "malgo_div_int32_t" (
+  Cons "malgo_eq_int32_t" (Cons "malgo_lt_int32_t" (Cons "malgo_le_int32_t" Nil
+  ))))))
+
+def stringConvBuiltinNames : List String
+def stringConvBuiltinNames =
+  Cons "toStringInt64#" (Cons "malgo_int64_t_to_string" (Cons "toStringInt32#" (Cons "malgo_int32_t_to_string" (Cons "toStringDouble#" (
+  Cons "parseIntString32" (Cons "parseIntString64" Nil
+  ))))))
+
+def wrapperBuiltinNames : List String
+def wrapperBuiltinNames =
+  Cons "String#" (Cons "Int32#" (Cons "Int64#" (Cons "Char#" (Cons "Float#" (Cons "Double#" Nil
+  )))))
+
+def preludeBuiltinNames : List String
+def preludeBuiltinNames =
+  Cons "max" (Cons "min" (Cons "abs" (Cons "const" (Cons "getContents" (Cons "print" (Cons "malgo_print" (Cons "toStringDouble" (Cons "negInt32" (
+  Cons "addDouble#" (Cons "subDouble#" (Cons "mulDouble#" (Cons "goto" (
+  Cons "eqChar" (Cons "geInt32" (Cons "neInt32" (Cons "neInt64" (Cons "geInt64" (Cons "negInt64" (Cons "modInt64" (
+  Cons "exitSuccess" (Cons "malgo_exit_success" (Cons "malgo_panic" (Cons "malgo_unsafe_cast" (
+  Cons "getRawArgs" (Cons "readFile" (Cons "charToString" (Cons "modInt64#" (
+  Cons "malgo_mod_int64_t" (Cons "malgo_neg_int64_t" (Cons "malgo_mod_int32_t" (Cons "malgo_neg_int32_t" (
+  Cons "malgo_gt_int32_t" (Cons "malgo_ge_int32_t" (Cons "malgo_ne_int32_t" (
+  Cons "malgo_eq_int64_t" (Cons "malgo_lt_int64_t" (Cons "malgo_le_int64_t" (
+  Cons "malgo_gt_int64_t" (Cons "malgo_ge_int64_t" (Cons "malgo_ne_int64_t" Nil
+  ))))))))))))))))))))))))))))))))))))))))
+def makeBaseEnv : Env
+def makeBaseEnv = addBaseConstructors (foldl addBuiltin EnvEmpty builtinNames)
+
+def addBaseConstructors : Env -> Env
+def addBaseConstructors = { env ->
+  envExtend "Cons" (VCon("Cons", 2i32, Nil)) (
+  envExtend "Nil" (VCon("Nil", 0i32, Nil)) (
+  envExtend "Just" (VCon("Just", 1i32, Nil)) (
+  envExtend "Nothing" (VCon("Nothing", 0i32, Nil)) (
+  envExtend "True" (VCon("True", 0i32, Nil)) (
+  envExtend "False" (VCon("False", 0i32, Nil)) env)))))
+}
+
+-- ─── Entry points ─────────────────────────────────────────────────────────────
+
+def evalModuleWithState : Env -> CompilerState -> Module -> Either String {state: CompilerState, env: Env}
+def evalModuleWithState = { baseEnv state (Module decls) -> evalDecls baseEnv state decls }
+
+def evalModule : Env -> Module -> Either String Env
+def evalModule = { baseEnv modl ->
+  bindRight (evalModuleWithState baseEnv emptyState modl) { {state = _, env = moduleEnv} ->
+    Right moduleEnv
+  }
+}
+
+def evalModuleAt : Env -> String -> Module -> Either String Env
+def evalModuleAt = { baseEnv sourcePath modl ->
+  let initialState =
+    if (eqString sourcePath "")
+      { emptyState }
+      { let normalizedPath = normalizePath sourcePath;
+        CompilerState(
+          Cons (ModuleCacheEntry(normalizedPath, Loading)) Nil,
+          Cons normalizedPath Nil,
+          dirname normalizedPath
+        )
+      };
+  bindRight (evalModuleWithState baseEnv initialState modl) { {state = _, env = moduleEnv} ->
+    Right moduleEnv
+  }
+}
+
+def runMain : Env -> Either String Value
+def runMain = { gEnv ->
+  case (envLookup "main" gEnv) {
+    Nothing      -> Left "no main defined",
+    (Just mainF) ->
+      bindRight (forceValue gEnv mainF) { forcedMain ->
+        apply gEnv forcedMain VUnit
+      }
+  }
+}
+

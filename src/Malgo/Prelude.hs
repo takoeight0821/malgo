@@ -254,7 +254,8 @@ data Flag = Flag
     testMode :: Bool,
     target :: Target,
     evalMode :: EvalMode,
-    useInfer :: Bool
+    useInfer :: Bool,
+    programArgs :: [String]
   }
 
 instance Hashable Megaparsec.Pos

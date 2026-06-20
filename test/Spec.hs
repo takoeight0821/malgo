@@ -3,6 +3,7 @@ module Main (main) where
 import Malgo.Backend.SchemeSpec qualified as SchemeSpec
 import Malgo.ElaborateSpec qualified as ElaborateSpec
 import Malgo.FeaturesSpec qualified as FeaturesSpec
+import Malgo.ForthSpec qualified as ForthSpec
 import Malgo.InferSpec qualified as InferSpec
 import Malgo.ParserSpec qualified as ParserSpec
 import Malgo.Prelude (IO)
@@ -31,3 +32,4 @@ main = do
     describe "Malgo.Sequent.ToCore" ToCoreSpec.spec
     describe "Malgo.Sequent.Eval" (EvalSpec.specWith builtin prelude)
     describe "Malgo.Sequent.BigStepEval" (BigStepEvalSpec.specWith builtin prelude)
+    describe "Malgo.Forth" (ForthSpec.specWith builtin prelude)

@@ -19,6 +19,7 @@ module Malgo.TestUtils
     compileTestCaseWithElaborate,
     assertConsistentResults,
     withFreshQueryDB,
+    runEvalWithStdin,
   )
 where
 
@@ -27,7 +28,7 @@ import Data.ByteString qualified as BS
 import Data.Set qualified as Set
 import Data.Text.Lazy qualified as TL
 import Effectful
-import Effectful.Error.Static (Error)
+import Effectful.Error.Static (Error, runError)
 import Effectful.Reader.Static (Reader, runReader)
 import Effectful.State.Static.Local (State)
 import GHC.Stack (CallStack, prettyCallStack)
@@ -45,6 +46,7 @@ import Malgo.Query.Engine (runQueryDB)
 import Malgo.Rename
 import Malgo.Sequent.Core.Flat (flatProgram)
 import Malgo.Sequent.Core.Join (Program (..), joinProgram)
+import Malgo.Sequent.Eval (EvalError, Handlers (..), evalProgram)
 import Malgo.Sequent.ToCore (toCore)
 import Malgo.Sequent.ToFun (ToFunPass (..))
 import Malgo.Syntax (Module (..))
@@ -136,17 +138,7 @@ failIfError = \case
   Right x -> x
 
 setupTestStdin :: (MonadIO m) => m (IO (Maybe Char))
-setupTestStdin = liftIO do
-  ref <- newIORef "Hello\n"
-  let stdin :: IO (Maybe Char)
-      stdin = do
-        str <- readIORef ref
-        case str of
-          [] -> pure Nothing
-          (c : cs) -> do
-            writeIORef ref cs
-            pure $ Just c
-  pure stdin
+setupTestStdin = setupTestStdinFromString "Hello\n"
 
 setupTestStdout :: (MonadIO m) => m (Char -> IO (), IORef String)
 setupTestStdout = do
@@ -237,6 +229,40 @@ assertConsistentResults action1 action2 = do
     (Left _, Left _) -> pure ()
     (Left err, Right _) -> expectationFailure $ "First failed but second succeeded: " <> show err
     (Right _, Left err) -> expectationFailure $ "First succeeded but second failed: " <> show err
+
+setupTestStdinFromString :: (MonadIO m) => String -> m (IO (Maybe Char))
+setupTestStdinFromString content = liftIO do
+  ref <- newIORef content
+  let stdin :: IO (Maybe Char)
+      stdin = do
+        str <- readIORef ref
+        case str of
+          [] -> pure Nothing
+          (c : cs) -> do
+            writeIORef ref cs
+            pure $ Just c
+  pure stdin
+
+runEvalWithStdin :: String -> ModuleName -> Program -> IO String
+runEvalWithStdin stdinContent moduleName program = do
+  runMalgoM flag $ runCompileError do
+    stdin <- setupTestStdinFromString stdinContent
+    (stdout, stdoutBuilder) <- setupTestStdout
+    (stderr, _) <- setupTestStderr
+    result <-
+      runError @EvalError
+        $ runReader moduleName
+        $ runReader
+          Handlers
+            { stdin,
+              stdout,
+              stderr,
+              arguments = []
+            }
+        $ evalProgram program
+    case result of
+      Left (_, err) -> error $ show err
+      Right _ -> readIORef stdoutBuilder
 
 -- | Wrap an action requiring 'QueryDB' with a fresh database.
 -- Convenient for tests that call 'runPass RenamePass' directly.

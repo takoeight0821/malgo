@@ -1,0 +1,431 @@
+module {..} = import "../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../runtime/malgo/Prelude.mlg"
+
+-- Forth interpreter in Malgo.
+-- Usage: malgo eval examples/malgo/Forth.mlg < script.fs
+
+-- ── Error monad ───────────────────────────────────────────────────────────────
+--
+-- Defined locally so the interpreter is a self-contained single file. The test
+-- harness links only Builtin + Prelude + this program, not transitive imports,
+-- so Either cannot be pulled from runtime/malgo/Either.mlg here.
+
+data Either a b = Left a | Right b
+
+def bindRight : Either a b -> (b -> Either a c) -> Either a c
+def bindRight = {
+  (Left e)  _ -> Left e,
+  (Right x) f -> f x
+}
+
+-- ── Types ─────────────────────────────────────────────────────────────────────
+
+data ForthVal = FInt Int32
+
+data ForthWord
+  = Builtin (ForthState -> Either String ForthState)
+  | UserDef (List String)
+
+data Dict
+  = DictEmpty
+  | DictBind(String, ForthWord, Dict)
+
+type ForthState =
+  { stack        : List ForthVal
+  , dict         : Dict
+  , compiling    : Bool
+  , compileName  : String
+  , compileBuffer: List String
+  }
+
+-- ── Dictionary ────────────────────────────────────────────────────────────────
+
+def dictLookup : String -> Dict -> Maybe ForthWord
+def dictLookup = {
+  _ DictEmpty -> Nothing,
+  name (DictBind n w rest) ->
+    if (eqString name n)
+      { Just w }
+      { dictLookup name rest }
+}
+
+def dictInsert : String -> ForthWord -> Dict -> Dict
+def dictInsert = { name word dict -> DictBind(name, word, dict) }
+
+-- ── State helpers ─────────────────────────────────────────────────────────────
+
+def withStack : List ForthVal -> ForthState -> ForthState
+def withStack = { s state ->
+  { stack = s
+  , dict = state.dict
+  , compiling = state.compiling
+  , compileName = state.compileName
+  , compileBuffer = state.compileBuffer
+  }
+}
+
+def enterCompile : String -> ForthState -> ForthState
+def enterCompile = { name state ->
+  { stack = state.stack
+  , dict = state.dict
+  , compiling = True
+  , compileName = name
+  , compileBuffer = Nil
+  }
+}
+
+def exitCompile : ForthState -> ForthState
+def exitCompile = { state ->
+  let newWord = UserDef (reverse (state.compileBuffer));
+  let newDict = dictInsert (state.compileName) newWord (state.dict);
+  { stack = state.stack
+  , dict = newDict
+  , compiling = False
+  , compileName = ""
+  , compileBuffer = Nil
+  }
+}
+
+def appendToken : String -> ForthState -> ForthState
+def appendToken = { tok state ->
+  { stack = state.stack
+  , dict = state.dict
+  , compiling = state.compiling
+  , compileName = state.compileName
+  , compileBuffer = Cons tok (state.compileBuffer)
+  }
+}
+
+-- ── Tokenizer ─────────────────────────────────────────────────────────────────
+
+def isNewline : Char -> Bool
+def isNewline = {
+  (Char# '\n'#) -> True,
+  _ -> False
+}
+
+def notNewline : Char -> Bool
+def notNewline = { c -> not (isNewline c) }
+
+def notWhiteSpace : Char -> Bool
+def notWhiteSpace = { c -> not (isWhiteSpace c) }
+
+def isAllDigits : String -> Bool
+def isAllDigits = { s ->
+  if (eqString s "")
+    { True }
+    { if (isDigit (atString 0i64 s))
+        { isAllDigits (tailString s) }
+        { False }
+    }
+}
+
+def isNumToken : String -> Bool
+def isNumToken = { s ->
+  if (eqString s "")
+    { False }
+    { let c = atString 0i64 s;
+      if (eqChar c '-')
+        { if (eqString (tailString s) "")
+            { False }
+            { isAllDigits (tailString s) }
+        }
+        { isAllDigits s }
+    }
+}
+
+def nextToken : String -> Maybe {val: String, rest: String}
+def nextToken = { src ->
+  let src1 = dropWhileString isWhiteSpace src;
+  if (eqString src1 "")
+    { Nothing }
+    { let tok  = takeWhileString notWhiteSpace src1;
+      let rest = dropWhileString notWhiteSpace src1;
+      Just {val = tok, rest = rest}
+    }
+}
+
+def tokenize : String -> List String
+def tokenize = { src ->
+  case (nextToken src) {
+    Nothing -> Nil,
+    (Just {val = tok, rest = rest}) -> Cons tok (tokenize rest)
+  }
+}
+
+def splitLines : String -> List String
+def splitLines = { src ->
+  if (eqString src "")
+    { Nil }
+    { let line  = takeWhileString notNewline src;
+      let after = dropWhileString notNewline src;
+      let rest  = if (eqString after "") { "" } { tailString after };
+      Cons line (splitLines rest)
+    }
+}
+
+-- ── Execution (forward declarations for mutual recursion) ─────────────────────
+
+def execTokens : ForthState -> List String -> Either String ForthState
+def execWord   : ForthWord -> ForthState -> Either String ForthState
+def execToken  : ForthState -> String -> Either String ForthState
+
+-- ── Primitive helpers ─────────────────────────────────────────────────────────
+
+def showVal : ForthVal -> String
+def showVal = { (FInt n) -> toStringInt32 n }
+
+def printStackItems : List ForthVal -> ()
+def printStackItems = {
+  Nil -> (),
+  (Cons v vs) ->
+    let _ = printStackItems vs;
+    let _ = printString (showVal v);
+    newline ()
+}
+
+def applyBinArith : String -> (Int32 -> Int32 -> Int32) -> ForthState -> Either String ForthState
+def applyBinArith = { name op state ->
+  case (state.stack) {
+    (Cons (FInt b) (Cons (FInt a) rest)) ->
+      Right (withStack (Cons (FInt (op a b)) rest) state),
+    _ -> Left (appendString name ": stack underflow or type error")
+  }
+}
+
+def applyBinCmp : String -> (Int32 -> Int32 -> Bool) -> ForthState -> Either String ForthState
+def applyBinCmp = { name cmp state ->
+  case (state.stack) {
+    (Cons (FInt b) (Cons (FInt a) rest)) ->
+      let result = if (cmp a b) { 1 } { 0 };
+      Right (withStack (Cons (FInt result) rest) state),
+    _ -> Left (appendString name ": stack underflow or type error")
+  }
+}
+
+-- ── Built-in word handlers ────────────────────────────────────────────────────
+--
+-- Each handler maps a ForthState to an updated state (or an error). Handlers are
+-- installed directly into the dictionary by makeBaseDict, so a looked-up Builtin
+-- carries its handler and is invoked without a second name-based dispatch.
+
+def handleDup : ForthState -> Either String ForthState
+def handleDup = { state ->
+  case (state.stack) {
+    Nil -> Left "dup: stack underflow",
+    (Cons x _) -> Right (withStack (Cons x (state.stack)) state)
+  }
+}
+
+def handleDrop : ForthState -> Either String ForthState
+def handleDrop = { state ->
+  case (state.stack) {
+    Nil -> Left "drop: stack underflow",
+    (Cons _ xs) -> Right (withStack xs state)
+  }
+}
+
+def handleSwap : ForthState -> Either String ForthState
+def handleSwap = { state ->
+  case (state.stack) {
+    (Cons x (Cons y rest)) -> Right (withStack (Cons y (Cons x rest)) state),
+    _ -> Left "swap: stack underflow"
+  }
+}
+
+def handleOver : ForthState -> Either String ForthState
+def handleOver = { state ->
+  case (state.stack) {
+    (Cons x (Cons y rest)) -> Right (withStack (Cons y (Cons x (Cons y rest))) state),
+    _ -> Left "over: stack underflow"
+  }
+}
+
+def handleRot : ForthState -> Either String ForthState
+def handleRot = { state ->
+  case (state.stack) {
+    (Cons z (Cons y (Cons x rest))) ->
+      Right (withStack (Cons x (Cons z (Cons y rest))) state),
+    _ -> Left "rot: stack underflow"
+  }
+}
+
+def handleDiv : ForthState -> Either String ForthState
+def handleDiv = { state ->
+  case (state.stack) {
+    (Cons (FInt b) (Cons (FInt a) rest)) ->
+      if (eqInt32 b 0)
+        { Left "/: division by zero" }
+        { Right (withStack (Cons (FInt (divInt32 a b)) rest) state) },
+    _ -> Left "/: stack underflow or type error"
+  }
+}
+
+def handleMod : ForthState -> Either String ForthState
+def handleMod = { state ->
+  case (state.stack) {
+    (Cons (FInt b) (Cons (FInt a) rest)) ->
+      if (eqInt32 b 0)
+        { Left "mod: division by zero" }
+        { Right (withStack (Cons (FInt (modInt32 a b)) rest) state) },
+    _ -> Left "mod: stack underflow or type error"
+  }
+}
+
+def handleNegate : ForthState -> Either String ForthState
+def handleNegate = { state ->
+  case (state.stack) {
+    (Cons (FInt n) rest) ->
+      Right (withStack (Cons (FInt (negInt32 n)) rest) state),
+    _ -> Left "negate: stack underflow or type error"
+  }
+}
+
+def handleZeroEq : ForthState -> Either String ForthState
+def handleZeroEq = { state ->
+  case (state.stack) {
+    (Cons (FInt n) rest) ->
+      let result = if (eqInt32 n 0) { 1i32 } { 0i32 };
+      Right (withStack (Cons (FInt result) rest) state),
+    _ -> Left "0=: stack underflow"
+  }
+}
+
+def handleDot : ForthState -> Either String ForthState
+def handleDot = { state ->
+  case (state.stack) {
+    Nil -> Left ".: stack underflow",
+    (Cons v rest) ->
+      let _ = printString (showVal v);
+      let _ = newline ();
+      Right (withStack rest state)
+  }
+}
+
+def handleEmit : ForthState -> Either String ForthState
+def handleEmit = { state ->
+  case (state.stack) {
+    Nil -> Left "emit: stack underflow",
+    (Cons (FInt n) rest) ->
+      let _ = printChar (chrInt32 n);
+      Right (withStack rest state)
+  }
+}
+
+def handleCr : ForthState -> Either String ForthState
+def handleCr = { state ->
+  let _ = newline ();
+  Right state
+}
+
+def handleDotS : ForthState -> Either String ForthState
+def handleDotS = { state ->
+  let _ = printStackItems (state.stack);
+  Right state
+}
+
+def handleBye : ForthState -> Either String ForthState
+def handleBye = { state ->
+  let _ = exitSuccess ();
+  Right state
+}
+
+-- ── Interpreter ───────────────────────────────────────────────────────────────
+
+def execToken = { state tok ->
+  if (isNumToken tok)
+    { Right (withStack (Cons (FInt (parseIntString32 tok)) (state.stack)) state) }
+    { case (dictLookup tok (state.dict)) {
+        Nothing -> Left (appendString "unknown word: " tok),
+        (Just word) -> execWord word state
+      }
+    }
+}
+
+def execWord = { word state ->
+  case word {
+    (Builtin handler) -> handler state,
+    (UserDef toks) -> execTokens state toks
+  }
+}
+
+def execTokens = {
+  state Nil -> Right state,
+  state (Cons tok rest) ->
+    if (state.compiling)
+      { if (eqString tok ";")
+          { execTokens (exitCompile state) rest }
+          { execTokens (appendToken tok state) rest }
+      }
+      { if (eqString tok ":")
+          { case rest {
+              Nil -> Left "expected word name after :",
+              (Cons name restRem) ->
+                execTokens (enterCompile name state) restRem
+            }
+          }
+          { bindRight (execToken state tok) { nextState ->
+              execTokens nextState rest
+            }
+          }
+      }
+}
+
+-- ── Base dictionary ───────────────────────────────────────────────────────────
+
+def makeBaseDict : () -> Dict
+def makeBaseDict = { _ ->
+  let d = DictEmpty;
+  let d = dictInsert "dup"    (Builtin handleDup) d;
+  let d = dictInsert "drop"   (Builtin handleDrop) d;
+  let d = dictInsert "swap"   (Builtin handleSwap) d;
+  let d = dictInsert "over"   (Builtin handleOver) d;
+  let d = dictInsert "rot"    (Builtin handleRot) d;
+  let d = dictInsert "+"      (Builtin (applyBinArith "+" addInt32)) d;
+  let d = dictInsert "-"      (Builtin (applyBinArith "-" subInt32)) d;
+  let d = dictInsert "*"      (Builtin (applyBinArith "*" mulInt32)) d;
+  let d = dictInsert "/"      (Builtin handleDiv) d;
+  let d = dictInsert "mod"    (Builtin handleMod) d;
+  let d = dictInsert "negate" (Builtin handleNegate) d;
+  let d = dictInsert "="      (Builtin (applyBinCmp "=" eqInt32)) d;
+  let d = dictInsert "<"      (Builtin (applyBinCmp "<" ltInt32)) d;
+  let d = dictInsert ">"      (Builtin (applyBinCmp ">" gtInt32)) d;
+  let d = dictInsert "<="     (Builtin (applyBinCmp "<=" leInt32)) d;
+  let d = dictInsert ">="     (Builtin (applyBinCmp ">=" geInt32)) d;
+  let d = dictInsert "0="     (Builtin handleZeroEq) d;
+  let d = dictInsert "."      (Builtin handleDot) d;
+  let d = dictInsert "emit"   (Builtin handleEmit) d;
+  let d = dictInsert "cr"     (Builtin handleCr) d;
+  let d = dictInsert ".s"     (Builtin handleDotS) d;
+  let d = dictInsert "bye"    (Builtin handleBye) d;
+  d
+}
+
+-- ── Main loop ─────────────────────────────────────────────────────────────────
+
+def execLines : ForthState -> List String -> ForthState
+def execLines = {
+  state Nil -> state,
+  state (Cons line rest) ->
+    let toks = tokenize line;
+    case (execTokens state toks) {
+      (Left err) ->
+        let _ = printStderr (appendString "Error: " (appendString err "\n"));
+        execLines state rest,
+      (Right nextState) -> execLines nextState rest
+    }
+}
+
+def main = {
+  let init =
+    { stack = Nil
+    , dict = makeBaseDict ()
+    , compiling = False
+    , compileName = ""
+    , compileBuffer = Nil
+    };
+  let input = getContents ();
+  let lines = splitLines input;
+  execLines init lines;
+  ()
+}

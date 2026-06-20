@@ -12,6 +12,7 @@ import Malgo.Features (Features)
 import Malgo.Module (ModuleName (..), Workspace, parseArtifactPath, parseArtifactPathFromPwd)
 import Malgo.Parser.Core
   ( Parser,
+    anyReserved,
     captureRange,
     decimal,
     ident,
@@ -20,6 +21,7 @@ import Malgo.Parser.Core
     manyUnaryOp,
     operator,
     optional,
+    rawIdent,
     reserved,
     reservedOperator,
     skipPragma,
@@ -727,13 +729,52 @@ pStringLiteral = lexeme do
 
 -- * Utility Functions
 
--- | pVariable parses a variable.
+-- | pVariable parses a variable, greedily consuming any immediately-adjacent
+-- field access chains (no whitespace before the '.').
 --
--- > variable = ident ;
+-- This means @state.field@ parses as @Project (Var "state") "field"@ (a single
+-- atom), while @state .field@ (space before dot) leaves the projection to the
+-- outer @pApply@ loop, giving @(... state).field@.
+--
+-- Each AST node gets its own source range:
+-- * @Var@ covers only the identifier (@state@)
+-- * each @Project@ covers from the expression start to the end of the field name
+--
+-- > variable = ident ("." ident)* ;  -- where '.' must be immediately adjacent
 pVariable :: Parser es (Expr (Malgo Parse))
-pVariable = captureRange do
-  name <- ident
-  pure $ \range -> Var range name
+pVariable = do
+  startPos <- getSourcePos
+  -- Parse the identifier without consuming trailing whitespace so we can
+  -- check whether '.' follows immediately.
+  name <- notFollowedBy anyReserved *> rawIdent
+  identEndPos <- getSourcePos
+  -- Peek: is the next character '.' with no whitespace before it?
+  hasDot <- option False (True <$ lookAhead (char '.'))
+  if hasDot
+    then do
+      -- Tight field access: greedily consume '.field' chains before any whitespace.
+      -- The Var node gets identEndPos (which equals what ident-as-lexeme would give,
+      -- since no space was consumed before the '.').
+      result <- foldFields startPos (Var (Range startPos identEndPos) name)
+      space -- trailing whitespace after the whole chain
+      pure result
+    else do
+      -- No immediate dot: consume trailing whitespace now to match the range
+      -- that the old ident lexeme produced (end position after the space).
+      space
+      endPos <- getSourcePos
+      pure (Var (Range startPos endPos) name)
+  where
+    -- foldFields accumulates Project nodes; projStart is the start of the
+    -- whole expression so each Project's range spans from the original start
+    -- to the end of the latest field name.
+    foldFields projStart expr = do
+      mField <- optional (try (char '.' *> rawIdent))
+      case mField of
+        Nothing -> pure expr
+        Just field -> do
+          fieldEndPos <- getSourcePos
+          foldFields projStart (Project (Range projStart fieldEndPos) expr field)
 
 -- | pClause parses C-style clauses with optional parentheses
 -- > clause = "(" pattern ("," pattern)* ")" "->" stmts

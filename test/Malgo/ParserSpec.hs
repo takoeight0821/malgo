@@ -94,6 +94,21 @@ spec = parallel do
       it "ignores unknown pragmas while preserving parse behavior" do
         expectParsed "#c-style-apply\n#debug\ndef main = f(x, y)"
 
+    -- Regression tests for #345: '.field' binds tighter than function
+    -- application only when no whitespace precedes the dot.
+    describe "field access precedence (#345)" do
+      it "binds .field to the adjacent atom when no space precedes the dot" do
+        sexpr <- parseToSExpr "def main = f a state.dict"
+        sexpr `shouldContain` "(apply (apply f a) (project state \"dict\"))"
+
+      it "treats .field as a postfix on the whole application when a space precedes the dot" do
+        sexpr <- parseToSExpr "def main = f a state .dict"
+        sexpr `shouldContain` "(project (apply (apply f a) state) \"dict\")"
+
+      it "chains adjacent .field projections tightly" do
+        sexpr <- parseToSExpr "def main = f state.dict.head"
+        sexpr `shouldContain` "(apply f (project (project state \"dict\") \"head\"))"
+
 driveParse :: FilePath -> IO String
 driveParse srcPath = do
   src <- convertString <$> BL.readFile srcPath
@@ -120,3 +135,14 @@ expectParsed src = do
   case result of
     Left err -> expectationFailure $ errorBundlePretty err
     Right _ -> pure ()
+
+-- | Parse a source snippet and render the resulting module as an S-expression,
+-- with all runs of whitespace collapsed to single spaces so structural
+-- assertions are insensitive to the pretty-printer's line breaking.
+parseToSExpr :: String -> IO String
+parseToSExpr src = do
+  result <- runMalgoM flag do
+    parse "test.mlg" (convertString src)
+  case result of
+    Left err -> error $ errorBundlePretty err
+    Right parsed -> pure $ unwords $ words $ sShow parsed

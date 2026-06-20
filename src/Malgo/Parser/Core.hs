@@ -11,6 +11,7 @@ module Malgo.Parser.Core
     decimal,
     symbol,
     ident,
+    rawIdent,
     identStart,
     identContinue,
     reserved,
@@ -65,11 +66,16 @@ decimal = lexeme L.decimal
 symbol :: TL.Text -> Parser es ()
 symbol = void . L.symbol space
 
--- | ident consumes an identifier.
+-- | ident consumes an identifier, rejecting reserved keywords and skipping
+-- trailing whitespace.
 ident :: Parser es Text
-ident = lexeme do
-  notFollowedBy anyReserved
-  TL.toStrict . TL.pack <$> ((:) <$> identStart <*> many identContinue)
+ident = lexeme (notFollowedBy anyReserved *> rawIdent)
+
+-- | rawIdent consumes an identifier without rejecting reserved keywords or
+-- skipping trailing whitespace. Useful when adjacency to the following
+-- character matters (e.g. tight @.field@ projection).
+rawIdent :: Parser es Text
+rawIdent = TL.toStrict . TL.pack <$> ((:) <$> identStart <*> many identContinue)
 
 -- TODO: use XID_Start
 identStart :: Parser es Char

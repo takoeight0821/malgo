@@ -17,11 +17,11 @@ import Malgo.Parser.Core
     decimal,
     ident,
     identContinue,
-    identStart,
     lexeme,
     manyUnaryOp,
     operator,
     optional,
+    rawIdent,
     reserved,
     reservedOperator,
     skipPragma,
@@ -765,7 +765,6 @@ pVariable = do
       endPos <- getSourcePos
       pure (Var (Range startPos endPos) name)
   where
-    rawIdent = TL.toStrict . TL.pack <$> ((:) <$> identStart <*> many identContinue)
     -- foldFields accumulates Project nodes; projStart is the start of the
     -- whole expression so each Project's range spans from the original start
     -- to the end of the latest field name.

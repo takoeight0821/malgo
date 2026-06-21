@@ -5,6 +5,7 @@ import Malgo.ElaborateSpec qualified as ElaborateSpec
 import Malgo.FeaturesSpec qualified as FeaturesSpec
 import Malgo.ForthSpec qualified as ForthSpec
 import Malgo.InferSpec qualified as InferSpec
+import Malgo.LintSpec qualified as LintSpec
 import Malgo.ParserSpec qualified as ParserSpec
 import Malgo.Prelude (IO)
 import Malgo.Query.EngineSpec qualified as QueryEngineSpec
@@ -33,3 +34,4 @@ main = do
     describe "Malgo.Sequent.Eval" (EvalSpec.specWith builtin prelude)
     describe "Malgo.Sequent.BigStepEval" (BigStepEvalSpec.specWith builtin prelude)
     describe "Malgo.Forth" (ForthSpec.specWith builtin prelude)
+    describe "Malgo.Lint" LintSpec.spec

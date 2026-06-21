@@ -29,6 +29,7 @@ module Malgo.Syntax
     Module (..),
     toUnboxed,
     makeBindGroup,
+    freevars,
   )
 where
 

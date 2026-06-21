@@ -153,25 +153,21 @@ def tyEnvExtend = { name scheme (TyEnv entries) ->
 }
 
 def tyEnvLookup : String -> TyEnv -> Maybe Scheme
-def tyEnvLookup = { name (TyEnv entries) ->
-  case entries {
-    Nil -> Nothing,
-    (Cons (TyEnvEntry n s) rest) ->
-      if (eqString name n) { Just s } { tyEnvLookup name (TyEnv rest) }
-  }
+def tyEnvLookup = {
+  name (TyEnv Nil) -> Nothing,
+  name (TyEnv (Cons (TyEnvEntry n s) rest)) ->
+    if (eqString name n) { Just s } { tyEnvLookup name (TyEnv rest) }
 }
 
 -- Instantiate a scheme with fresh type variables
 def instantiate : InferState -> Scheme -> {state: InferState, ty: Ty}
-def instantiate = { istate (Scheme vars body) ->
-  case vars {
-    Nil -> {state = istate, ty = body},
-    (Cons v rest) ->
-      let fr = freshTyVar istate;
-      let sub2 = singleSub v (TVar fr.var);
-      let body2 = applySubTy sub2 body;
-      instantiate fr.state (Scheme rest body2)
-  }
+def instantiate = {
+  istate (Scheme Nil body) -> {state = istate, ty = body},
+  istate (Scheme (Cons v rest) body) ->
+    let fr = freshTyVar istate;
+    let sub2 = singleSub v (TVar fr.var);
+    let body2 = applySubTy sub2 body;
+    instantiate fr.state (Scheme rest body2)
 }
 
 -- Generalize: close over free vars not in env

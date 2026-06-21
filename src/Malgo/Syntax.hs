@@ -30,6 +30,7 @@ module Malgo.Syntax
     toUnboxed,
     makeBindGroup,
     freevars,
+    patBoundVars,
   )
 where
 

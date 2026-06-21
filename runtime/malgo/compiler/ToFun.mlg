@@ -82,11 +82,8 @@ def buildBranchBody = { params pats body ->
 def caseArity : List Expr -> Int32
 def caseArity = {
   Nil -> 0i32,
-  (Cons arm _) ->
-    case arm {
-      (ExArm pats _) -> length pats,
-      _ -> 0i32
-    }
+  (Cons (ExArm pats _) _) -> length pats,
+  (Cons _ _) -> 0i32
 }
 
 -- ── Core expression lowering ──────────────────────────────────────────────────
@@ -155,14 +152,11 @@ def lowerZeroArityCase : Int32 -> List Expr -> {count: Int32, expr: FunExpr}
 def lowerZeroArityCase = {
   count Nil ->
     {count = count, expr = FunLambda(Nil, FunLiteral(FunLitString "error: no arm"))},
-  count (Cons arm _) ->
-    case arm {
-      (ExArm _ body) ->
-        let br = lowerExpr count body;
-        {count = br.count, expr = FunLambda(Nil, br.expr)},
-      _ ->
-        {count = count, expr = FunLambda(Nil, FunLiteral(FunLitString "error: bad arm"))}
-    }
+  count (Cons (ExArm _ body) _) ->
+    let br = lowerExpr count body;
+    {count = br.count, expr = FunLambda(Nil, br.expr)},
+  count (Cons _ _) ->
+    {count = count, expr = FunLambda(Nil, FunLiteral(FunLitString "error: bad arm"))}
 }
 
 def lowerCaseArms : Int32 -> List String -> List Expr -> {count: Int32, branches: List FunBranch}
@@ -194,15 +188,8 @@ def lowerCaseArm = {
 def allFieldCoArms : List Expr -> Bool
 def allFieldCoArms = {
   Nil -> True,
-  (Cons arm rest) ->
-    case arm {
-      (ExCoArm segs _) ->
-        case segs {
-          (Cons (CoField _) Nil) -> allFieldCoArms rest,
-          _ -> False
-        },
-      _ -> False
-    }
+  (Cons (ExCoArm (Cons (CoField _) Nil) _) rest) -> allFieldCoArms rest,
+  (Cons _ _) -> False
 }
 
 def lowerCoCase : Int32 -> List Expr -> {count: Int32, expr: FunExpr}
@@ -220,49 +207,31 @@ def lowerCoCase = { count arms ->
 def lowerCoArmFields : Int32 -> List Expr -> {count: Int32, fields: List FunField}
 def lowerCoArmFields = {
   count Nil -> {count = count, fields = Nil},
-  count (Cons arm rest) ->
-    case arm {
-      (ExCoArm segs body) ->
-        case segs {
-          (Cons (CoField field) _) ->
-            let br = lowerExpr count body;
-            let restr = lowerCoArmFields br.count rest;
-            {count = restr.count, fields = Cons (FunField(field, br.expr)) restr.fields},
-          _ ->
-            lowerCoArmFields count rest
-        },
-      _ -> lowerCoArmFields count rest
-    }
+  count (Cons (ExCoArm (Cons (CoField field) _) body) rest) ->
+    let br = lowerExpr count body;
+    let restr = lowerCoArmFields br.count rest;
+    {count = restr.count, fields = Cons (FunField(field, br.expr)) restr.fields},
+  count (Cons _ rest) -> lowerCoArmFields count rest
 }
 
 def lowerCoApplyBranches : Int32 -> List Expr -> {count: Int32, branches: List FunBranch}
 def lowerCoApplyBranches = {
   count Nil -> {count = count, branches = Nil},
-  count (Cons arm rest) ->
-    case arm {
-      (ExCoArm segs body) ->
-        let pat = coSegsToFunPat segs;
-        let br = lowerExpr count body;
-        let restr = lowerCoApplyBranches br.count rest;
-        {count = restr.count, branches = Cons (FunBranch(pat, br.expr)) restr.branches},
-      _ ->
-        lowerCoApplyBranches count rest
-    }
+  count (Cons (ExCoArm segs body) rest) ->
+    let pat = coSegsToFunPat segs;
+    let br = lowerExpr count body;
+    let restr = lowerCoApplyBranches br.count rest;
+    {count = restr.count, branches = Cons (FunBranch(pat, br.expr)) restr.branches},
+  count (Cons _ rest) -> lowerCoApplyBranches count rest
 }
 
 def coSegsToFunPat : List CoSeg -> FunPat
 def coSegsToFunPat = {
   Nil -> FunPWild,
-  (Cons seg _) ->
-    case seg {
-      (CoApply pats) ->
-        case pats {
-          Nil -> FunPWild,
-          (Cons p Nil) -> lowerPat p,
-          ps -> FunPDestruct(FunTagTuple, mapList lowerPat ps)
-        },
-      (CoField _) -> FunPWild
-    }
+  (Cons (CoApply Nil) _) -> FunPWild,
+  (Cons (CoApply (Cons p Nil)) _) -> lowerPat p,
+  (Cons (CoApply ps) _) -> FunPDestruct(FunTagTuple, mapList lowerPat ps),
+  (Cons (CoField _) _) -> FunPWild
 }
 
 -- ── ExRecord field lowering ───────────────────────────────────────────────────

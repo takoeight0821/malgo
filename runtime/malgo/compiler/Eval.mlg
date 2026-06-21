@@ -173,16 +173,13 @@ def matchPats = { lEnv pats vals ->
 def tryArms : Env -> Env -> List Value -> List Expr -> Either String Value
 def tryArms = {
   gEnv lEnv args Nil -> Left "match failure: no arm matched",
-  gEnv lEnv args (Cons arm rest) ->
-    case arm {
-      (ExArm pats body) ->
-        case (matchPats lEnv pats args) {
-          (Left err) ->
-            if (eqString err "mismatch") { tryArms gEnv lEnv args rest } { Left err },
-          (Right newLEnv) -> eval gEnv newLEnv body
-        },
-      _ -> tryArms gEnv lEnv args rest
-    }
+  gEnv lEnv args (Cons (ExArm pats body) rest) ->
+    case (matchPats lEnv pats args) {
+      (Left err) ->
+        if (eqString err "mismatch") { tryArms gEnv lEnv args rest } { Left err },
+      (Right newLEnv) -> eval gEnv newLEnv body
+    },
+  gEnv lEnv args (Cons _ rest) -> tryArms gEnv lEnv args rest
 }
 
 -- force a thunk (0-arity VClosure): run its body with no args
@@ -206,14 +203,11 @@ def eval = {
           { Right (VBuiltin(implicitBuiltinRuntimeName name, 2i32, Nil)) }
           { Left (appendString "undefined: " name) }
     },
-  gEnv lEnv (ExLit lit) ->
-    case lit {
-      (LitInt32 n)  -> Right (VInt32 n),
-      (LitInt64 n)  -> Right (VInt64 n),
-      (LitChar c)   -> Right (VChar c),
-      (LitString s) -> Right (VString s),
-      LitUnit       -> Right VUnit
-    },
+  gEnv lEnv (ExLit (LitInt32 n))  -> Right (VInt32 n),
+  gEnv lEnv (ExLit (LitInt64 n))  -> Right (VInt64 n),
+  gEnv lEnv (ExLit (LitChar c))   -> Right (VChar c),
+  gEnv lEnv (ExLit (LitString s)) -> Right (VString s),
+  gEnv lEnv (ExLit LitUnit)       -> Right VUnit,
   gEnv lEnv (ExApp f x) ->
     bindRight (eval gEnv lEnv f) { fv ->
       bindRight (eval gEnv lEnv x) { xv ->
@@ -324,21 +318,18 @@ def matchCoApply = { lEnv pats args ->
 def matchCoPrefix : Env -> List Value -> String -> List CoSeg -> Either String {env: Env, rest: List CoSeg}
 def matchCoPrefix = {
   lEnv args field Nil -> Left "mismatch",
-  lEnv args field (Cons seg restSegs) ->
-    case seg {
-      (CoApply pats) ->
-        bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
-          matchCoPrefix lEnv2 remainingArgs field restSegs
-        },
-      (CoField name) ->
-        if (eqString name field)
-          { case args {
-              Nil -> Right {env = lEnv, rest = restSegs},
-              _ -> Left "mismatch"
-            }
-          }
-          { Left "mismatch" }
-    }
+  lEnv args field (Cons (CoApply pats) restSegs) ->
+    bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
+      matchCoPrefix lEnv2 remainingArgs field restSegs
+    },
+  lEnv args field (Cons (CoField name) restSegs) ->
+    if (eqString name field)
+      { case args {
+          Nil -> Right {env = lEnv, rest = restSegs},
+          _ -> Left "mismatch"
+        }
+      }
+      { Left "mismatch" }
 }
 
 def projectValue : Env -> Value -> String -> Either String Value
@@ -365,29 +356,23 @@ def matchCoApplyOnly = {
       Nil -> Right lEnv,
       _ -> Left "mismatch"
     },
-  lEnv args (Cons seg restSegs) ->
-    case seg {
-      (CoApply pats) ->
-        bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
-          matchCoApplyOnly lEnv2 remainingArgs restSegs
-        },
-      (CoField _) -> Left "mismatch"
-    }
+  lEnv args (Cons (CoApply pats) restSegs) ->
+    bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
+      matchCoApplyOnly lEnv2 remainingArgs restSegs
+    },
+  lEnv args (Cons (CoField _) restSegs) -> Left "mismatch"
 }
 
 def tryResolveCoApply : Env -> Env -> List Value -> List Expr -> Either String (Maybe Value)
 def tryResolveCoApply = {
   gEnv lEnv args Nil -> Right Nothing,
-  gEnv lEnv args (Cons arm restArms) ->
-    case arm {
-      (ExCoArm segs body) ->
-        case (matchCoApplyOnly lEnv args segs) {
-          (Right armEnv) ->
-            bindRight (eval gEnv armEnv body) { value -> Right (Just value) },
-          (Left _) -> tryResolveCoApply gEnv lEnv args restArms
-        },
-      _ -> tryResolveCoApply gEnv lEnv args restArms
-    }
+  gEnv lEnv args (Cons (ExCoArm segs body) restArms) ->
+    case (matchCoApplyOnly lEnv args segs) {
+      (Right armEnv) ->
+        bindRight (eval gEnv armEnv body) { value -> Right (Just value) },
+      (Left _) -> tryResolveCoApply gEnv lEnv args restArms
+    },
+  gEnv lEnv args (Cons _ restArms) -> tryResolveCoApply gEnv lEnv args restArms
 }
 
 def projectCoArms : Env -> Env -> List Value -> String -> List Expr -> List Expr -> Maybe Env -> Either String Value
@@ -402,19 +387,16 @@ def projectCoArms = { gEnv lEnv acc field arms conts contEnv ->
             (Just nextEnv) -> Right (VCoClosure(nextEnv, Nil, conts))
           }
       },
-    (Cons arm restArms) ->
-      case arm {
-        (ExCoArm segs body) ->
-          case (matchCoPrefix lEnv acc field segs) {
-            (Left _) -> projectCoArms gEnv lEnv acc field restArms conts contEnv,
-            (Right {env = armEnv, rest = restSegs}) ->
-              case restSegs {
-                Nil -> eval gEnv armEnv body,
-                _ -> projectCoArms gEnv lEnv acc field restArms (append conts (Cons (ExCoArm(restSegs, body)) Nil)) (Just armEnv)
-              }
-          },
-        _ -> projectCoArms gEnv lEnv acc field restArms conts contEnv
-      }
+    (Cons (ExCoArm segs body) restArms) ->
+      case (matchCoPrefix lEnv acc field segs) {
+        (Left _) -> projectCoArms gEnv lEnv acc field restArms conts contEnv,
+        (Right {env = armEnv, rest = restSegs}) ->
+          case restSegs {
+            Nil -> eval gEnv armEnv body,
+            _ -> projectCoArms gEnv lEnv acc field restArms (append conts (Cons (ExCoArm(restSegs, body)) Nil)) (Just armEnv)
+          }
+      },
+    (Cons _ restArms) -> projectCoArms gEnv lEnv acc field restArms conts contEnv
   }
 }
 
@@ -425,26 +407,23 @@ def projectCoArms = { gEnv lEnv acc field arms conts contEnv ->
 def evalDecls : Env -> CompilerState -> List Decl -> Either String {state: CompilerState, env: Env}
 def evalDecls = {
   gEnv state Nil -> Right {state = state, env = gEnv},
-  gEnv state (Cons d rest) ->
-    case d {
-      (DeclDef name expr) ->
-        case (envLookup name gEnv) {
-          (Just (VBuiltin _ _ _)) -> evalDecls gEnv state rest,
-          _ -> evalDecls (envExtend name (VThunk(EnvEmpty, expr)) gEnv) state rest
-        },
-      (DeclData _ _ cons) ->
-        evalDecls (addConstructors gEnv cons) state rest,
-      (DeclImport target path) ->
-        bindRight (evalImport gEnv state target path) { {state = state2, env = gEnv2} ->
-          evalDecls gEnv2 state2 rest
-        },
-      (DeclForeign fname _) ->
-        let ar = foreignArity fname;
-        evalDecls (envExtend fname (VBuiltin(fname, ar, Nil)) gEnv) state rest,
-      (DeclTypeSig _ _) -> evalDecls gEnv state rest,
-      (DeclTypeSynonym _ _ _) -> evalDecls gEnv state rest,
-      (DeclInfix _ _ _) -> evalDecls gEnv state rest
-    }
+  gEnv state (Cons (DeclDef name expr) rest) ->
+    case (envLookup name gEnv) {
+      (Just (VBuiltin _ _ _)) -> evalDecls gEnv state rest,
+      _ -> evalDecls (envExtend name (VThunk(EnvEmpty, expr)) gEnv) state rest
+    },
+  gEnv state (Cons (DeclData _ _ cons) rest) ->
+    evalDecls (addConstructors gEnv cons) state rest,
+  gEnv state (Cons (DeclImport target path) rest) ->
+    bindRight (evalImport gEnv state target path) { {state = state2, env = gEnv2} ->
+      evalDecls gEnv2 state2 rest
+    },
+  gEnv state (Cons (DeclForeign fname _) rest) ->
+    let ar = foreignArity fname;
+    evalDecls (envExtend fname (VBuiltin(fname, ar, Nil)) gEnv) state rest,
+  gEnv state (Cons (DeclTypeSig _ _) rest) -> evalDecls gEnv state rest,
+  gEnv state (Cons (DeclTypeSynonym _ _ _) rest) -> evalDecls gEnv state rest,
+  gEnv state (Cons (DeclInfix _ _ _) rest) -> evalDecls gEnv state rest
 }
 
 def startsWith : String -> String -> Bool

@@ -1182,19 +1182,16 @@ def parseOpPrecLoop = { minPrec ftable lhs ts ->
   if (isNextBinaryOp ts)
     { case ts {
         (Cons (TkOp opName) rest) ->
-          let fix = lookupFixity opName ftable;
-          case fix {
-            (FixityEntry _ prec assoc) ->
-              if (geInt32 prec minPrec)
-                { let nextMinPrec = if (assocIsRight assoc) { prec } { addInt32 prec 1i32 };
-                  bindRight (parseApp ftable rest) { {val = rhs, rest = ts3} ->
-                    bindRight (parseOpPrecLoop nextMinPrec ftable rhs ts3) { {val = rhs2, rest = ts4} ->
-                      parseOpPrecLoop minPrec ftable (ExApp(ExApp(ExVar opName, lhs), rhs2)) ts4
-                    }
-                  }
+          let (FixityEntry _ prec assoc) = lookupFixity opName ftable;
+          if (geInt32 prec minPrec)
+            { let nextMinPrec = if (assocIsRight assoc) { prec } { addInt32 prec 1i32 };
+              bindRight (parseApp ftable rest) { {val = rhs, rest = ts3} ->
+                bindRight (parseOpPrecLoop nextMinPrec ftable rhs ts3) { {val = rhs2, rest = ts4} ->
+                  parseOpPrecLoop minPrec ftable (ExApp(ExApp(ExVar opName, lhs), rhs2)) ts4
                 }
-                { Right {val = lhs, rest = ts} }
-          },
+              }
+            }
+            { Right {val = lhs, rest = ts} },
         _ -> Right {val = lhs, rest = ts}
       }
     }
@@ -1554,10 +1551,8 @@ def parseDefDecl = { ftable ts ->
   bindRight (eatDefName ts) { {val = name, rest = ts2} ->
     if (isNextOpStr ":" ts2)
       -- Type annotation: 'def name : Type' — preserve as DeclTypeSig
-      { let r = collectRawTypeStr ts2;
-        case r { {val = tyStr, rest = ts3} ->
-          Right {val = Just (DeclTypeSig(name, tyStr)), rest = ts3}
-        }
+      { let {val = tyStr, rest = ts3} = collectRawTypeStr ts2;
+        Right {val = Just (DeclTypeSig(name, tyStr)), rest = ts3}
       }
       { if (isNextOpStr "=" ts2)
           { bindRight (expectOp "=" ts2) { ts3 ->
@@ -1696,9 +1691,8 @@ def parseForeignDecl = { ts ->
   bindRight (eatIdent ts) { {val = kw, rest = ts2} ->
     if (eqString kw "import")
       { bindRight (eatIdent ts2) { {val = name, rest = ts3} ->
-          case (collectTypeStr ts3) { {val = tyStr, rest = ts4} ->
-            Right {val = DeclForeign(name, tyStr), rest = ts4}
-          }
+          let {val = tyStr, rest = ts4} = collectTypeStr ts3;
+          Right {val = DeclForeign(name, tyStr), rest = ts4}
         }
       }
       { Left (appendString "expected 'import' after 'foreign' but got " kw) }
@@ -1743,10 +1737,8 @@ def parseTypeSynonymDecl = { ts ->
   bindRight (eatIdent ts) { {val = name, rest = ts2} ->
     bindRight (parseTypeParams ts2) { {val = params, rest = ts3} ->
       bindRight (expectOp "=" ts3) { ts4 ->
-        let r = collectTypeStr ts4;
-        case r { {val = tyStr, rest = ts5} ->
-          Right {val = Just (DeclTypeSynonym(name, params, tyStr)), rest = ts5}
-        }
+        let {val = tyStr, rest = ts5} = collectTypeStr ts4;
+        Right {val = Just (DeclTypeSynonym(name, params, tyStr)), rest = ts5}
       }
     }
   }

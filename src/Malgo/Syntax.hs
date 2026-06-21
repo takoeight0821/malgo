@@ -245,11 +245,19 @@ freevars (Ann _ e _) = freevars e
 freevars (Seq _ ss) = freevarsStmts ss
   where
     freevarsStmts (Let _ x e :| ss) = freevars e <> Set.delete x (freevarsStmts' ss)
+    freevarsStmts (LetP _ pat e :| ss) = freevars e <> Set.difference (freevarsStmts' ss) (letBindVars pat)
     freevarsStmts (With _ Nothing e :| ss) = freevars e <> freevarsStmts' ss
     freevarsStmts (With _ (Just x) e :| ss) = freevars e <> Set.delete x (freevarsStmts' ss)
     freevarsStmts (NoBind _ e :| ss) = freevars e <> freevarsStmts' ss
     freevarsStmts' [] = mempty
     freevarsStmts' (s : ss) = freevarsStmts (s :| ss)
+    letBindVars (VarP _ x) = Set.singleton x
+    letBindVars (ConP _ _ ps) = foldMap letBindVars ps
+    letBindVars (TupleP _ ps) = foldMap letBindVars ps
+    letBindVars (RecordP _ kps) = foldMap (letBindVars . snd) kps
+    letBindVars (ListP _ ps) = foldMap letBindVars ps
+    letBindVars UnboxedP {} = mempty
+    letBindVars BoxedP {} = mempty
 freevars (Parens _ e) = freevars e
 freevars (Codata _ clauses) = foldMap freevarsClause clauses
   where
@@ -274,6 +282,9 @@ freevars (Goto _ value label) = freevars value <> freevars label
 
 data Stmt x
   = Let (XLet x) (XId x) (Expr x)
+  | -- | @let pat = e@ where @pat@ is not a bare variable. Desugared to a
+    -- @case@ in 'Malgo.Rename.Pass'; uninhabited after the parse phase.
+    LetP (XLetP x) (Pat x) (Expr x)
   | With (XWith x) (Maybe (XId x)) (Expr x)
   | NoBind (XNoBind x) (Expr x)
 
@@ -283,12 +294,14 @@ deriving stock instance (ForallClauseX Show x, ForallPatX Show x, ForallCoPatX S
 
 instance (ToSExpr (XId x)) => (ToSExpr (Stmt x)) where
   toSExpr (Let _ id e) = S.L ["let", toSExpr id, toSExpr e]
+  toSExpr (LetP _ pat e) = S.L ["let", toSExpr pat, toSExpr e]
   toSExpr (With _ Nothing e) = S.L ["with", toSExpr e]
   toSExpr (With _ (Just id) e) = S.L ["with", toSExpr id, toSExpr e]
   toSExpr (NoBind _ e) = S.L ["do", toSExpr e]
 
 instance (Pretty (XId x)) => Pretty (Stmt x) where
   pretty (Let _ var body) = sexpr ["let", pretty var, pretty body]
+  pretty (LetP _ pat body) = sexpr ["let", pretty pat, pretty body]
   pretty (With _ Nothing body) = sexpr ["with", pretty body]
   pretty (With _ (Just var) body) = sexpr ["with", pretty var, pretty body]
   pretty (NoBind _ body) = sexpr ["do", pretty body]

@@ -363,6 +363,9 @@ inferStmts env (Let _ name expr : rest) = do
 inferStmts env (With pos _ _ : rest) = do
   -- With statements are desugared before inference
   absurd pos
+inferStmts env (LetP pos _ _ : rest) = do
+  -- LetP statements are desugared before inference
+  absurd pos
 inferStmts env (NoBind _ expr : rest) = do
   _ <- inferExpr env expr
   inferStmts env rest

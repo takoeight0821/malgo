@@ -366,6 +366,13 @@ rnStmts (Let x v e :| s : ss) = do
   local (insertVarIdent [(v, Qualified Implicit v')]) do
     s' :| ss' <- rnStmts (s :| ss)
     pure $ Let x v' e' :| s' : ss'
+rnStmts (LetP x pat e :| s : ss) = do
+  -- desugar `let pat = e; rest` to `case e { pat -> rest }`,
+  -- i.e. apply the single-clause lambda `{ pat -> rest }` to `e`.
+  e <- rnExpr e
+  k <- rnExpr (Fn x $ Clause x (NE.singleton pat) (Seq x $ s :| ss) :| [])
+  pure $ NoBind x (Apply x k e) :| []
+rnStmts (LetP x _ _ :| []) = errorOn x "`let` binding a pattern cannot appear in the last line of the sequence expression."
 rnStmts (With x (Just v) e :| s : ss) = do
   e <- rnExpr e
   ss <- rnExpr (Fn x $ Clause x (NE.singleton (VarP x v)) (Seq x $ s :| ss) :| [])

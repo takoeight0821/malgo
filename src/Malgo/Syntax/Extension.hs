@@ -38,6 +38,7 @@ module Malgo.Syntax.Extension
     XClause,
     ForallClauseX,
     XLet,
+    XLetP,
     XWith,
     XNoBind,
     ForallStmtX,
@@ -259,6 +260,12 @@ type ForallClauseX (c :: K.Type -> Constraint) x = c (XClause x)
 type family XLet x where
   XLet (Malgo _) = SimpleX Parse
 
+-- | A @let@ binding a non-variable pattern. Parse-only: 'Malgo.Rename.Pass'
+-- desugars it to @case e { pat -> rest }@, so it is 'Void' afterwards.
+type family XLetP x where
+  XLetP (Malgo Parse) = SimpleX Parse
+  XLetP (Malgo _) = Void
+
 type family XWith x where
   XWith (Malgo Parse) = SimpleX Parse
   XWith (Malgo _) = Void
@@ -266,7 +273,7 @@ type family XWith x where
 type family XNoBind x where
   XNoBind (Malgo _) = SimpleX Parse
 
-type ForallStmtX (c :: K.Type -> Constraint) x = (c (XLet x), c (XWith x), c (XNoBind x))
+type ForallStmtX (c :: K.Type -> Constraint) x = (c (XLet x), c (XLetP x), c (XWith x), c (XNoBind x))
 
 -- * Pat Extensions
 

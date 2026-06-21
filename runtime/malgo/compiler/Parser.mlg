@@ -191,16 +191,15 @@ def isUpperFirst = { s ->
 -- True when an operator string can appear as an infix binary operator in exprs
 -- Exclude: -> : = ; .. | (these are used in declarations/arms, not exprs)
 def isBinaryOp : String -> Bool
-def isBinaryOp = { s ->
-  if (eqString s "->") { False } {
-  if (eqString s ":")  { False } {
-  if (eqString s "=")  { False } {
-  if (eqString s ";")  { False } {
-  if (eqString s "..")  { False } {
-  if (eqString s "|")  { False } {
-  if (eqString s ".")  { False } {
-    True
-  }}}}}}}
+def isBinaryOp = {
+  "->" -> False,
+  ":"  -> False,
+  "="  -> False,
+  ";"  -> False,
+  ".." -> False,
+  "|"  -> False,
+  "."  -> False,
+  _ -> True
 }
 
 -- True when the next token is a binary operator in expression context
@@ -226,17 +225,16 @@ def isAtomStart = {
 
 -- True when a string is a top-level declaration starter
 def isDeclStart : String -> Bool
-def isDeclStart = { s ->
-  if (eqString s "def")     { True } {
-  if (eqString s "data")    { True } {
-  if (eqString s "type")    { True } {
-  if (eqString s "infix")   { True } {
-  if (eqString s "infixl")  { True } {
-  if (eqString s "infixr")  { True } {
-  if (eqString s "module")  { True } {
-  if (eqString s "foreign") { True } {
-    False
-  }}}}}}}}
+def isDeclStart = {
+  "def"     -> True,
+  "data"    -> True,
+  "type"    -> True,
+  "infix"   -> True,
+  "infixl"  -> True,
+  "infixr"  -> True,
+  "module"  -> True,
+  "foreign" -> True,
+  _ -> False
 }
 
 -- Skip tokens until the start of the next declaration (or EOF)
@@ -1125,15 +1123,12 @@ def collectFixityTable = {
   Nil -> Nil,
   (Cons TkEof _) -> Nil,
   (Cons (TkIdent kw) rest) ->
-    if (eqString kw "infixl")
-      { collectFixityEntry "left" rest }
-      { if (eqString kw "infixr")
-          { collectFixityEntry "right" rest }
-          { if (eqString kw "infix")
-              { collectFixityEntry "none" rest }
-              { collectFixityTable rest }
-          }
-      },
+    case kw {
+      "infixl" -> collectFixityEntry "left" rest,
+      "infixr" -> collectFixityEntry "right" rest,
+      "infix"  -> collectFixityEntry "none" rest,
+      _ -> collectFixityTable rest
+    },
   (Cons _ rest) -> collectFixityTable rest
 }
 
@@ -1716,39 +1711,26 @@ def parseSingleDecl = { ftable ts ->
   bindRight (nextTok ts) { {val = t, rest = ts2} ->
     case t {
       (TkIdent s) ->
-        if (eqString s "def")
-          { parseDefDecl ftable ts2 }
-          { if (eqString s "data")
-              { bindRight (parseDataDecl ts2) { {val = d, rest = ts3} ->
-                  Right {val = Just d, rest = ts3}
-                }
-              }
-              { if (eqString s "module")
-                  { bindRight (parseModuleImport ts2) { {val = d, rest = ts3} ->
-                      Right {val = Just d, rest = ts3}
-                    }
-                  }
-                  { if (eqString s "foreign")
-                      { bindRight (parseForeignDecl ts2) { {val = d, rest = ts3} ->
-                          Right {val = Just d, rest = ts3}
-                        }
-                      }
-                      { if (eqString s "type")
-                        { parseTypeSynonymDecl ts2 }
-                        { if (eqString s "infix")
-                          { parseInfixDecl "none" ts2 }
-                          { if (eqString s "infixl")
-                            { parseInfixDecl "left" ts2 }
-                            { if (eqString s "infixr")
-                              { parseInfixDecl "right" ts2 }
-                              { Left (appendString "expected declaration but got identifier '" (appendString s "'")) }
-                            }
-                          }
-                        }
-                      }
-                  }
-              }
-          },
+        case s {
+          "def" -> parseDefDecl ftable ts2,
+          "data" ->
+            bindRight (parseDataDecl ts2) { {val = d, rest = ts3} ->
+              Right {val = Just d, rest = ts3}
+            },
+          "module" ->
+            bindRight (parseModuleImport ts2) { {val = d, rest = ts3} ->
+              Right {val = Just d, rest = ts3}
+            },
+          "foreign" ->
+            bindRight (parseForeignDecl ts2) { {val = d, rest = ts3} ->
+              Right {val = Just d, rest = ts3}
+            },
+          "type" -> parseTypeSynonymDecl ts2,
+          "infix" -> parseInfixDecl "none" ts2,
+          "infixl" -> parseInfixDecl "left" ts2,
+          "infixr" -> parseInfixDecl "right" ts2,
+          _ -> Left (appendString "expected declaration but got identifier '" (appendString s "'"))
+        },
       TkEof -> Left "eof",
       _ -> Left (appendString "expected declaration but got " (showToken t))
     }

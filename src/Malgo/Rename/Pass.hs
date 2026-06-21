@@ -300,8 +300,6 @@ rnPat (ListP pos xs) = buildListP <$> lookupVarName pos "Nil" <*> lookupVarName 
   where
     buildListP nilName _ [] = ConP pos nilName []
     buildListP nilName consName (x : xs) = ConP pos consName [x, buildListP nilName consName xs]
-rnPat (UnboxedP pos (String _)) = errorOn pos "String literal pattern is not supported"
-rnPat (BoxedP pos (String _)) = errorOn pos "String literal pattern is not supported"
 rnPat (UnboxedP pos x) = pure $ UnboxedP pos x
 rnPat (BoxedP pos x) = ConP pos <$> lookupBox pos x <*> pure [UnboxedP pos (coerce x)]
 

@@ -1204,6 +1204,17 @@ def parseOpPrecLoop = { minPrec ftable lhs ts ->
 
 -- Parse a sequence of statements ending in an expression.
 -- Stops at ',' or '}' without consuming them.
+-- Build a let binding. A bare variable (or wildcard) keeps the dedicated
+-- ExLet form, whose evaluation semantics (notably forcing `let _ = io`) the
+-- evaluator depends on. A non-trivial pattern desugars to applying a
+-- single-arm lambda `{ pat -> body }` to the bound value, i.e. a case.
+def mkLetExpr : Pat -> Expr -> Expr -> Expr
+def mkLetExpr = {
+  (PatVar name) val body -> ExLet(name, val, body),
+  PatWild val body -> ExLet("_", val, body),
+  pat val body -> ExApp(ExCase(Cons (ExArm(Cons pat Nil, body)) Nil), val)
+}
+
 def parseStmts : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
 def parseStmts = { ftable ts ->
   if (isNextRBrace ts)
@@ -1214,23 +1225,23 @@ def parseStmts = { ftable ts ->
         }
       }
       { if (isNextIdentStr "let" ts)
-    -- let x = e; rest
+    -- let pat = e; rest
       { bindRight (nextTok ts) { {rest = ts2} ->        -- consume 'let'
-        bindRight (eatIdent ts2) { {val = name, rest = ts3} ->
+        bindRight (parseAtomPat ts2) { {val = pat, rest = ts3} ->
           bindRight (expectOp "=" ts3) { ts4 ->
             bindRight (parseOp ftable ts4) { {val = val, rest = ts5} ->
               if (isNextOpStr ";" ts5)
                 { bindRight (nextTok ts5) { {rest = ts6} ->
                     bindRight (parseStmts ftable ts6) { {val = body, rest = ts7} ->
-                      Right {val = ExLet(name, val, body), rest = ts7}
+                      Right {val = mkLetExpr pat val body, rest = ts7}
                     }
                   }
                 }
                 { if (isNextRBrace ts5)
-                    { Right {val = ExLet(name, val, ExUnit), rest = ts5} }
+                    { Right {val = mkLetExpr pat val ExUnit, rest = ts5} }
                     { bindRight (expectOp ";" ts5) { ts6 ->
                         bindRight (parseStmts ftable ts6) { {val = body, rest = ts7} ->
-                          Right {val = ExLet(name, val, body), rest = ts7}
+                          Right {val = mkLetExpr pat val body, rest = ts7}
                         }
                       }
                     }

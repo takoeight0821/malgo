@@ -220,6 +220,16 @@ instance (ForallExpX HasRange x) => HasRange (Expr x) where
   range (Label x _ _) = range x
   range (Goto x _ _) = range x
 
+-- | Variables bound by a pattern.
+patBoundVars :: (Ord (XId x)) => Pat x -> Set (XId x)
+patBoundVars (VarP _ x) = Set.singleton x
+patBoundVars (ConP _ _ ps) = foldMap patBoundVars ps
+patBoundVars (TupleP _ ps) = foldMap patBoundVars ps
+patBoundVars (RecordP _ kps) = foldMap (patBoundVars . snd) kps
+patBoundVars (ListP _ ps) = foldMap patBoundVars ps
+patBoundVars UnboxedP {} = mempty
+patBoundVars BoxedP {} = mempty
+
 freevars :: (Ord (XId x)) => Expr x -> Set (XId x)
 freevars (Var _ v) = Set.singleton v
 freevars (Unboxed _ _) = mempty
@@ -230,14 +240,7 @@ freevars (Project _ e _) = freevars e
 freevars (Fn _ cs) = foldMap freevarsClause cs
   where
     freevarsClause :: (Ord (XId x)) => Clause x -> Set (XId x)
-    freevarsClause (Clause _ pats e) = Set.difference (freevars e) (foldMap bindVars pats)
-    bindVars (VarP _ x) = Set.singleton x
-    bindVars (ConP _ _ ps) = mconcat $ map bindVars ps
-    bindVars (TupleP _ ps) = mconcat $ map bindVars ps
-    bindVars (RecordP _ kps) = mconcat $ map (bindVars . snd) kps
-    bindVars (ListP _ ps) = mconcat $ map bindVars ps
-    bindVars UnboxedP {} = mempty
-    bindVars BoxedP {} = mempty
+    freevarsClause (Clause _ pats e) = Set.difference (freevars e) (foldMap patBoundVars pats)
 freevars (Tuple _ es) = mconcat $ map freevars es
 freevars (Record _ kvs) = mconcat $ map (freevars . snd) kvs
 freevars (List _ es) = mconcat $ map freevars es
@@ -245,19 +248,12 @@ freevars (Ann _ e _) = freevars e
 freevars (Seq _ ss) = freevarsStmts ss
   where
     freevarsStmts (Let _ x e :| ss) = freevars e <> Set.delete x (freevarsStmts' ss)
-    freevarsStmts (LetP _ pat e :| ss) = freevars e <> Set.difference (freevarsStmts' ss) (letBindVars pat)
+    freevarsStmts (LetP _ pat e :| ss) = freevars e <> Set.difference (freevarsStmts' ss) (patBoundVars pat)
     freevarsStmts (With _ Nothing e :| ss) = freevars e <> freevarsStmts' ss
     freevarsStmts (With _ (Just x) e :| ss) = freevars e <> Set.delete x (freevarsStmts' ss)
     freevarsStmts (NoBind _ e :| ss) = freevars e <> freevarsStmts' ss
     freevarsStmts' [] = mempty
     freevarsStmts' (s : ss) = freevarsStmts (s :| ss)
-    letBindVars (VarP _ x) = Set.singleton x
-    letBindVars (ConP _ _ ps) = foldMap letBindVars ps
-    letBindVars (TupleP _ ps) = foldMap letBindVars ps
-    letBindVars (RecordP _ kps) = foldMap (letBindVars . snd) kps
-    letBindVars (ListP _ ps) = foldMap letBindVars ps
-    letBindVars UnboxedP {} = mempty
-    letBindVars BoxedP {} = mempty
 freevars (Parens _ e) = freevars e
 freevars (Codata _ clauses) = foldMap freevarsClause clauses
   where
@@ -267,14 +263,6 @@ freevars (Codata _ clauses) = foldMap freevarsClause clauses
     copatBoundVars (HoleP _) = mempty
     copatBoundVars (ApplyP _ cp pat) = copatBoundVars cp <> patBoundVars pat
     copatBoundVars (ProjectP _ cp _) = copatBoundVars cp
-    patBoundVars :: (Ord (XId x)) => Pat x -> Set (XId x)
-    patBoundVars (VarP _ x) = Set.singleton x
-    patBoundVars (ConP _ _ ps) = foldMap patBoundVars ps
-    patBoundVars (TupleP _ ps) = foldMap patBoundVars ps
-    patBoundVars (RecordP _ kps) = foldMap (patBoundVars . snd) kps
-    patBoundVars (ListP _ ps) = foldMap patBoundVars ps
-    patBoundVars UnboxedP {} = mempty
-    patBoundVars BoxedP {} = mempty
 freevars (Label _ name body) = Set.delete name (freevars body)
 freevars (Goto _ value label) = freevars value <> freevars label
 

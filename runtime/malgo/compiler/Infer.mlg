@@ -121,24 +121,20 @@ def unifyList = { sub ts1 ts2 ->
 -- ──────────────────────────────────────────────────────────────────────
 
 def solveConstraints : TySub -> List Constraint -> Either String TySub
-def solveConstraints = { sub constraints ->
-  case constraints {
-    Nil -> Right sub,
-    (Cons c rest) ->
-      bindRight (solveConstraint sub c) { sub2 ->
-        solveConstraints sub2 rest
-      }
-  }
+def solveConstraints = {
+  sub Nil -> Right sub,
+  sub (Cons c rest) ->
+    bindRight (solveConstraint sub c) { sub2 ->
+      solveConstraints sub2 rest
+    }
 }
 
 def solveConstraint : TySub -> Constraint -> Either String TySub
-def solveConstraint = { sub c ->
-  case c {
-    (CtEq t1 t2) -> unify sub t1 t2,
-    (CtField _ _ _) ->
-      -- TODO: proper row unification
-      Right sub
-  }
+def solveConstraint = {
+  sub (CtEq t1 t2) -> unify sub t1 t2,
+  sub (CtField _ _ _) ->
+    -- TODO: proper row unification
+    Right sub
 }
 
 -- ──────────────────────────────────────────────────────────────────────

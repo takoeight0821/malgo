@@ -1072,11 +1072,9 @@ def parseCStyleCallArgsRest = { ftable ts ->
 }
 
 def applyExprArgs : Expr -> List Expr -> Expr
-def applyExprArgs = { f args ->
-  case args {
-    Nil -> f,
-    (Cons x xs) -> applyExprArgs (ExApp(f, x)) xs
-  }
+def applyExprArgs = {
+  f Nil -> f,
+  f (Cons x xs) -> applyExprArgs (ExApp(f, x)) xs
 }
 
 -- ────────────────────────────────────────────────────────────────────────────
@@ -1107,14 +1105,12 @@ def defaultFixityTable =
   ]
 
 def lookupFixity : String -> List FixityEntry -> FixityEntry
-def lookupFixity = { op entries ->
-  case entries {
-    Nil -> FixityEntry(op, 9i32, AssocLeft),
-    (Cons (FixityEntry name prec assoc) rest) ->
-      if (eqString op name)
-        { FixityEntry(name, prec, assoc) }
-        { lookupFixity op rest }
-  }
+def lookupFixity = {
+  op Nil -> FixityEntry(op, 9i32, AssocLeft),
+  op (Cons (FixityEntry name prec assoc) rest) ->
+    if (eqString op name)
+      { FixityEntry(name, prec, assoc) }
+      { lookupFixity op rest }
 }
 
 def assocIsRight : Assoc -> Bool
@@ -1125,22 +1121,20 @@ def assocIsRight = {
 
 -- Collect fixity declarations from the token stream (pre-pass)
 def collectFixityTable : List Token -> List FixityEntry
-def collectFixityTable = { ts ->
-  case ts {
-    Nil -> Nil,
-    (Cons TkEof _) -> Nil,
-    (Cons (TkIdent kw) rest) ->
-      if (eqString kw "infixl")
-        { collectFixityEntry "left" rest }
-        { if (eqString kw "infixr")
-            { collectFixityEntry "right" rest }
-            { if (eqString kw "infix")
-                { collectFixityEntry "none" rest }
-                { collectFixityTable rest }
-            }
-        },
-    (Cons _ rest) -> collectFixityTable rest
-  }
+def collectFixityTable = {
+  Nil -> Nil,
+  (Cons TkEof _) -> Nil,
+  (Cons (TkIdent kw) rest) ->
+    if (eqString kw "infixl")
+      { collectFixityEntry "left" rest }
+      { if (eqString kw "infixr")
+          { collectFixityEntry "right" rest }
+          { if (eqString kw "infix")
+              { collectFixityEntry "none" rest }
+              { collectFixityTable rest }
+          }
+      },
+  (Cons _ rest) -> collectFixityTable rest
 }
 
 def collectFixityEntry : String -> List Token -> List FixityEntry
@@ -1173,12 +1167,10 @@ def filterOutFixity = { defaults user ->
 }
 
 def fixityTableHas : String -> List FixityEntry -> Bool
-def fixityTableHas = { name entries ->
-  case entries {
-    Nil -> False,
-    (Cons (FixityEntry n _ _) rest) ->
-      if (eqString name n) { True } { fixityTableHas name rest }
-  }
+def fixityTableHas = {
+  name Nil -> False,
+  name (Cons (FixityEntry n _ _) rest) ->
+    if (eqString name n) { True } { fixityTableHas name rest }
 }
 
 -- Parse operator expression using Pratt parsing with precedence
@@ -1534,17 +1526,15 @@ def collectTypeStr = { ts ->
 }
 
 def collectTypeStrAcc : String -> List Token -> {val: String, rest: List Token}
-def collectTypeStrAcc = { acc ts ->
-  case ts {
-    Nil -> {val = acc, rest = Nil},
-    (Cons TkEof rest) -> {val = acc, rest = Cons TkEof rest},
-    (Cons (TkIdent s) rest) ->
-      if (isDeclStart s)
-        { {val = acc, rest = Cons (TkIdent s) rest} }
-        { collectTypeStrAcc (appendString acc (appendString " " s)) rest },
-    (Cons t rest) ->
-      collectTypeStrAcc (appendString acc (appendString " " (showToken t))) rest
-  }
+def collectTypeStrAcc = {
+  acc Nil -> {val = acc, rest = Nil},
+  acc (Cons TkEof rest) -> {val = acc, rest = Cons TkEof rest},
+  acc (Cons (TkIdent s) rest) ->
+    if (isDeclStart s)
+      { {val = acc, rest = Cons (TkIdent s) rest} }
+      { collectTypeStrAcc (appendString acc (appendString " " s)) rest },
+  acc (Cons t rest) ->
+    collectTypeStrAcc (appendString acc (appendString " " (showToken t))) rest
 }
 
 -- Collect tokens as a raw type string until the next top-level declaration boundary.
@@ -1625,14 +1615,12 @@ def parseModuleImport = { ts ->
 }
 
 def parseImportTarget : List Token -> Either String {val: ImportTarget, rest: List Token}
-def parseImportTarget = { ts ->
-  case ts {
-    (Cons TkLBrace rest) ->
-      parseBraceImportTarget rest,
-    (Cons (TkIdent alias) rest) ->
-      Right {val = ImportQualified alias, rest = rest},
-    _ -> Left "expected module import target"
-  }
+def parseImportTarget = {
+  (Cons TkLBrace rest) ->
+    parseBraceImportTarget rest,
+  (Cons (TkIdent alias) rest) ->
+    Right {val = ImportQualified alias, rest = rest},
+  _ -> Left "expected module import target"
 }
 
 def parseBraceImportTarget : List Token -> Either String {val: ImportTarget, rest: List Token}
@@ -1671,12 +1659,10 @@ def parseImportNames = { ts ->
 }
 
 def parseImportName : List Token -> Either String {val: ImportName, rest: List Token}
-def parseImportName = { ts ->
-  case ts {
-    (Cons (TkIdent name) rest) -> Right {val = ImportName name, rest = rest},
-    (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest))) -> Right {val = ImportName op, rest = rest},
-    _ -> Left "expected import name"
-  }
+def parseImportName = {
+  (Cons (TkIdent name) rest) -> Right {val = ImportName name, rest = rest},
+  (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest))) -> Right {val = ImportName op, rest = rest},
+  _ -> Left "expected import name"
 }
 
 def skipToRBrace : List Token -> Either String (List Token)

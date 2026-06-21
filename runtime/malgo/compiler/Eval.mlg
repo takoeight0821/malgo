@@ -109,14 +109,12 @@ def matchPat = { lEnv pat val ->
 }
 
 def lookupValueField : String -> List ValueField -> Maybe Value
-def lookupValueField = { name fields ->
-  case fields {
-    Nil -> Nothing,
-    (Cons (ValueField fieldName value) rest) ->
-      if (eqString name fieldName)
-        { Just value }
-        { lookupValueField name rest }
-  }
+def lookupValueField = {
+  name Nil -> Nothing,
+  name (Cons (ValueField fieldName value) rest) ->
+    if (eqString name fieldName)
+      { Just value }
+      { lookupValueField name rest }
 }
 
 def matchRecordFields : Env -> List PatField -> List ValueField -> Either String Env
@@ -179,20 +177,18 @@ def matchPats = { lEnv pats vals ->
 
 -- tryArms: try each arm in order, gEnv threaded for recursive lookups
 def tryArms : Env -> Env -> List Value -> List Expr -> Either String Value
-def tryArms = { gEnv lEnv args arms ->
-  case arms {
-    Nil -> Left "match failure: no arm matched",
-    (Cons arm rest) ->
-      case arm {
-        (ExArm pats body) ->
-          case (matchPats lEnv pats args) {
-            (Left err) ->
-              if (eqString err "mismatch") { tryArms gEnv lEnv args rest } { Left err },
-            (Right newLEnv) -> eval gEnv newLEnv body
-          },
-        _ -> tryArms gEnv lEnv args rest
-      }
-  }
+def tryArms = {
+  gEnv lEnv args Nil -> Left "match failure: no arm matched",
+  gEnv lEnv args (Cons arm rest) ->
+    case arm {
+      (ExArm pats body) ->
+        case (matchPats lEnv pats args) {
+          (Left err) ->
+            if (eqString err "mismatch") { tryArms gEnv lEnv args rest } { Left err },
+          (Right newLEnv) -> eval gEnv newLEnv body
+        },
+      _ -> tryArms gEnv lEnv args rest
+    }
 }
 
 -- force a thunk (0-arity VClosure): run its body with no args
@@ -207,73 +203,67 @@ def forceThunk = { gEnv v ->
 -- ─── Core evaluator ─────────────────────────────────────────────────────────
 
 def eval : Env -> Env -> Expr -> Either String Value
-def eval = { gEnv lEnv expr ->
-  case expr {
-    (ExVar name) ->
-      case (envLookupBoth name lEnv gEnv) {
-        (Just v) -> forceValue gEnv v,
-        Nothing  ->
-          if (isImplicitBuiltin name)
-            { Right (VBuiltin(implicitBuiltinRuntimeName name, 2i32, Nil)) }
-            { Left (appendString "undefined: " name) }
-      },
-    (ExLit lit) ->
-      case lit {
-        (LitInt32 n)  -> Right (VInt32 n),
-        (LitInt64 n)  -> Right (VInt64 n),
-        (LitChar c)   -> Right (VChar c),
-        (LitString s) -> Right (VString s),
-        LitUnit       -> Right VUnit
-      },
-    (ExApp f x) ->
-      bindRight (eval gEnv lEnv f) { fv ->
-        bindRight (eval gEnv lEnv x) { xv ->
-          apply gEnv fv xv
-        }
-      },
-    (ExArm _ _) -> Left "unexpected bare arm",
-    -- Case lambda: arms evaluated at call time using the current gEnv
-    (ExCase arms) -> Right (VClosure(lEnv, Nil, arms)),
-    (ExCoArm _ _) -> Left "unexpected bare copattern arm",
-    (ExCoCase arms) -> Right (VCoClosure(lEnv, Nil, arms)),
-    (ExField target field) ->
-      bindRight (eval gEnv lEnv target) { targetValue ->
-        bindRight (forceValue gEnv targetValue) { forcedTarget ->
-          projectValue gEnv forcedTarget field
-        }
-      },
-    (ExRecord fields) ->
-      bindRight (evalExprFields gEnv lEnv fields) { values -> Right (VRecord values) },
-    (ExLet name valE body) ->
-      if (eqString name "_")
-        { bindRight (eval gEnv lEnv valE) { _ -> eval gEnv lEnv body } }
-        { eval gEnv (envExtend name (VThunk(lEnv, valE)) lEnv) body },
-    (ExTuple es) ->
-      bindRight (evalList gEnv lEnv es) { vs -> Right (VTuple vs) },
-    ExUnit -> Right VUnit
-  }
+def eval = {
+  gEnv lEnv (ExVar name) ->
+    case (envLookupBoth name lEnv gEnv) {
+      (Just v) -> forceValue gEnv v,
+      Nothing  ->
+        if (isImplicitBuiltin name)
+          { Right (VBuiltin(implicitBuiltinRuntimeName name, 2i32, Nil)) }
+          { Left (appendString "undefined: " name) }
+    },
+  gEnv lEnv (ExLit lit) ->
+    case lit {
+      (LitInt32 n)  -> Right (VInt32 n),
+      (LitInt64 n)  -> Right (VInt64 n),
+      (LitChar c)   -> Right (VChar c),
+      (LitString s) -> Right (VString s),
+      LitUnit       -> Right VUnit
+    },
+  gEnv lEnv (ExApp f x) ->
+    bindRight (eval gEnv lEnv f) { fv ->
+      bindRight (eval gEnv lEnv x) { xv ->
+        apply gEnv fv xv
+      }
+    },
+  gEnv lEnv (ExArm _ _) -> Left "unexpected bare arm",
+  -- Case lambda: arms evaluated at call time using the current gEnv
+  gEnv lEnv (ExCase arms) -> Right (VClosure(lEnv, Nil, arms)),
+  gEnv lEnv (ExCoArm _ _) -> Left "unexpected bare copattern arm",
+  gEnv lEnv (ExCoCase arms) -> Right (VCoClosure(lEnv, Nil, arms)),
+  gEnv lEnv (ExField target field) ->
+    bindRight (eval gEnv lEnv target) { targetValue ->
+      bindRight (forceValue gEnv targetValue) { forcedTarget ->
+        projectValue gEnv forcedTarget field
+      }
+    },
+  gEnv lEnv (ExRecord fields) ->
+    bindRight (evalExprFields gEnv lEnv fields) { values -> Right (VRecord values) },
+  gEnv lEnv (ExLet name valE body) ->
+    if (eqString name "_")
+      { bindRight (eval gEnv lEnv valE) { _ -> eval gEnv lEnv body } }
+      { eval gEnv (envExtend name (VThunk(lEnv, valE)) lEnv) body },
+  gEnv lEnv (ExTuple es) ->
+    bindRight (evalList gEnv lEnv es) { vs -> Right (VTuple vs) },
+  gEnv lEnv ExUnit -> Right VUnit
 }
 
 def evalList : Env -> Env -> List Expr -> Either String (List Value)
-def evalList = { gEnv lEnv es ->
-  case es {
-    Nil -> Right Nil,
-    (Cons e rest) ->
-      bindRight (eval gEnv lEnv e) { v ->
-        bindRight (evalList gEnv lEnv rest) { vs -> Right (Cons v vs) }
-      }
-  }
+def evalList = {
+  gEnv lEnv Nil -> Right Nil,
+  gEnv lEnv (Cons e rest) ->
+    bindRight (eval gEnv lEnv e) { v ->
+      bindRight (evalList gEnv lEnv rest) { vs -> Right (Cons v vs) }
+    }
 }
 
 def evalExprFields : Env -> Env -> List ExprField -> Either String (List ValueField)
-def evalExprFields = { gEnv lEnv fields ->
-  case fields {
-    Nil -> Right Nil,
-    (Cons (ExprField name expr) rest) ->
-      bindRight (evalExprFields gEnv lEnv rest) { values ->
-        Right (Cons (ValueField(name, VThunk(lEnv, expr))) values)
-      }
-  }
+def evalExprFields = {
+  gEnv lEnv Nil -> Right Nil,
+  gEnv lEnv (Cons (ExprField name expr) rest) ->
+    bindRight (evalExprFields gEnv lEnv rest) { values ->
+      Right (Cons (ValueField(name, VThunk(lEnv, expr))) values)
+    }
 }
 
 -- apply: apply fn to arg
@@ -296,11 +286,9 @@ def apply = { gEnv fn arg ->
         },
         (VCoClosure cLEnv acc arms) ->
           let newAcc = append acc (Cons arg Nil);
-          bindRight (tryResolveCoApply gEnv cLEnv newAcc arms) { resolved ->
-            case resolved {
-              Nothing -> Right (VCoClosure(cLEnv, newAcc, arms)),
-              (Just value) -> Right value
-            }
+          bindRight (tryResolveCoApply gEnv cLEnv newAcc arms) {
+            Nothing -> Right (VCoClosure(cLEnv, newAcc, arms)),
+            (Just value) -> Right value
           },
     (VCon name arity acc) ->
       if (geInt32 (length acc) arity)
@@ -340,25 +328,23 @@ def matchCoApply = { lEnv pats args ->
 }
 
 def matchCoPrefix : Env -> List Value -> String -> List CoSeg -> Either String {env: Env, rest: List CoSeg}
-def matchCoPrefix = { lEnv args field segs ->
-  case segs {
-    Nil -> Left "mismatch",
-    (Cons seg restSegs) ->
-      case seg {
-        (CoApply pats) ->
-          bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
-            matchCoPrefix lEnv2 remainingArgs field restSegs
-          },
-        (CoField name) ->
-          if (eqString name field)
-            { case args {
-                Nil -> Right {env = lEnv, rest = restSegs},
-                _ -> Left "mismatch"
-              }
+def matchCoPrefix = {
+  lEnv args field Nil -> Left "mismatch",
+  lEnv args field (Cons seg restSegs) ->
+    case seg {
+      (CoApply pats) ->
+        bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
+          matchCoPrefix lEnv2 remainingArgs field restSegs
+        },
+      (CoField name) ->
+        if (eqString name field)
+          { case args {
+              Nil -> Right {env = lEnv, rest = restSegs},
+              _ -> Left "mismatch"
             }
-            { Left "mismatch" }
-      }
-  }
+          }
+          { Left "mismatch" }
+    }
 }
 
 def projectValue : Env -> Value -> String -> Either String Value
@@ -379,39 +365,35 @@ def projectValue = { gEnv value field ->
 }
 
 def matchCoApplyOnly : Env -> List Value -> List CoSeg -> Either String Env
-def matchCoApplyOnly = { lEnv args segs ->
-  case segs {
-    Nil ->
-      case args {
-        Nil -> Right lEnv,
-        _ -> Left "mismatch"
-      },
-    (Cons seg restSegs) ->
-      case seg {
-        (CoApply pats) ->
-          bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
-            matchCoApplyOnly lEnv2 remainingArgs restSegs
-          },
-        (CoField _) -> Left "mismatch"
-      }
-  }
+def matchCoApplyOnly = {
+  lEnv args Nil ->
+    case args {
+      Nil -> Right lEnv,
+      _ -> Left "mismatch"
+    },
+  lEnv args (Cons seg restSegs) ->
+    case seg {
+      (CoApply pats) ->
+        bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
+          matchCoApplyOnly lEnv2 remainingArgs restSegs
+        },
+      (CoField _) -> Left "mismatch"
+    }
 }
 
 def tryResolveCoApply : Env -> Env -> List Value -> List Expr -> Either String (Maybe Value)
-def tryResolveCoApply = { gEnv lEnv args arms ->
-  case arms {
-    Nil -> Right Nothing,
-    (Cons arm restArms) ->
-      case arm {
-        (ExCoArm segs body) ->
-          case (matchCoApplyOnly lEnv args segs) {
-            (Right armEnv) ->
-              bindRight (eval gEnv armEnv body) { value -> Right (Just value) },
-            (Left _) -> tryResolveCoApply gEnv lEnv args restArms
-          },
-        _ -> tryResolveCoApply gEnv lEnv args restArms
-      }
-  }
+def tryResolveCoApply = {
+  gEnv lEnv args Nil -> Right Nothing,
+  gEnv lEnv args (Cons arm restArms) ->
+    case arm {
+      (ExCoArm segs body) ->
+        case (matchCoApplyOnly lEnv args segs) {
+          (Right armEnv) ->
+            bindRight (eval gEnv armEnv body) { value -> Right (Just value) },
+          (Left _) -> tryResolveCoApply gEnv lEnv args restArms
+        },
+      _ -> tryResolveCoApply gEnv lEnv args restArms
+    }
 }
 
 def projectCoArms : Env -> Env -> List Value -> String -> List Expr -> List Expr -> Maybe Env -> Either String Value
@@ -447,30 +429,28 @@ def projectCoArms = { gEnv lEnv acc field arms conts contEnv ->
 -- Process declarations without using bindRight for simple cases, reducing overhead.
 -- Only DeclImport uses bindRight since it's the only decl that can fail or update state.
 def evalDecls : Env -> CompilerState -> List Decl -> Either String {state: CompilerState, env: Env}
-def evalDecls = { gEnv state decls ->
-  case decls {
-    Nil -> Right {state = state, env = gEnv},
-    (Cons d rest) ->
-      case d {
-        (DeclDef name expr) ->
-          case (envLookup name gEnv) {
-            (Just (VBuiltin _ _ _)) -> evalDecls gEnv state rest,
-            _ -> evalDecls (envExtend name (VThunk(EnvEmpty, expr)) gEnv) state rest
-          },
-        (DeclData _ _ cons) ->
-          evalDecls (addConstructors gEnv cons) state rest,
-        (DeclImport target path) ->
-          bindRight (evalImport gEnv state target path) { {state = state2, env = gEnv2} ->
-            evalDecls gEnv2 state2 rest
-          },
-        (DeclForeign fname _) ->
-          let ar = foreignArity fname;
-          evalDecls (envExtend fname (VBuiltin(fname, ar, Nil)) gEnv) state rest,
-        (DeclTypeSig _ _) -> evalDecls gEnv state rest,
-        (DeclTypeSynonym _ _ _) -> evalDecls gEnv state rest,
-        (DeclInfix _ _ _) -> evalDecls gEnv state rest
-      }
-  }
+def evalDecls = {
+  gEnv state Nil -> Right {state = state, env = gEnv},
+  gEnv state (Cons d rest) ->
+    case d {
+      (DeclDef name expr) ->
+        case (envLookup name gEnv) {
+          (Just (VBuiltin _ _ _)) -> evalDecls gEnv state rest,
+          _ -> evalDecls (envExtend name (VThunk(EnvEmpty, expr)) gEnv) state rest
+        },
+      (DeclData _ _ cons) ->
+        evalDecls (addConstructors gEnv cons) state rest,
+      (DeclImport target path) ->
+        bindRight (evalImport gEnv state target path) { {state = state2, env = gEnv2} ->
+          evalDecls gEnv2 state2 rest
+        },
+      (DeclForeign fname _) ->
+        let ar = foreignArity fname;
+        evalDecls (envExtend fname (VBuiltin(fname, ar, Nil)) gEnv) state rest,
+      (DeclTypeSig _ _) -> evalDecls gEnv state rest,
+      (DeclTypeSynonym _ _ _) -> evalDecls gEnv state rest,
+      (DeclInfix _ _ _) -> evalDecls gEnv state rest
+    }
 }
 
 def startsWith : String -> String -> Bool
@@ -634,25 +614,21 @@ def stateCurrentDir : CompilerState -> String
 def stateCurrentDir = { (CompilerState _ _ dir) -> dir }
 
 def cacheLookup : String -> List ModuleCacheEntry -> Maybe LoadStatus
-def cacheLookup = { path cache ->
-  case cache {
-    Nil -> Nothing,
-    (Cons (ModuleCacheEntry p status) rest) ->
-      if (eqString p path)
-        { Just status }
-        { cacheLookup path rest }
-  }
+def cacheLookup = {
+  path Nil -> Nothing,
+  path (Cons (ModuleCacheEntry p status) rest) ->
+    if (eqString p path)
+      { Just status }
+      { cacheLookup path rest }
 }
 
 def cacheInsert : String -> LoadStatus -> List ModuleCacheEntry -> List ModuleCacheEntry
-def cacheInsert = { path status cache ->
-  case cache {
-    Nil -> Cons (ModuleCacheEntry(path, status)) Nil,
-    (Cons (ModuleCacheEntry p s) rest) ->
-      if (eqString p path)
-        { Cons (ModuleCacheEntry(path, status)) rest }
-        { Cons (ModuleCacheEntry(p, s)) (cacheInsert path status rest) }
-  }
+def cacheInsert = {
+  path status Nil -> Cons (ModuleCacheEntry(path, status)) Nil,
+  path status (Cons (ModuleCacheEntry p s) rest) ->
+    if (eqString p path)
+      { Cons (ModuleCacheEntry(path, status)) rest }
+      { Cons (ModuleCacheEntry(p, s)) (cacheInsert path status rest) }
 }
 
 def withLoadingModule : String -> CompilerState -> CompilerState
@@ -776,66 +752,52 @@ def extendFromModuleEnv = { target callerEnv moduleEnv ->
 }
 
 def addConstructors : Env -> List ConDecl -> Env
-def addConstructors = { gEnv cons ->
-  case cons {
-    Nil -> gEnv,
-    (Cons (ConDecl name arity) rest) ->
-      addConstructors (envExtend name (VCon(name, arity, Nil)) gEnv) rest
-  }
+def addConstructors = {
+  gEnv Nil -> gEnv,
+  gEnv (Cons (ConDecl name arity) rest) ->
+    addConstructors (envExtend name (VCon(name, arity, Nil)) gEnv) rest
 }
 
 -- ─── Built-in implementations ────────────────────────────────────────────────
 
 def applyStr2 : (String -> String -> String) -> String -> List Value -> Either String Value
-def applyStr2 = { f fname args ->
-  case args {
-    (Cons (VString a) (Cons (VString b) Nil)) -> Right (VString (f a b)),
-    _ -> Left (appendString fname ": type error")
-  }
+def applyStr2 = {
+  f fname (Cons (VString a) (Cons (VString b) Nil)) -> Right (VString (f a b)),
+  f fname _ -> Left (appendString fname ": type error")
 }
 
 def applyInt2 : (Int32 -> Int32 -> Int32) -> String -> List Value -> Either String Value
-def applyInt2 = { f fname args ->
-  case args {
-    (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (VInt32 (f a b)),
-    _ -> Left (appendString fname ": type error")
-  }
+def applyInt2 = {
+  f fname (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (VInt32 (f a b)),
+  f fname _ -> Left (appendString fname ": type error")
 }
 
 def applyIntCmp : (Int32 -> Int32 -> Bool) -> String -> List Value -> Either String Value
-def applyIntCmp = { f fname args ->
-  case args {
-    (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (f a b)),
-    _ -> Left (appendString fname ": type error")
-  }
+def applyIntCmp = {
+  f fname (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (f a b)),
+  f fname _ -> Left (appendString fname ": type error")
 }
 
 def applyInt64_2 : (Int64 -> Int64 -> Int64) -> String -> List Value -> Either String Value
-def applyInt64_2 = { f fname args ->
-  case args {
-    (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (VInt64 (f a b)),
-    _ -> Left (appendString fname ": type error")
-  }
+def applyInt64_2 = {
+  f fname (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (VInt64 (f a b)),
+  f fname _ -> Left (appendString fname ": type error")
 }
 
 def applyInt64Cmp : (Int64 -> Int64 -> Bool) -> String -> List Value -> Either String Value
-def applyInt64Cmp = { f fname args ->
-  case args {
-    (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (f a b)),
-    _ -> Left (appendString fname ": type error")
-  }
+def applyInt64Cmp = {
+  f fname (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (f a b)),
+  f fname _ -> Left (appendString fname ": type error")
 }
 
 def printStringValue : String -> List Value -> Either String Value
-def printStringValue = { fname args ->
-  case args {
-    (Cons (VString s) Nil) -> let _ = printString s; Right VUnit,
-    (Cons (VCon cname _ (Cons (VString s) Nil)) Nil) ->
-      if (eqString cname "String#")
-        { let _ = printString s; Right VUnit }
-        { Left (appendString fname ": type error") },
-    _ -> Left (appendString fname ": type error")
-  }
+def printStringValue = {
+  fname (Cons (VString s) Nil) -> let _ = printString s; Right VUnit,
+  fname (Cons (VCon cname _ (Cons (VString s) Nil)) Nil) ->
+    if (eqString cname "String#")
+      { let _ = printString s; Right VUnit }
+      { Left (appendString fname ": type error") },
+  fname _ -> Left (appendString fname ": type error")
 }
 
 def printStringLineValue : String -> List Value -> Either String Value
@@ -847,19 +809,15 @@ def printStringLineValue = { fname args ->
 }
 
 def printInt32Value : String -> List Value -> Either String Value
-def printInt32Value = { fname args ->
-  case args {
-    (Cons (VInt32 number) Nil) -> let _ = printString (toStringInt32 number); Right VUnit,
-    _ -> Left (appendString fname ": type error")
-  }
+def printInt32Value = {
+  fname (Cons (VInt32 number) Nil) -> let _ = printString (toStringInt32 number); Right VUnit,
+  fname _ -> Left (appendString fname ": type error")
 }
 
 def printInt64Value : String -> List Value -> Either String Value
-def printInt64Value = { fname args ->
-  case args {
-    (Cons (VInt64 number) Nil) -> let _ = printString (toStringInt64 number); Right VUnit,
-    _ -> Left (appendString fname ": type error")
-  }
+def printInt64Value = {
+  fname (Cons (VInt64 number) Nil) -> let _ = printString (toStringInt64 number); Right VUnit,
+  fname _ -> Left (appendString fname ": type error")
 }
 
 def doubleAddString : String -> String -> String

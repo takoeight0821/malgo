@@ -130,36 +130,32 @@ def removeSub = { v (TySub entries) ->
 
 -- Free type variables in a type
 def freeTyVars : Ty -> List TyVar
-def freeTyVars = { ty ->
-  case ty {
-    (TVar v) -> Cons v Nil,
-    (TCon _) -> Nil,
-    (TApp t1 t2) -> append (freeTyVars t1) (freeTyVars t2),
-    (TArr t1 t2) -> append (freeTyVars t1) (freeTyVars t2),
-    (TRecord fields) -> concatMapTy freeTyVarsField fields,
-    (TVariant fields) -> concatMapTy freeTyVarsField fields,
-    (TTuple ts) -> concatMapTy freeTyVars ts,
-    (TForall v body) -> filter { u -> not (eqTyVar v u) } (freeTyVars body),
-    (TMu v body) -> filter { u -> not (eqTyVar v u) } (freeTyVars body),
-    TBottom -> Nil,
-    (TRow fields rest) ->
-      let fieldVars = concatMapTy freeTyVarsField fields;
-      case rest {
-        Nothing -> fieldVars,
-        (Just rv) -> append fieldVars (Cons rv Nil)
-      }
-  }
+def freeTyVars = {
+  (TVar v) -> Cons v Nil,
+  (TCon _) -> Nil,
+  (TApp t1 t2) -> append (freeTyVars t1) (freeTyVars t2),
+  (TArr t1 t2) -> append (freeTyVars t1) (freeTyVars t2),
+  (TRecord fields) -> concatMapTy freeTyVarsField fields,
+  (TVariant fields) -> concatMapTy freeTyVarsField fields,
+  (TTuple ts) -> concatMapTy freeTyVars ts,
+  (TForall v body) -> filter { u -> not (eqTyVar v u) } (freeTyVars body),
+  (TMu v body) -> filter { u -> not (eqTyVar v u) } (freeTyVars body),
+  TBottom -> Nil,
+  (TRow fields rest) ->
+    let fieldVars = concatMapTy freeTyVarsField fields;
+    case rest {
+      Nothing -> fieldVars,
+      (Just rv) -> append fieldVars (Cons rv Nil)
+    }
 }
 
 def freeTyVarsField : TyField -> List TyVar
 def freeTyVarsField = { (TyField _ ty) -> freeTyVars ty }
 
 def tyVarMember : TyVar -> List TyVar -> Bool
-def tyVarMember = { v vs ->
-  case vs {
-    Nil -> False,
-    (Cons u rest) -> if (eqTyVar v u) { True } { tyVarMember v rest }
-  }
+def tyVarMember = {
+  v Nil -> False,
+  v (Cons u rest) -> if (eqTyVar v u) { True } { tyVarMember v rest }
 }
 
 -- ──────────────────────────────────────────────────────────────────────
@@ -183,22 +179,20 @@ def showTyCon = {
 }
 
 def showTy : Ty -> String
-def showTy = { ty ->
-  case ty {
-    (TVar v) -> showTyVar v,
-    (TCon c) -> showTyCon c,
-    (TApp t1 t2) -> appendString "(" (appendString (showTy t1) (appendString " " (appendString (showTy t2) ")"))),
-    (TArr t1 t2) -> appendString (showTy t1) (appendString " -> " (showTy t2)),
-    (TRecord fields) -> appendString "{" (appendString (joinTyFields fields) "}"),
-    (TVariant fields) -> appendString "(|" (appendString (joinTyFields fields) "|)"),
-    (TTuple ts) -> appendString "(" (appendString (joinTys ", " ts) ")"),
-    (TForall v body) -> appendString "forall " (appendString (showTyVar v) (appendString ". " (showTy body))),
-    (TMu v body) -> appendString "mu " (appendString (showTyVar v) (appendString ". " (showTy body))),
-    TBottom -> "Bottom",
-    (TRow fields rest) ->
-      let restStr = case rest { Nothing -> "", (Just rv) -> appendString " | " (showTyVar rv) };
-      appendString "(row " (appendString (joinTyFields fields) (appendString restStr ")"))
-  }
+def showTy = {
+  (TVar v) -> showTyVar v,
+  (TCon c) -> showTyCon c,
+  (TApp t1 t2) -> appendString "(" (appendString (showTy t1) (appendString " " (appendString (showTy t2) ")"))),
+  (TArr t1 t2) -> appendString (showTy t1) (appendString " -> " (showTy t2)),
+  (TRecord fields) -> appendString "{" (appendString (joinTyFields fields) "}"),
+  (TVariant fields) -> appendString "(|" (appendString (joinTyFields fields) "|)"),
+  (TTuple ts) -> appendString "(" (appendString (joinTys ", " ts) ")"),
+  (TForall v body) -> appendString "forall " (appendString (showTyVar v) (appendString ". " (showTy body))),
+  (TMu v body) -> appendString "mu " (appendString (showTyVar v) (appendString ". " (showTy body))),
+  TBottom -> "Bottom",
+  (TRow fields rest) ->
+    let restStr = case rest { Nothing -> "", (Just rv) -> appendString " | " (showTyVar rv) };
+    appendString "(row " (appendString (joinTyFields fields) (appendString restStr ")"))
 }
 
 def joinTyFields : List TyField -> String
@@ -209,12 +203,10 @@ def joinTyFields = {
 }
 
 def joinTys : String -> List Ty -> String
-def joinTys = { sep ts ->
-  case ts {
-    Nil -> "",
-    (Cons t Nil) -> showTy t,
-    (Cons t rest) -> appendString (showTy t) (appendString sep (joinTys sep rest))
-  }
+def joinTys = {
+  sep Nil -> "",
+  sep (Cons t Nil) -> showTy t,
+  sep (Cons t rest) -> appendString (showTy t) (appendString sep (joinTys sep rest))
 }
 
 def concatMapTy : (a -> List b) -> List a -> List b

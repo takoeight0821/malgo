@@ -40,6 +40,7 @@ plate f = \case
     clausePlate g (Clause x ps body) = Clause x ps <$> g body
     stmtPlate g = \case
       Let x n e -> Let x n <$> g e
+      LetP x p e -> LetP x p <$> g e
       With x n e -> With x n <$> g e
       NoBind x e -> NoBind x <$> g e
 

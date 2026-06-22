@@ -553,10 +553,12 @@ pStmt = pLet <|> pWith <|> pNoBind
 pLet :: (Features :> es) => Parser es (Stmt (Malgo Parse))
 pLet = captureRange do
   reserved "let"
-  name <- ident
+  pat <- pPat
   reservedOperator "="
   body <- pExpr
-  pure $ \range -> Let range name body
+  pure $ \range -> case pat of
+    VarP _ name -> Let range name body
+    _ -> LetP range pat body
 
 -- | pWith parses with statements using C-style syntax
 pWith :: (Features :> es) => Parser es (Stmt (Malgo Parse))

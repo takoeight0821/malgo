@@ -58,20 +58,55 @@ matchCase _ = Nothing
 -- ── Rule: case-of-bound-arg ─────────────────────────────────────────────────
 
 -- @{ … x -> case x { … } }@ collapses to @{ … pat -> … }@ when @x@ is only
--- used as the scrutinee.
+-- used as the scrutinee. Two shapes fire:
+--
+--   * @x@ is the last argument (the classic single-arg @case@ smell), or
+--   * @x@ is bound by a /nested/ constructor, tuple, or list pattern, e.g.
+--     @{ (Cons x xs) -> case x { … } }@, which folds into nested patterns
+--     across extra clauses the same way.
+--
+-- A plain non-last @VarP@ parameter (@{ a x b -> case x { … } }@) is left
+-- alone: folding it duplicates the other parameters across every clause for
+-- little gain. A record-field binder (@{ {val = x} -> case x { … } }@) is
+-- also left alone: the fold would push a constructor pattern into a record
+-- field, which not every back end can match.
 caseOfBoundArg :: Rule P
 caseOfBoundArg = exprRule "case-of-bound-arg" check
   where
     check (Fn _ clauses) = concatMap clauseCheck (toList clauses)
     check _ = []
     clauseCheck c@(Clause _ pats body)
-      | VarP _ x <- NE.last pats,
-        Just (scrut, fn) <- matchCase (soleExpr body),
-        Var _ x' <- soleExpr scrut,
-        x == x',
+      | Just (scrut, fn) <- matchCase (soleExpr body),
+        Var _ x <- soleExpr scrut,
         x `Set.notMember` freevars fn =
-          [warn "case-of-bound-arg" (clauseRange c) ("`" <> x <> "` is bound only to be matched; drop `" <> x <> " -> case " <> x <> "` and match the argument directly.")]
+          case boundPosition x pats of
+            LastParam -> [warn "case-of-bound-arg" (clauseRange c) ("`" <> x <> "` is bound only to be matched; drop `" <> x <> " -> case " <> x <> "` and match the argument directly.")]
+            NestedBind -> [warn "case-of-bound-arg" (clauseRange c) ("`" <> x <> "` is bound by a pattern only to be matched; fold the `case` arms into the pattern that binds it.")]
+            Elsewhere -> []
     clauseCheck _ = []
+
+-- | Where a scrutinee variable is bound among a clause's head patterns.
+data BoundPosition = LastParam | NestedBind | Elsewhere
+
+boundPosition :: Text -> NonEmpty (Pat P) -> BoundPosition
+boundPosition x pats
+  | VarP _ x' <- NE.last pats, x == x' = LastParam
+  | x `elem` topLevelVars = Elsewhere
+  | x `Set.member` foldMap nestedFoldableVars pats = NestedBind
+  | otherwise = Elsewhere
+  where
+    topLevelVars = [v | VarP _ v <- toList pats]
+
+-- | Variables reachable through constructor\/tuple\/list nesting only —
+-- substituting a pattern at these positions is a sound fold. Record-field
+-- binders are excluded (folding would put a non-variable pattern in a record
+-- field, which the self-hosted back end cannot match).
+nestedFoldableVars :: Pat P -> Set Text
+nestedFoldableVars (ConP _ _ ps) = foldMap nestedFoldableVars ps
+nestedFoldableVars (TupleP _ ps) = foldMap nestedFoldableVars ps
+nestedFoldableVars (ListP _ ps) = foldMap nestedFoldableVars ps
+nestedFoldableVars (VarP _ x) = Set.singleton x
+nestedFoldableVars _ = mempty
 
 -- ── Rule: single-branch-case ────────────────────────────────────────────────
 

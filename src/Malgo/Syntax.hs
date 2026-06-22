@@ -30,6 +30,7 @@ module Malgo.Syntax
     toUnboxed,
     makeBindGroup,
     freevars,
+    patBoundVars,
   )
 where
 
@@ -220,6 +221,16 @@ instance (ForallExpX HasRange x) => HasRange (Expr x) where
   range (Label x _ _) = range x
   range (Goto x _ _) = range x
 
+-- | Variables bound by a pattern.
+patBoundVars :: (Ord (XId x)) => Pat x -> Set (XId x)
+patBoundVars (VarP _ x) = Set.singleton x
+patBoundVars (ConP _ _ ps) = foldMap patBoundVars ps
+patBoundVars (TupleP _ ps) = foldMap patBoundVars ps
+patBoundVars (RecordP _ kps) = foldMap (patBoundVars . snd) kps
+patBoundVars (ListP _ ps) = foldMap patBoundVars ps
+patBoundVars UnboxedP {} = mempty
+patBoundVars BoxedP {} = mempty
+
 freevars :: (Ord (XId x)) => Expr x -> Set (XId x)
 freevars (Var _ v) = Set.singleton v
 freevars (Unboxed _ _) = mempty
@@ -230,14 +241,7 @@ freevars (Project _ e _) = freevars e
 freevars (Fn _ cs) = foldMap freevarsClause cs
   where
     freevarsClause :: (Ord (XId x)) => Clause x -> Set (XId x)
-    freevarsClause (Clause _ pats e) = Set.difference (freevars e) (foldMap bindVars pats)
-    bindVars (VarP _ x) = Set.singleton x
-    bindVars (ConP _ _ ps) = mconcat $ map bindVars ps
-    bindVars (TupleP _ ps) = mconcat $ map bindVars ps
-    bindVars (RecordP _ kps) = mconcat $ map (bindVars . snd) kps
-    bindVars (ListP _ ps) = mconcat $ map bindVars ps
-    bindVars UnboxedP {} = mempty
-    bindVars BoxedP {} = mempty
+    freevarsClause (Clause _ pats e) = Set.difference (freevars e) (foldMap patBoundVars pats)
 freevars (Tuple _ es) = mconcat $ map freevars es
 freevars (Record _ kvs) = mconcat $ map (freevars . snd) kvs
 freevars (List _ es) = mconcat $ map freevars es
@@ -245,6 +249,7 @@ freevars (Ann _ e _) = freevars e
 freevars (Seq _ ss) = freevarsStmts ss
   where
     freevarsStmts (Let _ x e :| ss) = freevars e <> Set.delete x (freevarsStmts' ss)
+    freevarsStmts (LetP _ pat e :| ss) = freevars e <> Set.difference (freevarsStmts' ss) (patBoundVars pat)
     freevarsStmts (With _ Nothing e :| ss) = freevars e <> freevarsStmts' ss
     freevarsStmts (With _ (Just x) e :| ss) = freevars e <> Set.delete x (freevarsStmts' ss)
     freevarsStmts (NoBind _ e :| ss) = freevars e <> freevarsStmts' ss
@@ -259,14 +264,6 @@ freevars (Codata _ clauses) = foldMap freevarsClause clauses
     copatBoundVars (HoleP _) = mempty
     copatBoundVars (ApplyP _ cp pat) = copatBoundVars cp <> patBoundVars pat
     copatBoundVars (ProjectP _ cp _) = copatBoundVars cp
-    patBoundVars :: (Ord (XId x)) => Pat x -> Set (XId x)
-    patBoundVars (VarP _ x) = Set.singleton x
-    patBoundVars (ConP _ _ ps) = foldMap patBoundVars ps
-    patBoundVars (TupleP _ ps) = foldMap patBoundVars ps
-    patBoundVars (RecordP _ kps) = foldMap (patBoundVars . snd) kps
-    patBoundVars (ListP _ ps) = foldMap patBoundVars ps
-    patBoundVars UnboxedP {} = mempty
-    patBoundVars BoxedP {} = mempty
 freevars (Label _ name body) = Set.delete name (freevars body)
 freevars (Goto _ value label) = freevars value <> freevars label
 
@@ -274,6 +271,9 @@ freevars (Goto _ value label) = freevars value <> freevars label
 
 data Stmt x
   = Let (XLet x) (XId x) (Expr x)
+  | -- | @let pat = e@ where @pat@ is not a bare variable. Desugared to a
+    -- @case@ in 'Malgo.Rename.Pass'; uninhabited after the parse phase.
+    LetP (XLetP x) (Pat x) (Expr x)
   | With (XWith x) (Maybe (XId x)) (Expr x)
   | NoBind (XNoBind x) (Expr x)
 
@@ -283,12 +283,14 @@ deriving stock instance (ForallClauseX Show x, ForallPatX Show x, ForallCoPatX S
 
 instance (ToSExpr (XId x)) => (ToSExpr (Stmt x)) where
   toSExpr (Let _ id e) = S.L ["let", toSExpr id, toSExpr e]
+  toSExpr (LetP _ pat e) = S.L ["let", toSExpr pat, toSExpr e]
   toSExpr (With _ Nothing e) = S.L ["with", toSExpr e]
   toSExpr (With _ (Just id) e) = S.L ["with", toSExpr id, toSExpr e]
   toSExpr (NoBind _ e) = S.L ["do", toSExpr e]
 
 instance (Pretty (XId x)) => Pretty (Stmt x) where
   pretty (Let _ var body) = sexpr ["let", pretty var, pretty body]
+  pretty (LetP _ pat body) = sexpr ["let", pretty pat, pretty body]
   pretty (With _ Nothing body) = sexpr ["with", pretty body]
   pretty (With _ (Just var) body) = sexpr ["with", pretty var, pretty body]
   pretty (NoBind _ body) = sexpr ["do", pretty body]

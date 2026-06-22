@@ -21,12 +21,10 @@ def scopeExtend = { name resolved (NameScope entries) ->
 }
 
 def scopeLookup : String -> NameScope -> Maybe String
-def scopeLookup = { name (NameScope entries) ->
-  case entries {
-    Nil -> Nothing,
-    (Cons (ScopeEntry n r) rest) ->
-      if (eqString name n) { Just r } { scopeLookup name (NameScope rest) }
-  }
+def scopeLookup = {
+  name (NameScope Nil) -> Nothing,
+  name (NameScope (Cons (ScopeEntry n r) rest)) ->
+    if (eqString name n) { Just r } { scopeLookup name (NameScope rest) }
 }
 
 -- ──────────────────────────────────────────────────────────────────────
@@ -48,11 +46,9 @@ def concatMapStr = { f xs ->
 }
 
 def listMember : String -> List String -> Bool
-def listMember = { s xs ->
-  case xs {
-    Nil -> False,
-    (Cons x rest) -> if (eqString s x) { True } { listMember s rest }
-  }
+def listMember = {
+  s Nil -> False,
+  s (Cons x rest) -> if (eqString s x) { True } { listMember s rest }
 }
 
 -- ──────────────────────────────────────────────────────────────────────
@@ -63,16 +59,14 @@ def collectTopLevel : List Decl -> NameScope
 def collectTopLevel = { decls -> foldl addDeclToScope emptyScope decls }
 
 def addDeclToScope : NameScope -> Decl -> NameScope
-def addDeclToScope = { scope decl ->
-  case decl {
-    (DeclDef name _)           -> scopeExtend name name scope,
-    (DeclData _ _ cons)        -> foldl addConToScope scope cons,
-    (DeclForeign name _)       -> scopeExtend name name scope,
-    (DeclTypeSig _ _)          -> scope,
-    (DeclTypeSynonym _ _ _)    -> scope,
-    (DeclInfix _ _ _)          -> scope,
-    (DeclImport _ _)           -> scope
-  }
+def addDeclToScope = {
+  scope (DeclDef name _)           -> scopeExtend name name scope,
+  scope (DeclData _ _ cons)        -> foldl addConToScope scope cons,
+  scope (DeclForeign name _)       -> scopeExtend name name scope,
+  scope (DeclTypeSig _ _)          -> scope,
+  scope (DeclTypeSynonym _ _ _)    -> scope,
+  scope (DeclInfix _ _ _)          -> scope,
+  scope (DeclImport _ _)           -> scope
 }
 
 def addConToScope : NameScope -> ConDecl -> NameScope
@@ -83,26 +77,22 @@ def addConToScope = { scope (ConDecl name _) -> scopeExtend name name scope }
 -- ──────────────────────────────────────────────────────────────────────
 
 def patBoundVars : Pat -> List String
-def patBoundVars = { pat ->
-  case pat {
-    (PatVar name)    -> Cons name Nil,
-    PatWild          -> Nil,
-    (PatCon _ pats)  -> concatMapStr patBoundVars pats,
-    (PatLit _)       -> Nil,
-    (PatTuple pats)  -> concatMapStr patBoundVars pats,
-    (PatRecord flds) -> concatMapStr patFieldBoundVars flds
-  }
+def patBoundVars = {
+  (PatVar name)    -> Cons name Nil,
+  PatWild          -> Nil,
+  (PatCon _ pats)  -> concatMapStr patBoundVars pats,
+  (PatLit _)       -> Nil,
+  (PatTuple pats)  -> concatMapStr patBoundVars pats,
+  (PatRecord flds) -> concatMapStr patFieldBoundVars flds
 }
 
 def patFieldBoundVars : PatField -> List String
 def patFieldBoundVars = { (PatField _ pat) -> patBoundVars pat }
 
 def coSegBoundVars : CoSeg -> List String
-def coSegBoundVars = { seg ->
-  case seg {
-    (CoApply pats) -> concatMapStr patBoundVars pats,
-    (CoField _)    -> Nil
-  }
+def coSegBoundVars = {
+  (CoApply pats) -> concatMapStr patBoundVars pats,
+  (CoField _)    -> Nil
 }
 
 -- ──────────────────────────────────────────────────────────────────────
@@ -110,41 +100,39 @@ def coSegBoundVars = { seg ->
 -- ──────────────────────────────────────────────────────────────────────
 
 def checkExpr : NameScope -> Expr -> List RenameError
-def checkExpr = { scope expr ->
-  case expr {
-    (ExVar name) ->
-      case (scopeLookup name scope) {
-        (Just _) -> Nil,
-        Nothing  -> Cons (RenameError (appendString "undefined name: " name)) Nil
-      },
-    (ExLit _)  -> Nil,
-    ExUnit     -> Nil,
-    (ExApp f x) ->
-      append (checkExpr scope f) (checkExpr scope x),
-    (ExTuple es) ->
-      concatMapStr (checkExpr scope) es,
-    (ExRecord flds) ->
-      concatMapStr (checkExprField scope) flds,
-    (ExField e _) ->
-      checkExpr scope e,
-    (ExLet name bindExpr body) ->
-      let innerScope = scopeExtend name name scope;
-      append (checkExpr scope bindExpr) (checkExpr innerScope body),
-    (ExCase arms) ->
-      concatMapStr (checkArm scope) arms,
-    (ExCoCase arms) ->
-      concatMapStr (checkCoArm scope) arms,
-    -- ExArm / ExCoArm are handled via ExCase / ExCoCase above;
-    -- if encountered standalone, just recurse into the body.
-    (ExArm pats body) ->
-      let bound = concatMapStr patBoundVars pats;
-      let innerScope = foldl { sc n -> scopeExtend n n sc } scope bound;
-      checkExpr innerScope body,
-    (ExCoArm segs body) ->
-      let bound = concatMapStr coSegBoundVars segs;
-      let innerScope = foldl { sc n -> scopeExtend n n sc } scope bound;
-      checkExpr innerScope body
-  }
+def checkExpr = {
+  scope (ExVar name) ->
+    case (scopeLookup name scope) {
+      (Just _) -> Nil,
+      Nothing  -> Cons (RenameError (appendString "undefined name: " name)) Nil
+    },
+  scope (ExLit _)  -> Nil,
+  scope ExUnit     -> Nil,
+  scope (ExApp f x) ->
+    append (checkExpr scope f) (checkExpr scope x),
+  scope (ExTuple es) ->
+    concatMapStr (checkExpr scope) es,
+  scope (ExRecord flds) ->
+    concatMapStr (checkExprField scope) flds,
+  scope (ExField e _) ->
+    checkExpr scope e,
+  scope (ExLet name bindExpr body) ->
+    let innerScope = scopeExtend name name scope;
+    append (checkExpr scope bindExpr) (checkExpr innerScope body),
+  scope (ExCase arms) ->
+    concatMapStr (checkArm scope) arms,
+  scope (ExCoCase arms) ->
+    concatMapStr (checkCoArm scope) arms,
+  -- ExArm / ExCoArm are handled via ExCase / ExCoCase above;
+  -- if encountered standalone, just recurse into the body.
+  scope (ExArm pats body) ->
+    let bound = concatMapStr patBoundVars pats;
+    let innerScope = foldl { sc n -> scopeExtend n n sc } scope bound;
+    checkExpr innerScope body,
+  scope (ExCoArm segs body) ->
+    let bound = concatMapStr coSegBoundVars segs;
+    let innerScope = foldl { sc n -> scopeExtend n n sc } scope bound;
+    checkExpr innerScope body
 }
 
 def checkExprField : NameScope -> ExprField -> List RenameError
@@ -152,26 +140,22 @@ def checkExprField = { scope (ExprField _ e) -> checkExpr scope e }
 
 -- Check one case arm: ExArm(List Pat, Expr)
 def checkArm : NameScope -> Expr -> List RenameError
-def checkArm = { scope arm ->
-  case arm {
-    (ExArm pats body) ->
-      let bound = concatMapStr patBoundVars pats;
-      let innerScope = foldl { sc n -> scopeExtend n n sc } scope bound;
-      checkExpr innerScope body,
-    other -> checkExpr scope other
-  }
+def checkArm = {
+  scope (ExArm pats body) ->
+    let bound = concatMapStr patBoundVars pats;
+    let innerScope = foldl { sc n -> scopeExtend n n sc } scope bound;
+    checkExpr innerScope body,
+  scope other -> checkExpr scope other
 }
 
 -- Check one copattern arm: ExCoArm(List CoSeg, Expr)
 def checkCoArm : NameScope -> Expr -> List RenameError
-def checkCoArm = { scope arm ->
-  case arm {
-    (ExCoArm segs body) ->
-      let bound = concatMapStr coSegBoundVars segs;
-      let innerScope = foldl { sc n -> scopeExtend n n sc } scope bound;
-      checkExpr innerScope body,
-    other -> checkExpr scope other
-  }
+def checkCoArm = {
+  scope (ExCoArm segs body) ->
+    let bound = concatMapStr coSegBoundVars segs;
+    let innerScope = foldl { sc n -> scopeExtend n n sc } scope bound;
+    checkExpr innerScope body,
+  scope other -> checkExpr scope other
 }
 
 -- ──────────────────────────────────────────────────────────────────────
@@ -179,16 +163,14 @@ def checkCoArm = { scope arm ->
 -- ──────────────────────────────────────────────────────────────────────
 
 def checkDecl : NameScope -> Decl -> List RenameError
-def checkDecl = { scope decl ->
-  case decl {
-    (DeclDef _ expr)        -> checkExpr scope expr,
-    (DeclData _ _ _)        -> Nil,
-    (DeclForeign _ _)       -> Nil,
-    (DeclTypeSig _ _)       -> Nil,
-    (DeclTypeSynonym _ _ _) -> Nil,
-    (DeclInfix _ _ _)       -> Nil,
-    (DeclImport _ _)        -> Nil
-  }
+def checkDecl = {
+  scope (DeclDef _ expr)        -> checkExpr scope expr,
+  scope (DeclData _ _ _)        -> Nil,
+  scope (DeclForeign _ _)       -> Nil,
+  scope (DeclTypeSig _ _)       -> Nil,
+  scope (DeclTypeSynonym _ _ _) -> Nil,
+  scope (DeclInfix _ _ _)       -> Nil,
+  scope (DeclImport _ _)        -> Nil
 }
 
 -- Check a module: collect top-level names first, then check each definition.
@@ -204,13 +186,11 @@ def checkModule = { prelude (Module decls) ->
 -- ──────────────────────────────────────────────────────────────────────
 
 def printRenameErrors : List RenameError -> ()
-def printRenameErrors = { errors ->
-  case errors {
-    Nil -> (),
-    (Cons e rest) ->
-      let _ = putStrLn (appendString "RenameError: " (renameErrorMsg e));
-      printRenameErrors rest
-  }
+def printRenameErrors = {
+  Nil -> (),
+  (Cons e rest) ->
+    let _ = putStrLn (appendString "RenameError: " (renameErrorMsg e));
+    printRenameErrors rest
 }
 
 def main = { _ -> putStrLn "Rename module OK" }

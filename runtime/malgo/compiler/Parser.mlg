@@ -191,16 +191,15 @@ def isUpperFirst = { s ->
 -- True when an operator string can appear as an infix binary operator in exprs
 -- Exclude: -> : = ; .. | (these are used in declarations/arms, not exprs)
 def isBinaryOp : String -> Bool
-def isBinaryOp = { s ->
-  if (eqString s "->") { False } {
-  if (eqString s ":")  { False } {
-  if (eqString s "=")  { False } {
-  if (eqString s ";")  { False } {
-  if (eqString s "..")  { False } {
-  if (eqString s "|")  { False } {
-  if (eqString s ".")  { False } {
-    True
-  }}}}}}}
+def isBinaryOp = {
+  "->" -> False,
+  ":"  -> False,
+  "="  -> False,
+  ";"  -> False,
+  ".." -> False,
+  "|"  -> False,
+  "."  -> False,
+  _ -> True
 }
 
 -- True when the next token is a binary operator in expression context
@@ -226,17 +225,16 @@ def isAtomStart = {
 
 -- True when a string is a top-level declaration starter
 def isDeclStart : String -> Bool
-def isDeclStart = { s ->
-  if (eqString s "def")     { True } {
-  if (eqString s "data")    { True } {
-  if (eqString s "type")    { True } {
-  if (eqString s "infix")   { True } {
-  if (eqString s "infixl")  { True } {
-  if (eqString s "infixr")  { True } {
-  if (eqString s "module")  { True } {
-  if (eqString s "foreign") { True } {
-    False
-  }}}}}}}}
+def isDeclStart = {
+  "def"     -> True,
+  "data"    -> True,
+  "type"    -> True,
+  "infix"   -> True,
+  "infixl"  -> True,
+  "infixr"  -> True,
+  "module"  -> True,
+  "foreign" -> True,
+  _ -> False
 }
 
 -- Skip tokens until the start of the next declaration (or EOF)
@@ -1072,11 +1070,9 @@ def parseCStyleCallArgsRest = { ftable ts ->
 }
 
 def applyExprArgs : Expr -> List Expr -> Expr
-def applyExprArgs = { f args ->
-  case args {
-    Nil -> f,
-    (Cons x xs) -> applyExprArgs (ExApp(f, x)) xs
-  }
+def applyExprArgs = {
+  f Nil -> f,
+  f (Cons x xs) -> applyExprArgs (ExApp(f, x)) xs
 }
 
 -- ────────────────────────────────────────────────────────────────────────────
@@ -1107,14 +1103,12 @@ def defaultFixityTable =
   ]
 
 def lookupFixity : String -> List FixityEntry -> FixityEntry
-def lookupFixity = { op entries ->
-  case entries {
-    Nil -> FixityEntry(op, 9i32, AssocLeft),
-    (Cons (FixityEntry name prec assoc) rest) ->
-      if (eqString op name)
-        { FixityEntry(name, prec, assoc) }
-        { lookupFixity op rest }
-  }
+def lookupFixity = {
+  op Nil -> FixityEntry(op, 9i32, AssocLeft),
+  op (Cons (FixityEntry name prec assoc) rest) ->
+    if (eqString op name)
+      { FixityEntry(name, prec, assoc) }
+      { lookupFixity op rest }
 }
 
 def assocIsRight : Assoc -> Bool
@@ -1125,22 +1119,14 @@ def assocIsRight = {
 
 -- Collect fixity declarations from the token stream (pre-pass)
 def collectFixityTable : List Token -> List FixityEntry
-def collectFixityTable = { ts ->
-  case ts {
-    Nil -> Nil,
-    (Cons TkEof _) -> Nil,
-    (Cons (TkIdent kw) rest) ->
-      if (eqString kw "infixl")
-        { collectFixityEntry "left" rest }
-        { if (eqString kw "infixr")
-            { collectFixityEntry "right" rest }
-            { if (eqString kw "infix")
-                { collectFixityEntry "none" rest }
-                { collectFixityTable rest }
-            }
-        },
-    (Cons _ rest) -> collectFixityTable rest
-  }
+def collectFixityTable = {
+  Nil -> Nil,
+  (Cons TkEof _) -> Nil,
+  (Cons (TkIdent "infixl") rest) -> collectFixityEntry "left" rest,
+  (Cons (TkIdent "infixr") rest) -> collectFixityEntry "right" rest,
+  (Cons (TkIdent "infix") rest) -> collectFixityEntry "none" rest,
+  (Cons (TkIdent _) rest) -> collectFixityTable rest,
+  (Cons _ rest) -> collectFixityTable rest
 }
 
 def collectFixityEntry : String -> List Token -> List FixityEntry
@@ -1173,12 +1159,10 @@ def filterOutFixity = { defaults user ->
 }
 
 def fixityTableHas : String -> List FixityEntry -> Bool
-def fixityTableHas = { name entries ->
-  case entries {
-    Nil -> False,
-    (Cons (FixityEntry n _ _) rest) ->
-      if (eqString name n) { True } { fixityTableHas name rest }
-  }
+def fixityTableHas = {
+  name Nil -> False,
+  name (Cons (FixityEntry n _ _) rest) ->
+    if (eqString name n) { True } { fixityTableHas name rest }
 }
 
 -- Parse operator expression using Pratt parsing with precedence
@@ -1195,19 +1179,16 @@ def parseOpPrecLoop = { minPrec ftable lhs ts ->
   if (isNextBinaryOp ts)
     { case ts {
         (Cons (TkOp opName) rest) ->
-          let fix = lookupFixity opName ftable;
-          case fix {
-            (FixityEntry _ prec assoc) ->
-              if (geInt32 prec minPrec)
-                { let nextMinPrec = if (assocIsRight assoc) { prec } { addInt32 prec 1i32 };
-                  bindRight (parseApp ftable rest) { {val = rhs, rest = ts3} ->
-                    bindRight (parseOpPrecLoop nextMinPrec ftable rhs ts3) { {val = rhs2, rest = ts4} ->
-                      parseOpPrecLoop minPrec ftable (ExApp(ExApp(ExVar opName, lhs), rhs2)) ts4
-                    }
-                  }
+          let (FixityEntry _ prec assoc) = lookupFixity opName ftable;
+          if (geInt32 prec minPrec)
+            { let nextMinPrec = if (assocIsRight assoc) { prec } { addInt32 prec 1i32 };
+              bindRight (parseApp ftable rest) { {val = rhs, rest = ts3} ->
+                bindRight (parseOpPrecLoop nextMinPrec ftable rhs ts3) { {val = rhs2, rest = ts4} ->
+                  parseOpPrecLoop minPrec ftable (ExApp(ExApp(ExVar opName, lhs), rhs2)) ts4
                 }
-                { Right {val = lhs, rest = ts} }
-          },
+              }
+            }
+            { Right {val = lhs, rest = ts} },
         _ -> Right {val = lhs, rest = ts}
       }
     }
@@ -1220,6 +1201,17 @@ def parseOpPrecLoop = { minPrec ftable lhs ts ->
 
 -- Parse a sequence of statements ending in an expression.
 -- Stops at ',' or '}' without consuming them.
+-- Build a let binding. A bare variable (or wildcard) keeps the dedicated
+-- ExLet form, whose evaluation semantics (notably forcing `let _ = io`) the
+-- evaluator depends on. A non-trivial pattern desugars to applying a
+-- single-arm lambda `{ pat -> body }` to the bound value, i.e. a case.
+def mkLetExpr : Pat -> Expr -> Expr -> Expr
+def mkLetExpr = {
+  (PatVar name) val body -> ExLet(name, val, body),
+  PatWild val body -> ExLet("_", val, body),
+  pat val body -> ExApp(ExCase(Cons (ExArm(Cons pat Nil, body)) Nil), val)
+}
+
 def parseStmts : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
 def parseStmts = { ftable ts ->
   if (isNextRBrace ts)
@@ -1230,23 +1222,23 @@ def parseStmts = { ftable ts ->
         }
       }
       { if (isNextIdentStr "let" ts)
-    -- let x = e; rest
+    -- let pat = e; rest
       { bindRight (nextTok ts) { {rest = ts2} ->        -- consume 'let'
-        bindRight (eatIdent ts2) { {val = name, rest = ts3} ->
+        bindRight (parseAtomPat ts2) { {val = pat, rest = ts3} ->
           bindRight (expectOp "=" ts3) { ts4 ->
             bindRight (parseOp ftable ts4) { {val = val, rest = ts5} ->
               if (isNextOpStr ";" ts5)
                 { bindRight (nextTok ts5) { {rest = ts6} ->
                     bindRight (parseStmts ftable ts6) { {val = body, rest = ts7} ->
-                      Right {val = ExLet(name, val, body), rest = ts7}
+                      Right {val = mkLetExpr pat val body, rest = ts7}
                     }
                   }
                 }
                 { if (isNextRBrace ts5)
-                    { Right {val = ExLet(name, val, ExUnit), rest = ts5} }
+                    { Right {val = mkLetExpr pat val ExUnit, rest = ts5} }
                     { bindRight (expectOp ";" ts5) { ts6 ->
                         bindRight (parseStmts ftable ts6) { {val = body, rest = ts7} ->
-                          Right {val = ExLet(name, val, body), rest = ts7}
+                          Right {val = mkLetExpr pat val body, rest = ts7}
                         }
                       }
                     }
@@ -1534,17 +1526,15 @@ def collectTypeStr = { ts ->
 }
 
 def collectTypeStrAcc : String -> List Token -> {val: String, rest: List Token}
-def collectTypeStrAcc = { acc ts ->
-  case ts {
-    Nil -> {val = acc, rest = Nil},
-    (Cons TkEof rest) -> {val = acc, rest = Cons TkEof rest},
-    (Cons (TkIdent s) rest) ->
-      if (isDeclStart s)
-        { {val = acc, rest = Cons (TkIdent s) rest} }
-        { collectTypeStrAcc (appendString acc (appendString " " s)) rest },
-    (Cons t rest) ->
-      collectTypeStrAcc (appendString acc (appendString " " (showToken t))) rest
-  }
+def collectTypeStrAcc = {
+  acc Nil -> {val = acc, rest = Nil},
+  acc (Cons TkEof rest) -> {val = acc, rest = Cons TkEof rest},
+  acc (Cons (TkIdent s) rest) ->
+    if (isDeclStart s)
+      { {val = acc, rest = Cons (TkIdent s) rest} }
+      { collectTypeStrAcc (appendString acc (appendString " " s)) rest },
+  acc (Cons t rest) ->
+    collectTypeStrAcc (appendString acc (appendString " " (showToken t))) rest
 }
 
 -- Collect tokens as a raw type string until the next top-level declaration boundary.
@@ -1569,10 +1559,8 @@ def parseDefDecl = { ftable ts ->
   bindRight (eatDefName ts) { {val = name, rest = ts2} ->
     if (isNextOpStr ":" ts2)
       -- Type annotation: 'def name : Type' — preserve as DeclTypeSig
-      { let r = collectRawTypeStr ts2;
-        case r { {val = tyStr, rest = ts3} ->
-          Right {val = Just (DeclTypeSig(name, tyStr)), rest = ts3}
-        }
+      { let {val = tyStr, rest = ts3} = collectRawTypeStr ts2;
+        Right {val = Just (DeclTypeSig(name, tyStr)), rest = ts3}
       }
       { if (isNextOpStr "=" ts2)
           { bindRight (expectOp "=" ts2) { ts3 ->
@@ -1625,14 +1613,12 @@ def parseModuleImport = { ts ->
 }
 
 def parseImportTarget : List Token -> Either String {val: ImportTarget, rest: List Token}
-def parseImportTarget = { ts ->
-  case ts {
-    (Cons TkLBrace rest) ->
-      parseBraceImportTarget rest,
-    (Cons (TkIdent alias) rest) ->
-      Right {val = ImportQualified alias, rest = rest},
-    _ -> Left "expected module import target"
-  }
+def parseImportTarget = {
+  (Cons TkLBrace rest) ->
+    parseBraceImportTarget rest,
+  (Cons (TkIdent alias) rest) ->
+    Right {val = ImportQualified alias, rest = rest},
+  _ -> Left "expected module import target"
 }
 
 def parseBraceImportTarget : List Token -> Either String {val: ImportTarget, rest: List Token}
@@ -1671,12 +1657,10 @@ def parseImportNames = { ts ->
 }
 
 def parseImportName : List Token -> Either String {val: ImportName, rest: List Token}
-def parseImportName = { ts ->
-  case ts {
-    (Cons (TkIdent name) rest) -> Right {val = ImportName name, rest = rest},
-    (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest))) -> Right {val = ImportName op, rest = rest},
-    _ -> Left "expected import name"
-  }
+def parseImportName = {
+  (Cons (TkIdent name) rest) -> Right {val = ImportName name, rest = rest},
+  (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest))) -> Right {val = ImportName op, rest = rest},
+  _ -> Left "expected import name"
 }
 
 def skipToRBrace : List Token -> Either String (List Token)
@@ -1715,9 +1699,8 @@ def parseForeignDecl = { ts ->
   bindRight (eatIdent ts) { {val = kw, rest = ts2} ->
     if (eqString kw "import")
       { bindRight (eatIdent ts2) { {val = name, rest = ts3} ->
-          case (collectTypeStr ts3) { {val = tyStr, rest = ts4} ->
-            Right {val = DeclForeign(name, tyStr), rest = ts4}
-          }
+          let {val = tyStr, rest = ts4} = collectTypeStr ts3;
+          Right {val = DeclForeign(name, tyStr), rest = ts4}
         }
       }
       { Left (appendString "expected 'import' after 'foreign' but got " kw) }
@@ -1730,39 +1713,26 @@ def parseSingleDecl = { ftable ts ->
   bindRight (nextTok ts) { {val = t, rest = ts2} ->
     case t {
       (TkIdent s) ->
-        if (eqString s "def")
-          { parseDefDecl ftable ts2 }
-          { if (eqString s "data")
-              { bindRight (parseDataDecl ts2) { {val = d, rest = ts3} ->
-                  Right {val = Just d, rest = ts3}
-                }
-              }
-              { if (eqString s "module")
-                  { bindRight (parseModuleImport ts2) { {val = d, rest = ts3} ->
-                      Right {val = Just d, rest = ts3}
-                    }
-                  }
-                  { if (eqString s "foreign")
-                      { bindRight (parseForeignDecl ts2) { {val = d, rest = ts3} ->
-                          Right {val = Just d, rest = ts3}
-                        }
-                      }
-                      { if (eqString s "type")
-                        { parseTypeSynonymDecl ts2 }
-                        { if (eqString s "infix")
-                          { parseInfixDecl "none" ts2 }
-                          { if (eqString s "infixl")
-                            { parseInfixDecl "left" ts2 }
-                            { if (eqString s "infixr")
-                              { parseInfixDecl "right" ts2 }
-                              { Left (appendString "expected declaration but got identifier '" (appendString s "'")) }
-                            }
-                          }
-                        }
-                      }
-                  }
-              }
-          },
+        case s {
+          "def" -> parseDefDecl ftable ts2,
+          "data" ->
+            bindRight (parseDataDecl ts2) { {val = d, rest = ts3} ->
+              Right {val = Just d, rest = ts3}
+            },
+          "module" ->
+            bindRight (parseModuleImport ts2) { {val = d, rest = ts3} ->
+              Right {val = Just d, rest = ts3}
+            },
+          "foreign" ->
+            bindRight (parseForeignDecl ts2) { {val = d, rest = ts3} ->
+              Right {val = Just d, rest = ts3}
+            },
+          "type" -> parseTypeSynonymDecl ts2,
+          "infix" -> parseInfixDecl "none" ts2,
+          "infixl" -> parseInfixDecl "left" ts2,
+          "infixr" -> parseInfixDecl "right" ts2,
+          _ -> Left (appendString "expected declaration but got identifier '" (appendString s "'"))
+        },
       TkEof -> Left "eof",
       _ -> Left (appendString "expected declaration but got " (showToken t))
     }
@@ -1775,10 +1745,8 @@ def parseTypeSynonymDecl = { ts ->
   bindRight (eatIdent ts) { {val = name, rest = ts2} ->
     bindRight (parseTypeParams ts2) { {val = params, rest = ts3} ->
       bindRight (expectOp "=" ts3) { ts4 ->
-        let r = collectTypeStr ts4;
-        case r { {val = tyStr, rest = ts5} ->
-          Right {val = Just (DeclTypeSynonym(name, params, tyStr)), rest = ts5}
-        }
+        let {val = tyStr, rest = ts5} = collectTypeStr ts4;
+        Right {val = Just (DeclTypeSynonym(name, params, tyStr)), rest = ts5}
       }
     }
   }

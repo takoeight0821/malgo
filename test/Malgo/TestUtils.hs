@@ -86,7 +86,7 @@ flag = Flag {noOptimize = False, lambdaLift = False, debugMode = False, testMode
 --   primitive ops, recursion/HOF, import, record, row polymorphism,
 --   codata, copattern, label/goto, nested pattern, C-style syntax,
 --   zero-arity edge, complex control flow, tuple pattern,
---   nested/mutual recursive types
+--   nested/mutual recursive types, string literal pattern, let pattern
 --
 -- After updating: mise run reset && mise run test
 representatives :: [String]
@@ -104,7 +104,9 @@ representatives =
     "ZeroArgs",
     "Eventually",
     "TuplePattern",
-    "NestedRecursive"
+    "NestedRecursive",
+    "StringPattern",
+    "LetPattern"
   ]
 
 -- | Verify that all entries in 'representatives' correspond to actual

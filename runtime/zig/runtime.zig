@@ -469,6 +469,18 @@ fn isAscii(c: u21) bool {
     return c < 128;
 }
 
+/// Haskell's `Data.Char.isUpper`/`isLower`/`isAlpha` are full-Unicode, but
+/// Zig's stdlib only classifies ASCII. As a bounded, honest partial match to
+/// the oracle we also cover the Latin-1 Supplement block (the next most
+/// common range after ASCII); Greek/Cyrillic/CJK/etc. remain unimplemented.
+fn isLatin1Upper(c: u21) bool {
+    return (c >= 0xC0 and c <= 0xD6) or (c >= 0xD8 and c <= 0xDE);
+}
+
+fn isLatin1Lower(c: u21) bool {
+    return (c >= 0xDF and c <= 0xF6) or (c >= 0xF8 and c <= 0xFF);
+}
+
 pub fn malgo_char_ord(args: []const Value) Value {
     return mkInt32(@intCast(asChar(args[0])));
 }
@@ -479,20 +491,21 @@ pub fn malgo_char_to_string(args: []const Value) Value {
     return mkString(utf8EncodeAlloc(asChar(args[0])));
 }
 pub fn malgo_is_digit(args: []const Value) Value {
+    // Data.Char.isDigit is itself ASCII-only ('0'..'9'), so no Latin-1 case applies here.
     const c = asChar(args[0]);
     return boolValue(isAscii(c) and std.ascii.isDigit(@intCast(c)));
 }
 pub fn malgo_is_lower(args: []const Value) Value {
     const c = asChar(args[0]);
-    return boolValue(isAscii(c) and std.ascii.isLower(@intCast(c)));
+    return boolValue((isAscii(c) and std.ascii.isLower(@intCast(c))) or isLatin1Lower(c));
 }
 pub fn malgo_is_upper(args: []const Value) Value {
     const c = asChar(args[0]);
-    return boolValue(isAscii(c) and std.ascii.isUpper(@intCast(c)));
+    return boolValue((isAscii(c) and std.ascii.isUpper(@intCast(c))) or isLatin1Upper(c));
 }
 pub fn malgo_is_alphanum(args: []const Value) Value {
     const c = asChar(args[0]);
-    return boolValue(isAscii(c) and std.ascii.isAlphanumeric(@intCast(c)));
+    return boolValue((isAscii(c) and std.ascii.isAlphanumeric(@intCast(c))) or isLatin1Lower(c) or isLatin1Upper(c));
 }
 
 pub fn malgo_string_length(args: []const Value) Value {
@@ -531,15 +544,31 @@ pub fn malgo_string_append(args: []const Value) Value {
     return mkString(owned);
 }
 
+/// Mirrors Eval.hs's `malgo_substring`, which never fails: `T.take (end -
+/// start) (T.drop start s)`. `T.drop` clamps a negative or overlong `start`
+/// to `[0, len]`; `T.take` then clamps its own (unclamped, sign-preserved)
+/// count against the remaining length. Indices past the string's bounds or
+/// a negative `start` are ordinary, non-panicking inputs -- only malformed
+/// UTF-8 is a genuine error.
 pub fn malgo_substring(args: []const Value) Value {
     const s = asStr(args[0]);
-    const start: usize = @intCast(asI64(args[1]));
-    const end: usize = @intCast(asI64(args[2]));
-    if (end <= start) return mkString("");
-    const startByte = utf8ByteOffsetOfScalar(s, start);
-    const endByte = utf8ByteOffsetOfScalar(s, end);
+    const rawStart = asI64(args[1]);
+    const rawEnd = asI64(args[2]);
+    const len: i64 = @intCast(std.unicode.utf8CountCodepoints(s) catch panic("malformed UTF-8 string"));
+    const clampedStart: i64 = clampI64(rawStart, 0, len);
+    const takeCount = rawEnd - rawStart;
+    if (takeCount <= 0) return mkString("");
+    const clampedEnd: i64 = clampI64(clampedStart + takeCount, clampedStart, len);
+    const startByte = utf8ByteOffsetOfScalar(s, @intCast(clampedStart));
+    const endByte = utf8ByteOffsetOfScalar(s, @intCast(clampedEnd));
     const owned = g_arena.allocator().dupe(u8, s[startByte..endByte]) catch @panic("Malgo: out of memory");
     return mkString(owned);
+}
+
+fn clampI64(x: i64, lo: i64, hi: i64) i64 {
+    if (x < lo) return lo;
+    if (x > hi) return hi;
+    return x;
 }
 
 pub fn malgo_string_reverse(args: []const Value) Value {
@@ -657,11 +686,27 @@ pub fn malgo_write_file(args: []const Value) Value {
     panicUnimplemented("malgo_write_file");
 }
 
+fn isReadsSpace(c: u8) bool {
+    return c == ' ' or c == '\t' or c == '\n' or c == 11 or c == 12 or c == '\r';
+}
+
 fn parseIntLiteral(comptime T: type, s: []const u8) T {
-    // Haskell's `reads` for integers: optional leading '-', then digits,
-    // must consume the whole string (partial parses are rejected upstream
-    // by the evaluator too -- `reads` returning `[(n, "")]`).
-    return std.fmt.parseInt(T, s, 10) catch panic("malformed integer literal in string");
+    // Mirrors Haskell's `reads` for integers, which the oracle (Eval.hs)
+    // requires to consume the whole string (`[(n, "")]`): skip leading
+    // whitespace (via `lex`), then an optional '-' (no '+'), then one or
+    // more digits, with nothing left over. `std.fmt.parseInt` differs from
+    // this in both directions -- it accepts '_' separators and a leading
+    // '+' that `reads` rejects, and it rejects leading whitespace that
+    // `reads` accepts -- so the accepted digit run is sliced out by hand
+    // and only that slice is handed to `parseInt`.
+    var i: usize = 0;
+    while (i < s.len and isReadsSpace(s[i])) : (i += 1) {}
+    const digitsStart = i;
+    if (i < s.len and s[i] == '-') i += 1;
+    const signEnd = i;
+    while (i < s.len and s[i] >= '0' and s[i] <= '9') : (i += 1) {}
+    if (i == signEnd or i != s.len) panic("malformed integer literal in string");
+    return std.fmt.parseInt(T, s[digitsStart..], 10) catch panic("malformed integer literal in string");
 }
 
 pub fn malgo_string_to_int32(args: []const Value) Value {

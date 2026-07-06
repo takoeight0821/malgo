@@ -138,36 +138,102 @@ escapingNamesBranch (Branch _ _ stmt) = escapingNamesStatement stmt
 -- | For every 'Join'-bound name in a function body (not descending into
 -- nested closure bodies, which are classified independently once lifted),
 -- decide whether it is 'Local' or 'Escaping'.
+--
+-- 'initialClassifyJoins' alone is not sufficient: it only checks whether a
+-- join's /own/ uses escape within its own continuation. But a join @j@
+-- classified 'Local' by that rule can still be referenced from inside the
+-- *consumer* of some other join @m@ — and once @m@ is itself 'Escaping', its
+-- consumer is lifted into a separate function ('Malgo.Backend.Zig.Emit.liftConsumer'),
+-- which captures its free variables as ordinary runtime values. A 'Local'
+-- join has no runtime value (it exists only as a compile-time substitution
+-- table entry), so it cannot be captured this way: it must be promoted to
+-- 'Escaping' too. This is a monotone fixpoint over "escaping join → free
+-- variable of its consumer that is itself a tracked join, currently Local".
 classifyJoins :: Statement -> Map Name Ownership
-classifyJoins (Cut p _) = classifyJoinsProducer p
-classifyJoins (Join _ name consumer stmt) =
+classifyJoins stmt = promoteEscapingCaptures (Map.fromList (collectJoins stmt)) (initialClassifyJoins stmt)
+
+-- | Like 'classifyJoins', but for a 'Consumer' being independently lifted
+-- into its own function (see 'Malgo.Backend.Zig.Emit.liftConsumer'): the
+-- fixpoint must be recomputed in this fresh scope using only the joins
+-- collected from *this* consumer's body.
+classifyJoinsConsumer :: Consumer -> Map Name Ownership
+classifyJoinsConsumer consumer = promoteEscapingCaptures (Map.fromList (collectJoinsConsumer consumer)) (initialClassifyJoinsConsumer consumer)
+
+-- | Repeatedly promote any 'Local' join referenced as a free variable of an
+-- 'Escaping' join's consumer, until no more changes.
+promoteEscapingCaptures :: Map Name Consumer -> Map Name Ownership -> Map Name Ownership
+promoteEscapingCaptures consumers = go
+  where
+    go ownership =
+      let escapingConsumers = [c | (n, c) <- Map.toList consumers, Map.lookup n ownership == Just Escaping]
+          referenced = Set.unions (map freeVarsConsumer escapingConsumers)
+          toPromote = Set.filter (\n -> Map.lookup n ownership == Just Local) referenced
+       in if Set.null toPromote
+            then ownership
+            else go (Map.union (Map.fromSet (const Escaping) toPromote) ownership)
+
+-- | Every 'Join'-bound name paired with its consumer, within a function body
+-- (not descending into nested closure bodies — those are collected
+-- independently, in their own fresh scope, once lifted).
+collectJoins :: Statement -> [(Name, Consumer)]
+collectJoins (Cut p _) = collectJoinsProducer p
+collectJoins (Join _ name consumer stmt) = (name, consumer) : (collectJoinsConsumer consumer <> collectJoins stmt)
+collectJoins (Primitive _ _ ps _) = concatMap collectJoinsProducer ps
+collectJoins (Invoke _ _ _) = []
+collectJoins (ExternalCall _ _ ps _) = concatMap collectJoinsProducer ps
+collectJoins (BinOp _ _ lhs rhs _) = collectJoinsProducer lhs <> collectJoinsProducer rhs
+collectJoins (Ifz _ cond t e) = collectJoinsProducer cond <> collectJoins t <> collectJoins e
+
+collectJoinsProducer :: Producer -> [(Name, Consumer)]
+collectJoinsProducer (Var _ _) = []
+collectJoinsProducer (Literal _ _) = []
+collectJoinsProducer (Construct _ _ ps _) = concatMap collectJoinsProducer ps
+collectJoinsProducer (Lambda _ _ _) = []
+collectJoinsProducer (Object _ _) = []
+collectJoinsProducer (Mu _ _ _) = []
+collectJoinsProducer (Cocase _ _) = []
+
+collectJoinsConsumer :: Consumer -> [(Name, Consumer)]
+collectJoinsConsumer (Label _ _) = []
+collectJoinsConsumer (Apply _ ps _) = concatMap collectJoinsProducer ps
+collectJoinsConsumer (Project _ _ _) = []
+collectJoinsConsumer (Then _ _ stmt) = collectJoins stmt
+collectJoinsConsumer (Finish _) = []
+collectJoinsConsumer (Select _ branches) = concatMap (\(Branch _ _ stmt) -> collectJoins stmt) branches
+collectJoinsConsumer (Destructor _ _ ps _) = concatMap collectJoinsProducer ps
+
+-- | The direct-escaping rule alone (see 'classifyJoins' for why this is not
+-- the whole story).
+initialClassifyJoins :: Statement -> Map Name Ownership
+initialClassifyJoins (Cut p _) = initialClassifyJoinsProducer p
+initialClassifyJoins (Join _ name consumer stmt) =
   let ownership = if name `Set.member` escapingNamesStatement stmt then Escaping else Local
-   in Map.insert name ownership (classifyJoinsConsumer consumer <> classifyJoins stmt)
-classifyJoins (Primitive _ _ ps _) = Map.unions (map classifyJoinsProducer ps)
-classifyJoins (Invoke _ _ _) = Map.empty
-classifyJoins (ExternalCall _ _ ps _) = Map.unions (map classifyJoinsProducer ps)
-classifyJoins (BinOp _ _ lhs rhs _) = classifyJoinsProducer lhs <> classifyJoinsProducer rhs
-classifyJoins (Ifz _ cond t e) = classifyJoinsProducer cond <> classifyJoins t <> classifyJoins e
+   in Map.insert name ownership (initialClassifyJoinsConsumer consumer <> initialClassifyJoins stmt)
+initialClassifyJoins (Primitive _ _ ps _) = Map.unions (map initialClassifyJoinsProducer ps)
+initialClassifyJoins (Invoke _ _ _) = Map.empty
+initialClassifyJoins (ExternalCall _ _ ps _) = Map.unions (map initialClassifyJoinsProducer ps)
+initialClassifyJoins (BinOp _ _ lhs rhs _) = initialClassifyJoinsProducer lhs <> initialClassifyJoinsProducer rhs
+initialClassifyJoins (Ifz _ cond t e) = initialClassifyJoinsProducer cond <> initialClassifyJoins t <> initialClassifyJoins e
 
 -- | Only descends into a nested closure's free variables for escaping
 -- analysis, but its *own* join structure still needs classifying once it is
 -- lifted — which happens via a fresh top-level call to 'classifyJoins' on
 -- its body, done by the emitter. This function does not recurse into
 -- 'Lambda'\/'Object'\/'Cocase'\/'Mu' bodies for that reason.
-classifyJoinsProducer :: Producer -> Map Name Ownership
-classifyJoinsProducer (Var _ _) = Map.empty
-classifyJoinsProducer (Literal _ _) = Map.empty
-classifyJoinsProducer (Construct _ _ ps _) = Map.unions (map classifyJoinsProducer ps)
-classifyJoinsProducer (Lambda _ _ _) = Map.empty
-classifyJoinsProducer (Object _ _) = Map.empty
-classifyJoinsProducer (Mu _ _ _) = Map.empty
-classifyJoinsProducer (Cocase _ _) = Map.empty
+initialClassifyJoinsProducer :: Producer -> Map Name Ownership
+initialClassifyJoinsProducer (Var _ _) = Map.empty
+initialClassifyJoinsProducer (Literal _ _) = Map.empty
+initialClassifyJoinsProducer (Construct _ _ ps _) = Map.unions (map initialClassifyJoinsProducer ps)
+initialClassifyJoinsProducer (Lambda _ _ _) = Map.empty
+initialClassifyJoinsProducer (Object _ _) = Map.empty
+initialClassifyJoinsProducer (Mu _ _ _) = Map.empty
+initialClassifyJoinsProducer (Cocase _ _) = Map.empty
 
-classifyJoinsConsumer :: Consumer -> Map Name Ownership
-classifyJoinsConsumer (Label _ _) = Map.empty
-classifyJoinsConsumer (Apply _ ps _) = Map.unions (map classifyJoinsProducer ps)
-classifyJoinsConsumer (Project _ _ _) = Map.empty
-classifyJoinsConsumer (Then _ _ stmt) = classifyJoins stmt
-classifyJoinsConsumer (Finish _) = Map.empty
-classifyJoinsConsumer (Select _ branches) = Map.unions (map (\(Branch _ _ stmt) -> classifyJoins stmt) branches)
-classifyJoinsConsumer (Destructor _ _ ps _) = Map.unions (map classifyJoinsProducer ps)
+initialClassifyJoinsConsumer :: Consumer -> Map Name Ownership
+initialClassifyJoinsConsumer (Label _ _) = Map.empty
+initialClassifyJoinsConsumer (Apply _ ps _) = Map.unions (map initialClassifyJoinsProducer ps)
+initialClassifyJoinsConsumer (Project _ _ _) = Map.empty
+initialClassifyJoinsConsumer (Then _ _ stmt) = initialClassifyJoins stmt
+initialClassifyJoinsConsumer (Finish _) = Map.empty
+initialClassifyJoinsConsumer (Select _ branches) = Map.unions (map (\(Branch _ _ stmt) -> initialClassifyJoins stmt) branches)
+initialClassifyJoinsConsumer (Destructor _ _ ps _) = Map.unions (map initialClassifyJoinsProducer ps)

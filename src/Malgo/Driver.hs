@@ -106,6 +106,7 @@ compileToExecutable srcPath outPath optMode = do
     liftIO $ modifyIORef db.cacheParsedModule $ Map.insert modName parsedAst
     core <- runQueryDB db $ fetch (LinkedProgram modName)
     runReader modName $ runPass ZigPass core
+  save srcModulePath ".zig" (convertString @Text @BS.ByteString zigText)
   workspace <- getWorkspace
   let zigPath = outPath <> ".zig"
   liftIO $ BS.writeFile zigPath (convertString zigText)

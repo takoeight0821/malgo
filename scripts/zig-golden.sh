@@ -16,7 +16,12 @@ set -u
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 
-MALGO="${MALGO:-dist-newstyle/build/aarch64-osx/ghc-9.12.4/malgo-2.0.0/x/malgo/build/malgo/malgo}"
+if [ -z "${MALGO:-}" ]; then
+  # `cabal list-bin` resolves the exact path regardless of platform triple
+  # (aarch64-osx, x86_64-linux, ...) or GHC/package version, unlike a
+  # hardcoded dist-newstyle path.
+  MALGO="$(cabal list-bin exe:malgo 2>/dev/null || true)"
+fi
 COMPILE_TIMEOUT="${COMPILE_TIMEOUT:-60}"
 CASE_TIMEOUT="${CASE_TIMEOUT:-10}"
 MAX_FAILURES="${MAX_FAILURES:-999999}"
@@ -30,8 +35,8 @@ if ! command -v zig >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -x "$MALGO" ]; then
-  echo "malgo executable not found at $MALGO (set MALGO or run 'cabal build exe:malgo')." >&2
+if [ -z "$MALGO" ] || [ ! -x "$MALGO" ]; then
+  echo "malgo executable not found (set MALGO explicitly or run 'cabal build exe:malgo')." >&2
   exit 1
 fi
 
@@ -76,15 +81,19 @@ for dir in "$GOLDEN_ROOT"/*/; do
     total_failures=$((total_failures + 1))
   else
     actual_out="$WORK/$case.out"
-    if ! printf 'Hello\n' | timeout "$CASE_TIMEOUT" "$out_bin" >"$actual_out" 2>"$WORK/$case.run.log"; then
-      exit_code=$?
-      if [ "$exit_code" -eq 124 ]; then
-        timeout_fail=$((timeout_fail + 1))
-        timeout_names+=("$case")
-      else
-        run_fail=$((run_fail + 1))
-        run_fail_names+=("$case")
-      fi
+    # Run as a plain statement (not `if ! pipeline`) so `$?` right after
+    # reflects the pipeline's actual last-command exit status, including
+    # `timeout`'s 124 on expiry -- `if ! pipeline; then ...; $?` would
+    # instead capture the negated condition's status, which is always 0.
+    printf 'Hello\n' | timeout "$CASE_TIMEOUT" "$out_bin" >"$actual_out" 2>"$WORK/$case.run.log"
+    run_exit=$?
+    if [ "$run_exit" -eq 124 ]; then
+      timeout_fail=$((timeout_fail + 1))
+      timeout_names+=("$case")
+      total_failures=$((total_failures + 1))
+    elif [ "$run_exit" -ne 0 ]; then
+      run_fail=$((run_fail + 1))
+      run_fail_names+=("$case")
       total_failures=$((total_failures + 1))
     elif cmp -s "$actual_out" "$golden"; then
       pass=$((pass + 1))
@@ -109,7 +118,10 @@ echo "run-fail:     $run_fail ${run_fail_names[*]:-}"
 echo "mismatch:     $mismatch ${mismatch_names[*]:-}"
 echo "timeout:      $timeout_fail ${timeout_names[*]:-}"
 
-if [ "$pass" -eq "$total" ]; then
+if [ "$total" -eq 0 ]; then
+  echo "No golden+testcase pairs were found under $GOLDEN_ROOT / $TESTCASE_DIR -- treating this as failure, not success." >&2
+  exit 1
+elif [ "$pass" -eq "$total" ]; then
   exit 0
 else
   exit 1

@@ -47,7 +47,13 @@ buildExecutable zigCacheRoot srcPath outPath mode = do
           "--global-cache-dir",
           zigCacheRoot <> "/zig-global-cache",
           "-O",
-          optModeFlag mode
+          optModeFlag mode,
+          -- The runtime calls std.c.write/std.c.read (deliberately bypassing
+          -- Zig's async std.Io; see runtime.zig's module doc). macOS links
+          -- libc unconditionally (it's part of libSystem), but Zig does not
+          -- link libc by default on Linux, so every generated program would
+          -- fail at link time there without this.
+          "-lc"
         ]
   (exitCode, _stdout, stderrOutput) <- readProcessWithExitCode zig args ""
   case exitCode of

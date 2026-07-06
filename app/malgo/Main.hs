@@ -58,6 +58,16 @@ main = do
             }
     Compile opt -> do
       let outPath = fromMaybe (takeBaseName opt.srcPath) opt.outPath
+      -- opt.srcPath is already absolute (parseCommand resolves it), so
+      -- comparing it against the default output path's own absolute form
+      -- catches e.g. `malgo compile hello` on an extension-less source
+      -- file run from its own directory, where the default output name
+      -- (the source's base name) would otherwise silently overwrite it.
+      outPathAbs <- makeAbsolute outPath
+      when (outPathAbs == opt.srcPath) do
+        hPutStrLn stderr $ "malgo compile: refusing to overwrite the source file (" <> outPath <> ")."
+        hPutStrLn stderr "Pass -o/--output to choose a different path."
+        exitFailure
       Driver.compileToExecutable opt.srcPath outPath opt.optMode
         & runMalgoM compileFlag
     Lint opt -> do

@@ -47,8 +47,7 @@ emitProgram program = do
         "",
         "pub fn main(rt_init: rt.std.process.Init.Minimal) void {",
         "    rt.setArgv(rt_init.args.vector);",
-        "    var arena = rt.newArena();",
-        "    rt.g_arena = &arena;",
+        "    rt.initHeap();",
         entryCall,
         "    rt.flushStdout();",
         "}"

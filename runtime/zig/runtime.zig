@@ -128,6 +128,32 @@ pub fn projectField(record: Value, name: []const u8, k: Value) Value {
     panic("projectField: no such field");
 }
 
+fn identityCode(cap: []const Value, args: []const Value) Value {
+    _ = cap;
+    return args[0];
+}
+
+/// A covalue that, once invoked, returns its argument unchanged. Since every
+/// generated function tail-returns whatever the covalue it invokes returns,
+/// calling a record field's code with this as its continuation makes the
+/// field's (call-by-name) computation synchronous from the caller's point of
+/// view -- used by `Expand` pattern matching to force a field into a plain
+/// value it can immediately test and bind against.
+pub fn identityKont() Value {
+    return mkClosure(&identityCode, &[_]Value{});
+}
+
+/// Force a record field by name without checking `record`'s kind first
+/// (callers that already know it is a record, e.g. `Expand` pattern
+/// matching after its own `.kind == .record` guard, can skip that check).
+pub fn forceField(record: Value, name: []const u8) ?Value {
+    if (record.kind != .record) return null;
+    for (record.payload.record.fields) |field| {
+        if (stringEq(field.name, name)) return field.code(record.payload.record.captures, &[_]Value{identityKont()});
+    }
+    return null;
+}
+
 pub fn tagEq(a: Tag, b: Tag) bool {
     return switch (a) {
         .tuple => b == .tuple,

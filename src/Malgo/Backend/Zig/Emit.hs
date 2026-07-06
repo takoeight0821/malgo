@@ -20,11 +20,12 @@
 --     function (capturing its free variables), allocated once as a real
 --     @rt.Closure@ Value bound to an ordinary Zig @const@, and invoked
 --     through @rt.applyCovalue@ wherever it is used.
-module Malgo.Backend.Zig.Emit (compileToZig) where
+module Malgo.Backend.Zig.Emit (compileToZig, mangleId) where
 
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text qualified as T
+import Data.Traversable (for)
 import Effectful
 import Effectful.Reader.Static (Reader, ask)
 import Effectful.State.Static.Local (State)
@@ -238,7 +239,7 @@ emitSelect env ownership scrutineeExpr branches = do
       -- `_ = x;` discard of a used one, so every pattern-bound name must be
       -- discarded if and only if the branch body never references it.
       let used = freeVarsStatement stmt
-          (guardExpr, bindStmts) = compilePattern used scrutVar pat
+      (guardExpr, bindStmts) <- compilePattern used scrutVar pat
       (bodyText, lifted1) <- emitStatement env ownership stmt
       (restText, lifted2) <- goBranches scrutVar rest
       pure
@@ -270,33 +271,68 @@ emitSelect env ownership scrutineeExpr branches = do
 -- one scope. A locally-threaded "seen" set (scoped to one top-level
 -- 'compilePattern' call, i.e. one branch's pattern) drops every
 -- redeclaration after the first.
-compilePattern :: Set Name -> Text -> Pattern -> (Text, Text)
-compilePattern used scrutinee pat = let (guard, binds, _) = go Set.empty scrutinee pat in (guard, binds)
+--
+-- Monadic (needs fresh names): unlike a struct's @Destruct@ fields, which
+-- are plain, side-effect-free field accesses safe to re-evaluate, an
+-- @Object@ record's fields are call-by-name and may have effects
+-- ('Malgo.Sequent.Eval.evalConsumer'\'s @Project@ case re-runs the field's
+-- statement on every force) — an @Expand@ sub-pattern must therefore force
+-- each field into a fresh @const@ exactly once, not inline the force
+-- expression everywhere it is used.
+--
+-- A pattern field absent from the record (the evaluator's
+-- @Map.intersectionWith@ silently treats this as still matching) is not
+-- implemented: it panics at runtime instead. Real Malgo programs pattern
+-- match only on fields a record's row guarantees are present, so this
+-- edge case is not expected to be exercised.
+compilePattern :: (State Uniq :> es, Reader ModuleName :> es) => Set Name -> Text -> Pattern -> Eff es (Text, Text)
+compilePattern used scrutinee pat = do
+  (guard, binds, _) <- go Set.empty scrutinee pat
+  pure (guard, binds)
   where
-    go :: Set Name -> Text -> Pattern -> (Text, Text, Set Name)
+    go :: (State Uniq :> es, Reader ModuleName :> es) => Set Name -> Text -> Pattern -> Eff es (Text, Text, Set Name)
     go seen s (PVar _ name)
-      | name `Set.member` seen = ("true", "", seen)
+      | name `Set.member` seen = pure ("true", "", seen)
       | otherwise =
           let discard = if name `Set.member` used then "" else "_ = " <> mangleId name <> ";\n"
-           in ("true", "const " <> mangleId name <> " = " <> s <> ";\n" <> discard, Set.insert name seen)
-    go seen s (PLiteral _ lit) = (literalEqExpr s lit, "", seen)
-    go seen s (Destruct _ tag pats) =
+           in pure ("true", "const " <> mangleId name <> " = " <> s <> ";\n" <> discard, Set.insert name seen)
+    go seen s (PLiteral _ lit) = pure (literalEqExpr s lit, "", seen)
+    go seen s (Destruct _ tag pats) = do
       let tagCheck = s <> ".kind == .strukt and rt.tagEq(" <> s <> ".payload.strukt.tag, " <> compileTag tag <> ")"
-          (subs, seen') = goFields seen (zip [0 :: Int ..] pats)
-          guards = tagCheck : [g | (g, _) <- subs, g /= "true"]
+      (subs, seen') <- goFields seen (zip [0 :: Int ..] pats)
+      let guards = tagCheck : [g | (g, _) <- subs, g /= "true"]
           binds = T.concat [b | (_, b) <- subs]
-       in (T.intercalate " and " guards, binds, seen')
+      pure (T.intercalate " and " guards, binds, seen')
       where
-        goFields seen0 [] = ([], seen0)
-        goFields seen0 ((i, p) : rest) =
-          let (g, b, seen1) = go seen0 (s <> ".payload.strukt.fields[" <> convertString (show i) <> "]") p
-              (restResults, seen2) = goFields seen1 rest
-           in ((g, b) : restResults, seen2)
-    go seen s (Expand _ _fields) =
-      -- Record projection lands with Object/Record support (M4). Until
-      -- then, any Expand pattern fails to match rather than corrupting
-      -- memory.
-      (s <> ".kind == .record and rt.panicUnimplemented(\"Expand pattern\")", "", seen)
+        goFields seen0 [] = pure ([], seen0)
+        goFields seen0 ((i, p) : rest) = do
+          (g, b, seen1) <- go seen0 (s <> ".payload.strukt.fields[" <> convertString (show i) <> "]") p
+          (restResults, seen2) <- goFields seen1 rest
+          pure ((g, b) : restResults, seen2)
+    go seen s (Expand _ fieldPats) = do
+      -- Fields forced in ascending name order (Map.toList), matching
+      -- Eval.hs's matchExpand.
+      (subs, seen') <- goFields seen (Map.toList fieldPats)
+      let guards = (s <> ".kind == .record") : [g | (g, _) <- subs, g /= "true"]
+          binds = T.concat [b | (_, b) <- subs]
+      pure (T.intercalate " and " guards, binds, seen')
+      where
+        goFields seen0 [] = pure ([], seen0)
+        goFields seen0 ((fieldName, p) : rest) = do
+          forced <- newTemporalId "expand"
+          let forceStmt =
+                "const "
+                  <> mangleId forced
+                  <> " = rt.forceField("
+                  <> s
+                  <> ", "
+                  <> zigStringLit fieldName
+                  <> ") orelse rt.panic(\"Expand: missing field "
+                  <> fieldName
+                  <> "\");\n"
+          (g, b, seen1) <- go seen0 (mangleId forced) p
+          (restResults, seen2) <- goFields seen1 rest
+          pure ((g, forceStmt <> b) : restResults, seen2)
 
 literalEqExpr :: Text -> Literal -> Text
 literalEqExpr scrutinee = \case
@@ -391,14 +427,48 @@ emitProducer _outerEnv _outerOwnership (Lambda _ params stmt) = do
       | otherwise =
           let discard = if p `Set.member` used then "" else "_ = " <> mangleId p <> ";\n"
            in "const " <> mangleId p <> " = args[" <> convertString (show i) <> "];\n" <> discard <> bindParams used (Set.insert p seen) rest
-emitProducer _ _ (Object _ fields) =
-  -- Records land with M4; a placeholder value keeps the (unreachable, for
-  -- Builtin/Prelude) code path total. Its free variables are still read
-  -- into a discarded array literal (not individually discarded) so an
-  -- enclosing pattern match's "used" vars stay consistent with what this
-  -- stub actually emits, whichever way `used`/`freeVarsStatement` decided.
-  let vars = Set.toList (Set.unions [freeVarsStatement stmt Set.\\ Set.singleton ret | (ret, stmt) <- Map.elems fields])
-   in pure ("rt.panicUnimplemented(\"Object\")", discardFreeVars vars, [])
+emitProducer _outerEnv _outerOwnership (Object _ fields) = do
+  -- A record's fields share ONE captured environment (mirrors the
+  -- evaluator's `Record env fields`, Eval.hs) — the *allocation*'s capture
+  -- list is the union of every field's own free variables (excluding that
+  -- field's own return name). But each individual field function only
+  -- references a subset of that shared list, so (unlike a Lambda, where
+  -- captures are computed per-function) binding *every* shared capture
+  -- unconditionally in *every* field's function body would leave some
+  -- unused in fields that do not reference them — Zig rejects that. Each
+  -- field's own bindings are therefore discarded per-field based on that
+  -- field's own free variables, not the shared union.
+  let sharedCaptures = Set.toList (Set.unions [freeVarsStatement stmt Set.\\ Set.singleton ret | (ret, stmt) <- Map.elems fields])
+      discardCap = if null sharedCaptures then "_ = cap;\n" else ""
+  fieldFns <- for (Map.toList fields) \(fieldName, (retName, stmt)) -> do
+    fnId <- newTemporalId "field"
+    let usedByThisField = freeVarsStatement stmt Set.\\ Set.singleton retName
+        captureBinds = T.concat [bindCapture usedByThisField i c | (i, c) <- zip [0 :: Int ..] sharedCaptures]
+    (bodyText, lifted) <- emitStatement Map.empty (classifyJoins stmt) stmt
+    let fnText =
+          "fn "
+            <> mangleId fnId
+            <> "(cap: []const rt.Value, args: []const rt.Value) rt.Value {\n"
+            <> discardCap
+            <> captureBinds
+            <> "const "
+            <> mangleId retName
+            <> " = args[0];\n"
+            <> bodyText
+            <> "\n}"
+    pure (fieldName, fnId, fnText, lifted)
+  let fieldEntries = T.intercalate ", " [".{ .name = " <> zigStringLit fieldName <> ", .code = &" <> mangleId fnId <> " }" | (fieldName, fnId, _, _) <- fieldFns]
+      allocExpr =
+        "rt.mkRecord(&[_]rt.NamedField{"
+          <> fieldEntries
+          <> "}, &[_]rt.Value{"
+          <> T.intercalate ", " (map mangleId sharedCaptures)
+          <> "})"
+      allLifted = concatMap (\(_, _, fnText, lifted) -> fnText : lifted) fieldFns
+  pure (allocExpr, "", allLifted)
+  where
+    bindCapture usedByThisField i c =
+      "const " <> mangleId c <> " = cap[" <> convertString (show i) <> "];\n" <> if c `Set.member` usedByThisField then "" else "_ = " <> mangleId c <> ";\n"
 emitProducer _ _ (Mu _ _ _) =
   error "Malgo.Backend.Zig.Emit: Mu in producer position should have been eliminated by Normalize"
 emitProducer _ _ (Cocase _ branches) =

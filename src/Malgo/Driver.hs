@@ -1,5 +1,5 @@
 -- | Malgo.Driver is the entry point of `malgo to-ll`.
-module Malgo.Driver (compile, compileFromAST, withDump) where
+module Malgo.Driver (compile, compileFromAST, compileToExecutable, withDump) where
 
 import Control.Exception (IOException, catch)
 import Data.ByteString qualified as BS
@@ -9,6 +9,8 @@ import Effectful.Error.Static (Error)
 import Effectful.Reader.Static
 import Effectful.State.Static.Local (State)
 import Malgo.Backend.Scheme (SchemePass (..))
+import Malgo.Backend.Zig (ZigPass (..))
+import Malgo.Backend.Zig.Toolchain qualified as Zig
 import Malgo.Features
 import Malgo.Module
 import Malgo.Parser (ParserPass (..))
@@ -65,6 +67,9 @@ compileFromAST srcPath parsedAst = do
     TargetScheme -> do
       schemeCode <- runReader modName $ runPass SchemePass core
       liftIO $ putStr $ convertString schemeCode
+    TargetZig -> do
+      zigCode <- runReader modName $ runPass ZigPass core
+      liftIO $ putStr $ convertString zigCode
     TargetEval -> do
       let stdin = fmap Just getChar `catch` \(_ :: IOException) -> pure Nothing
       let stdout = putChar
@@ -73,6 +78,38 @@ compileFromAST srcPath parsedAst = do
       case flags.evalMode of
         EvalBigStep -> runPass BigStepEvalPass (modName, Handlers {..}, core)
         EvalSmallStep -> runPass EvalPass (modName, Handlers {..}, core)
+
+-- | Compile a source file to Zig, then invoke the @zig@ toolchain to
+-- produce a native executable at @outPath@. Used by the @malgo compile@
+-- subcommand (as opposed to @malgo eval --target zig@, which just prints
+-- generated Zig source to stdout via 'compileFromAST').
+compileToExecutable ::
+  ( Reader Flag :> es,
+    IOE :> es,
+    State Uniq :> es,
+    Workspace :> es,
+    Features :> es
+  ) =>
+  FilePath ->
+  FilePath ->
+  Zig.OptMode ->
+  Eff es ()
+compileToExecutable srcPath outPath optMode = do
+  srcModulePath <- parseArtifactPathFromPwd srcPath
+  src <- liftIO $ BS.readFile srcPath
+  save srcModulePath ".mlg" src
+  zigText <- runCompileError do
+    parsedAst <- runPass ParserPass (srcPath, convertString @BS.ByteString src)
+    let modName = parsedAst.moduleName
+    registerModule modName srcModulePath
+    db <- liftIO newDatabase
+    liftIO $ modifyIORef db.cacheParsedModule $ Map.insert modName parsedAst
+    core <- runQueryDB db $ fetch (LinkedProgram modName)
+    runReader modName $ runPass ZigPass core
+  workspace <- getWorkspace
+  let zigPath = outPath <> ".zig"
+  liftIO $ BS.writeFile zigPath (convertString zigText)
+  liftIO $ Zig.buildExecutable workspace zigPath outPath optMode
 
 -- | Read the source file and parse it, then compile.
 compile ::

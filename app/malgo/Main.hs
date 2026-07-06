@@ -4,6 +4,7 @@
 
 module Main (main) where
 
+import Malgo.Backend.Zig.Toolchain qualified as Zig
 import Malgo.Driver qualified as Driver
 import Malgo.Lint (lintFile)
 import Malgo.Lint.Diagnostic (Diagnostic (..), Severity (Error), prettyDiagnostic)
@@ -14,6 +15,7 @@ import Options.Applicative
 import Prettyprinter.Render.Text (hPutDoc)
 import System.Directory (makeAbsolute)
 import System.Exit (exitFailure)
+import System.FilePath (takeBaseName)
 
 data EvalOpt = EvalOpt
   { srcPath :: FilePath,
@@ -29,6 +31,12 @@ data EvalOpt = EvalOpt
 data LintOpt = LintOpt
   { srcPath :: FilePath,
     denyWarnings :: Bool
+  }
+
+data CompileOpt = CompileOpt
+  { srcPath :: FilePath,
+    outPath :: Maybe FilePath,
+    optMode :: Zig.OptMode
   }
 
 main :: IO ()
@@ -48,6 +56,10 @@ main = do
               Flag.useInfer = opt.useInfer,
               Flag.programArgs = opt.programArgs
             }
+    Compile opt -> do
+      let outPath = fromMaybe (takeBaseName opt.srcPath) opt.outPath
+      Driver.compileToExecutable opt.srcPath outPath opt.optMode
+        & runMalgoM compileFlag
     Lint opt -> do
       diags <- lintFile opt.srcPath & runMalgoM lintFlag
       for_ diags \d -> do
@@ -67,6 +79,17 @@ main = do
           Flag.useInfer = False,
           Flag.programArgs = []
         }
+    compileFlag =
+      Flag
+        { Flag.noOptimize = False,
+          Flag.lambdaLift = False,
+          Flag.debugMode = False,
+          Flag.testMode = False,
+          Flag.target = TargetZig,
+          Flag.evalMode = EvalSmallStep,
+          Flag.useInfer = False,
+          Flag.programArgs = []
+        }
 
 targetOpt :: Parser Target
 targetOpt =
@@ -74,12 +97,22 @@ targetOpt =
     (eitherReader parseTarget)
     ( long "target"
         <> value TargetEval
-        <> help "Compilation target: eval (default) or scheme"
+        <> help "Compilation target: eval (default), scheme, or zig"
     )
   where
     parseTarget "eval" = Right TargetEval
     parseTarget "scheme" = Right TargetScheme
+    parseTarget "zig" = Right TargetZig
     parseTarget t = Left $ "Unknown target: " <> t
+
+optModeOpt :: Parser Zig.OptMode
+optModeOpt =
+  option
+    (eitherReader Zig.parseOptMode)
+    ( long "opt"
+        <> value Zig.Debug
+        <> help "Zig build mode: debug (default), release-safe, or release-fast"
+    )
 
 evalModeOpt :: Parser EvalMode
 evalModeOpt =
@@ -116,15 +149,25 @@ lintOpt =
   )
     <**> helper
 
+compileOpt :: Parser CompileOpt
+compileOpt =
+  ( CompileOpt
+      <$> strArgument (metavar "SOURCE" <> help "Source file (relative path)" <> action "file")
+      <*> optional (strOption (long "output" <> short 'o' <> metavar "OUT" <> help "Output executable path (default: SOURCE's base name)"))
+      <*> optModeOpt
+  )
+    <**> helper
+
 data Command
   = Eval EvalOpt
+  | Compile CompileOpt
   | Lint LintOpt
 
 parseCommand :: IO Command
 parseCommand = do
   command <-
     execParser
-      ( info (subparser (eval <> lint) <**> helper)
+      ( info (subparser (eval <> compile <> lint) <**> helper)
           $ fullDesc
           <> header "malgo programming language"
       )
@@ -132,6 +175,9 @@ parseCommand = do
     Eval opt -> do
       srcPath <- makeAbsolute opt.srcPath
       pure $ Eval opt {srcPath = srcPath}
+    Compile opt -> do
+      srcPath <- makeAbsolute opt.srcPath
+      pure $ Compile opt {srcPath = srcPath}
     Lint opt -> do
       srcPath <- makeAbsolute opt.srcPath
       pure $ Lint opt {srcPath = srcPath}
@@ -141,6 +187,11 @@ parseCommand = do
         $ info (Eval <$> evalOpt)
         $ fullDesc
         <> progDesc "Evaluate a malgo program"
+    compile =
+      command "compile"
+        $ info (Compile <$> compileOpt)
+        $ fullDesc
+        <> progDesc "Compile a malgo program to a native executable via the Zig backend"
     lint =
       command "lint"
         $ info (Lint <$> lintOpt)

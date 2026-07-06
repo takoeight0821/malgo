@@ -41,14 +41,24 @@ module Malgo.Backend.Zig.ClosureConv
     classifyJoins,
     classifyJoinsConsumer,
     Ownership (..),
+    convertProgram,
   )
 where
 
 import Data.Map.Strict qualified as Map
+import Data.Maybe (listToMaybe)
 import Data.Set qualified as Set
+import Data.Traversable (for)
+import Effectful
+import Effectful.Reader.Static (Reader)
+import Effectful.State.Static.Local (State)
+import Malgo.Backend.Zig.Ir qualified as Ir
+import Malgo.Backend.Zig.Normalize (normalizeStatement, substStatement)
+import Malgo.Id
+import Malgo.Module (ModuleName)
 import Malgo.Prelude
 import Malgo.Sequent.Core.Join
-import Malgo.Sequent.Fun (Name, Pattern (..))
+import Malgo.Sequent.Fun (Name, Pattern (..), Tag (..))
 
 -- | Whether a 'Join'-bound consumer name can be compiled as an inline
 -- substitution within its defining function, or must be reified as a
@@ -237,3 +247,311 @@ initialClassifyJoinsConsumer (Then _ _ stmt) = initialClassifyJoins stmt
 initialClassifyJoinsConsumer (Finish _) = Map.empty
 initialClassifyJoinsConsumer (Select _ branches) = Map.unions (map (\(Branch _ _ stmt) -> initialClassifyJoins stmt) branches)
 initialClassifyJoinsConsumer (Destructor _ _ ps _) = Map.unions (map initialClassifyJoinsProducer ps)
+
+-- | Local (same-function) substitution environment: a join name classified
+-- 'Local' maps to the 'Consumer' it was bound to, to be inlined at use.
+-- Because the same consumer AST is inlined (and converted) once per use
+-- site, binders written inside it are duplicated across sites — always on
+-- disjoint control-flow paths, since Join IR joins are non-recursive and a
+-- linear path expands each local join at most once.
+type LocalEnv = Map Name Consumer
+
+-- | Convert a linked Join IR program into the backend 'Ir.Program':
+-- normalize each definition, classify its joins, ANF-flatten every nested
+-- producer, inline 'Local' joins at their use sites, and lift every
+-- 'Lambda'\/escaping join\/'Object' field into its own 'Ir.Func'.
+convertProgram :: (State Uniq :> es, Reader ModuleName :> es) => Program -> Eff es Ir.Program
+convertProgram program = do
+  -- A module reachable via more than one import path (a diamond, e.g. a
+  -- test case importing both Builtin and Prelude, which itself imports
+  -- Builtin) appears once per path in the linked 'Program.definitions'.
+  -- Zig errors on a duplicate struct member name, so definitions are
+  -- deduplicated by 'Malgo.Id.Id' (stable across import paths).
+  let definitions = nubByName program.definitions
+  defFuncs <- concat <$> traverse convertDefinition definitions
+  -- A module with no top-level `main` is valid input (a library-style
+  -- module): 'Malgo.Sequent.Eval.evalProgram' silently does nothing in
+  -- that case, so the generated executable does the same.
+  (entryFuncs, entryName) <- case findMain definitions of
+    Nothing -> pure ([], Nothing)
+    Just found@(entryRange, _) -> do
+      entryStmt <- mainEntryStatement found
+      fnName <- newTemporalId "zig_main"
+      selfVar <- newTemporalId "self"
+      (body, lifted) <- convertStatement Map.empty (classifyJoins entryStmt) entryStmt
+      let fn = Ir.Func {range = entryRange, name = fnName, kind = Ir.TopLevelFn, selfVar, params = [], body}
+      pure (fn : lifted, Just fnName)
+  pure Ir.Program {funcs = defFuncs <> entryFuncs, entry = entryName}
+
+convertDefinition :: (State Uniq :> es, Reader ModuleName :> es) => (Range, Name, Name, Statement) -> Eff es [Ir.Func]
+convertDefinition (defRange, name, retName, rawStmt) = do
+  -- Normalize once per top-level definition: 'normalizeStatement' recurses
+  -- into every nested Lambda/Object field/Cocase branch body, so this
+  -- single call covers the whole tree reachable from here.
+  let stmt = normalizeStatement rawStmt
+  selfVar <- newTemporalId "self"
+  (body, lifted) <- convertStatement Map.empty (classifyJoins stmt) stmt
+  pure (Ir.Func {range = defRange, name, kind = Ir.TopLevelFn, selfVar, params = [retName], body} : lifted)
+
+-- | Keep only the first definition for each 'Malgo.Id.Id', dropping later
+-- occurrences reached via a different import path to the same module.
+nubByName :: [(Range, Name, Name, Statement)] -> [(Range, Name, Name, Statement)]
+nubByName = go Set.empty
+  where
+    go _ [] = []
+    go seen (d@(_, name, _, _) : rest)
+      | name `Set.member` seen = go seen rest
+      | otherwise = d : go (Set.insert name seen) rest
+
+-- | Find the definition named @main@, matching the interpreter's bootstrap
+-- ('Malgo.Sequent.Eval.evalProgram'): the first definition (from any linked
+-- module) whose 'Malgo.Id.Id.name' is exactly @"main"@. 'Nothing' is a
+-- valid result (a library-style module with no entry point).
+findMain :: [(Range, Name, Name, Statement)] -> Maybe (Range, Name)
+findMain defs = listToMaybe [(range, name) | (range, name, _, _) <- defs, name.name == "main"]
+
+-- | Build the program's entry-point statement, mirroring
+-- 'Malgo.Sequent.Eval.evalProgram'\'s bootstrap exactly: locate @main@,
+-- then run @Invoke main afterMain@ where @afterMain@, once handed @main@'s
+-- own value (a closure, by the @main : () -> a@ convention), applies it to
+-- unit and a fresh @Finish@ continuation.
+mainEntryStatement :: (State Uniq :> es, Reader ModuleName :> es) => (Range, Name) -> Eff es Statement
+mainEntryStatement (entryRange, mainName) = do
+  finishName <- newTemporalId "finish"
+  afterMain <- newTemporalId "after_main"
+  pure
+    $ Join entryRange finishName (Finish entryRange)
+    $ Join entryRange afterMain (Apply entryRange [Construct entryRange Tuple [] []] [finishName])
+    $ Invoke entryRange mainName afterMain
+
+convertStatement :: (State Uniq :> es, Reader ModuleName :> es) => LocalEnv -> Map Name Ownership -> Statement -> Eff es (Ir.Block, [Ir.Func])
+convertStatement env ownership = go
+  where
+    go (Cut producer k) = do
+      (stmts, v, fns1) <- convertProducer env ownership producer
+      (Ir.Block rest term, fns2) <- case Map.lookup k env of
+        Just consumer -> convertApply env ownership consumer v
+        Nothing -> pure (Ir.Block [] (Ir.TApplyCo k v), [])
+      pure (Ir.Block (stmts <> rest) term, fns1 <> fns2)
+    go (Join joinRange name consumer stmt) = case Map.findWithDefault Local name ownership of
+      Local -> convertStatement (Map.insert name consumer env) ownership stmt
+      Escaping -> do
+        (allocStmts, fns1) <- liftJoinConsumer joinRange name consumer
+        (Ir.Block rest term, fns2) <- convertStatement env ownership stmt
+        pure (Ir.Block (allocStmts <> rest) term, fns1 <> fns2)
+    go (Primitive _ name producers k) = do
+      (stmts, vs, fns1) <- convertProducers env ownership producers
+      result <- newTemporalId "prim_result"
+      let bind = Ir.Let result (Ir.Prim name vs)
+      (Ir.Block rest term, fns2) <- case Map.lookup k env of
+        Just consumer -> convertApply env ownership consumer result
+        Nothing -> pure (Ir.Block [] (Ir.TApplyCo k result), [])
+      pure (Ir.Block (stmts <> (bind : rest)) term, fns1 <> fns2)
+    go (Invoke _ name k) = pure (Ir.Block [] (Ir.TStaticCall name [k]), [])
+    go (ExternalCall exRange name producers k) = go (Primitive exRange name producers k)
+    go (BinOp opRange op lhs rhs k) = go (Primitive opRange op [lhs, rhs] k)
+    go (Ifz _ cond t e) = do
+      (stmts, v, fns1) <- convertProducer env ownership cond
+      (tBlock, fns2) <- go t
+      (eBlock, fns3) <- go e
+      pure (Ir.Block stmts (Ir.TIf (Ir.GIsZero v) tBlock eBlock), fns1 <> fns2 <> fns3)
+
+-- | Apply a 'Consumer' to an already-available variable, inline in the
+-- current function scope.
+convertApply :: (State Uniq :> es, Reader ModuleName :> es) => LocalEnv -> Map Name Ownership -> Consumer -> Name -> Eff es (Ir.Block, [Ir.Func])
+convertApply env ownership consumer v = case consumer of
+  Label _ name -> pure (Ir.Block [] (Ir.TApplyCo name v), [])
+  Apply _ producers returns -> do
+    (stmts, vs, fns) <- convertProducers env ownership producers
+    pure (Ir.Block stmts (Ir.TCallClosure v (vs <> returns)), fns)
+  Project _ field k -> pure (Ir.Block [] (Ir.TProject v field k), [])
+  -- The bound name is renamed to the already-available variable instead of
+  -- emitting an alias binding — sound because every Id is globally unique.
+  Then _ name stmt -> convertStatement env ownership (substStatement name v stmt)
+  Finish _ -> pure (Ir.Block [] (Ir.TReturn v), [])
+  Select _ branches -> convertSelect env ownership v branches
+  Destructor _ name producers k -> do
+    (stmts, vs, fns) <- convertProducers env ownership producers
+    pure (Ir.Block stmts (Ir.TDestruct v name (vs <> [k])), fns)
+
+convertProducers :: (State Uniq :> es, Reader ModuleName :> es) => LocalEnv -> Map Name Ownership -> [Producer] -> Eff es ([Ir.Stmt], [Name], [Ir.Func])
+convertProducers _ _ [] = pure ([], [], [])
+convertProducers env ownership (p : ps) = do
+  (stmts, v, fns1) <- convertProducer env ownership p
+  (restStmts, vs, fns2) <- convertProducers env ownership ps
+  pure (stmts <> restStmts, v : vs, fns1 <> fns2)
+
+convertProducer :: (State Uniq :> es, Reader ModuleName :> es) => LocalEnv -> Map Name Ownership -> Producer -> Eff es ([Ir.Stmt], Name, [Ir.Func])
+convertProducer env ownership = \case
+  Var _ x -> pure ([], x, [])
+  Literal _ lit -> do
+    t <- newTemporalId "lit"
+    pure ([Ir.Let t (Ir.Lit lit)], t, [])
+  Construct _ tag producers returns -> do
+    (stmts, vs, fns) <- convertProducers env ownership producers
+    t <- newTemporalId "struct"
+    pure (stmts <> [Ir.Let t (Ir.MkStruct tag (vs <> returns))], t, fns)
+  Lambda lamRange params stmt -> do
+    fnId <- newTemporalId "lambda"
+    selfVar <- newTemporalId "self"
+    let captures = Set.toList (freeVarsStatement stmt Set.\\ Set.fromList params)
+        captureLets = [Ir.Let c (Ir.ReadCapture selfVar i) | (i, c) <- zip [0 :: Int ..] captures]
+    params' <- dedupParams params
+    (Ir.Block bodyStmts term, fns) <- convertStatement Map.empty (classifyJoins stmt) stmt
+    let fn =
+          Ir.Func
+            { range = lamRange,
+              name = fnId,
+              kind = Ir.ClosureFn,
+              selfVar,
+              params = params',
+              body = Ir.Block (captureLets <> bodyStmts) term
+            }
+    t <- newTemporalId "closure"
+    pure ([Ir.Let t (Ir.MkClosure fnId captures)], t, fn : fns)
+  Object objRange fields -> do
+    -- A record's fields share ONE captured environment (mirroring the
+    -- evaluator's @Record env fields@): the allocation's capture list is
+    -- the union of every field's own free variables, but each field
+    -- function reads only its own subset out of the shared list.
+    let sharedCaptures = Set.toList (Set.unions [freeVarsStatement stmt Set.\\ Set.singleton ret | (ret, stmt) <- Map.elems fields])
+        indexedCaptures = zip [0 :: Int ..] sharedCaptures
+    fieldFns <- for (Map.toList fields) \(fieldName, (retName, stmt)) -> do
+      fnId <- newTemporalId "field"
+      selfVar <- newTemporalId "self"
+      let usedByThisField = freeVarsStatement stmt Set.\\ Set.singleton retName
+          captureLets = [Ir.Let c (Ir.ReadCapture selfVar i) | (i, c) <- indexedCaptures, c `Set.member` usedByThisField]
+      (Ir.Block bodyStmts term, fns) <- convertStatement Map.empty (classifyJoins stmt) stmt
+      let fn =
+            Ir.Func
+              { range = objRange,
+                name = fnId,
+                kind = Ir.FieldFn,
+                selfVar,
+                params = [retName],
+                body = Ir.Block (captureLets <> bodyStmts) term
+              }
+      pure ((fieldName, fnId), fn : fns)
+    t <- newTemporalId "record"
+    pure ([Ir.Let t (Ir.MkRecord (map fst fieldFns) sharedCaptures)], t, concatMap snd fieldFns)
+  Mu {} -> error "Malgo.Backend.Zig.ClosureConv: Mu in producer position should have been eliminated by Normalize"
+  Cocase {} -> do
+    -- Not yet implemented: compiles to a runtime panic. 'Ir.PanicExpr' is
+    -- @noreturn@, so anything after it in the block is never printed;
+    -- variables referenced only by the Cocase become dead bindings.
+    t <- newTemporalId "cocase"
+    pure ([Ir.Let t (Ir.PanicExpr "Cocase")], t, [])
+
+-- | The renamer can assign the same wildcard 'Malgo.Id.Id' to more than one
+-- surface parameter (e.g. two @_@s); Ir binders must be unique per path, so
+-- every repeat is replaced with a fresh (never referenced) name.
+dedupParams :: (State Uniq :> es, Reader ModuleName :> es) => [Name] -> Eff es [Name]
+dedupParams = go Set.empty
+  where
+    go _ [] = pure []
+    go seen (p : ps)
+      | p `Set.member` seen = do
+          p' <- newTemporalId "unused_param"
+          (p' :) <$> go seen ps
+      | otherwise = (p :) <$> go (Set.insert p seen) ps
+
+-- | Lift an 'Escaping' join's consumer into its own 'Ir.Func', returning
+-- the allocation statement that binds the join's name to the closure.
+liftJoinConsumer :: (State Uniq :> es, Reader ModuleName :> es) => Range -> Name -> Consumer -> Eff es ([Ir.Stmt], [Ir.Func])
+liftJoinConsumer joinRange name consumer = do
+  fnId <- newTemporalId "join"
+  selfVar <- newTemporalId "self"
+  valueParam <- newTemporalId "value"
+  let captures = Set.toList (freeVarsConsumer consumer)
+      captureLets = [Ir.Let c (Ir.ReadCapture selfVar i) | (i, c) <- zip [0 :: Int ..] captures]
+  -- The join fixpoint must be recomputed in this fresh scope using only
+  -- the joins collected from this consumer's body.
+  (Ir.Block bodyStmts term, fns) <- convertApply Map.empty (classifyJoinsConsumer consumer) consumer valueParam
+  let fn =
+        Ir.Func
+          { range = joinRange,
+            name = fnId,
+            kind = Ir.ClosureFn,
+            selfVar,
+            params = [valueParam],
+            body = Ir.Block (captureLets <> bodyStmts) term
+          }
+  pure ([Ir.Let name (Ir.MkClosure fnId captures)], fn : fns)
+
+convertSelect :: (State Uniq :> es, Reader ModuleName :> es) => LocalEnv -> Map Name Ownership -> Name -> [Branch] -> Eff es (Ir.Block, [Ir.Func])
+convertSelect env ownership scrut = go
+  where
+    go [] = pure (Ir.Block [] (Ir.TPanic "no matching branch"), [])
+    go (Branch _ pat stmt : rest) = do
+      (tests, binds) <- compilePatternIr scrut pat
+      (Ir.Block bodyStmts term, fns1) <- convertStatement env ownership stmt
+      (elseBlock, fns2) <- go rest
+      pure
+        ( Ir.Block [] (Ir.TIf (Ir.GAnd tests) (Ir.Block (binds <> bodyStmts) term) elseBlock),
+          fns1 <> fns2
+        )
+
+-- | Compile a pattern match against a scrutinee variable into borrowing
+-- guard tests and the bindings to splice before the branch body. Mirrors
+-- 'Malgo.Sequent.Eval.match'\/@matchDL@.
+--
+-- The renamer assigns wildcard (@_@) patterns a shared 'Malgo.Id.Id', so a
+-- single pattern like @Nil _ _@ can bind the same name more than once; a
+-- locally-threaded @seen@ set (scoped to one branch's pattern) replaces
+-- every redeclaration after the first with a fresh dead binding (or skips
+-- it entirely when the read has no effect).
+--
+-- 'Expand' (record) sub-patterns must be plain variables: record fields
+-- are call-by-name and possibly effectful ('Malgo.Sequent.Eval' re-runs
+-- the field statement per force), so each field is forced into a binding
+-- exactly once — after the guard commits — which leaves no forced value a
+-- literal sub-pattern's guard could inspect. A field absent from the
+-- record (which the evaluator's @Map.intersectionWith@ silently treats as
+-- still matching) panics at runtime instead; real Malgo programs match
+-- only on fields the record's row guarantees are present.
+compilePatternIr :: (State Uniq :> es, Reader ModuleName :> es) => Name -> Pattern -> Eff es ([Ir.Test], [Ir.Stmt])
+compilePatternIr scrut pat = do
+  (tests, binds, _) <- go Set.empty (Ir.PRoot scrut) pat
+  pure (tests, binds)
+  where
+    go seen path = \case
+      PVar _ name
+        | name `Set.member` seen -> pure ([], [], seen)
+        | otherwise -> pure ([], [Ir.Let name (Ir.ReadPath path)], Set.insert name seen)
+      PLiteral _ lit -> pure ([Ir.TLitEq path lit], [], seen)
+      Destruct _ tag pats -> do
+        (subTests, binds, seen') <- goFields seen (zip [0 :: Int ..] pats)
+        pure (Ir.TTagEq path tag : subTests, binds, seen')
+        where
+          goFields seen0 [] = pure ([], [], seen0)
+          goFields seen0 ((i, p) : rest) = do
+            (g1, b1, seen1) <- go seen0 (Ir.PField path i) p
+            (g2, b2, seen2) <- goFields seen1 rest
+            pure (g1 <> g2, b1 <> b2, seen2)
+      Expand _ fieldPats -> do
+        (recordBinds, recordVar) <- case path of
+          Ir.PRoot v -> pure ([], v)
+          _ -> do
+            r <- newTemporalId "record"
+            pure ([Ir.Let r (Ir.ReadPath path)], r)
+        -- Fields forced in ascending name order (Map.toList), matching
+        -- Eval.hs's matchExpand.
+        (binds, seen') <- goExpandFields recordVar seen (Map.toList fieldPats)
+        pure ([Ir.TKindIs path "record"], recordBinds <> binds, seen')
+        where
+          goExpandFields recordVar = goF
+            where
+              goF seen0 [] = pure ([], seen0)
+              goF seen0 ((fieldName, p) : rest) = do
+                (bind, seen1) <- case p of
+                  PVar _ name
+                    | name `Set.member` seen0 -> do
+                        -- A repeated wildcard Id: the force still runs (the
+                        -- field may have effects, and the evaluator forces
+                        -- every pattern field), bound to a fresh dead name.
+                        t <- newTemporalId "expand"
+                        pure ([Ir.Let t (Ir.Force recordVar fieldName)], seen0)
+                    | otherwise -> pure ([Ir.Let name (Ir.Force recordVar fieldName)], Set.insert name seen0)
+                  _ -> error "Malgo.Backend.Zig.ClosureConv: only variable patterns are supported inside record patterns"
+                (restBinds, seen2) <- goF seen1 rest
+                pure (bind <> restBinds, seen2)

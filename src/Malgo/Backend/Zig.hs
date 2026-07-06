@@ -9,7 +9,8 @@ import Control.Exception (Exception (..))
 import Effectful
 import Effectful.Reader.Static (Reader)
 import Effectful.State.Static.Local (State)
-import Malgo.Backend.Zig.Emit (compileToZig)
+import Malgo.Backend.Zig.ClosureConv (convertProgram)
+import Malgo.Backend.Zig.Emit (emitProgram)
 import Malgo.Module (ModuleName)
 import Malgo.Pass
 import Malgo.Prelude
@@ -23,7 +24,9 @@ instance Pass ZigPass where
   type ErrorType ZigPass = ZigError
   type Effects ZigPass es = (Reader ModuleName :> es, State Uniq :> es)
 
-  runPassImpl _ program = compileToZig program
+  runPassImpl _ program = do
+    ir <- convertProgram program
+    emitProgram ir
 
 data ZigError = ZigError Text
   deriving stock (Show)

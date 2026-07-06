@@ -9,7 +9,7 @@
 --
 -- Both eliminations are capture-avoiding for free because every 'Malgo.Id.Id'
 -- in the pipeline is already globally unique.
-module Malgo.Backend.Zig.Normalize (normalizeStatement) where
+module Malgo.Backend.Zig.Normalize (normalizeStatement, substStatement) where
 
 import Malgo.Prelude
 import Malgo.Sequent.Core.Join

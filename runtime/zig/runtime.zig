@@ -17,7 +17,15 @@ pub const Kind = enum(u8) { int32, int64, float, double, char, string, strukt, c
 
 pub const Tag = union(enum) { tuple: void, named: []const u8 };
 
-pub const CodeFn = *const fn (cap: []const Value, args: []const Value) Value;
+/// Self-passing calling convention (Koka/Lean style): a closure/record
+/// field/codata branch receives the closure object itself as `self` and
+/// reads its captures via `capturesOf(self)`. Under Perceus RC (M9), this
+/// is what makes "a call consumes one reference of the callee" possible:
+/// the callee dups the captures it needs and then drops `self` -- the
+/// caller has no post-call point to do either, since every call is a tail
+/// call. Top-level definitions are called directly with the `no_self`
+/// sentinel and ignore it.
+pub const CodeFn = *const fn (self: Value, args: []const Value) Value;
 
 pub const Struct = struct { tag: Tag, fields: []const Value };
 pub const Closure = struct { code: CodeFn, captures: []const Value };
@@ -42,6 +50,12 @@ pub const Payload = union(Kind) {
 
 pub const Object = struct { kind: Kind, payload: Payload };
 pub const Value = *const Object;
+
+const NO_SELF_OBJ: Object = .{ .kind = .unit, .payload = .{ .unit = {} } };
+
+/// Sentinel `self` for calling a top-level definition (which has no
+/// captures and ignores it).
+pub const no_self: Value = &NO_SELF_OBJ;
 
 // ===== Allocation (arena, v1) =====
 
@@ -109,13 +123,24 @@ pub fn applyCovalue(covalue: Value, value: Value) Value {
 
 pub fn callClosure(closure: Value, args: []const Value) Value {
     if (closure.kind != .closure) panic("callClosure: value is not a function");
-    return closure.payload.closure.code(closure.payload.closure.captures, args);
+    return closure.payload.closure.code(closure, args);
+}
+
+/// The captures slice of a closure/record/codata value, read by the
+/// callee out of its own `self` argument.
+pub fn capturesOf(v: Value) []const Value {
+    return switch (v.kind) {
+        .closure => v.payload.closure.captures,
+        .record => v.payload.record.captures,
+        .codata => v.payload.codata.captures,
+        else => panic("capturesOf: value has no captures"),
+    };
 }
 
 pub fn applyDestructor(codata: Value, name: []const u8, args: []const Value) Value {
     if (codata.kind != .codata) panic("applyDestructor: value is not codata");
     for (codata.payload.codata.branches) |branch| {
-        if (stringEq(branch.name, name)) return branch.code(codata.payload.codata.captures, args);
+        if (stringEq(branch.name, name)) return branch.code(codata, args);
     }
     panic("applyDestructor: no matching destructor");
 }
@@ -123,13 +148,13 @@ pub fn applyDestructor(codata: Value, name: []const u8, args: []const Value) Val
 pub fn projectField(record: Value, name: []const u8, k: Value) Value {
     if (record.kind != .record) panic("projectField: value is not a record");
     for (record.payload.record.fields) |field| {
-        if (stringEq(field.name, name)) return field.code(record.payload.record.captures, &[_]Value{k});
+        if (stringEq(field.name, name)) return field.code(record, &[_]Value{k});
     }
     panic("projectField: no such field");
 }
 
-fn identityCode(cap: []const Value, args: []const Value) Value {
-    _ = cap;
+fn identityCode(self: Value, args: []const Value) Value {
+    _ = self;
     return args[0];
 }
 
@@ -149,7 +174,7 @@ pub fn identityKont() Value {
 pub fn forceField(record: Value, name: []const u8) ?Value {
     if (record.kind != .record) return null;
     for (record.payload.record.fields) |field| {
-        if (stringEq(field.name, name)) return field.code(record.payload.record.captures, &[_]Value{identityKont()});
+        if (stringEq(field.name, name)) return field.code(record, &[_]Value{identityKont()});
     }
     return null;
 }

@@ -370,6 +370,29 @@ fn writeStderr(bytes: []const u8) void {
 /// No-op: writes are unbuffered.
 pub fn flushStdout() void {}
 
+/// The generated `main`'s last statement. A leaked Value means the Perceus
+/// pass under-dropped somewhere: report and exit 83 (the zig-golden
+/// harness's leak bucket). Early-exit paths (`panic`, `malgo_exit_*`)
+/// deliberately bypass this -- the process is going down anyway, and every
+/// golden case exits 0 through here, so the corpus is fully gated.
+pub fn exitWithLeakCheck() void {
+    var leaked = g_live_objects != 0;
+    if (builtin.mode == .Debug or builtin.mode == .ReleaseSafe) {
+        // Also ask DebugAllocator, which catches non-Object leaks in the
+        // Value heap (fields/captures arrays, string bytes) and prints
+        // per-allocation stack traces to stderr.
+        if (g_debug.deinit() == .leak) leaked = true;
+    }
+    if (leaked) {
+        var buf: [32]u8 = undefined;
+        const count = std.fmt.bufPrint(&buf, "{d}", .{g_live_objects}) catch "?";
+        writeStderr("MALGO-LEAK: ");
+        writeStderr(count);
+        writeStderr(" objects\n");
+        std.process.exit(83);
+    }
+}
+
 /// Reads one byte from stdin, or null at EOF.
 fn readStdinByte() ?u8 {
     var buf: [1]u8 = undefined;

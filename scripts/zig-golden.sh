@@ -67,9 +67,10 @@ compile_fail=0
 run_fail=0
 mismatch=0
 timeout_fail=0
+leak_fail=0
 total_failures=0
 
-declare -a compile_fail_names run_fail_names mismatch_names timeout_names
+declare -a compile_fail_names run_fail_names mismatch_names timeout_names leak_names
 
 for dir in "$GOLDEN_ROOT"/*/; do
   case=$(basename "$dir")
@@ -100,6 +101,13 @@ for dir in "$GOLDEN_ROOT"/*/; do
       timeout_fail=$((timeout_fail + 1))
       timeout_names+=("$case")
       total_failures=$((total_failures + 1))
+    elif [ "$run_exit" -eq 83 ] || grep -q '^MALGO-LEAK' "$WORK/$case.run.log"; then
+      # Exit 83 is the runtime's leak-check signal (see exitWithLeakCheck
+      # in runtime/zig/runtime.zig); the stderr marker catches it even if
+      # some shell layer remaps the exit code.
+      leak_fail=$((leak_fail + 1))
+      leak_names+=("$case")
+      total_failures=$((total_failures + 1))
     elif [ "$run_exit" -ne 0 ]; then
       run_fail=$((run_fail + 1))
       run_fail_names+=("$case")
@@ -119,13 +127,14 @@ for dir in "$GOLDEN_ROOT"/*/; do
   fi
 done
 
-total=$((pass + compile_fail + run_fail + mismatch + timeout_fail))
+total=$((pass + compile_fail + run_fail + mismatch + timeout_fail + leak_fail))
 echo ""
 echo "=== zig-golden results: $pass/$total passed ==="
 echo "compile-fail: $compile_fail ${compile_fail_names[*]:-}"
 echo "run-fail:     $run_fail ${run_fail_names[*]:-}"
 echo "mismatch:     $mismatch ${mismatch_names[*]:-}"
 echo "timeout:      $timeout_fail ${timeout_names[*]:-}"
+echo "leak:         $leak_fail ${leak_names[*]:-}"
 
 if [ "$total" -eq 0 ]; then
   echo "No golden+testcase pairs were found under $GOLDEN_ROOT / $TESTCASE_DIR -- treating this as failure, not success." >&2

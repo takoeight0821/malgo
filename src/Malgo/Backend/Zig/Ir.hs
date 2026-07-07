@@ -28,7 +28,9 @@ module Malgo.Backend.Zig.Ir
     freeVarsStmt,
     freeVarsTerminator,
     freeVarsExpr,
+    freeVarsGuard,
     pathRoot,
+    termOperands,
   )
 where
 
@@ -197,3 +199,16 @@ testPath :: Test -> Path
 testPath (TKindIs p _) = p
 testPath (TTagEq p _) = p
 testPath (TLitEq p _) = p
+
+-- | Operands a terminator consumes one reference of ('TIf'\/'TPanic'
+-- consume nothing), with multiplicity.
+termOperands :: Terminator -> [Name]
+termOperands = \case
+  TApplyCo k v -> [k, v]
+  TCallClosure f args -> f : args
+  TStaticCall _ args -> args
+  TProject v _ k -> [v, k]
+  TDestruct v _ args -> v : args
+  TReturn v -> [v]
+  TIf {} -> []
+  TPanic _ -> []

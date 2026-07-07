@@ -12,6 +12,7 @@ import Effectful.Reader.Static (Reader)
 import Effectful.State.Static.Local (State)
 import Malgo.Backend.Zig.ClosureConv (convertProgram)
 import Malgo.Backend.Zig.Emit (emitProgram)
+import Malgo.Backend.Zig.Peephole (peepholeProgram)
 import Malgo.Backend.Zig.Perceus (perceusProgram)
 import Malgo.Backend.Zig.RcCheck (checkProgram)
 import Malgo.Module (ModuleName)
@@ -28,7 +29,7 @@ instance Pass ZigPass where
   type Effects ZigPass es = (Reader ModuleName :> es, State Uniq :> es)
 
   runPassImpl _ program = do
-    ir <- perceusProgram <$> convertProgram program
+    ir <- perceusProgram . peepholeProgram <$> convertProgram program
     -- The linearity check is pure and fast relative to the rest of the
     -- pipeline; running it unconditionally turns any Perceus bug into a
     -- compile-time error instead of a use-after-free in the produced

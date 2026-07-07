@@ -14,6 +14,7 @@ module Malgo.Backend.Zig.PerceusSpec (specWith) where
 import Effectful.Reader.Static (runReader)
 import Malgo.Backend.Zig.ClosureConv (convertProgram)
 import Malgo.Backend.Zig.Ir
+import Malgo.Backend.Zig.Peephole (peepholeProgram)
 import Malgo.Backend.Zig.Perceus (perceusFunc, perceusProgram)
 import Malgo.Backend.Zig.RcCheck (RcViolation (..), checkFunc, checkProgram)
 import Malgo.Id
@@ -187,8 +188,10 @@ corpusSpec builtin prelude = describe "corpus linearity (all golden testcases)" 
       -- The conversion itself never inserts RC ops...
       for_ ir.funcs \fn ->
         hasRcOps fn.body `shouldBe` False
-      -- ...and the Perceus output is linear on every path.
-      checkProgram (perceusProgram ir) `shouldBe` Right ()
+      -- ...and the Perceus output is linear on every path, with the
+      -- scrutinee-tuple peephole applied first (mirroring Zig.hs's
+      -- pipeline order).
+      checkProgram (perceusProgram (peepholeProgram ir)) `shouldBe` Right ()
 
 hasRcOps :: Block -> Bool
 hasRcOps (Block stmts term) =

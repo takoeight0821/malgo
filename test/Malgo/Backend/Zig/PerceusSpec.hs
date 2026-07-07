@@ -17,6 +17,7 @@ import Malgo.Backend.Zig.Ir
 import Malgo.Backend.Zig.Peephole (peepholeProgram)
 import Malgo.Backend.Zig.Perceus (perceusFunc, perceusProgram)
 import Malgo.Backend.Zig.RcCheck (RcViolation (..), checkFunc, checkProgram)
+import Malgo.Backend.Zig.SaturateCtor (saturateProgram)
 import Malgo.Id
 import Malgo.Module (ArtifactPath, ModuleName (..))
 import Malgo.Monad (runMalgoM)
@@ -184,7 +185,7 @@ corpusSpec builtin prelude = describe "corpus linearity (all golden testcases)" 
   for_ testcases \testcase ->
     it (takeBaseName testcase) do
       (moduleName, program) <- compileTestCase builtin prelude (testcaseDir </> testcase)
-      ir <- runMalgoM flag $ runReader moduleName $ convertProgram program
+      ir <- runMalgoM flag $ runReader moduleName $ convertProgram (saturateProgram program)
       -- The conversion itself never inserts RC ops...
       for_ ir.funcs \fn ->
         hasRcOps fn.body `shouldBe` False

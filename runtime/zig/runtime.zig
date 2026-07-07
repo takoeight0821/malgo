@@ -85,6 +85,11 @@ var g_scratch_state: std.heap.ArenaAllocator = undefined;
 /// build mode. Zero at exit == no leaked Values.
 pub var g_live_objects: usize = 0;
 
+/// Total Objects ever allocated. Reported on stderr at exit when the
+/// MALGO_RC_STATS environment variable is set; purely an optimization
+/// instrument, invisible otherwise.
+pub var g_total_allocs: usize = 0;
+
 /// Called first thing in the generated `main` (and in `zig test` blocks).
 pub fn initHeap() void {
     g_value = switch (builtin.mode) {
@@ -109,6 +114,7 @@ fn alloc(kind: Kind, payload: Payload) Value {
     const obj = g_value.create(Object) catch @panic("Malgo: out of memory");
     obj.* = Object{ .rc = 1, .kind = kind, .payload = payload };
     g_live_objects += 1;
+    g_total_allocs += 1;
     return obj;
 }
 
@@ -376,6 +382,13 @@ pub fn flushStdout() void {}
 /// deliberately bypass this -- the process is going down anyway, and every
 /// golden case exits 0 through here, so the corpus is fully gated.
 pub fn exitWithLeakCheck() void {
+    // std.c.getenv, not std.posix (removed in Zig 0.16); libc is always
+    // linked (see Toolchain.hs's -lc).
+    if (std.c.getenv("MALGO_RC_STATS") != null) {
+        var buf: [64]u8 = undefined;
+        const line = std.fmt.bufPrint(&buf, "MALGO-STATS: total_allocs={d}\n", .{g_total_allocs}) catch "MALGO-STATS: ?\n";
+        writeStderr(line);
+    }
     var leaked = g_live_objects != 0;
     if (builtin.mode == .Debug or builtin.mode == .ReleaseSafe) {
         // Also ask DebugAllocator, which catches non-Object leaks in the
@@ -990,6 +1003,16 @@ test "dup/drop: an extra reference delays the free by exactly one drop" {
     try std.testing.expectEqual(before + 1, g_live_objects);
     drop(v);
     try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "g_total_allocs counts every Object ever allocated, freed or not" {
+    initHeap();
+    const before = g_total_allocs;
+    const a = mkInt32(1);
+    const pair = mkStruct(.{ .tuple = {} }, &[_]Value{a});
+    try std.testing.expectEqual(before + 2, g_total_allocs);
+    drop(pair);
+    try std.testing.expectEqual(before + 2, g_total_allocs);
 }
 
 test "drop releases a struct's children transitively" {

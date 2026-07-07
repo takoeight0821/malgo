@@ -41,10 +41,33 @@ ParserPass → RenamePass → [InferPass] → [RefinePass]
     ↓
 ToFunPass → ToCorePass → FlatPass → JoinPass
     ↓
-EvalPass (Interpreter)
+EvalPass (Interpreter) | SchemePass (--target scheme) | ZigPass (--target zig / malgo compile)
 ```
 
 **Note**: InferPass and RefinePass can be skipped for fast evaluation without type checking.
+
+### Zig Backend (native executables)
+
+`malgo compile SOURCE [-o OUT] [--opt debug|release-safe|release-fast]` compiles
+via Zig to a native executable (Zig 0.16 pinned in `mise.toml`). Pipeline inside
+`ZigPass` (`src/Malgo/Backend/Zig/`):
+
+```
+Join IR → Normalize (Mu/Label elimination) → ClosureConv.convertProgram (ANF Ir,
+closure conversion) → Perceus (dup/drop insertion) → RcCheck (linearity assert)
+→ Emit (Zig text, runtime embedded via file-embed from runtime/zig/runtime.zig)
+```
+
+- Memory: Perceus reference counting. Every produced binary leak-checks itself
+  at exit (`MALGO-LEAK` on stderr + exit 83 on failure).
+- Calling convention is self-passing: `fn(self, args)`; the callee dups its
+  captures then drops `self`.
+- Golden parity harness: `bash scripts/zig-golden.sh` (CI job `zig-golden`)
+  compiles every golden testcase and diffs stdout byte-for-byte against the
+  interpreter's goldens, failing on any leak.
+- Runtime unit tests: `zig test runtime/zig/runtime.zig`.
+- The interpreter (`Malgo.Sequent.Eval`) is the semantic oracle: any observable
+  divergence in the Zig backend is a bug, matched against Eval.hs, not Scheme.
 
 ### Intermediate Representations
 

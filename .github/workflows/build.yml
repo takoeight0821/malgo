@@ -227,9 +227,14 @@ jobs:
           cabal build lib:malgo --only-dependencies
           cabal build exe:malgo
 
+      - name: Run Zig runtime unit tests
+        run: zig test runtime/zig/runtime.zig
+
       - name: Run Zig backend golden parity sweep
         env:
           MAX_FAILURES: 40
           COMPILE_TIMEOUT: 120
-          CASE_TIMEOUT: 20
+          # Compiled cases run under DebugAllocator (leak/UAF detection),
+          # which is slower than the arena the timeout was first tuned for.
+          CASE_TIMEOUT: 30
         run: scripts/zig-golden.sh

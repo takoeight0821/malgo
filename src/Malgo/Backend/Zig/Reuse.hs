@@ -8,7 +8,15 @@
 -- 'Ir.TIf' branch — branch bodies are separate 'Ir.Block's and are
 -- recursed into independently), pairs the nearest preceding 'Ir.Drop' with
 -- a later 'Ir.MkStruct' (LIFO — the same pairing order Koka's own reuse
--- analysis uses), rewriting both to 'Ir.DropReuse'\/'Ir.MkStructReuse'. At
+-- analysis uses), rewriting both to 'Ir.DropReuse'\/'Ir.MkStructReuse'. A
+-- @Let hint (Prim \"reuseHint\" [x])@ immediately followed by @Drop hint@
+-- (the shape 'Malgo.Backend.Zig.Perceus' produces for a
+-- 'Malgo.Sequent.ReuseSpecialize'-inserted hint, since that pass treats
+-- @reuseHint@ as consuming @x@) is recognized specially: both statements
+-- are dropped and @x@ — not the immediately-dead @hint@ — is what is
+-- offered up for pairing, since @x@ (the matched, about-to-be-discarded
+-- scrutinee) is the intended reuse candidate, not the hint call's own
+-- throwaway result. At
 -- runtime, @rt.dropReuse@ recycles the dropped Object in place when it was
 -- uniquely referenced (see @runtime\/zig\/runtime.zig@'s Object-reuse
 -- semantics: struct, closure, and scalar payloads are all eligible, not
@@ -69,6 +77,29 @@ pairStmts = go []
     go pending (Let x (PanicExpr what) : rest) = do
       rest' <- go [] rest
       pure (map Drop (reverse pending) <> (Let x (PanicExpr what) : rest'))
+    -- Malgo.Sequent.ReuseSpecialize inserts `reuseHint scrutinee` right
+    -- before a reconstruction so `scrutinee` (not the immediately-unused
+    -- `hint` result) is the thing this pass should offer up for reuse.
+    -- Perceus (see its own reuseHint special case) treats reuseHint as
+    -- consuming `scrutinee` and always emits the resulting dead `hint`
+    -- binding's Drop immediately afterward (nothing else can be live in
+    -- between: both are only ever referenced here). Recognize that exact
+    -- two-statement shape, discard it, and push `scrutinee` instead of
+    -- `hint` -- an unrecognized/reordered shape simply falls through to the
+    -- generic cases below (hint's Drop would then compete normally; always
+    -- safe, per this module's dynamic reuse fallback, just missing the
+    -- optimization). Any OTHER drops still pending at this point (most
+    -- notably this Func's own `self`, whose captures array can hold a
+    -- second, not-yet-released reference into `scrutinee`'s payload) are
+    -- flushed here instead of being carried forward: the general (D) rule
+    -- lets an unrelated pending drop survive past a MkStruct it didn't
+    -- pair with, all the way to the next one or the block's end, but
+    -- deferring it past THIS point would leave `scrutinee` looking
+    -- non-unique when 'runtime.dropReuse' checks it, silently forfeiting
+    -- the reuse this whole pass exists for.
+    go pending (Let hint (Prim "reuseHint" [scrutinee]) : Drop hint' : rest)
+      | hint == hint' =
+          (map Drop (reverse pending) <>) <$> go [scrutinee] rest
     go pending (Drop x : rest) = go (x : pending) rest
     go (dropped : restPending) (Let x (MkStruct tag ops) : rest) = do
       tok <- newTemporalId "reuse"

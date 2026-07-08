@@ -94,6 +94,14 @@ pub var g_total_allocs: usize = 0;
 /// Reported alongside `g_total_allocs`.
 pub var g_reuse_hits: usize = 0;
 
+/// Set from the MALGO_RC_TRACE environment variable at startup. When true,
+/// every `*Named` wrapper below (see "Named RC tracing" further down) emits
+/// one JSON-lines record per RC event to stderr, for offline correlation by
+/// `scripts/rctrace.py`. The plain (untraced) dup/drop/mkStruct/... below
+/// are never touched by this -- tracing is purely additive and cannot
+/// change any RC decision.
+pub var g_trace_enabled: bool = false;
+
 /// Called first thing in the generated `main` (and in `zig test` blocks).
 pub fn initHeap() void {
     g_value = switch (builtin.mode) {
@@ -105,6 +113,9 @@ pub fn initHeap() void {
     // (if any); growing it under the fresh arena would be undefined. Only
     // matters for `zig test`, where initHeap runs once per test block.
     g_free_worklist = .empty;
+    // std.c.getenv, not std.posix (removed in Zig 0.16); libc is always
+    // linked (see Toolchain.hs's -lc).
+    g_trace_enabled = std.c.getenv("MALGO_RC_TRACE") != null;
 }
 
 /// Transient non-Value bytes: print formatting, encode/parse buffers, the
@@ -155,15 +166,15 @@ fn drainFreeWorklist() void {
     while (g_free_worklist.pop()) |obj| {
         switch (obj.kind) {
             .strukt => {
-                decChildren(obj.payload.strukt.fields);
+                decChildren(obj, obj.payload.strukt.fields);
                 g_value.free(obj.payload.strukt.fields);
             },
             .closure => {
-                decChildren(obj.payload.closure.captures);
+                decChildren(obj, obj.payload.closure.captures);
                 g_value.free(obj.payload.closure.captures);
             },
             .record => {
-                decChildren(obj.payload.record.captures);
+                decChildren(obj, obj.payload.record.captures);
                 g_value.free(obj.payload.record.captures);
                 // NamedField holds no Values -- only a name (a string
                 // literal in the generated code's .rodata, never freed)
@@ -171,7 +182,7 @@ fn drainFreeWorklist() void {
                 g_value.free(obj.payload.record.fields);
             },
             .codata => {
-                decChildren(obj.payload.codata.captures);
+                decChildren(obj, obj.payload.codata.captures);
                 g_value.free(obj.payload.codata.captures);
                 g_value.free(obj.payload.codata.branches);
             },
@@ -211,7 +222,7 @@ pub fn dropReuse(v: Value, arity: usize) ?Value {
     switch (v.kind) {
         .strukt => {
             const fields = v.payload.strukt.fields;
-            decChildren(fields);
+            decChildren(v, fields);
             drainFreeWorklist();
             if (fields.len != arity) {
                 g_value.free(fields);
@@ -220,7 +231,7 @@ pub fn dropReuse(v: Value, arity: usize) ?Value {
         },
         .closure => {
             const captures = v.payload.closure.captures;
-            decChildren(captures);
+            decChildren(v, captures);
             drainFreeWorklist();
             const kept = if (captures.len == arity) captures else blk: {
                 g_value.free(captures);
@@ -259,8 +270,12 @@ pub fn mkStructReuse(tok: ?Value, tag: Tag, fields: []const Value) Value {
     return obj;
 }
 
-fn decChildren(children: []const Value) void {
-    for (children) |c| {
+/// `container` is only used for tracing (see "Named RC tracing" below); it
+/// carries no RC obligation of its own here (the caller already dropped its
+/// own reference to `container` by the time its children are decremented).
+fn decChildren(container: Value, children: []const Value) void {
+    for (children, 0..) |c, i| {
+        traceDecChild(container, i, c);
         if (c.rc == IMMORTAL) continue;
         std.debug.assert(c.rc > 0);
         c.rc -= 1;
@@ -320,6 +335,131 @@ pub fn mkCodata(branches: []const NamedBranch, captures: []const Value) Value {
     const ownedBranches = g_value.dupe(NamedBranch, branches) catch @panic("Malgo: out of memory");
     const ownedCaptures = g_value.dupe(Value, captures) catch @panic("Malgo: out of memory");
     return alloc(.codata, .{ .codata = .{ .branches = ownedBranches, .captures = ownedCaptures } });
+}
+
+// ===== Named RC tracing (scripts/rctrace.py) =====
+//
+// Every wrapper here performs the exact same RC operation as its untraced
+// counterpart above (by calling straight through to it), then -- only when
+// `g_trace_enabled` -- emits one JSON-lines event to stderr carrying the
+// compile-time-known symbolic name and enclosing function that
+// 'Malgo.Backend.Zig.Emit' threads through from the Zig-IR 'Name'/'Func'
+// each operation came from. `scripts/rctrace.py` replays this log to
+// answer "who still holds a reference to this object right now", instead
+// of the throwaway raw-pointer tracing this replaces (see the M13 plan
+// entry in the project's Zig-backend notes).
+//
+// These wrappers are the only thing 'Emit.hs' ever calls; the plain
+// dup/drop/dropReuse/mkStruct/mkClosure/mkStructReuse above are otherwise
+// only exercised directly by this file's own `test` blocks, so tracing
+// cannot perturb the RC decisions those tests already exercise.
+
+fn traceLine(event: []const u8, v: Value, name: []const u8, func: []const u8) void {
+    if (!g_trace_enabled) return;
+    const rc: i64 = if (v.rc == IMMORTAL) -1 else @intCast(v.rc);
+    var buf: [256]u8 = undefined;
+    const line = std.fmt.bufPrint(
+        &buf,
+        "{{\"ev\":\"{s}\",\"ptr\":\"0x{x}\",\"rc\":{d},\"name\":\"{s}\",\"func\":\"{s}\"}}\n",
+        .{ event, @intFromPtr(v), rc, name, func },
+    ) catch return;
+    writeStderr(line);
+}
+
+/// Like 'traceLine', but identifies the object by an address captured
+/// earlier instead of dereferencing `v` -- for events reported after a call
+/// (like 'dropReuseNamed') that may already have freed the object.
+fn traceAddr(event: []const u8, addr: usize, name: []const u8, func: []const u8) void {
+    if (!g_trace_enabled) return;
+    var buf: [256]u8 = undefined;
+    const line = std.fmt.bufPrint(
+        &buf,
+        "{{\"ev\":\"{s}\",\"ptr\":\"0x{x}\",\"name\":\"{s}\",\"func\":\"{s}\"}}\n",
+        .{ event, addr, name, func },
+    ) catch return;
+    writeStderr(line);
+}
+
+/// Traces a construction event (`mkStruct`/`mkClosure`/`mkStructReuse`):
+/// records the fresh container's address plus, per slot, the symbolic name
+/// and child address that went into it -- so a later 'traceDecChild' event
+/// against the same (container, slot) pair can be resolved back to a name.
+fn traceSlots(event: []const u8, v: Value, fields: []const Value, names: []const []const u8, func: []const u8) void {
+    if (!g_trace_enabled) return;
+    var head: [256]u8 = undefined;
+    const headLine = std.fmt.bufPrint(
+        &head,
+        "{{\"ev\":\"{s}\",\"ptr\":\"0x{x}\",\"func\":\"{s}\",\"slots\":[",
+        .{ event, @intFromPtr(v), func },
+    ) catch return;
+    writeStderr(headLine);
+    for (fields, 0..) |child, i| {
+        if (i != 0) writeStderr(",");
+        const name = if (i < names.len) names[i] else "?";
+        var slot: [256]u8 = undefined;
+        const slotLine = std.fmt.bufPrint(
+            &slot,
+            "{{\"i\":{d},\"name\":\"{s}\",\"child\":\"0x{x}\"}}",
+            .{ i, name, @intFromPtr(child) },
+        ) catch continue;
+        writeStderr(slotLine);
+    }
+    writeStderr("]}\n");
+}
+
+/// Traces a `decChildren` release: `container`'s slot `slot` (a former
+/// field/capture) is about to have its reference decremented. `rc_before`
+/// is `child`'s refcount at this moment.
+fn traceDecChild(container: Value, slot: usize, child: Value) void {
+    if (!g_trace_enabled) return;
+    const rc: i64 = if (child.rc == IMMORTAL) -1 else @intCast(child.rc);
+    var buf: [160]u8 = undefined;
+    const line = std.fmt.bufPrint(
+        &buf,
+        "{{\"ev\":\"decChild\",\"container\":\"0x{x}\",\"slot\":{d},\"child\":\"0x{x}\",\"rc_before\":{d}}}\n",
+        .{ @intFromPtr(container), slot, @intFromPtr(child), rc },
+    ) catch return;
+    writeStderr(line);
+}
+
+pub fn dupNamed(v: Value, name: []const u8, func: []const u8) void {
+    dup(v);
+    traceLine("dup", v, name, func);
+}
+
+pub fn dropNamed(v: Value, name: []const u8, func: []const u8) void {
+    // Trace before dropping: `v` may be destroyed (and its memory reused or
+    // poisoned) by `drop` if this was its last reference.
+    traceLine("drop", v, name, func);
+    drop(v);
+}
+
+pub fn dropReuseNamed(v: Value, arity: usize, name: []const u8, func: []const u8) ?Value {
+    const addr = @intFromPtr(v);
+    traceLine("dropReuse_attempt", v, name, func);
+    const result = dropReuse(v, arity);
+    // Only the pre-captured address is used past this point: on a miss
+    // that fell through to a plain `drop`, `v` itself may already be freed.
+    traceAddr(if (result != null) "dropReuse_hit" else "dropReuse_miss", addr, name, func);
+    return result;
+}
+
+pub fn mkStructNamed(tag: Tag, fields: []const Value, names: []const []const u8, func: []const u8) Value {
+    const v = mkStruct(tag, fields);
+    traceSlots("mkStruct", v, fields, names, func);
+    return v;
+}
+
+pub fn mkClosureNamed(code: CodeFn, captures: []const Value, names: []const []const u8, func: []const u8) Value {
+    const v = mkClosure(code, captures);
+    traceSlots("mkClosure", v, captures, names, func);
+    return v;
+}
+
+pub fn mkStructReuseNamed(tok: ?Value, tag: Tag, fields: []const Value, names: []const []const u8, func: []const u8) Value {
+    const v = mkStructReuse(tok, tag, fields);
+    traceSlots("mkStructReuse", v, fields, names, func);
+    return v;
 }
 
 // ===== Dispatch =====
@@ -553,6 +693,20 @@ pub fn malgo_unsafe_cast(args: []const Value) Value {
     dup(args[0]);
     return args[0];
 }
+
+/// Inserted by Malgo.Sequent.ReuseSpecialize: keeps a matched-and-about-to-
+/// be-discarded scrutinee (args[0]) mentioned right before the
+/// reconstruction meant to reuse it, so Perceus's static last-use analysis
+/// places the scrutinee's real Drop here instead of immediately after
+/// pattern-match projection. Must not touch args[0]'s refcount itself --
+/// Perceus already accounts for and inserts that Drop statically -- so this
+/// returns the immortal `no_self` sentinel, whose (always-unused) result
+/// needs no Drop either.
+pub fn reuseHint(args: []const Value) Value {
+    _ = args;
+    return no_self;
+}
+
 
 pub fn malgo_add_int32_t(args: []const Value) Value {
     return mkInt32(asI32(args[0]) +% asI32(args[1]));

@@ -17,6 +17,7 @@ import Malgo.Query.EngineSpec qualified as QueryEngineSpec
 import Malgo.RenameSpec qualified as RenameSpec
 import Malgo.Sequent.BigStepEvalSpec qualified as BigStepEvalSpec
 import Malgo.Sequent.EvalSpec qualified as EvalSpec
+import Malgo.Sequent.ReuseSpecializeSpec qualified as ReuseSpecializeSpec
 import Malgo.Sequent.SaturateCtorSpec qualified as SaturateCtorSpec
 import Malgo.Sequent.ToCoreSpec qualified as ToCoreSpec
 import Malgo.Sequent.ToFunSpec qualified as ToFunSpec
@@ -42,6 +43,7 @@ main = do
     describe "Malgo.Debug.PrettyIR" PrettyIRSpec.spec
     describe "Malgo.Sequent.ToFun" ToFunSpec.spec
     describe "Malgo.Sequent.SaturateCtor" SaturateCtorSpec.spec
+    describe "Malgo.Sequent.ReuseSpecialize" ReuseSpecializeSpec.spec
     describe "Malgo.Sequent.ToCore" ToCoreSpec.spec
     describe "Malgo.Sequent.Eval" (EvalSpec.specWith builtin prelude)
     describe "Malgo.Sequent.BigStepEval" (BigStepEvalSpec.specWith builtin prelude)

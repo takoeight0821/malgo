@@ -72,6 +72,14 @@ goLive delta (stmt : rest) term = case stmt of
     ReadPath _ -> borrowedLet
     ReadCapture _ _ -> borrowedLet
     Lit _ -> owningLet []
+    -- reuseHint (inserted by Malgo.Sequent.ReuseSpecialize) is the one
+    -- primitive that consumes its operand rather than borrowing it: its
+    -- whole purpose is to mark its argument's last use right before a
+    -- reconstruction, so Malgo.Backend.Zig.Reuse can recognize the
+    -- (Let hint (Prim "reuseHint" [x]), Drop hint) pair it produces here
+    -- and redirect the reuse pairing to `x` instead of the immediately-dead
+    -- `hint` binding.
+    Prim "reuseHint" ops -> owningLet ops
     Prim _ _ -> owningLet []
     MkStruct _ ops -> owningLet ops
     MkClosure _ ops -> owningLet ops

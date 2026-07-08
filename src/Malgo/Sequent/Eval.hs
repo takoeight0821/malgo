@@ -413,6 +413,11 @@ isZeroValue (Immediate (Double 0)) = True
 isZeroValue _ = False
 
 fetchPrimitive :: (Error EvalError :> es, Reader Handlers :> es, IOE :> es) => Text -> Range -> [Value] -> Eff es Value
+-- Inserted by Malgo.Sequent.ReuseSpecialize for the Zig backend's
+-- reference-counting reuse analysis; a no-op everywhere else.
+fetchPrimitive "reuseHint" = \cases
+  _ [value] -> pure value
+  range values -> throwError $ InvalidArguments range "reuseHint" values
 fetchPrimitive "malgo_unsafe_cast" = \cases
   _ [value] -> pure value
   range values -> throwError $ InvalidArguments range "malgo_unsafe_cast" values

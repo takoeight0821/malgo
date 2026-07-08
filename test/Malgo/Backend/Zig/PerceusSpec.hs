@@ -17,6 +17,7 @@ import Malgo.Backend.Zig.Ir
 import Malgo.Backend.Zig.Peephole (peepholeProgram)
 import Malgo.Backend.Zig.Perceus (perceusFunc, perceusProgram)
 import Malgo.Backend.Zig.RcCheck (RcViolation (..), checkFunc, checkProgram)
+import Malgo.Backend.Zig.Reuse (reuseProgram)
 import Malgo.Backend.Zig.SaturateCtor (saturateProgram)
 import Malgo.Id
 import Malgo.Module (ArtifactPath, ModuleName (..))
@@ -178,21 +179,30 @@ rcCheckSpec = describe "RcCheck linearity checker" do
       _ -> False
 
 corpusSpec :: ArtifactPath -> ArtifactPath -> Spec
-corpusSpec builtin prelude = describe "corpus linearity (all golden testcases)" $ parallel do
+corpusSpec builtin prelude = describe "corpus linearity (all golden testcases)" do
   testcases <- runIO do
     files <- listDirectory testcaseDir
     pure $ filter (isExtensionOf "mlg") files
-  for_ testcases \testcase ->
+  reuseFired <- runIO $ newIORef False
+  parallel $ for_ testcases \testcase ->
     it (takeBaseName testcase) do
       (moduleName, program) <- compileTestCase builtin prelude (testcaseDir </> testcase)
-      ir <- runMalgoM flag $ runReader moduleName $ convertProgram (saturateProgram program)
-      -- The conversion itself never inserts RC ops...
+      (ir, final) <- runMalgoM flag $ runReader moduleName do
+        ir <- convertProgram (saturateProgram program)
+        -- The conversion itself never inserts RC ops...
+        final <- reuseProgram (perceusProgram (peepholeProgram ir))
+        pure (ir, final)
       for_ ir.funcs \fn ->
         hasRcOps fn.body `shouldBe` False
-      -- ...and the Perceus output is linear on every path, with the
-      -- scrutinee-tuple peephole applied first (mirroring Zig.hs's
-      -- pipeline order).
-      checkProgram (perceusProgram (peepholeProgram ir)) `shouldBe` Right ()
+      -- ...and the full pipeline (scrutinee-tuple peephole, Perceus, then
+      -- Reuse — mirroring Zig.hs's order) stays linear on every path,
+      -- including its new reuse-token obligations.
+      checkProgram final `shouldBe` Right ()
+      when (any (hasReuseOp . (.body)) final.funcs) $ writeIORef reuseFired True
+  -- A silent no-op pairing pass (matching nothing corpus-wide) would still
+  -- pass every linearity check above; this is the guard against that.
+  it "pairs at least one Drop/MkStruct somewhere in the corpus" do
+    readIORef reuseFired `shouldReturn` True
 
 hasRcOps :: Block -> Bool
 hasRcOps (Block stmts term) =
@@ -202,4 +212,14 @@ hasRcOps (Block stmts term) =
   where
     isRcOp (Dup _) = True
     isRcOp (Drop _) = True
+    isRcOp (DropReuse {}) = False
     isRcOp (Let _ _) = False
+
+hasReuseOp :: Block -> Bool
+hasReuseOp (Block stmts term) =
+  any isReuseOp stmts || case term of
+    TIf _ t e -> hasReuseOp t || hasReuseOp e
+    _ -> False
+  where
+    isReuseOp (DropReuse {}) = True
+    isReuseOp _ = False

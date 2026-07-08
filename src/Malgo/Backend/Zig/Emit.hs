@@ -96,6 +96,18 @@ emitBlock pv (Ir.Block stmts0 terminator) = go stmts0
        in "const " <> pv x <> " = " <> emitExpr pv e <> ";\n" <> discard <> go rest
     go (Ir.Dup x : rest) = "rt.dup(" <> pv x <> ");\n" <> go rest
     go (Ir.Drop x : rest) = "rt.drop(" <> pv x <> ");\n" <> go rest
+    go (Ir.DropReuse tok x arity : rest) =
+      let usedLater = tok `Set.member` Ir.freeVarsBlock (Ir.Block rest terminator)
+          discard = if usedLater then "" else "_ = " <> pv tok <> ";\n"
+       in "const "
+            <> pv tok
+            <> " = rt.dropReuse("
+            <> pv x
+            <> ", "
+            <> convertString (show arity)
+            <> ");\n"
+            <> discard
+            <> go rest
 
 emitTerminator :: (Name -> Text) -> Ir.Terminator -> Text
 emitTerminator pv = \case
@@ -137,6 +149,7 @@ emitExpr :: (Name -> Text) -> Ir.Expr -> Text
 emitExpr pv = \case
   Ir.Lit lit -> compileLiteral lit
   Ir.MkStruct tag vs -> "rt.mkStruct(" <> compileTag tag <> ", " <> valueSlice pv vs <> ")"
+  Ir.MkStructReuse tok tag vs -> "rt.mkStructReuse(" <> pv tok <> ", " <> compileTag tag <> ", " <> valueSlice pv vs <> ")"
   Ir.MkClosure fn vs -> "rt.mkClosure(&" <> mangleId fn <> ", " <> valueSlice pv vs <> ")"
   Ir.MkRecord fields vs ->
     "rt.mkRecord(&[_]rt.NamedField{"

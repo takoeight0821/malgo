@@ -15,6 +15,7 @@ import Malgo.Backend.Zig.Emit (emitProgram)
 import Malgo.Backend.Zig.Peephole (peepholeProgram)
 import Malgo.Backend.Zig.Perceus (perceusProgram)
 import Malgo.Backend.Zig.RcCheck (checkProgram)
+import Malgo.Backend.Zig.Reuse (reuseProgram)
 import Malgo.Backend.Zig.SaturateCtor (saturateProgram)
 import Malgo.Module (ModuleName)
 import Malgo.Pass
@@ -31,10 +32,12 @@ instance Pass ZigPass where
 
   runPassImpl _ program = do
     ir <- perceusProgram . peepholeProgram <$> convertProgram (saturateProgram program)
+    ir <- reuseProgram ir
     -- The linearity check is pure and fast relative to the rest of the
     -- pipeline; running it unconditionally turns any Perceus bug into a
     -- compile-time error instead of a use-after-free in the produced
-    -- binary.
+    -- binary. It also verifies reuse-token linearity, so a Reuse bug is
+    -- caught the same way.
     case checkProgram ir of
       Right () -> emitProgram ir
       Left violations ->

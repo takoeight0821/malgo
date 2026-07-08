@@ -141,6 +141,7 @@ substNameBlock from to = goBlock
       Let x e -> Let x (goExpr e)
       Dup x -> Dup (rn x)
       Drop x -> Drop (rn x)
+      DropReuse {} -> error "Malgo.Backend.Zig.Peephole: input already contains DropReuse (Reuse runs after Peephole)"
 
     goExpr = \case
       Lit lit -> Lit lit
@@ -152,6 +153,7 @@ substNameBlock from to = goBlock
       ReadCapture self i -> ReadCapture (rn self) i
       Force v field -> Force (rn v) field
       PanicExpr what -> PanicExpr what
+      MkStructReuse {} -> error "Malgo.Backend.Zig.Peephole: input already contains MkStructReuse (Reuse runs after Peephole)"
 
     goTerm = \case
       TApplyCo k v -> TApplyCo (rn k) (rn v)

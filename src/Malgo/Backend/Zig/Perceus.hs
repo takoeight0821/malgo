@@ -65,6 +65,7 @@ goLive delta [] term = insertTerminator delta term
 goLive delta (stmt : rest) term = case stmt of
   Dup _ -> error "Malgo.Backend.Zig.Perceus: input already contains Dup"
   Drop _ -> error "Malgo.Backend.Zig.Perceus: input already contains Drop"
+  DropReuse {} -> error "Malgo.Backend.Zig.Perceus: input already contains DropReuse (Reuse runs after Perceus)"
   Let x e -> case e of
     -- noreturn: the rest of the block is unreachable, leave it untouched.
     PanicExpr _ -> (stmt : rest, term)
@@ -76,6 +77,7 @@ goLive delta (stmt : rest) term = case stmt of
     MkClosure _ ops -> owningLet ops
     MkRecord _ ops -> owningLet ops
     Force v _ -> owningLet [v]
+    MkStructReuse {} -> error "Malgo.Backend.Zig.Perceus: input already contains MkStructReuse (Reuse runs after Perceus)"
     where
       liveAfter = freeVarsBlock (Block rest term)
       -- A borrowed read creates no reference: promote the binding to owned

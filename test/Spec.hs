@@ -3,6 +3,7 @@ module Main (main) where
 import Malgo.Backend.SchemeSpec qualified as SchemeSpec
 import Malgo.Backend.Zig.PeepholeSpec qualified as PeepholeSpec
 import Malgo.Backend.Zig.PerceusSpec qualified as PerceusSpec
+import Malgo.Backend.Zig.ReuseSpec qualified as ReuseSpec
 import Malgo.Backend.Zig.SaturateCtorSpec qualified as SaturateCtorSpec
 import Malgo.Backend.ZigSpec qualified as ZigSpec
 import Malgo.ElaborateSpec qualified as ElaborateSpec
@@ -37,6 +38,7 @@ main = do
     describe "Malgo.Backend.Zig.Perceus" (PerceusSpec.specWith builtin prelude)
     describe "Malgo.Backend.Zig.Peephole" PeepholeSpec.spec
     describe "Malgo.Backend.Zig.SaturateCtor" SaturateCtorSpec.spec
+    describe "Malgo.Backend.Zig.Reuse" ReuseSpec.spec
     describe "Malgo.Sequent.ToFun" ToFunSpec.spec
     describe "Malgo.Sequent.ToCore" ToCoreSpec.spec
     describe "Malgo.Sequent.Eval" (EvalSpec.specWith builtin prelude)

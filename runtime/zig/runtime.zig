@@ -90,6 +90,10 @@ pub var g_live_objects: usize = 0;
 /// instrument, invisible otherwise.
 pub var g_total_allocs: usize = 0;
 
+/// Times 'dropReuse' recycled an Object in place instead of freeing it.
+/// Reported alongside `g_total_allocs`.
+pub var g_reuse_hits: usize = 0;
+
 /// Called first thing in the generated `main` (and in `zig test` blocks).
 pub fn initHeap() void {
     g_value = switch (builtin.mode) {
@@ -141,6 +145,13 @@ var g_free_worklist: std.ArrayList(Value) = .empty;
 
 fn free(root: Value) void {
     g_free_worklist.append(scratch(), root) catch @panic("Malgo: out of memory");
+    drainFreeWorklist();
+}
+
+/// Destroys every dead Object currently queued. Shared by `free` (which
+/// queues `root` itself first) and `dropReuse` (which queues only a
+/// recycled Object's former children, never the Object itself).
+fn drainFreeWorklist() void {
     while (g_free_worklist.pop()) |obj| {
         switch (obj.kind) {
             .strukt => {
@@ -173,6 +184,79 @@ fn free(root: Value) void {
         g_live_objects -= 1;
         g_value.destroy(obj);
     }
+}
+
+/// FBIP-style reuse (Koka's "reuse tokens"): when `v` is uniquely
+/// referenced, releases its children exactly as `drop` would but keeps the
+/// Object itself alive (as a `.strukt`, since `mkStructReuse` is the only
+/// consumer of a token) for the paired `mkStructReuse` to overwrite --
+/// recycling one allocation instead of freeing-then-reallocating. The
+/// backing array survives too when its length already matches `arity`,
+/// otherwise it is freed here and `mkStructReuse` allocates a fresh one.
+///
+/// Falls back to an ordinary `drop` (returning `null`) for a shared value,
+/// an immortal, or a kind with a second owned buffer beyond one children
+/// array (`record`'s separate fields array, `codata`'s separate branches
+/// array, `string`'s bytes) -- reuse only ever recycles a single array, so
+/// these fall back rather than adding another bookkeeping case. Every
+/// caller of `mkStructReuse` already handles a `null` token by allocating
+/// fresh, so a fallback here is exactly as correct as the original
+/// `drop`\/`mkStruct` pair, only less cheap.
+pub fn dropReuse(v: Value, arity: usize) ?Value {
+    if (v.rc == IMMORTAL) return null;
+    if (v.rc != 1) {
+        drop(v);
+        return null;
+    }
+    switch (v.kind) {
+        .strukt => {
+            const fields = v.payload.strukt.fields;
+            decChildren(fields);
+            drainFreeWorklist();
+            if (fields.len != arity) {
+                g_value.free(fields);
+                v.payload.strukt.fields = &.{};
+            }
+        },
+        .closure => {
+            const captures = v.payload.closure.captures;
+            decChildren(captures);
+            drainFreeWorklist();
+            const kept = if (captures.len == arity) captures else blk: {
+                g_value.free(captures);
+                break :blk &.{};
+            };
+            v.payload = .{ .strukt = .{ .tag = .{ .tuple = {} }, .fields = kept } };
+        },
+        .int32, .int64, .float, .double, .char, .unit => {
+            v.payload = .{ .strukt = .{ .tag = .{ .tuple = {} }, .fields = &.{} } };
+        },
+        .record, .codata, .string => {
+            drop(v);
+            return null;
+        },
+    }
+    v.kind = .strukt;
+    g_reuse_hits += 1;
+    return v;
+}
+
+/// Overwrites a token produced by `dropReuse` in place when possible, else
+/// allocates fresh via `mkStruct`. `tag` is a value (a `[]const u8` name
+/// pointing at the generated code's own `.rodata`, or a bare tuple
+/// marker), so overwriting it is just a copy with no ownership
+/// implications.
+pub fn mkStructReuse(tok: ?Value, tag: Tag, fields: []const Value) Value {
+    const obj = tok orelse return mkStruct(tag, fields);
+    std.debug.assert(obj.rc == 1 and obj.kind == .strukt);
+    if (obj.payload.strukt.fields.len == fields.len) {
+        @memcpy(@constCast(obj.payload.strukt.fields), fields);
+        obj.payload.strukt.tag = tag;
+    } else {
+        std.debug.assert(obj.payload.strukt.fields.len == 0);
+        obj.payload.strukt = .{ .tag = tag, .fields = g_value.dupe(Value, fields) catch @panic("Malgo: out of memory") };
+    }
+    return obj;
 }
 
 fn decChildren(children: []const Value) void {
@@ -385,8 +469,8 @@ pub fn exitWithLeakCheck() void {
     // std.c.getenv, not std.posix (removed in Zig 0.16); libc is always
     // linked (see Toolchain.hs's -lc).
     if (std.c.getenv("MALGO_RC_STATS") != null) {
-        var buf: [64]u8 = undefined;
-        const line = std.fmt.bufPrint(&buf, "MALGO-STATS: total_allocs={d}\n", .{g_total_allocs}) catch "MALGO-STATS: ?\n";
+        var buf: [96]u8 = undefined;
+        const line = std.fmt.bufPrint(&buf, "MALGO-STATS: total_allocs={d} reuse_hits={d}\n", .{ g_total_allocs, g_reuse_hits }) catch "MALGO-STATS: ?\n";
         writeStderr(line);
     }
     var leaked = g_live_objects != 0;
@@ -1083,6 +1167,94 @@ test "unsafe_cast returns an owned reference" {
     drop(w);
     try std.testing.expectEqual(before + 1, g_live_objects);
     drop(v);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "dropReuse recycles a uniquely-referenced same-arity struct in place" {
+    initHeap();
+    const before = g_live_objects;
+    const beforeAllocs = g_total_allocs;
+    const beforeHits = g_reuse_hits;
+    const a = mkInt32(1);
+    const b = mkInt32(2);
+    const pair = mkStruct(.{ .tuple = {} }, &[_]Value{ a, b });
+    const tok = dropReuse(pair, 2);
+    try std.testing.expect(tok != null);
+    try std.testing.expectEqual(pair, tok.?);
+    try std.testing.expectEqual(beforeHits + 1, g_reuse_hits);
+    // a/b were released transitively, just as an ordinary drop would.
+    try std.testing.expectEqual(before + 1, g_live_objects);
+    const c = mkInt32(3);
+    const d = mkInt32(4);
+    const rebuilt = mkStructReuse(tok, .{ .named = "Cons" }, &[_]Value{ c, d });
+    try std.testing.expectEqual(pair, rebuilt);
+    // 5 Objects allocated total (a, b, pair, c, d); the recycled pair
+    // Object + its array were reused for `rebuilt`, not freed-and-reallocated.
+    try std.testing.expectEqual(beforeAllocs + 5, g_total_allocs);
+    drop(rebuilt);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "dropReuse falls back to an ordinary drop for a shared value" {
+    initHeap();
+    const before = g_live_objects;
+    const a = mkInt32(1);
+    const pair = mkStruct(.{ .tuple = {} }, &[_]Value{a});
+    dup(pair);
+    const tok = dropReuse(pair, 1);
+    try std.testing.expect(tok == null);
+    try std.testing.expectEqual(@as(u32, 1), pair.rc);
+    drop(pair);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "dropReuse falls back for an immortal value" {
+    initHeap();
+    try std.testing.expectEqual(@as(?Value, null), dropReuse(no_self, 0));
+    try std.testing.expectEqual(IMMORTAL, no_self.rc);
+}
+
+test "dropReuse reallocates the backing array on an arity mismatch" {
+    initHeap();
+    const before = g_live_objects;
+    const a = mkInt32(1);
+    const pair = mkStruct(.{ .tuple = {} }, &[_]Value{a});
+    const tok = dropReuse(pair, 3);
+    try std.testing.expect(tok != null);
+    const c = mkInt32(2);
+    const d = mkInt32(3);
+    const e = mkInt32(4);
+    const rebuilt = mkStructReuse(tok, .{ .tuple = {} }, &[_]Value{ c, d, e });
+    try std.testing.expectEqual(pair, rebuilt);
+    try std.testing.expectEqual(@as(usize, 3), rebuilt.payload.strukt.fields.len);
+    drop(rebuilt);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "dropReuse recycles a closure's Object into a struct" {
+    initHeap();
+    const before = g_live_objects;
+    const a = mkInt32(1);
+    const b = mkInt32(2);
+    const closure = mkClosure(&identityCode, &[_]Value{ a, b });
+    const tok = dropReuse(closure, 2);
+    try std.testing.expect(tok != null);
+    try std.testing.expectEqual(closure, tok.?);
+    const c = mkInt32(3);
+    const d = mkInt32(4);
+    const rebuilt = mkStructReuse(tok, .{ .tuple = {} }, &[_]Value{ c, d });
+    try std.testing.expectEqual(closure, rebuilt);
+    drop(rebuilt);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "mkStructReuse allocates fresh on a null token" {
+    initHeap();
+    const before = g_live_objects;
+    const a = mkInt32(1);
+    const built = mkStructReuse(null, .{ .tuple = {} }, &[_]Value{a});
+    try std.testing.expectEqual(Kind.strukt, built.kind);
+    drop(built);
     try std.testing.expectEqual(before, g_live_objects);
 }
 

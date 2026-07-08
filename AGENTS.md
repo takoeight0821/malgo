@@ -53,15 +53,28 @@ via Zig to a native executable (Zig 0.16 pinned in `mise.toml`). Pipeline inside
 `ZigPass` (`src/Malgo/Backend/Zig/`):
 
 ```
-Join IR → Normalize (Mu/Label elimination) → ClosureConv.convertProgram (ANF Ir,
-closure conversion) → Perceus (dup/drop insertion) → RcCheck (linearity assert)
-→ Emit (Zig text, runtime embedded via file-embed from runtime/zig/runtime.zig)
+Join IR → SaturateCtor (inline saturated constructor applications)
+        → Normalize (Mu/Label elimination) → ClosureConv.convertProgram (ANF Ir,
+          closure conversion) → Peephole (scrutinee-tuple elimination)
+        → Perceus (dup/drop insertion) → Reuse (Drop/MkStruct → reuse-token pairing)
+        → RcCheck (linearity + reuse-token assert)
+        → Emit (Zig text, runtime embedded via file-embed from runtime/zig/runtime.zig)
 ```
 
 - Memory: Perceus reference counting. Every produced binary leak-checks itself
   at exit (`MALGO-LEAK` on stderr + exit 83 on failure).
 - Calling convention is self-passing: `fn(self, args)`; the callee dups its
   captures then drops `self`.
+- Allocation-reduction passes (M10): `SaturateCtor` inlines a fully-applied
+  constructor call (`Cons x xs`) into a direct `Construct` instead of invoking
+  the shared curried constructor closure; `Peephole` removes the scrutinee
+  tuple a multi-parameter clause match otherwise allocates. `Reuse` then pairs
+  a Perceus `Drop` with a later `MkStruct` in the same block into
+  `DropReuse`/`MkStructReuse`, letting the runtime (`rt.dropReuse`/
+  `rt.mkStructReuse`) recycle a uniquely-referenced Object in place (Koka-style
+  FBIP, generalized to any same-arity payload, not just literal cell reuse).
+  Set `MALGO_RC_STATS=1` when running a compiled binary to print
+  `MALGO-STATS: total_allocs=<N> reuse_hits=<N>` to stderr.
 - Golden parity harness: `bash scripts/zig-golden.sh` (CI job `zig-golden`)
   compiles every golden testcase and diffs stdout byte-for-byte against the
   interpreter's goldens, failing on any leak.

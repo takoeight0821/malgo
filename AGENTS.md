@@ -46,6 +46,13 @@ EvalPass (Interpreter) | SchemePass (--target scheme) | ZigPass (--target zig / 
 
 **Note**: InferPass and RefinePass can be skipped for fast evaluation without type checking.
 
+`ToCorePass` runs `Malgo.Sequent.SaturateCtor.saturateProgram` first thing, before CPS
+conversion: it inlines a fully(-or-over-)saturated call of a data constructor
+(`Cons x xs`, or `Cons (f x) (mapList f xs)` — arguments need not be
+immediate) directly into `Fun.Construct`, instead of invoking the
+constructor's own curried closure. This is shared by every backend
+(Eval/Scheme/Zig) and every direct caller of `toCore`, not Zig-specific.
+
 ### Zig Backend (native executables)
 
 `malgo compile SOURCE [-o OUT] [--opt debug|release-safe|release-fast]` compiles
@@ -53,9 +60,9 @@ via Zig to a native executable (Zig 0.16 pinned in `mise.toml`). Pipeline inside
 `ZigPass` (`src/Malgo/Backend/Zig/`):
 
 ```
-Join IR → SaturateCtor (inline saturated constructor applications)
-        → Normalize (Mu/Label elimination) → ClosureConv.convertProgram (ANF Ir,
-          closure conversion) → Peephole (scrutinee-tuple elimination)
+Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label elimination)
+        → ClosureConv.convertProgram (ANF Ir, closure conversion)
+        → Peephole (scrutinee-tuple elimination)
         → Perceus (dup/drop insertion) → Reuse (Drop/MkStruct → reuse-token pairing)
         → RcCheck (linearity + reuse-token assert)
         → Emit (Zig text, runtime embedded via file-embed from runtime/zig/runtime.zig)
@@ -65,11 +72,9 @@ Join IR → SaturateCtor (inline saturated constructor applications)
   at exit (`MALGO-LEAK` on stderr + exit 83 on failure).
 - Calling convention is self-passing: `fn(self, args)`; the callee dups its
   captures then drops `self`.
-- Allocation-reduction passes (M10): `SaturateCtor` inlines a fully-applied
-  constructor call (`Cons x xs`) into a direct `Construct` instead of invoking
-  the shared curried constructor closure; `Peephole` removes the scrutinee
-  tuple a multi-parameter clause match otherwise allocates. `Reuse` then pairs
-  a Perceus `Drop` with a later `MkStruct` in the same block into
+- Allocation-reduction passes (M10/M11): `Peephole` removes the scrutinee
+  tuple a multi-parameter clause match otherwise allocates. `Reuse` pairs a
+  Perceus `Drop` with a later `MkStruct` in the same block into
   `DropReuse`/`MkStructReuse`, letting the runtime (`rt.dropReuse`/
   `rt.mkStructReuse`) recycle a uniquely-referenced Object in place (Koka-style
   FBIP, generalized to any same-arity payload, not just literal cell reuse).

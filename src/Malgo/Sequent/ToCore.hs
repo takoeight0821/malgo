@@ -11,6 +11,7 @@ import Malgo.Prelude
 import Malgo.Sequent.Core.Full (Producer (Do), Statement (Cut))
 import Malgo.Sequent.Core.Full qualified as C
 import Malgo.Sequent.Fun
+import Malgo.Sequent.SaturateCtor (saturateProgram)
 
 data ToCorePass = ToCorePass
 
@@ -22,8 +23,13 @@ instance Pass ToCorePass where
 
   runPassImpl _ = toCore
 
+-- | Runs 'saturateProgram' first (shared by every caller — Eval, Scheme,
+-- Zig, and every test helper that calls 'toCore' directly), so saturated
+-- constructor applications never reach CPS conversion in their curried
+-- form.
 toCore :: (State Uniq :> es, Reader ModuleName :> es) => Program -> Eff es C.Program
-toCore (Program {..}) = do
+toCore program = do
+  let Program {..} = saturateProgram program
   definitions <- traverse convertDefinition definitions
   pure C.Program {definitions, dependencies}
 

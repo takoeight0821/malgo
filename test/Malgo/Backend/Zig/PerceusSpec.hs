@@ -18,7 +18,6 @@ import Malgo.Backend.Zig.Peephole (peepholeProgram)
 import Malgo.Backend.Zig.Perceus (perceusFunc, perceusProgram)
 import Malgo.Backend.Zig.RcCheck (RcViolation (..), checkFunc, checkProgram)
 import Malgo.Backend.Zig.Reuse (reuseProgram)
-import Malgo.Backend.Zig.SaturateCtor (saturateProgram)
 import Malgo.Id
 import Malgo.Module (ArtifactPath, ModuleName (..))
 import Malgo.Monad (runMalgoM)
@@ -186,9 +185,10 @@ corpusSpec builtin prelude = describe "corpus linearity (all golden testcases)" 
   reuseFired <- runIO $ newIORef False
   parallel $ for_ testcases \testcase ->
     it (takeBaseName testcase) do
+      -- saturateProgram already ran inside compileTestCase's toCore call.
       (moduleName, program) <- compileTestCase builtin prelude (testcaseDir </> testcase)
       (ir, final) <- runMalgoM flag $ runReader moduleName do
-        ir <- convertProgram (saturateProgram program)
+        ir <- convertProgram program
         -- The conversion itself never inserts RC ops...
         final <- reuseProgram (perceusProgram (peepholeProgram ir))
         pure (ir, final)

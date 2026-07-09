@@ -83,7 +83,9 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
 - Golden parity harness: `bash scripts/zig-golden.sh` (CI job `zig-golden`)
   compiles every golden testcase and diffs stdout byte-for-byte against the
   interpreter's goldens, failing on any leak.
-- Runtime unit tests: `zig test runtime/zig/runtime.zig`.
+- Runtime unit tests: `zig test -lc runtime/zig/runtime.zig` (`-lc` is required on
+  Linux since the runtime calls `std.c.write`/`std.c.getenv` directly; macOS
+  masks this because it always links libc via libSystem).
 - The interpreter (`Malgo.Sequent.Eval`) is the semantic oracle: any observable
   divergence in the Zig backend is a bug, matched against Eval.hs, not Scheme.
 

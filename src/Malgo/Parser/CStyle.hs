@@ -97,10 +97,18 @@ pDataDef = captureRange do
     pConstructor = captureRange do
       name <- ident
       cStyleParameters <- fromMaybe [] <$> optional (try $ between (symbol "(") (symbol ")") (sepBy pType (symbol ",")))
-      parameters <-
-        if null cStyleParameters
-          then many pAtomType
-          else pure cStyleParameters
+      -- A single parenthesized field (no comma) is ambiguous with a
+      -- Regular-syntax constructor whose *first* field happens to be
+      -- written in parens (e.g. `Node (Tree a) a (Tree a)`): `sepBy`
+      -- matches one item with zero commas just as happily as a genuine
+      -- one-argument C-style call `Node(a)`. Treat it as the former,
+      -- continuing to parse any further atom-type fields after it --
+      -- this also covers the latter, since `many pAtomType` simply
+      -- returns [] when nothing else follows.
+      parameters <- case cStyleParameters of
+        [] -> many pAtomType
+        [field] -> (field :) <$> many pAtomType
+        fields -> pure fields
       pure (,name,parameters)
 
 -- | pTypeSynonym parses C-style type synonyms with parenthesized parameters

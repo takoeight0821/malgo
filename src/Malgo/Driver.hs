@@ -20,6 +20,7 @@ import Malgo.Query
 import Malgo.Query.Database
 import Malgo.Query.Engine
 import Malgo.Sequent.BigStepEval (BigStepEvalPass (..))
+import Malgo.Sequent.Core.Join qualified as Join
 import Malgo.Sequent.Eval (EvalPass (..), Handlers (..))
 import Malgo.Syntax qualified as Syntax
 import Malgo.Syntax.Extension
@@ -58,11 +59,7 @@ compileFromAST ::
 compileFromAST srcPath parsedAst = do
   flags <- ask @Flag
   let modName = parsedAst.moduleName
-  registerModule modName srcPath
-  db <- liftIO newDatabase
-  -- Pre-populate the parse cache so the query engine reuses this result.
-  liftIO $ modifyIORef db.cacheParsedModule $ Map.insert modName parsedAst
-  core <- runQueryDB db $ fetch (LinkedProgram modName)
+  core <- fetchLinkedCore srcPath parsedAst
   case flags.target of
     TargetScheme -> do
       schemeCode <- runReader modName $ runPass SchemePass core
@@ -78,6 +75,27 @@ compileFromAST srcPath parsedAst = do
       case flags.evalMode of
         EvalBigStep -> runPass BigStepEvalPass (modName, Handlers {..}, core)
         EvalSmallStep -> runPass EvalPass (modName, Handlers {..}, core)
+
+-- | Register the module and run the query pipeline through linking --
+-- shared by every 'compileFromAST' target and by 'compileToExecutable'.
+fetchLinkedCore ::
+  ( Reader Flag :> es,
+    Error CompileError :> es,
+    IOE :> es,
+    State Uniq :> es,
+    Workspace :> es,
+    Features :> es
+  ) =>
+  ArtifactPath ->
+  Syntax.Module (Malgo Parse) ->
+  Eff es Join.Program
+fetchLinkedCore srcPath parsedAst = do
+  let modName = parsedAst.moduleName
+  registerModule modName srcPath
+  db <- liftIO newDatabase
+  -- Pre-populate the parse cache so the query engine reuses this result.
+  liftIO $ modifyIORef db.cacheParsedModule $ Map.insert modName parsedAst
+  runQueryDB db $ fetch (LinkedProgram modName)
 
 -- | Compile a source file to Zig, then invoke the @zig@ toolchain to
 -- produce a native executable at @outPath@. Used by the @malgo compile@
@@ -100,12 +118,8 @@ compileToExecutable srcPath outPath optMode = do
   save srcModulePath ".mlg" src
   zigText <- runCompileError do
     parsedAst <- runPass ParserPass (srcPath, convertString @BS.ByteString src)
-    let modName = parsedAst.moduleName
-    registerModule modName srcModulePath
-    db <- liftIO newDatabase
-    liftIO $ modifyIORef db.cacheParsedModule $ Map.insert modName parsedAst
-    core <- runQueryDB db $ fetch (LinkedProgram modName)
-    runReader modName $ runPass ZigPass core
+    core <- fetchLinkedCore srcModulePath parsedAst
+    runReader parsedAst.moduleName $ runPass ZigPass core
   save srcModulePath ".zig" (convertString @Text @BS.ByteString zigText)
   workspace <- getWorkspace
   let zigPath = outPath <> ".zig"

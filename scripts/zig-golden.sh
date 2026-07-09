@@ -40,6 +40,15 @@ if [ -z "$MALGO" ] || [ ! -x "$MALGO" ]; then
   exit 1
 fi
 
+# Bare-name imports (e.g. `import Builtin` inside Prelude.mlg) resolve only
+# by searching the .malgo-work workspace mirror (see
+# Malgo.Module.searchAndRegister), which starts out empty on a fresh
+# checkout. Seed it by compiling each runtime module as an entry point once,
+# before any testcase transitively bare-imports them.
+for module in Builtin Prelude Either; do
+  "$MALGO" eval "runtime/malgo/$module.mlg" >/dev/null 2>&1
+done
+
 WORK="$(mktemp -d)"
 cleanup() {
   if [ -z "${KEEP_WORK:-}" ]; then

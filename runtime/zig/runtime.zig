@@ -198,7 +198,11 @@ fn writeAllFd(fd: c_int, bytes: []const u8) void {
     var off: usize = 0;
     while (off < bytes.len) {
         const n = std.c.write(fd, bytes.ptr + off, bytes.len - off);
-        if (n <= 0) return;
+        if (n < 0) {
+            if (std.c.errno(n) == .INTR) continue;
+            return;
+        }
+        if (n == 0) return;
         off += @intCast(n);
     }
 }
@@ -284,10 +288,14 @@ pub fn malgo_mul_int32_t(args: []const Value) Value {
     return mkInt32(asI32(args[0]) *% asI32(args[1]));
 }
 pub fn malgo_div_int32_t(args: []const Value) Value {
-    return mkInt32(@divFloor(asI32(args[0]), asI32(args[1])));
+    const divisor = asI32(args[1]);
+    if (divisor == 0) panic("divide by zero");
+    return mkInt32(@divFloor(asI32(args[0]), divisor));
 }
 pub fn malgo_mod_int32_t(args: []const Value) Value {
-    return mkInt32(@mod(asI32(args[0]), asI32(args[1])));
+    const divisor = asI32(args[1]);
+    if (divisor == 0) panic("divide by zero");
+    return mkInt32(@mod(asI32(args[0]), divisor));
 }
 pub fn malgo_neg_int32_t(args: []const Value) Value {
     return mkInt32(-%asI32(args[0]));
@@ -303,10 +311,14 @@ pub fn malgo_mul_int64_t(args: []const Value) Value {
     return mkInt64(asI64(args[0]) *% asI64(args[1]));
 }
 pub fn malgo_div_int64_t(args: []const Value) Value {
-    return mkInt64(@divFloor(asI64(args[0]), asI64(args[1])));
+    const divisor = asI64(args[1]);
+    if (divisor == 0) panic("divide by zero");
+    return mkInt64(@divFloor(asI64(args[0]), divisor));
 }
 pub fn malgo_mod_int64_t(args: []const Value) Value {
-    return mkInt64(@mod(asI64(args[0]), asI64(args[1])));
+    const divisor = asI64(args[1]);
+    if (divisor == 0) panic("divide by zero");
+    return mkInt64(@mod(asI64(args[0]), divisor));
 }
 pub fn malgo_neg_int64_t(args: []const Value) Value {
     return mkInt64(-%asI64(args[0]));
@@ -485,7 +497,9 @@ pub fn malgo_char_ord(args: []const Value) Value {
     return mkInt32(@intCast(asChar(args[0])));
 }
 pub fn malgo_int32_t_to_char(args: []const Value) Value {
-    return mkChar(@intCast(asI32(args[0])));
+    const n = asI32(args[0]);
+    if (n < 0 or n > std.math.maxInt(u21)) panic("Prelude.chr: bad argument");
+    return mkChar(@intCast(n));
 }
 pub fn malgo_char_to_string(args: []const Value) Value {
     return mkString(utf8EncodeAlloc(asChar(args[0])));
@@ -595,15 +609,34 @@ pub fn malgo_int64_t_to_string(args: []const Value) Value {
     const s = std.fmt.allocPrint(g_arena.allocator(), "{d}", .{asI64(args[0])}) catch @panic("Malgo: out of memory");
     return mkString(s);
 }
+/// Mirrors Haskell's `show :: RealFloat a => a -> String` (fixed-point
+/// notation for `x == 0 || 0.1 <= |x| < 10_000_000`, scientific notation
+/// otherwise, always at least one digit on both sides of the decimal
+/// point). `{d}`/`{e}` already produce the shortest round-tripping digit
+/// string, matching `floatToDigits`; only the notation choice and the
+/// "always show a fractional part" rule need reproducing by hand.
+fn formatHaskellFloat(comptime T: type, x: T) []const u8 {
+    const a = g_arena.allocator();
+    if (std.math.isNan(x)) return "NaN";
+    if (std.math.isInf(x)) return if (x < 0) "-Infinity" else "Infinity";
+    const absX = @abs(x);
+    if (x == 0 or (absX >= 0.1 and absX < 10_000_000.0)) {
+        const s = std.fmt.allocPrint(a, "{d}", .{x}) catch @panic("Malgo: out of memory");
+        if (std.mem.indexOfScalar(u8, s, '.') != null) return s;
+        return std.fmt.allocPrint(a, "{s}.0", .{s}) catch @panic("Malgo: out of memory");
+    }
+    const s = std.fmt.allocPrint(a, "{e}", .{x}) catch @panic("Malgo: out of memory");
+    const eIdx = std.mem.indexOfScalar(u8, s, 'e') orelse unreachable;
+    const mantissa = s[0..eIdx];
+    if (std.mem.indexOfScalar(u8, mantissa, '.') != null) return s;
+    return std.fmt.allocPrint(a, "{s}.0{s}", .{ mantissa, s[eIdx..] }) catch @panic("Malgo: out of memory");
+}
+
 pub fn malgo_float_to_string(args: []const Value) Value {
-    // Placeholder pending the Haskell-`show`-compatible formatter (M6);
-    // ArithInt32/HelloBoxed-class M1 tests never call this.
-    const s = std.fmt.allocPrint(g_arena.allocator(), "{d}", .{asF32(args[0])}) catch @panic("Malgo: out of memory");
-    return mkString(s);
+    return mkString(formatHaskellFloat(f32, asF32(args[0])));
 }
 pub fn malgo_double_to_string(args: []const Value) Value {
-    const s = std.fmt.allocPrint(g_arena.allocator(), "{d}", .{asF64(args[0])}) catch @panic("Malgo: out of memory");
-    return mkString(s);
+    return mkString(formatHaskellFloat(f64, asF64(args[0])));
 }
 
 pub fn malgo_exit_failure(args: []const Value) Value {
@@ -638,10 +671,21 @@ pub fn malgo_flush(args: []const Value) Value {
     return unitValue();
 }
 
+/// Decodes one full Unicode scalar from stdin (which may be a multi-byte
+/// UTF-8 sequence), unlike a single raw byte read.
 pub fn malgo_get_char(args: []const Value) Value {
     _ = args;
-    const b = readStdinByte() orelse return mkChar(0);
-    return mkChar(b);
+    const lead = readStdinByte() orelse return mkChar(0);
+    const seqLen = std.unicode.utf8ByteSequenceLength(lead) catch return mkChar(lead);
+    if (seqLen == 1) return mkChar(lead);
+    var buf: [4]u8 = undefined;
+    buf[0] = lead;
+    var i: u3 = 1;
+    while (i < seqLen) : (i += 1) {
+        buf[i] = readStdinByte() orelse panic("malformed UTF-8 on stdin");
+    }
+    const cp = std.unicode.utf8Decode(buf[0..seqLen]) catch panic("malformed UTF-8 on stdin");
+    return mkChar(cp);
 }
 
 pub fn malgo_get_contents(args: []const Value) Value {
@@ -661,11 +705,26 @@ pub fn malgo_get_line(args: []const Value) Value {
     return mkString(out.items);
 }
 
+/// The real argv, captured once from `main`'s `std.process.Init.Minimal`
+/// (see the generated `main` in Malgo.Backend.Zig.Emit); empty until then
+/// (e.g. inside `zig test`, which never calls `setArgv`).
+var g_argv: []const [*:0]const u8 = &.{};
+
+pub fn setArgv(vector: []const [*:0]const u8) void {
+    g_argv = vector;
+}
+
 pub fn malgo_get_args(args: []const Value) Value {
     _ = args;
-    // No test case passes program arguments (see plan); an empty argv is
-    // observably identical to the interpreter under every golden case.
-    return mkString("");
+    // g_argv[0] is the program's own path, which System.Environment.getArgs
+    // (and this project's Handlers.arguments) never includes.
+    if (g_argv.len <= 1) return mkString("");
+    var out: std.ArrayList(u8) = .empty;
+    for (g_argv[1..], 0..) |arg, i| {
+        if (i != 0) out.append(g_arena.allocator(), '\n') catch @panic("Malgo: out of memory");
+        out.appendSlice(g_arena.allocator(), std.mem.sliceTo(arg, 0)) catch @panic("Malgo: out of memory");
+    }
+    return mkString(out.items);
 }
 
 pub fn malgo_stderr_string(args: []const Value) Value {
@@ -724,8 +783,8 @@ fn valueToText(v: Value) []const u8 {
     return switch (v.kind) {
         .int32 => std.fmt.allocPrint(a, "{d}", .{v.payload.int32}) catch @panic("Malgo: out of memory"),
         .int64 => std.fmt.allocPrint(a, "{d}", .{v.payload.int64}) catch @panic("Malgo: out of memory"),
-        .float => std.fmt.allocPrint(a, "{d}", .{v.payload.float}) catch @panic("Malgo: out of memory"),
-        .double => std.fmt.allocPrint(a, "{d}", .{v.payload.double}) catch @panic("Malgo: out of memory"),
+        .float => formatHaskellFloat(f32, v.payload.float),
+        .double => formatHaskellFloat(f64, v.payload.double),
         .char => utf8EncodeAlloc(v.payload.char),
         .string => v.payload.string,
         .strukt => structToText(v.payload.strukt),

@@ -1,0 +1,1614 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+def succ =
+  fn {
+    Int64#(x) ->
+      {
+        (Int64#(addInt64#(x)(1L)))
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        printInt64((succ << succ)(Int64#(0L)))
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+def succ =
+  fn {
+    Int64#(x#0) ->
+      {
+        (Int64#(addInt64#(x#0)(1L)))
+      }
+  }
+
+def main =
+  fn {
+    _#1 ->
+      {
+        printInt64((succ << succ)(Int64#(0L)))
+      }
+  }
+
+=== ToFun ===
+def succ =
+  \param$2 ->
+    case param$2 of {
+      Int64#(x#0) -> invoke Int64#(invoke addInt64#(x#0)(1L))
+    }
+
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        invoke printInt64( invoke <<( invoke succ )( invoke succ )( invoke Int64#( 0L ) ) )
+    }
+
+=== SaturateCtor ===
+def succ =
+  \param$2 ->
+    case param$2 of {
+      Int64#(x#0) -> invoke Int64#(invoke addInt64#(x#0)(1L))
+    }
+
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        invoke printInt64( invoke <<( invoke succ )( invoke succ )( invoke Int64#( 0L ) ) )
+    }
+
+=== ReuseSpecialize ===
+def succ =
+  \param$2 ->
+    case param$2 of {
+      Int64#(x#0) -> invoke Int64#(invoke addInt64#(x#0)(1L))
+    }
+
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        invoke printInt64( invoke <<( invoke succ )( invoke succ )( invoke Int64#( 0L ) ) )
+    }
+
+=== ToCore ===
+def succ(return$4) =
+  \param$2 return$5 . {
+    param$2 ~ select {
+      Int64#(x#0) ->
+        invoke Int64# ~ ( do return$6 . {
+          invoke addInt64# ~ (x#0, (1L, return$6))
+        }
+        , return$5 )
+    }
+  } ~ return$4
+
+def main(return$7) =
+  \param$3 return$8 . {
+    param$3 ~ select {
+      _#1 ->
+        invoke printInt64 ~ ( do return$9 . {
+          invoke << ~ ( do return$12 . {
+            invoke succ ~ return$12
+          }
+          , ( do return$11 . {
+            invoke succ ~ return$11
+          }
+          , ( do return$10 . {
+            invoke Int64# ~ (0L, return$10)
+          }
+          , return$9 ) ) )
+        }
+        , return$8 )
+    }
+  } ~ return$7
+
+=== Flat ===
+def succ(return$4) =
+  \param$2 return$5 . {
+    param$2 ~ select {
+      Int64#(x#0) ->
+        invoke Int64# ~ then outer$13 -> {
+          join return$6 = then inner$14 -> {
+            outer$13 ~ (inner$14, return$5)
+          }
+          in invoke addInt64# ~ (x#0, (1L, return$6))
+        }
+    }
+  } ~ return$4
+
+def main(return$7) =
+  \param$3 return$8 . {
+    param$3 ~ select {
+      _#1 ->
+        invoke printInt64 ~ then outer$15 -> {
+          join return$9 = then inner$16 -> {
+            outer$15 ~ (inner$16, return$8)
+          }
+          in invoke << ~ then outer$17 -> {
+            join return$12 = then inner$18 -> {
+              outer$17 ~ ( inner$18
+              , then outer$19 -> {
+                join return$11 = then inner$20 -> {
+                  outer$19 ~ ( inner$20
+                  , then outer$21 -> {
+                    join return$10 = then inner$22 -> {
+                      outer$21 ~ (inner$22, return$9)
+                    }
+                    in invoke Int64# ~ (0L, return$10)
+                  } )
+                }
+                in invoke succ ~ return$11
+              } )
+            }
+            in invoke succ ~ return$12
+          }
+        }
+    }
+  } ~ return$7
+
+=== Join ===
+def succ(return$4) =
+  \param$2 return$5 . {
+    join select$27 = select {
+      Int64#(x#0) ->
+        join then$26 = then outer$13 -> {
+          join return$6 = then inner$14 -> {
+            join apply$25 = (inner$14, return$5)
+            in outer$13 ~ apply$25
+          }
+          in join apply$23 = (1L, return$6)
+          in join apply$24 = (x#0, apply$23)
+          in invoke addInt64# ~ apply$24
+        }
+        in invoke Int64# ~ then$26
+    }
+    in param$2 ~ select$27
+  } ~ return$4
+
+def main(return$7) =
+  \param$3 return$8 . {
+    join select$37 = select {
+      _#1 ->
+        join then$36 = then outer$15 -> {
+          join return$9 = then inner$16 -> {
+            join apply$35 = (inner$16, return$8)
+            in outer$15 ~ apply$35
+          }
+          in join then$34 = then outer$17 -> {
+            join return$12 = then inner$18 -> {
+              join then$32 = then outer$19 -> {
+                join return$11 = then inner$20 -> {
+                  join then$30 = then outer$21 -> {
+                    join return$10 = then inner$22 -> {
+                      join apply$29 = (inner$22, return$9)
+                      in outer$21 ~ apply$29
+                    }
+                    in join apply$28 = (0L, return$10)
+                    in invoke Int64# ~ apply$28
+                  }
+                  in join apply$31 = (inner$20, then$30)
+                  in outer$19 ~ apply$31
+                }
+                in invoke succ ~ return$11
+              }
+              in join apply$33 = (inner$18, then$32)
+              in outer$17 ~ apply$33
+            }
+            in invoke succ ~ return$12
+          }
+          in invoke << ~ then$34
+        }
+        in invoke printInt64 ~ then$36
+    }
+    in param$3 ~ select$37
+  } ~ return$7
+
+=== ClosureConv ===
+toplevel fn succ(return$4) =
+  let closure$54 = closure lambda$39()
+  return return$4(closure$54)
+
+closure fn lambda$39(self$40, param$2, return$5) =
+  if param$2.tag == Int64# then {
+    let x#0 = param$2.0
+    let then$26 = closure join$41(return$5, x#0)
+    return Int64#(then$26)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$41(self$42, value$43) =
+  let return$5 = self$42.cap[0]
+  let x#0 = self$42.cap[1]
+  let return$6 = closure join$44(return$5, value$43)
+  let apply$23 = closure join$47(return$6)
+  let apply$24 = closure join$51(apply$23, x#0)
+  return addInt64#(apply$24)
+
+closure fn join$44(self$45, value$46) =
+  let return$5 = self$45.cap[0]
+  let value$43 = self$45.cap[1]
+  return value$43(value$46, return$5)
+
+closure fn join$47(self$48, value$49) =
+  let return$6 = self$48.cap[0]
+  let lit$50 = 1L
+  return value$49(lit$50, return$6)
+
+closure fn join$51(self$52, value$53) =
+  let apply$23 = self$52.cap[0]
+  let x#0 = self$52.cap[1]
+  return value$53(x#0, apply$23)
+
+toplevel fn main(return$7) =
+  let closure$86 = closure lambda$56()
+  return return$7(closure$86)
+
+closure fn lambda$56(self$57, param$3, return$8) =
+  if  then {
+    let _#1 = param$3
+    let then$36 = closure join$58(return$8)
+    return printInt64(then$36)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$58(self$59, value$60) =
+  let return$8 = self$59.cap[0]
+  let return$9 = closure join$61(return$8, value$60)
+  let then$34 = closure join$64(return$9)
+  return <<(then$34)
+
+closure fn join$61(self$62, value$63) =
+  let return$8 = self$62.cap[0]
+  let value$60 = self$62.cap[1]
+  return value$60(value$63, return$8)
+
+closure fn join$64(self$65, value$66) =
+  let return$9 = self$65.cap[0]
+  let return$12 = closure join$67(return$9, value$66)
+  return succ(return$12)
+
+closure fn join$67(self$68, value$69) =
+  let return$9 = self$68.cap[0]
+  let value$66 = self$68.cap[1]
+  let then$32 = closure join$70(return$9)
+  return value$66(value$69, then$32)
+
+closure fn join$70(self$71, value$72) =
+  let return$9 = self$71.cap[0]
+  let return$11 = closure join$73(return$9, value$72)
+  return succ(return$11)
+
+closure fn join$73(self$74, value$75) =
+  let return$9 = self$74.cap[0]
+  let value$72 = self$74.cap[1]
+  let then$30 = closure join$76(return$9)
+  return value$72(value$75, then$30)
+
+closure fn join$76(self$77, value$78) =
+  let return$9 = self$77.cap[0]
+  let return$10 = closure join$79(return$9, value$78)
+  let apply$28 = closure join$82(return$10)
+  return Int64#(apply$28)
+
+closure fn join$79(self$80, value$81) =
+  let return$9 = self$80.cap[0]
+  let value$78 = self$80.cap[1]
+  return value$78(value$81, return$9)
+
+closure fn join$82(self$83, value$84) =
+  let return$10 = self$83.cap[0]
+  let lit$85 = 0L
+  return value$84(lit$85, return$10)
+
+toplevel fn zig_main$89() =
+  let finish$87 = closure join$91()
+  let after_main$88 = closure join$94(finish$87)
+  return main(after_main$88)
+
+closure fn join$91(self$92, value$93) = return value$93
+
+closure fn join$94(self$95, value$96) =
+  let finish$87 = self$95.cap[0]
+  let struct$97 = Tuple()
+  return value$96(struct$97, finish$87)
+
+entry = zig_main$89
+
+=== Peephole ===
+toplevel fn succ(return$4) =
+  let closure$54 = closure lambda$39()
+  return return$4(closure$54)
+
+closure fn lambda$39(self$40, param$2, return$5) =
+  if param$2.tag == Int64# then {
+    let x#0 = param$2.0
+    let then$26 = closure join$41(return$5, x#0)
+    return Int64#(then$26)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$41(self$42, value$43) =
+  let return$5 = self$42.cap[0]
+  let x#0 = self$42.cap[1]
+  let return$6 = closure join$44(return$5, value$43)
+  let apply$23 = closure join$47(return$6)
+  let apply$24 = closure join$51(apply$23, x#0)
+  return addInt64#(apply$24)
+
+closure fn join$44(self$45, value$46) =
+  let return$5 = self$45.cap[0]
+  let value$43 = self$45.cap[1]
+  return value$43(value$46, return$5)
+
+closure fn join$47(self$48, value$49) =
+  let return$6 = self$48.cap[0]
+  let lit$50 = 1L
+  return value$49(lit$50, return$6)
+
+closure fn join$51(self$52, value$53) =
+  let apply$23 = self$52.cap[0]
+  let x#0 = self$52.cap[1]
+  return value$53(x#0, apply$23)
+
+toplevel fn main(return$7) =
+  let closure$86 = closure lambda$56()
+  return return$7(closure$86)
+
+closure fn lambda$56(self$57, param$3, return$8) =
+  if  then {
+    let then$36 = closure join$58(return$8)
+    return printInt64(then$36)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$58(self$59, value$60) =
+  let return$8 = self$59.cap[0]
+  let return$9 = closure join$61(return$8, value$60)
+  let then$34 = closure join$64(return$9)
+  return <<(then$34)
+
+closure fn join$61(self$62, value$63) =
+  let return$8 = self$62.cap[0]
+  let value$60 = self$62.cap[1]
+  return value$60(value$63, return$8)
+
+closure fn join$64(self$65, value$66) =
+  let return$9 = self$65.cap[0]
+  let return$12 = closure join$67(return$9, value$66)
+  return succ(return$12)
+
+closure fn join$67(self$68, value$69) =
+  let return$9 = self$68.cap[0]
+  let value$66 = self$68.cap[1]
+  let then$32 = closure join$70(return$9)
+  return value$66(value$69, then$32)
+
+closure fn join$70(self$71, value$72) =
+  let return$9 = self$71.cap[0]
+  let return$11 = closure join$73(return$9, value$72)
+  return succ(return$11)
+
+closure fn join$73(self$74, value$75) =
+  let return$9 = self$74.cap[0]
+  let value$72 = self$74.cap[1]
+  let then$30 = closure join$76(return$9)
+  return value$72(value$75, then$30)
+
+closure fn join$76(self$77, value$78) =
+  let return$9 = self$77.cap[0]
+  let return$10 = closure join$79(return$9, value$78)
+  let apply$28 = closure join$82(return$10)
+  return Int64#(apply$28)
+
+closure fn join$79(self$80, value$81) =
+  let return$9 = self$80.cap[0]
+  let value$78 = self$80.cap[1]
+  return value$78(value$81, return$9)
+
+closure fn join$82(self$83, value$84) =
+  let return$10 = self$83.cap[0]
+  let lit$85 = 0L
+  return value$84(lit$85, return$10)
+
+toplevel fn zig_main$89() =
+  let finish$87 = closure join$91()
+  let after_main$88 = closure join$94(finish$87)
+  return main(after_main$88)
+
+closure fn join$91(self$92, value$93) = return value$93
+
+closure fn join$94(self$95, value$96) =
+  let finish$87 = self$95.cap[0]
+  let struct$97 = Tuple()
+  return value$96(struct$97, finish$87)
+
+entry = zig_main$89
+
+=== Perceus ===
+toplevel fn succ(return$4) =
+  let closure$54 = closure lambda$39()
+  return return$4(closure$54)
+
+closure fn lambda$39(self$40, param$2, return$5) =
+  drop self$40
+  if param$2.tag == Int64# then {
+    let x#0 = param$2.0
+    dup x#0
+    drop param$2
+    let then$26 = closure join$41(return$5, x#0)
+    return Int64#(then$26)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$41(self$42, value$43) =
+  let return$5 = self$42.cap[0]
+  dup return$5
+  let x#0 = self$42.cap[1]
+  dup x#0
+  drop self$42
+  let return$6 = closure join$44(return$5, value$43)
+  let apply$23 = closure join$47(return$6)
+  let apply$24 = closure join$51(apply$23, x#0)
+  return addInt64#(apply$24)
+
+closure fn join$44(self$45, value$46) =
+  let return$5 = self$45.cap[0]
+  dup return$5
+  let value$43 = self$45.cap[1]
+  dup value$43
+  drop self$45
+  return value$43(value$46, return$5)
+
+closure fn join$47(self$48, value$49) =
+  let return$6 = self$48.cap[0]
+  dup return$6
+  drop self$48
+  let lit$50 = 1L
+  return value$49(lit$50, return$6)
+
+closure fn join$51(self$52, value$53) =
+  let apply$23 = self$52.cap[0]
+  dup apply$23
+  let x#0 = self$52.cap[1]
+  dup x#0
+  drop self$52
+  return value$53(x#0, apply$23)
+
+toplevel fn main(return$7) =
+  let closure$86 = closure lambda$56()
+  return return$7(closure$86)
+
+closure fn lambda$56(self$57, param$3, return$8) =
+  drop param$3
+  drop self$57
+  if  then {
+    let then$36 = closure join$58(return$8)
+    return printInt64(then$36)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$58(self$59, value$60) =
+  let return$8 = self$59.cap[0]
+  dup return$8
+  drop self$59
+  let return$9 = closure join$61(return$8, value$60)
+  let then$34 = closure join$64(return$9)
+  return <<(then$34)
+
+closure fn join$61(self$62, value$63) =
+  let return$8 = self$62.cap[0]
+  dup return$8
+  let value$60 = self$62.cap[1]
+  dup value$60
+  drop self$62
+  return value$60(value$63, return$8)
+
+closure fn join$64(self$65, value$66) =
+  let return$9 = self$65.cap[0]
+  dup return$9
+  drop self$65
+  let return$12 = closure join$67(return$9, value$66)
+  return succ(return$12)
+
+closure fn join$67(self$68, value$69) =
+  let return$9 = self$68.cap[0]
+  dup return$9
+  let value$66 = self$68.cap[1]
+  dup value$66
+  drop self$68
+  let then$32 = closure join$70(return$9)
+  return value$66(value$69, then$32)
+
+closure fn join$70(self$71, value$72) =
+  let return$9 = self$71.cap[0]
+  dup return$9
+  drop self$71
+  let return$11 = closure join$73(return$9, value$72)
+  return succ(return$11)
+
+closure fn join$73(self$74, value$75) =
+  let return$9 = self$74.cap[0]
+  dup return$9
+  let value$72 = self$74.cap[1]
+  dup value$72
+  drop self$74
+  let then$30 = closure join$76(return$9)
+  return value$72(value$75, then$30)
+
+closure fn join$76(self$77, value$78) =
+  let return$9 = self$77.cap[0]
+  dup return$9
+  drop self$77
+  let return$10 = closure join$79(return$9, value$78)
+  let apply$28 = closure join$82(return$10)
+  return Int64#(apply$28)
+
+closure fn join$79(self$80, value$81) =
+  let return$9 = self$80.cap[0]
+  dup return$9
+  let value$78 = self$80.cap[1]
+  dup value$78
+  drop self$80
+  return value$78(value$81, return$9)
+
+closure fn join$82(self$83, value$84) =
+  let return$10 = self$83.cap[0]
+  dup return$10
+  drop self$83
+  let lit$85 = 0L
+  return value$84(lit$85, return$10)
+
+toplevel fn zig_main$89() =
+  let finish$87 = closure join$91()
+  let after_main$88 = closure join$94(finish$87)
+  return main(after_main$88)
+
+closure fn join$91(self$92, value$93) =
+  drop self$92
+  return value$93
+
+closure fn join$94(self$95, value$96) =
+  let finish$87 = self$95.cap[0]
+  dup finish$87
+  drop self$95
+  let struct$97 = Tuple()
+  return value$96(struct$97, finish$87)
+
+entry = zig_main$89
+
+=== Reuse ===
+toplevel fn succ(return$4) =
+  let closure$54 = closure lambda$39()
+  return return$4(closure$54)
+
+closure fn lambda$39(self$40, param$2, return$5) =
+  drop self$40
+  if param$2.tag == Int64# then {
+    let x#0 = param$2.0
+    dup x#0
+    let then$26 = closure join$41(return$5, x#0)
+    drop param$2
+    return Int64#(then$26)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$41(self$42, value$43) =
+  let return$5 = self$42.cap[0]
+  dup return$5
+  let x#0 = self$42.cap[1]
+  dup x#0
+  let return$6 = closure join$44(return$5, value$43)
+  let apply$23 = closure join$47(return$6)
+  let apply$24 = closure join$51(apply$23, x#0)
+  drop self$42
+  return addInt64#(apply$24)
+
+closure fn join$44(self$45, value$46) =
+  let return$5 = self$45.cap[0]
+  dup return$5
+  let value$43 = self$45.cap[1]
+  dup value$43
+  drop self$45
+  return value$43(value$46, return$5)
+
+closure fn join$47(self$48, value$49) =
+  let return$6 = self$48.cap[0]
+  dup return$6
+  let lit$50 = 1L
+  drop self$48
+  return value$49(lit$50, return$6)
+
+closure fn join$51(self$52, value$53) =
+  let apply$23 = self$52.cap[0]
+  dup apply$23
+  let x#0 = self$52.cap[1]
+  dup x#0
+  drop self$52
+  return value$53(x#0, apply$23)
+
+toplevel fn main(return$7) =
+  let closure$86 = closure lambda$56()
+  return return$7(closure$86)
+
+closure fn lambda$56(self$57, param$3, return$8) =
+  drop param$3
+  drop self$57
+  if  then {
+    let then$36 = closure join$58(return$8)
+    return printInt64(then$36)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$58(self$59, value$60) =
+  let return$8 = self$59.cap[0]
+  dup return$8
+  let return$9 = closure join$61(return$8, value$60)
+  let then$34 = closure join$64(return$9)
+  drop self$59
+  return <<(then$34)
+
+closure fn join$61(self$62, value$63) =
+  let return$8 = self$62.cap[0]
+  dup return$8
+  let value$60 = self$62.cap[1]
+  dup value$60
+  drop self$62
+  return value$60(value$63, return$8)
+
+closure fn join$64(self$65, value$66) =
+  let return$9 = self$65.cap[0]
+  dup return$9
+  let return$12 = closure join$67(return$9, value$66)
+  drop self$65
+  return succ(return$12)
+
+closure fn join$67(self$68, value$69) =
+  let return$9 = self$68.cap[0]
+  dup return$9
+  let value$66 = self$68.cap[1]
+  dup value$66
+  let then$32 = closure join$70(return$9)
+  drop self$68
+  return value$66(value$69, then$32)
+
+closure fn join$70(self$71, value$72) =
+  let return$9 = self$71.cap[0]
+  dup return$9
+  let return$11 = closure join$73(return$9, value$72)
+  drop self$71
+  return succ(return$11)
+
+closure fn join$73(self$74, value$75) =
+  let return$9 = self$74.cap[0]
+  dup return$9
+  let value$72 = self$74.cap[1]
+  dup value$72
+  let then$30 = closure join$76(return$9)
+  drop self$74
+  return value$72(value$75, then$30)
+
+closure fn join$76(self$77, value$78) =
+  let return$9 = self$77.cap[0]
+  dup return$9
+  let return$10 = closure join$79(return$9, value$78)
+  let apply$28 = closure join$82(return$10)
+  drop self$77
+  return Int64#(apply$28)
+
+closure fn join$79(self$80, value$81) =
+  let return$9 = self$80.cap[0]
+  dup return$9
+  let value$78 = self$80.cap[1]
+  dup value$78
+  drop self$80
+  return value$78(value$81, return$9)
+
+closure fn join$82(self$83, value$84) =
+  let return$10 = self$83.cap[0]
+  dup return$10
+  let lit$85 = 0L
+  drop self$83
+  return value$84(lit$85, return$10)
+
+toplevel fn zig_main$89() =
+  let finish$87 = closure join$91()
+  let after_main$88 = closure join$94(finish$87)
+  return main(after_main$88)
+
+closure fn join$91(self$92, value$93) =
+  drop self$92
+  return value$93
+
+closure fn join$94(self$95, value$96) =
+  let finish$87 = self$95.cap[0]
+  dup finish$87
+  dropReuse reuse$98 = self$95 /0
+  let struct$97 = reuse reuse$98 Tuple()
+  return value$96(struct$97, finish$87)
+
+entry = zig_main$89
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  def succ =
+    fn {
+-     Int64#(x) ->
++     Int64#(x#0) ->
+        {
+-         (Int64#(addInt64#(x)(1L)))
++         (Int64#(addInt64#(x#0)(1L)))
+        }
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#1 ->
+        {
+          printInt64((succ << succ)(Int64#(0L)))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+  def succ =
+-   fn {
++   \param$2 ->
+-     Int64#(x#0) ->
++     case param$2 of {
+-       {
++       Int64#(x#0) -> invoke Int64#(invoke addInt64#(x#0)(1L))
+-         (Int64#(addInt64#(x#0)(1L)))
++     }
+-       }
+-   }
+  
+  def main =
+-   fn {
++   \param$3 ->
+-     _#1 ->
++     case param$3 of {
+-       {
++       _#1 ->
+-         printInt64((succ << succ)(Int64#(0L)))
++         invoke printInt64( invoke <<( invoke succ )( invoke succ )( invoke Int64#( 0L ) ) )
+-       }
++     }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def succ =
+    \param$2 ->
+      case param$2 of {
+        Int64#(x#0) -> invoke Int64#(invoke addInt64#(x#0)(1L))
+      }
+  
+  def main =
+    \param$3 ->
+      case param$3 of {
+        _#1 ->
+          invoke printInt64( invoke <<( invoke succ )( invoke succ )( invoke Int64#( 0L ) ) )
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def succ =
+    \param$2 ->
+      case param$2 of {
+        Int64#(x#0) -> invoke Int64#(invoke addInt64#(x#0)(1L))
+      }
+  
+  def main =
+    \param$3 ->
+      case param$3 of {
+        _#1 ->
+          invoke printInt64( invoke <<( invoke succ )( invoke succ )( invoke Int64#( 0L ) ) )
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def succ =
++ def succ(return$4) =
+-   \param$2 ->
++   \param$2 return$5 . {
+-     case param$2 of {
++     param$2 ~ select {
+-       Int64#(x#0) -> invoke Int64#(invoke addInt64#(x#0)(1L))
++       Int64#(x#0) ->
++         invoke Int64# ~ ( do return$6 . {
++           invoke addInt64# ~ (x#0, (1L, return$6))
++         }
++         , return$5 )
+      }
++   } ~ return$4
+  
+- def main =
++ def main(return$7) =
+-   \param$3 ->
++   \param$3 return$8 . {
+-     case param$3 of {
++     param$3 ~ select {
+        _#1 ->
+-         invoke printInt64( invoke <<( invoke succ )( invoke succ )( invoke Int64#( 0L ) ) )
++         invoke printInt64 ~ ( do return$9 . {
++           invoke << ~ ( do return$12 . {
++             invoke succ ~ return$12
++           }
++           , ( do return$11 . {
++             invoke succ ~ return$11
++           }
++           , ( do return$10 . {
++             invoke Int64# ~ (0L, return$10)
++           }
++           , return$9 ) ) )
++         }
++         , return$8 )
+      }
++   } ~ return$7
+
+
+=== ToCore -> Flat ===
+  def succ(return$4) =
+    \param$2 return$5 . {
+      param$2 ~ select {
+        Int64#(x#0) ->
+-         invoke Int64# ~ ( do return$6 . {
++         invoke Int64# ~ then outer$13 -> {
+-           invoke addInt64# ~ (x#0, (1L, return$6))
++           join return$6 = then inner$14 -> {
++             outer$13 ~ (inner$14, return$5)
++           }
++           in invoke addInt64# ~ (x#0, (1L, return$6))
+          }
+-         , return$5 )
+      }
+    } ~ return$4
+  
+  def main(return$7) =
+    \param$3 return$8 . {
+      param$3 ~ select {
+        _#1 ->
+-         invoke printInt64 ~ ( do return$9 . {
++         invoke printInt64 ~ then outer$15 -> {
+-           invoke << ~ ( do return$12 . {
++           join return$9 = then inner$16 -> {
+-             invoke succ ~ return$12
++             outer$15 ~ (inner$16, return$8)
+-           }
+-           , ( do return$11 . {
+-             invoke succ ~ return$11
+            }
+-           , ( do return$10 . {
++           in invoke << ~ then outer$17 -> {
+-             invoke Int64# ~ (0L, return$10)
++             join return$12 = then inner$18 -> {
++               outer$17 ~ ( inner$18
++               , then outer$19 -> {
++                 join return$11 = then inner$20 -> {
++                   outer$19 ~ ( inner$20
++                   , then outer$21 -> {
++                     join return$10 = then inner$22 -> {
++                       outer$21 ~ (inner$22, return$9)
++                     }
++                     in invoke Int64# ~ (0L, return$10)
++                   } )
++                 }
++                 in invoke succ ~ return$11
++               } )
++             }
++             in invoke succ ~ return$12
+            }
+-           , return$9 ) ) )
+          }
+-         , return$8 )
+      }
+    } ~ return$7
+
+
+=== Flat -> Join ===
+  def succ(return$4) =
+    \param$2 return$5 . {
+-     param$2 ~ select {
++     join select$27 = select {
+        Int64#(x#0) ->
+-         invoke Int64# ~ then outer$13 -> {
++         join then$26 = then outer$13 -> {
+            join return$6 = then inner$14 -> {
+-             outer$13 ~ (inner$14, return$5)
++             join apply$25 = (inner$14, return$5)
++             in outer$13 ~ apply$25
+            }
+-           in invoke addInt64# ~ (x#0, (1L, return$6))
++           in join apply$23 = (1L, return$6)
++           in join apply$24 = (x#0, apply$23)
++           in invoke addInt64# ~ apply$24
+          }
++         in invoke Int64# ~ then$26
+      }
++     in param$2 ~ select$27
+    } ~ return$4
+  
+  def main(return$7) =
+    \param$3 return$8 . {
+-     param$3 ~ select {
++     join select$37 = select {
+        _#1 ->
+-         invoke printInt64 ~ then outer$15 -> {
++         join then$36 = then outer$15 -> {
+            join return$9 = then inner$16 -> {
+-             outer$15 ~ (inner$16, return$8)
++             join apply$35 = (inner$16, return$8)
++             in outer$15 ~ apply$35
+            }
+-           in invoke << ~ then outer$17 -> {
++           in join then$34 = then outer$17 -> {
+              join return$12 = then inner$18 -> {
+-               outer$17 ~ ( inner$18
++               join then$32 = then outer$19 -> {
+-               , then outer$19 -> {
+                  join return$11 = then inner$20 -> {
+-                   outer$19 ~ ( inner$20
++                   join then$30 = then outer$21 -> {
+-                   , then outer$21 -> {
+                      join return$10 = then inner$22 -> {
+-                       outer$21 ~ (inner$22, return$9)
++                       join apply$29 = (inner$22, return$9)
++                       in outer$21 ~ apply$29
+                      }
+-                     in invoke Int64# ~ (0L, return$10)
++                     in join apply$28 = (0L, return$10)
+-                   } )
++                     in invoke Int64# ~ apply$28
++                   }
++                   in join apply$31 = (inner$20, then$30)
++                   in outer$19 ~ apply$31
+                  }
+                  in invoke succ ~ return$11
+-               } )
++               }
++               in join apply$33 = (inner$18, then$32)
++               in outer$17 ~ apply$33
+              }
+              in invoke succ ~ return$12
+            }
++           in invoke << ~ then$34
+          }
++         in invoke printInt64 ~ then$36
+      }
++     in param$3 ~ select$37
+    } ~ return$7
+
+
+=== Join -> ClosureConv ===
+- def succ(return$4) =
++ toplevel fn succ(return$4) =
+-   \param$2 return$5 . {
++   let closure$54 = closure lambda$39()
+-     join select$27 = select {
++   return return$4(closure$54)
+-       Int64#(x#0) ->
+-         join then$26 = then outer$13 -> {
+-           join return$6 = then inner$14 -> {
+-             join apply$25 = (inner$14, return$5)
+-             in outer$13 ~ apply$25
+-           }
+-           in join apply$23 = (1L, return$6)
+-           in join apply$24 = (x#0, apply$23)
+-           in invoke addInt64# ~ apply$24
+-         }
+-         in invoke Int64# ~ then$26
+-     }
+-     in param$2 ~ select$27
+-   } ~ return$4
+  
+- def main(return$7) =
++ closure fn lambda$39(self$40, param$2, return$5) =
+-   \param$3 return$8 . {
++   if param$2.tag == Int64# then {
+-     join select$37 = select {
++     let x#0 = param$2.0
+-       _#1 ->
++     let then$26 = closure join$41(return$5, x#0)
+-         join then$36 = then outer$15 -> {
++     return Int64#(then$26)
+-           join return$9 = then inner$16 -> {
++   } else {
+-             join apply$35 = (inner$16, return$8)
++     panic "no matching branch"
+-             in outer$15 ~ apply$35
++   }
+-           }
++ 
+-           in join then$34 = then outer$17 -> {
++ closure fn join$41(self$42, value$43) =
+-             join return$12 = then inner$18 -> {
++   let return$5 = self$42.cap[0]
+-               join then$32 = then outer$19 -> {
++   let x#0 = self$42.cap[1]
+-                 join return$11 = then inner$20 -> {
++   let return$6 = closure join$44(return$5, value$43)
+-                   join then$30 = then outer$21 -> {
++   let apply$23 = closure join$47(return$6)
+-                     join return$10 = then inner$22 -> {
++   let apply$24 = closure join$51(apply$23, x#0)
+-                       join apply$29 = (inner$22, return$9)
++   return addInt64#(apply$24)
+-                       in outer$21 ~ apply$29
++ 
+-                     }
++ closure fn join$44(self$45, value$46) =
+-                     in join apply$28 = (0L, return$10)
++   let return$5 = self$45.cap[0]
+-                     in invoke Int64# ~ apply$28
++   let value$43 = self$45.cap[1]
+-                   }
++   return value$43(value$46, return$5)
+-                   in join apply$31 = (inner$20, then$30)
++ 
+-                   in outer$19 ~ apply$31
++ closure fn join$47(self$48, value$49) =
+-                 }
++   let return$6 = self$48.cap[0]
+-                 in invoke succ ~ return$11
++   let lit$50 = 1L
+-               }
++   return value$49(lit$50, return$6)
+-               in join apply$33 = (inner$18, then$32)
++ 
+-               in outer$17 ~ apply$33
++ closure fn join$51(self$52, value$53) =
+-             }
++   let apply$23 = self$52.cap[0]
+-             in invoke succ ~ return$12
++   let x#0 = self$52.cap[1]
+-           }
++   return value$53(x#0, apply$23)
+-           in invoke << ~ then$34
++ 
+-         }
++ toplevel fn main(return$7) =
+-         in invoke printInt64 ~ then$36
++   let closure$86 = closure lambda$56()
+-     }
++   return return$7(closure$86)
+-     in param$3 ~ select$37
++ 
+-   } ~ return$7
++ closure fn lambda$56(self$57, param$3, return$8) =
++   if  then {
++     let _#1 = param$3
++     let then$36 = closure join$58(return$8)
++     return printInt64(then$36)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$58(self$59, value$60) =
++   let return$8 = self$59.cap[0]
++   let return$9 = closure join$61(return$8, value$60)
++   let then$34 = closure join$64(return$9)
++   return <<(then$34)
++ 
++ closure fn join$61(self$62, value$63) =
++   let return$8 = self$62.cap[0]
++   let value$60 = self$62.cap[1]
++   return value$60(value$63, return$8)
++ 
++ closure fn join$64(self$65, value$66) =
++   let return$9 = self$65.cap[0]
++   let return$12 = closure join$67(return$9, value$66)
++   return succ(return$12)
++ 
++ closure fn join$67(self$68, value$69) =
++   let return$9 = self$68.cap[0]
++   let value$66 = self$68.cap[1]
++   let then$32 = closure join$70(return$9)
++   return value$66(value$69, then$32)
++ 
++ closure fn join$70(self$71, value$72) =
++   let return$9 = self$71.cap[0]
++   let return$11 = closure join$73(return$9, value$72)
++   return succ(return$11)
++ 
++ closure fn join$73(self$74, value$75) =
++   let return$9 = self$74.cap[0]
++   let value$72 = self$74.cap[1]
++   let then$30 = closure join$76(return$9)
++   return value$72(value$75, then$30)
++ 
++ closure fn join$76(self$77, value$78) =
++   let return$9 = self$77.cap[0]
++   let return$10 = closure join$79(return$9, value$78)
++   let apply$28 = closure join$82(return$10)
++   return Int64#(apply$28)
++ 
++ closure fn join$79(self$80, value$81) =
++   let return$9 = self$80.cap[0]
++   let value$78 = self$80.cap[1]
++   return value$78(value$81, return$9)
++ 
++ closure fn join$82(self$83, value$84) =
++   let return$10 = self$83.cap[0]
++   let lit$85 = 0L
++   return value$84(lit$85, return$10)
++ 
++ toplevel fn zig_main$89() =
++   let finish$87 = closure join$91()
++   let after_main$88 = closure join$94(finish$87)
++   return main(after_main$88)
++ 
++ closure fn join$91(self$92, value$93) = return value$93
++ 
++ closure fn join$94(self$95, value$96) =
++   let finish$87 = self$95.cap[0]
++   let struct$97 = Tuple()
++   return value$96(struct$97, finish$87)
++ 
++ entry = zig_main$89
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn succ(return$4) =
+    let closure$54 = closure lambda$39()
+    return return$4(closure$54)
+  
+  closure fn lambda$39(self$40, param$2, return$5) =
+    if param$2.tag == Int64# then {
+      let x#0 = param$2.0
+      let then$26 = closure join$41(return$5, x#0)
+      return Int64#(then$26)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$41(self$42, value$43) =
+    let return$5 = self$42.cap[0]
+    let x#0 = self$42.cap[1]
+    let return$6 = closure join$44(return$5, value$43)
+    let apply$23 = closure join$47(return$6)
+    let apply$24 = closure join$51(apply$23, x#0)
+    return addInt64#(apply$24)
+  
+  closure fn join$44(self$45, value$46) =
+    let return$5 = self$45.cap[0]
+    let value$43 = self$45.cap[1]
+    return value$43(value$46, return$5)
+  
+  closure fn join$47(self$48, value$49) =
+    let return$6 = self$48.cap[0]
+    let lit$50 = 1L
+    return value$49(lit$50, return$6)
+  
+  closure fn join$51(self$52, value$53) =
+    let apply$23 = self$52.cap[0]
+    let x#0 = self$52.cap[1]
+    return value$53(x#0, apply$23)
+  
+  toplevel fn main(return$7) =
+    let closure$86 = closure lambda$56()
+    return return$7(closure$86)
+  
+  closure fn lambda$56(self$57, param$3, return$8) =
+    if  then {
+-     let _#1 = param$3
+      let then$36 = closure join$58(return$8)
+      return printInt64(then$36)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$58(self$59, value$60) =
+    let return$8 = self$59.cap[0]
+    let return$9 = closure join$61(return$8, value$60)
+    let then$34 = closure join$64(return$9)
+    return <<(then$34)
+  
+  closure fn join$61(self$62, value$63) =
+    let return$8 = self$62.cap[0]
+    let value$60 = self$62.cap[1]
+    return value$60(value$63, return$8)
+  
+  closure fn join$64(self$65, value$66) =
+    let return$9 = self$65.cap[0]
+    let return$12 = closure join$67(return$9, value$66)
+    return succ(return$12)
+  
+  closure fn join$67(self$68, value$69) =
+    let return$9 = self$68.cap[0]
+    let value$66 = self$68.cap[1]
+    let then$32 = closure join$70(return$9)
+    return value$66(value$69, then$32)
+  
+  closure fn join$70(self$71, value$72) =
+    let return$9 = self$71.cap[0]
+    let return$11 = closure join$73(return$9, value$72)
+    return succ(return$11)
+  
+  closure fn join$73(self$74, value$75) =
+    let return$9 = self$74.cap[0]
+    let value$72 = self$74.cap[1]
+    let then$30 = closure join$76(return$9)
+    return value$72(value$75, then$30)
+  
+  closure fn join$76(self$77, value$78) =
+    let return$9 = self$77.cap[0]
+    let return$10 = closure join$79(return$9, value$78)
+    let apply$28 = closure join$82(return$10)
+    return Int64#(apply$28)
+  
+  closure fn join$79(self$80, value$81) =
+    let return$9 = self$80.cap[0]
+    let value$78 = self$80.cap[1]
+    return value$78(value$81, return$9)
+  
+  closure fn join$82(self$83, value$84) =
+    let return$10 = self$83.cap[0]
+    let lit$85 = 0L
+    return value$84(lit$85, return$10)
+  
+  toplevel fn zig_main$89() =
+    let finish$87 = closure join$91()
+    let after_main$88 = closure join$94(finish$87)
+    return main(after_main$88)
+  
+  closure fn join$91(self$92, value$93) = return value$93
+  
+  closure fn join$94(self$95, value$96) =
+    let finish$87 = self$95.cap[0]
+    let struct$97 = Tuple()
+    return value$96(struct$97, finish$87)
+  
+  entry = zig_main$89
+
+
+=== Peephole -> Perceus ===
+  toplevel fn succ(return$4) =
+    let closure$54 = closure lambda$39()
+    return return$4(closure$54)
+  
+  closure fn lambda$39(self$40, param$2, return$5) =
++   drop self$40
+    if param$2.tag == Int64# then {
+      let x#0 = param$2.0
++     dup x#0
++     drop param$2
+      let then$26 = closure join$41(return$5, x#0)
+      return Int64#(then$26)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$41(self$42, value$43) =
+    let return$5 = self$42.cap[0]
++   dup return$5
+    let x#0 = self$42.cap[1]
++   dup x#0
++   drop self$42
+    let return$6 = closure join$44(return$5, value$43)
+    let apply$23 = closure join$47(return$6)
+    let apply$24 = closure join$51(apply$23, x#0)
+    return addInt64#(apply$24)
+  
+  closure fn join$44(self$45, value$46) =
+    let return$5 = self$45.cap[0]
++   dup return$5
+    let value$43 = self$45.cap[1]
++   dup value$43
++   drop self$45
+    return value$43(value$46, return$5)
+  
+  closure fn join$47(self$48, value$49) =
+    let return$6 = self$48.cap[0]
++   dup return$6
++   drop self$48
+    let lit$50 = 1L
+    return value$49(lit$50, return$6)
+  
+  closure fn join$51(self$52, value$53) =
+    let apply$23 = self$52.cap[0]
++   dup apply$23
+    let x#0 = self$52.cap[1]
++   dup x#0
++   drop self$52
+    return value$53(x#0, apply$23)
+  
+  toplevel fn main(return$7) =
+    let closure$86 = closure lambda$56()
+    return return$7(closure$86)
+  
+  closure fn lambda$56(self$57, param$3, return$8) =
++   drop param$3
++   drop self$57
+    if  then {
+      let then$36 = closure join$58(return$8)
+      return printInt64(then$36)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$58(self$59, value$60) =
+    let return$8 = self$59.cap[0]
++   dup return$8
++   drop self$59
+    let return$9 = closure join$61(return$8, value$60)
+    let then$34 = closure join$64(return$9)
+    return <<(then$34)
+  
+  closure fn join$61(self$62, value$63) =
+    let return$8 = self$62.cap[0]
++   dup return$8
+    let value$60 = self$62.cap[1]
++   dup value$60
++   drop self$62
+    return value$60(value$63, return$8)
+  
+  closure fn join$64(self$65, value$66) =
+    let return$9 = self$65.cap[0]
++   dup return$9
++   drop self$65
+    let return$12 = closure join$67(return$9, value$66)
+    return succ(return$12)
+  
+  closure fn join$67(self$68, value$69) =
+    let return$9 = self$68.cap[0]
++   dup return$9
+    let value$66 = self$68.cap[1]
++   dup value$66
++   drop self$68
+    let then$32 = closure join$70(return$9)
+    return value$66(value$69, then$32)
+  
+  closure fn join$70(self$71, value$72) =
+    let return$9 = self$71.cap[0]
++   dup return$9
++   drop self$71
+    let return$11 = closure join$73(return$9, value$72)
+    return succ(return$11)
+  
+  closure fn join$73(self$74, value$75) =
+    let return$9 = self$74.cap[0]
++   dup return$9
+    let value$72 = self$74.cap[1]
++   dup value$72
++   drop self$74
+    let then$30 = closure join$76(return$9)
+    return value$72(value$75, then$30)
+  
+  closure fn join$76(self$77, value$78) =
+    let return$9 = self$77.cap[0]
++   dup return$9
++   drop self$77
+    let return$10 = closure join$79(return$9, value$78)
+    let apply$28 = closure join$82(return$10)
+    return Int64#(apply$28)
+  
+  closure fn join$79(self$80, value$81) =
+    let return$9 = self$80.cap[0]
++   dup return$9
+    let value$78 = self$80.cap[1]
++   dup value$78
++   drop self$80
+    return value$78(value$81, return$9)
+  
+  closure fn join$82(self$83, value$84) =
+    let return$10 = self$83.cap[0]
++   dup return$10
++   drop self$83
+    let lit$85 = 0L
+    return value$84(lit$85, return$10)
+  
+  toplevel fn zig_main$89() =
+    let finish$87 = closure join$91()
+    let after_main$88 = closure join$94(finish$87)
+    return main(after_main$88)
+  
+- closure fn join$91(self$92, value$93) = return value$93
++ closure fn join$91(self$92, value$93) =
++   drop self$92
++   return value$93
+  
+  closure fn join$94(self$95, value$96) =
+    let finish$87 = self$95.cap[0]
++   dup finish$87
++   drop self$95
+    let struct$97 = Tuple()
+    return value$96(struct$97, finish$87)
+  
+  entry = zig_main$89
+
+
+=== Perceus -> Reuse ===
+  toplevel fn succ(return$4) =
+    let closure$54 = closure lambda$39()
+    return return$4(closure$54)
+  
+  closure fn lambda$39(self$40, param$2, return$5) =
+    drop self$40
+    if param$2.tag == Int64# then {
+      let x#0 = param$2.0
+      dup x#0
+-     drop param$2
+      let then$26 = closure join$41(return$5, x#0)
++     drop param$2
+      return Int64#(then$26)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$41(self$42, value$43) =
+    let return$5 = self$42.cap[0]
+    dup return$5
+    let x#0 = self$42.cap[1]
+    dup x#0
+-   drop self$42
+    let return$6 = closure join$44(return$5, value$43)
+    let apply$23 = closure join$47(return$6)
+    let apply$24 = closure join$51(apply$23, x#0)
++   drop self$42
+    return addInt64#(apply$24)
+  
+  closure fn join$44(self$45, value$46) =
+    let return$5 = self$45.cap[0]
+    dup return$5
+    let value$43 = self$45.cap[1]
+    dup value$43
+    drop self$45
+    return value$43(value$46, return$5)
+  
+  closure fn join$47(self$48, value$49) =
+    let return$6 = self$48.cap[0]
+    dup return$6
+-   drop self$48
+    let lit$50 = 1L
++   drop self$48
+    return value$49(lit$50, return$6)
+  
+  closure fn join$51(self$52, value$53) =
+    let apply$23 = self$52.cap[0]
+    dup apply$23
+    let x#0 = self$52.cap[1]
+    dup x#0
+    drop self$52
+    return value$53(x#0, apply$23)
+  
+  toplevel fn main(return$7) =
+    let closure$86 = closure lambda$56()
+    return return$7(closure$86)
+  
+  closure fn lambda$56(self$57, param$3, return$8) =
+    drop param$3
+    drop self$57
+    if  then {
+      let then$36 = closure join$58(return$8)
+      return printInt64(then$36)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$58(self$59, value$60) =
+    let return$8 = self$59.cap[0]
+    dup return$8
+-   drop self$59
+    let return$9 = closure join$61(return$8, value$60)
+    let then$34 = closure join$64(return$9)
++   drop self$59
+    return <<(then$34)
+  
+  closure fn join$61(self$62, value$63) =
+    let return$8 = self$62.cap[0]
+    dup return$8
+    let value$60 = self$62.cap[1]
+    dup value$60
+    drop self$62
+    return value$60(value$63, return$8)
+  
+  closure fn join$64(self$65, value$66) =
+    let return$9 = self$65.cap[0]
+    dup return$9
+-   drop self$65
+    let return$12 = closure join$67(return$9, value$66)
++   drop self$65
+    return succ(return$12)
+  
+  closure fn join$67(self$68, value$69) =
+    let return$9 = self$68.cap[0]
+    dup return$9
+    let value$66 = self$68.cap[1]
+    dup value$66
+-   drop self$68
+    let then$32 = closure join$70(return$9)
++   drop self$68
+    return value$66(value$69, then$32)
+  
+  closure fn join$70(self$71, value$72) =
+    let return$9 = self$71.cap[0]
+    dup return$9
+-   drop self$71
+    let return$11 = closure join$73(return$9, value$72)
++   drop self$71
+    return succ(return$11)
+  
+  closure fn join$73(self$74, value$75) =
+    let return$9 = self$74.cap[0]
+    dup return$9
+    let value$72 = self$74.cap[1]
+    dup value$72
+-   drop self$74
+    let then$30 = closure join$76(return$9)
++   drop self$74
+    return value$72(value$75, then$30)
+  
+  closure fn join$76(self$77, value$78) =
+    let return$9 = self$77.cap[0]
+    dup return$9
+-   drop self$77
+    let return$10 = closure join$79(return$9, value$78)
+    let apply$28 = closure join$82(return$10)
++   drop self$77
+    return Int64#(apply$28)
+  
+  closure fn join$79(self$80, value$81) =
+    let return$9 = self$80.cap[0]
+    dup return$9
+    let value$78 = self$80.cap[1]
+    dup value$78
+    drop self$80
+    return value$78(value$81, return$9)
+  
+  closure fn join$82(self$83, value$84) =
+    let return$10 = self$83.cap[0]
+    dup return$10
+-   drop self$83
+    let lit$85 = 0L
++   drop self$83
+    return value$84(lit$85, return$10)
+  
+  toplevel fn zig_main$89() =
+    let finish$87 = closure join$91()
+    let after_main$88 = closure join$94(finish$87)
+    return main(after_main$88)
+  
+  closure fn join$91(self$92, value$93) =
+    drop self$92
+    return value$93
+  
+  closure fn join$94(self$95, value$96) =
+    let finish$87 = self$95.cap[0]
+    dup finish$87
+-   drop self$95
++   dropReuse reuse$98 = self$95 /0
+-   let struct$97 = Tuple()
++   let struct$97 = reuse reuse$98 Tuple()
+    return value$96(struct$97, finish$87)
+  
+  entry = zig_main$89

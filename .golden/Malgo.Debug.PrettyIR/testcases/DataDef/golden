@@ -1,0 +1,1461 @@
+=== Parse ===
+data Int  = Int#(Int64#)
+
+data List a = Nil() | Cons(a, List(a))
+
+foreign malgo_int64_t_to_string : Int64# -> String#
+
+foreign malgo_print_string : String# -> ()
+
+def main =
+  fn {
+    _ ->
+      {
+        fn {
+          Int#(x) ->
+            {
+              malgo_print_string(malgo_int64_t_to_string(x))
+            }
+        }(Int#(1L))
+      }
+  }
+
+=== Rename ===
+data Int  = Int#(Int64#)
+
+data List a#0 = Nil() | Cons(a#0, List(a#0))
+
+foreign malgo_int64_t_to_string : Int64# -> String#
+
+foreign malgo_print_string : String# -> ()
+
+def main =
+  fn {
+    _#1 ->
+      {
+        fn {
+          Int#(x#2) ->
+            {
+              malgo_print_string(malgo_int64_t_to_string(x#2))
+            }
+        }(Int#(1L))
+      }
+  }
+
+=== ToFun ===
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        \param$4 ->
+          case param$4 of {
+            Int#(x#2) ->
+              invoke malgo_print_string(invoke malgo_int64_t_to_string(x#2))
+          }(invoke Int#(1L))
+    }
+
+def Int# = \constructor$5 -> Int#(constructor$5)
+
+def Nil = Nil()
+
+def Cons =
+  \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+
+def malgo_int64_t_to_string =
+  \primitive$8 -> #malgo_int64_t_to_string(primitive$8)
+
+def malgo_print_string = \primitive$9 -> #malgo_print_string(primitive$9)
+
+=== SaturateCtor ===
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        \param$4 ->
+          case param$4 of {
+            Int#(x#2) ->
+              invoke malgo_print_string(invoke malgo_int64_t_to_string(x#2))
+          }(Int#(1L))
+    }
+
+def Int# = \constructor$5 -> Int#(constructor$5)
+
+def Nil = Nil()
+
+def Cons =
+  \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+
+def malgo_int64_t_to_string =
+  \primitive$8 -> #malgo_int64_t_to_string(primitive$8)
+
+def malgo_print_string = \primitive$9 -> #malgo_print_string(primitive$9)
+
+=== ReuseSpecialize ===
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        \param$4 ->
+          case param$4 of {
+            Int#(x#2) ->
+              invoke malgo_print_string(invoke malgo_int64_t_to_string(x#2))
+          }(Int#(1L))
+    }
+
+def Int# = \constructor$5 -> Int#(constructor$5)
+
+def Nil = Nil()
+
+def Cons =
+  \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+
+def malgo_int64_t_to_string =
+  \primitive$8 -> #malgo_int64_t_to_string(primitive$8)
+
+def malgo_print_string = \primitive$9 -> #malgo_print_string(primitive$9)
+
+=== ToCore ===
+def main(return$10) =
+  \param$3 return$11 . {
+    param$3 ~ select {
+      _#1 ->
+        \param$4 return$12 . {
+          param$4 ~ select {
+            Int#(x#2) ->
+              invoke malgo_print_string ~ ( do return$13 . {
+                invoke malgo_int64_t_to_string ~ (x#2, return$13)
+              }
+              , return$12 )
+          }
+        } ~ (Int#(1L), return$11)
+    }
+  } ~ return$10
+
+def Int#(return$14) =
+  \constructor$5 return$15 . {
+    Int#(constructor$5) ~ return$15
+  } ~ return$14
+
+def Nil(return$16) = Nil() ~ return$16
+
+def Cons(return$17) =
+  \constructor$6 return$18 . {
+    \constructor$7 return$19 . {
+      Cons(constructor$6, constructor$7) ~ return$19
+    } ~ return$18
+  } ~ return$17
+
+def malgo_int64_t_to_string(return$20) =
+  \primitive$8 return$21 . {
+    #malgo_int64_t_to_string(primitive$8) ~ return$21
+  } ~ return$20
+
+def malgo_print_string(return$22) =
+  \primitive$9 return$23 . {
+    #malgo_print_string(primitive$9) ~ return$23
+  } ~ return$22
+
+=== Flat ===
+def main(return$10) =
+  \param$3 return$11 . {
+    param$3 ~ select {
+      _#1 ->
+        \param$4 return$12 . {
+          param$4 ~ select {
+            Int#(x#2) ->
+              invoke malgo_print_string ~ then outer$24 -> {
+                join return$13 = then inner$25 -> {
+                  outer$24 ~ (inner$25, return$12)
+                }
+                in invoke malgo_int64_t_to_string ~ (x#2, return$13)
+              }
+          }
+        } ~ (Int#(1L), return$11)
+    }
+  } ~ return$10
+
+def Int#(return$14) =
+  \constructor$5 return$15 . {
+    Int#(constructor$5) ~ return$15
+  } ~ return$14
+
+def Nil(return$16) = Nil() ~ return$16
+
+def Cons(return$17) =
+  \constructor$6 return$18 . {
+    \constructor$7 return$19 . {
+      Cons(constructor$6, constructor$7) ~ return$19
+    } ~ return$18
+  } ~ return$17
+
+def malgo_int64_t_to_string(return$20) =
+  \primitive$8 return$21 . {
+    #malgo_int64_t_to_string(primitive$8) ~ return$21
+  } ~ return$20
+
+def malgo_print_string(return$22) =
+  \primitive$9 return$23 . {
+    #malgo_print_string(primitive$9) ~ return$23
+  } ~ return$22
+
+=== Join ===
+def main(return$10) =
+  \param$3 return$11 . {
+    join select$31 = select {
+      _#1 ->
+        join apply$30 = (Int#(1L), return$11)
+        in \param$4 return$12 . {
+          join select$29 = select {
+            Int#(x#2) ->
+              join then$28 = then outer$24 -> {
+                join return$13 = then inner$25 -> {
+                  join apply$27 = (inner$25, return$12)
+                  in outer$24 ~ apply$27
+                }
+                in join apply$26 = (x#2, return$13)
+                in invoke malgo_int64_t_to_string ~ apply$26
+              }
+              in invoke malgo_print_string ~ then$28
+          }
+          in param$4 ~ select$29
+        } ~ apply$30
+    }
+    in param$3 ~ select$31
+  } ~ return$10
+
+def Int#(return$14) =
+  \constructor$5 return$15 . {
+    Int#(constructor$5) ~ return$15
+  } ~ return$14
+
+def Nil(return$16) = Nil() ~ return$16
+
+def Cons(return$17) =
+  \constructor$6 return$18 . {
+    \constructor$7 return$19 . {
+      Cons(constructor$6, constructor$7) ~ return$19
+    } ~ return$18
+  } ~ return$17
+
+def malgo_int64_t_to_string(return$20) =
+  \primitive$8 return$21 . {
+    #malgo_int64_t_to_string(primitive$8) ~ return$21
+  } ~ return$20
+
+def malgo_print_string(return$22) =
+  \primitive$9 return$23 . {
+    #malgo_print_string(primitive$9) ~ return$23
+  } ~ return$22
+
+=== ClosureConv ===
+toplevel fn main(return$10) =
+  let closure$49 = closure lambda$33()
+  return return$10(closure$49)
+
+closure fn lambda$33(self$34, param$3, return$11) =
+  if  then {
+    let _#1 = param$3
+    let closure$46 = closure lambda$35()
+    let lit$47 = 1L
+    let struct$48 = Int#(lit$47)
+    return closure$46(struct$48, return$11)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$35(self$36, param$4, return$12) =
+  if param$4.tag == Int# then {
+    let x#2 = param$4.0
+    let then$28 = closure join$37(return$12, x#2)
+    return malgo_print_string(then$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$37(self$38, value$39) =
+  let return$12 = self$38.cap[0]
+  let x#2 = self$38.cap[1]
+  let return$13 = closure join$40(return$12, value$39)
+  let apply$26 = closure join$43(return$13, x#2)
+  return malgo_int64_t_to_string(apply$26)
+
+closure fn join$40(self$41, value$42) =
+  let return$12 = self$41.cap[0]
+  let value$39 = self$41.cap[1]
+  return value$39(value$42, return$12)
+
+closure fn join$43(self$44, value$45) =
+  let return$13 = self$44.cap[0]
+  let x#2 = self$44.cap[1]
+  return value$45(x#2, return$13)
+
+toplevel fn Int#(return$14) =
+  let closure$54 = closure lambda$51()
+  return return$14(closure$54)
+
+closure fn lambda$51(self$52, constructor$5, return$15) =
+  let struct$53 = Int#(constructor$5)
+  return return$15(struct$53)
+
+toplevel fn Nil(return$16) =
+  let struct$56 = Nil()
+  return return$16(struct$56)
+
+toplevel fn Cons(return$17) =
+  let closure$64 = closure lambda$58()
+  return return$17(closure$64)
+
+closure fn lambda$58(self$59, constructor$6, return$18) =
+  let closure$63 = closure lambda$60(constructor$6)
+  return return$18(closure$63)
+
+closure fn lambda$60(self$61, constructor$7, return$19) =
+  let constructor$6 = self$61.cap[0]
+  let struct$62 = Cons(constructor$6, constructor$7)
+  return return$19(struct$62)
+
+toplevel fn malgo_int64_t_to_string(return$20) =
+  let closure$69 = closure lambda$66()
+  return return$20(closure$69)
+
+closure fn lambda$66(self$67, primitive$8, return$21) =
+  let prim_result$68 = #malgo_int64_t_to_string(primitive$8)
+  return return$21(prim_result$68)
+
+toplevel fn malgo_print_string(return$22) =
+  let closure$74 = closure lambda$71()
+  return return$22(closure$74)
+
+closure fn lambda$71(self$72, primitive$9, return$23) =
+  let prim_result$73 = #malgo_print_string(primitive$9)
+  return return$23(prim_result$73)
+
+toplevel fn zig_main$77() =
+  let finish$75 = closure join$79()
+  let after_main$76 = closure join$82(finish$75)
+  return main(after_main$76)
+
+closure fn join$79(self$80, value$81) = return value$81
+
+closure fn join$82(self$83, value$84) =
+  let finish$75 = self$83.cap[0]
+  let struct$85 = Tuple()
+  return value$84(struct$85, finish$75)
+
+entry = zig_main$77
+
+=== Peephole ===
+toplevel fn main(return$10) =
+  let closure$49 = closure lambda$33()
+  return return$10(closure$49)
+
+closure fn lambda$33(self$34, param$3, return$11) =
+  if  then {
+    let closure$46 = closure lambda$35()
+    let lit$47 = 1L
+    let struct$48 = Int#(lit$47)
+    return closure$46(struct$48, return$11)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$35(self$36, param$4, return$12) =
+  if param$4.tag == Int# then {
+    let x#2 = param$4.0
+    let then$28 = closure join$37(return$12, x#2)
+    return malgo_print_string(then$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$37(self$38, value$39) =
+  let return$12 = self$38.cap[0]
+  let x#2 = self$38.cap[1]
+  let return$13 = closure join$40(return$12, value$39)
+  let apply$26 = closure join$43(return$13, x#2)
+  return malgo_int64_t_to_string(apply$26)
+
+closure fn join$40(self$41, value$42) =
+  let return$12 = self$41.cap[0]
+  let value$39 = self$41.cap[1]
+  return value$39(value$42, return$12)
+
+closure fn join$43(self$44, value$45) =
+  let return$13 = self$44.cap[0]
+  let x#2 = self$44.cap[1]
+  return value$45(x#2, return$13)
+
+toplevel fn Int#(return$14) =
+  let closure$54 = closure lambda$51()
+  return return$14(closure$54)
+
+closure fn lambda$51(self$52, constructor$5, return$15) =
+  let struct$53 = Int#(constructor$5)
+  return return$15(struct$53)
+
+toplevel fn Nil(return$16) =
+  let struct$56 = Nil()
+  return return$16(struct$56)
+
+toplevel fn Cons(return$17) =
+  let closure$64 = closure lambda$58()
+  return return$17(closure$64)
+
+closure fn lambda$58(self$59, constructor$6, return$18) =
+  let closure$63 = closure lambda$60(constructor$6)
+  return return$18(closure$63)
+
+closure fn lambda$60(self$61, constructor$7, return$19) =
+  let constructor$6 = self$61.cap[0]
+  let struct$62 = Cons(constructor$6, constructor$7)
+  return return$19(struct$62)
+
+toplevel fn malgo_int64_t_to_string(return$20) =
+  let closure$69 = closure lambda$66()
+  return return$20(closure$69)
+
+closure fn lambda$66(self$67, primitive$8, return$21) =
+  let prim_result$68 = #malgo_int64_t_to_string(primitive$8)
+  return return$21(prim_result$68)
+
+toplevel fn malgo_print_string(return$22) =
+  let closure$74 = closure lambda$71()
+  return return$22(closure$74)
+
+closure fn lambda$71(self$72, primitive$9, return$23) =
+  let prim_result$73 = #malgo_print_string(primitive$9)
+  return return$23(prim_result$73)
+
+toplevel fn zig_main$77() =
+  let finish$75 = closure join$79()
+  let after_main$76 = closure join$82(finish$75)
+  return main(after_main$76)
+
+closure fn join$79(self$80, value$81) = return value$81
+
+closure fn join$82(self$83, value$84) =
+  let finish$75 = self$83.cap[0]
+  let struct$85 = Tuple()
+  return value$84(struct$85, finish$75)
+
+entry = zig_main$77
+
+=== Perceus ===
+toplevel fn main(return$10) =
+  let closure$49 = closure lambda$33()
+  return return$10(closure$49)
+
+closure fn lambda$33(self$34, param$3, return$11) =
+  drop param$3
+  drop self$34
+  if  then {
+    let closure$46 = closure lambda$35()
+    let lit$47 = 1L
+    let struct$48 = Int#(lit$47)
+    return closure$46(struct$48, return$11)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$35(self$36, param$4, return$12) =
+  drop self$36
+  if param$4.tag == Int# then {
+    let x#2 = param$4.0
+    dup x#2
+    drop param$4
+    let then$28 = closure join$37(return$12, x#2)
+    return malgo_print_string(then$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$37(self$38, value$39) =
+  let return$12 = self$38.cap[0]
+  dup return$12
+  let x#2 = self$38.cap[1]
+  dup x#2
+  drop self$38
+  let return$13 = closure join$40(return$12, value$39)
+  let apply$26 = closure join$43(return$13, x#2)
+  return malgo_int64_t_to_string(apply$26)
+
+closure fn join$40(self$41, value$42) =
+  let return$12 = self$41.cap[0]
+  dup return$12
+  let value$39 = self$41.cap[1]
+  dup value$39
+  drop self$41
+  return value$39(value$42, return$12)
+
+closure fn join$43(self$44, value$45) =
+  let return$13 = self$44.cap[0]
+  dup return$13
+  let x#2 = self$44.cap[1]
+  dup x#2
+  drop self$44
+  return value$45(x#2, return$13)
+
+toplevel fn Int#(return$14) =
+  let closure$54 = closure lambda$51()
+  return return$14(closure$54)
+
+closure fn lambda$51(self$52, constructor$5, return$15) =
+  drop self$52
+  let struct$53 = Int#(constructor$5)
+  return return$15(struct$53)
+
+toplevel fn Nil(return$16) =
+  let struct$56 = Nil()
+  return return$16(struct$56)
+
+toplevel fn Cons(return$17) =
+  let closure$64 = closure lambda$58()
+  return return$17(closure$64)
+
+closure fn lambda$58(self$59, constructor$6, return$18) =
+  drop self$59
+  let closure$63 = closure lambda$60(constructor$6)
+  return return$18(closure$63)
+
+closure fn lambda$60(self$61, constructor$7, return$19) =
+  let constructor$6 = self$61.cap[0]
+  dup constructor$6
+  drop self$61
+  let struct$62 = Cons(constructor$6, constructor$7)
+  return return$19(struct$62)
+
+toplevel fn malgo_int64_t_to_string(return$20) =
+  let closure$69 = closure lambda$66()
+  return return$20(closure$69)
+
+closure fn lambda$66(self$67, primitive$8, return$21) =
+  drop self$67
+  let prim_result$68 = #malgo_int64_t_to_string(primitive$8)
+  drop primitive$8
+  return return$21(prim_result$68)
+
+toplevel fn malgo_print_string(return$22) =
+  let closure$74 = closure lambda$71()
+  return return$22(closure$74)
+
+closure fn lambda$71(self$72, primitive$9, return$23) =
+  drop self$72
+  let prim_result$73 = #malgo_print_string(primitive$9)
+  drop primitive$9
+  return return$23(prim_result$73)
+
+toplevel fn zig_main$77() =
+  let finish$75 = closure join$79()
+  let after_main$76 = closure join$82(finish$75)
+  return main(after_main$76)
+
+closure fn join$79(self$80, value$81) =
+  drop self$80
+  return value$81
+
+closure fn join$82(self$83, value$84) =
+  let finish$75 = self$83.cap[0]
+  dup finish$75
+  drop self$83
+  let struct$85 = Tuple()
+  return value$84(struct$85, finish$75)
+
+entry = zig_main$77
+
+=== Reuse ===
+toplevel fn main(return$10) =
+  let closure$49 = closure lambda$33()
+  return return$10(closure$49)
+
+closure fn lambda$33(self$34, param$3, return$11) =
+  drop param$3
+  drop self$34
+  if  then {
+    let closure$46 = closure lambda$35()
+    let lit$47 = 1L
+    let struct$48 = Int#(lit$47)
+    return closure$46(struct$48, return$11)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$35(self$36, param$4, return$12) =
+  drop self$36
+  if param$4.tag == Int# then {
+    let x#2 = param$4.0
+    dup x#2
+    let then$28 = closure join$37(return$12, x#2)
+    drop param$4
+    return malgo_print_string(then$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$37(self$38, value$39) =
+  let return$12 = self$38.cap[0]
+  dup return$12
+  let x#2 = self$38.cap[1]
+  dup x#2
+  let return$13 = closure join$40(return$12, value$39)
+  let apply$26 = closure join$43(return$13, x#2)
+  drop self$38
+  return malgo_int64_t_to_string(apply$26)
+
+closure fn join$40(self$41, value$42) =
+  let return$12 = self$41.cap[0]
+  dup return$12
+  let value$39 = self$41.cap[1]
+  dup value$39
+  drop self$41
+  return value$39(value$42, return$12)
+
+closure fn join$43(self$44, value$45) =
+  let return$13 = self$44.cap[0]
+  dup return$13
+  let x#2 = self$44.cap[1]
+  dup x#2
+  drop self$44
+  return value$45(x#2, return$13)
+
+toplevel fn Int#(return$14) =
+  let closure$54 = closure lambda$51()
+  return return$14(closure$54)
+
+closure fn lambda$51(self$52, constructor$5, return$15) =
+  dropReuse reuse$86 = self$52 /1
+  let struct$53 = reuse reuse$86 Int#(constructor$5)
+  return return$15(struct$53)
+
+toplevel fn Nil(return$16) =
+  let struct$56 = Nil()
+  return return$16(struct$56)
+
+toplevel fn Cons(return$17) =
+  let closure$64 = closure lambda$58()
+  return return$17(closure$64)
+
+closure fn lambda$58(self$59, constructor$6, return$18) =
+  let closure$63 = closure lambda$60(constructor$6)
+  drop self$59
+  return return$18(closure$63)
+
+closure fn lambda$60(self$61, constructor$7, return$19) =
+  let constructor$6 = self$61.cap[0]
+  dup constructor$6
+  dropReuse reuse$87 = self$61 /2
+  let struct$62 = reuse reuse$87 Cons(constructor$6, constructor$7)
+  return return$19(struct$62)
+
+toplevel fn malgo_int64_t_to_string(return$20) =
+  let closure$69 = closure lambda$66()
+  return return$20(closure$69)
+
+closure fn lambda$66(self$67, primitive$8, return$21) =
+  let prim_result$68 = #malgo_int64_t_to_string(primitive$8)
+  drop self$67
+  drop primitive$8
+  return return$21(prim_result$68)
+
+toplevel fn malgo_print_string(return$22) =
+  let closure$74 = closure lambda$71()
+  return return$22(closure$74)
+
+closure fn lambda$71(self$72, primitive$9, return$23) =
+  let prim_result$73 = #malgo_print_string(primitive$9)
+  drop self$72
+  drop primitive$9
+  return return$23(prim_result$73)
+
+toplevel fn zig_main$77() =
+  let finish$75 = closure join$79()
+  let after_main$76 = closure join$82(finish$75)
+  return main(after_main$76)
+
+closure fn join$79(self$80, value$81) =
+  drop self$80
+  return value$81
+
+closure fn join$82(self$83, value$84) =
+  let finish$75 = self$83.cap[0]
+  dup finish$75
+  dropReuse reuse$88 = self$83 /0
+  let struct$85 = reuse reuse$88 Tuple()
+  return value$84(struct$85, finish$75)
+
+entry = zig_main$77
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  data Int  = Int#(Int64#)
+  
+- data List a = Nil() | Cons(a, List(a))
++ data List a#0 = Nil() | Cons(a#0, List(a#0))
+  
+  foreign malgo_int64_t_to_string : Int64# -> String#
+  
+  foreign malgo_print_string : String# -> ()
+  
+  def main =
+    fn {
+-     _ ->
++     _#1 ->
+        {
+          fn {
+-           Int#(x) ->
++           Int#(x#2) ->
+              {
+-               malgo_print_string(malgo_int64_t_to_string(x))
++               malgo_print_string(malgo_int64_t_to_string(x#2))
+              }
+          }(Int#(1L))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- data Int  = Int#(Int64#)
++ def main =
++   \param$3 ->
++     case param$3 of {
++       _#1 ->
++         \param$4 ->
++           case param$4 of {
++             Int#(x#2) ->
++               invoke malgo_print_string(invoke malgo_int64_t_to_string(x#2))
++           }(invoke Int#(1L))
++     }
+  
+- data List a#0 = Nil() | Cons(a#0, List(a#0))
++ def Int# = \constructor$5 -> Int#(constructor$5)
+  
+- foreign malgo_int64_t_to_string : Int64# -> String#
++ def Nil = Nil()
+  
+- foreign malgo_print_string : String# -> ()
++ def Cons =
++   \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+  
+- def main =
++ def malgo_int64_t_to_string =
+-   fn {
++   \primitive$8 -> #malgo_int64_t_to_string(primitive$8)
+-     _#1 ->
++ 
+-       {
++ def malgo_print_string = \primitive$9 -> #malgo_print_string(primitive$9)
+-         fn {
+-           Int#(x#2) ->
+-             {
+-               malgo_print_string(malgo_int64_t_to_string(x#2))
+-             }
+-         }(Int#(1L))
+-       }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def main =
+    \param$3 ->
+      case param$3 of {
+        _#1 ->
+          \param$4 ->
+            case param$4 of {
+              Int#(x#2) ->
+                invoke malgo_print_string(invoke malgo_int64_t_to_string(x#2))
+-           }(invoke Int#(1L))
++           }(Int#(1L))
+      }
+  
+  def Int# = \constructor$5 -> Int#(constructor$5)
+  
+  def Nil = Nil()
+  
+  def Cons =
+    \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+  
+  def malgo_int64_t_to_string =
+    \primitive$8 -> #malgo_int64_t_to_string(primitive$8)
+  
+  def malgo_print_string = \primitive$9 -> #malgo_print_string(primitive$9)
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def main =
+    \param$3 ->
+      case param$3 of {
+        _#1 ->
+          \param$4 ->
+            case param$4 of {
+              Int#(x#2) ->
+                invoke malgo_print_string(invoke malgo_int64_t_to_string(x#2))
+            }(Int#(1L))
+      }
+  
+  def Int# = \constructor$5 -> Int#(constructor$5)
+  
+  def Nil = Nil()
+  
+  def Cons =
+    \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+  
+  def malgo_int64_t_to_string =
+    \primitive$8 -> #malgo_int64_t_to_string(primitive$8)
+  
+  def malgo_print_string = \primitive$9 -> #malgo_print_string(primitive$9)
+
+
+=== ReuseSpecialize -> ToCore ===
+- def main =
++ def main(return$10) =
+-   \param$3 ->
++   \param$3 return$11 . {
+-     case param$3 of {
++     param$3 ~ select {
+        _#1 ->
+-         \param$4 ->
++         \param$4 return$12 . {
+-           case param$4 of {
++           param$4 ~ select {
+              Int#(x#2) ->
+-               invoke malgo_print_string(invoke malgo_int64_t_to_string(x#2))
++               invoke malgo_print_string ~ ( do return$13 . {
+-           }(Int#(1L))
++                 invoke malgo_int64_t_to_string ~ (x#2, return$13)
++               }
++               , return$12 )
++           }
++         } ~ (Int#(1L), return$11)
+      }
++   } ~ return$10
+  
+- def Int# = \constructor$5 -> Int#(constructor$5)
++ def Int#(return$14) =
++   \constructor$5 return$15 . {
++     Int#(constructor$5) ~ return$15
++   } ~ return$14
+  
+- def Nil = Nil()
++ def Nil(return$16) = Nil() ~ return$16
+  
+- def Cons =
++ def Cons(return$17) =
+-   \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
++   \constructor$6 return$18 . {
++     \constructor$7 return$19 . {
++       Cons(constructor$6, constructor$7) ~ return$19
++     } ~ return$18
++   } ~ return$17
+  
+- def malgo_int64_t_to_string =
++ def malgo_int64_t_to_string(return$20) =
+-   \primitive$8 -> #malgo_int64_t_to_string(primitive$8)
++   \primitive$8 return$21 . {
++     #malgo_int64_t_to_string(primitive$8) ~ return$21
++   } ~ return$20
+  
+- def malgo_print_string = \primitive$9 -> #malgo_print_string(primitive$9)
++ def malgo_print_string(return$22) =
++   \primitive$9 return$23 . {
++     #malgo_print_string(primitive$9) ~ return$23
++   } ~ return$22
+
+
+=== ToCore -> Flat ===
+  def main(return$10) =
+    \param$3 return$11 . {
+      param$3 ~ select {
+        _#1 ->
+          \param$4 return$12 . {
+            param$4 ~ select {
+              Int#(x#2) ->
+-               invoke malgo_print_string ~ ( do return$13 . {
++               invoke malgo_print_string ~ then outer$24 -> {
+-                 invoke malgo_int64_t_to_string ~ (x#2, return$13)
++                 join return$13 = then inner$25 -> {
++                   outer$24 ~ (inner$25, return$12)
++                 }
++                 in invoke malgo_int64_t_to_string ~ (x#2, return$13)
+                }
+-               , return$12 )
+            }
+          } ~ (Int#(1L), return$11)
+      }
+    } ~ return$10
+  
+  def Int#(return$14) =
+    \constructor$5 return$15 . {
+      Int#(constructor$5) ~ return$15
+    } ~ return$14
+  
+  def Nil(return$16) = Nil() ~ return$16
+  
+  def Cons(return$17) =
+    \constructor$6 return$18 . {
+      \constructor$7 return$19 . {
+        Cons(constructor$6, constructor$7) ~ return$19
+      } ~ return$18
+    } ~ return$17
+  
+  def malgo_int64_t_to_string(return$20) =
+    \primitive$8 return$21 . {
+      #malgo_int64_t_to_string(primitive$8) ~ return$21
+    } ~ return$20
+  
+  def malgo_print_string(return$22) =
+    \primitive$9 return$23 . {
+      #malgo_print_string(primitive$9) ~ return$23
+    } ~ return$22
+
+
+=== Flat -> Join ===
+  def main(return$10) =
+    \param$3 return$11 . {
+-     param$3 ~ select {
++     join select$31 = select {
+        _#1 ->
+-         \param$4 return$12 . {
++         join apply$30 = (Int#(1L), return$11)
+-           param$4 ~ select {
++         in \param$4 return$12 . {
++           join select$29 = select {
+              Int#(x#2) ->
+-               invoke malgo_print_string ~ then outer$24 -> {
++               join then$28 = then outer$24 -> {
+                  join return$13 = then inner$25 -> {
+-                   outer$24 ~ (inner$25, return$12)
++                   join apply$27 = (inner$25, return$12)
++                   in outer$24 ~ apply$27
+                  }
+-                 in invoke malgo_int64_t_to_string ~ (x#2, return$13)
++                 in join apply$26 = (x#2, return$13)
++                 in invoke malgo_int64_t_to_string ~ apply$26
+                }
++               in invoke malgo_print_string ~ then$28
+            }
+-         } ~ (Int#(1L), return$11)
++           in param$4 ~ select$29
++         } ~ apply$30
+      }
++     in param$3 ~ select$31
+    } ~ return$10
+  
+  def Int#(return$14) =
+    \constructor$5 return$15 . {
+      Int#(constructor$5) ~ return$15
+    } ~ return$14
+  
+  def Nil(return$16) = Nil() ~ return$16
+  
+  def Cons(return$17) =
+    \constructor$6 return$18 . {
+      \constructor$7 return$19 . {
+        Cons(constructor$6, constructor$7) ~ return$19
+      } ~ return$18
+    } ~ return$17
+  
+  def malgo_int64_t_to_string(return$20) =
+    \primitive$8 return$21 . {
+      #malgo_int64_t_to_string(primitive$8) ~ return$21
+    } ~ return$20
+  
+  def malgo_print_string(return$22) =
+    \primitive$9 return$23 . {
+      #malgo_print_string(primitive$9) ~ return$23
+    } ~ return$22
+
+
+=== Join -> ClosureConv ===
+- def main(return$10) =
++ toplevel fn main(return$10) =
+-   \param$3 return$11 . {
++   let closure$49 = closure lambda$33()
+-     join select$31 = select {
++   return return$10(closure$49)
+-       _#1 ->
+-         join apply$30 = (Int#(1L), return$11)
+-         in \param$4 return$12 . {
+-           join select$29 = select {
+-             Int#(x#2) ->
+-               join then$28 = then outer$24 -> {
+-                 join return$13 = then inner$25 -> {
+-                   join apply$27 = (inner$25, return$12)
+-                   in outer$24 ~ apply$27
+-                 }
+-                 in join apply$26 = (x#2, return$13)
+-                 in invoke malgo_int64_t_to_string ~ apply$26
+-               }
+-               in invoke malgo_print_string ~ then$28
+-           }
+-           in param$4 ~ select$29
+-         } ~ apply$30
+-     }
+-     in param$3 ~ select$31
+-   } ~ return$10
+  
+- def Int#(return$14) =
++ closure fn lambda$33(self$34, param$3, return$11) =
+-   \constructor$5 return$15 . {
++   if  then {
+-     Int#(constructor$5) ~ return$15
++     let _#1 = param$3
+-   } ~ return$14
++     let closure$46 = closure lambda$35()
++     let lit$47 = 1L
++     let struct$48 = Int#(lit$47)
++     return closure$46(struct$48, return$11)
++   } else {
++     panic "no matching branch"
++   }
+  
+- def Nil(return$16) = Nil() ~ return$16
++ closure fn lambda$35(self$36, param$4, return$12) =
++   if param$4.tag == Int# then {
++     let x#2 = param$4.0
++     let then$28 = closure join$37(return$12, x#2)
++     return malgo_print_string(then$28)
++   } else {
++     panic "no matching branch"
++   }
+  
+- def Cons(return$17) =
++ closure fn join$37(self$38, value$39) =
+-   \constructor$6 return$18 . {
++   let return$12 = self$38.cap[0]
+-     \constructor$7 return$19 . {
++   let x#2 = self$38.cap[1]
+-       Cons(constructor$6, constructor$7) ~ return$19
++   let return$13 = closure join$40(return$12, value$39)
+-     } ~ return$18
++   let apply$26 = closure join$43(return$13, x#2)
+-   } ~ return$17
++   return malgo_int64_t_to_string(apply$26)
+  
+- def malgo_int64_t_to_string(return$20) =
++ closure fn join$40(self$41, value$42) =
+-   \primitive$8 return$21 . {
++   let return$12 = self$41.cap[0]
+-     #malgo_int64_t_to_string(primitive$8) ~ return$21
++   let value$39 = self$41.cap[1]
+-   } ~ return$20
++   return value$39(value$42, return$12)
+  
+- def malgo_print_string(return$22) =
++ closure fn join$43(self$44, value$45) =
+-   \primitive$9 return$23 . {
++   let return$13 = self$44.cap[0]
+-     #malgo_print_string(primitive$9) ~ return$23
++   let x#2 = self$44.cap[1]
+-   } ~ return$22
++   return value$45(x#2, return$13)
++ 
++ toplevel fn Int#(return$14) =
++   let closure$54 = closure lambda$51()
++   return return$14(closure$54)
++ 
++ closure fn lambda$51(self$52, constructor$5, return$15) =
++   let struct$53 = Int#(constructor$5)
++   return return$15(struct$53)
++ 
++ toplevel fn Nil(return$16) =
++   let struct$56 = Nil()
++   return return$16(struct$56)
++ 
++ toplevel fn Cons(return$17) =
++   let closure$64 = closure lambda$58()
++   return return$17(closure$64)
++ 
++ closure fn lambda$58(self$59, constructor$6, return$18) =
++   let closure$63 = closure lambda$60(constructor$6)
++   return return$18(closure$63)
++ 
++ closure fn lambda$60(self$61, constructor$7, return$19) =
++   let constructor$6 = self$61.cap[0]
++   let struct$62 = Cons(constructor$6, constructor$7)
++   return return$19(struct$62)
++ 
++ toplevel fn malgo_int64_t_to_string(return$20) =
++   let closure$69 = closure lambda$66()
++   return return$20(closure$69)
++ 
++ closure fn lambda$66(self$67, primitive$8, return$21) =
++   let prim_result$68 = #malgo_int64_t_to_string(primitive$8)
++   return return$21(prim_result$68)
++ 
++ toplevel fn malgo_print_string(return$22) =
++   let closure$74 = closure lambda$71()
++   return return$22(closure$74)
++ 
++ closure fn lambda$71(self$72, primitive$9, return$23) =
++   let prim_result$73 = #malgo_print_string(primitive$9)
++   return return$23(prim_result$73)
++ 
++ toplevel fn zig_main$77() =
++   let finish$75 = closure join$79()
++   let after_main$76 = closure join$82(finish$75)
++   return main(after_main$76)
++ 
++ closure fn join$79(self$80, value$81) = return value$81
++ 
++ closure fn join$82(self$83, value$84) =
++   let finish$75 = self$83.cap[0]
++   let struct$85 = Tuple()
++   return value$84(struct$85, finish$75)
++ 
++ entry = zig_main$77
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn main(return$10) =
+    let closure$49 = closure lambda$33()
+    return return$10(closure$49)
+  
+  closure fn lambda$33(self$34, param$3, return$11) =
+    if  then {
+-     let _#1 = param$3
+      let closure$46 = closure lambda$35()
+      let lit$47 = 1L
+      let struct$48 = Int#(lit$47)
+      return closure$46(struct$48, return$11)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$35(self$36, param$4, return$12) =
+    if param$4.tag == Int# then {
+      let x#2 = param$4.0
+      let then$28 = closure join$37(return$12, x#2)
+      return malgo_print_string(then$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$37(self$38, value$39) =
+    let return$12 = self$38.cap[0]
+    let x#2 = self$38.cap[1]
+    let return$13 = closure join$40(return$12, value$39)
+    let apply$26 = closure join$43(return$13, x#2)
+    return malgo_int64_t_to_string(apply$26)
+  
+  closure fn join$40(self$41, value$42) =
+    let return$12 = self$41.cap[0]
+    let value$39 = self$41.cap[1]
+    return value$39(value$42, return$12)
+  
+  closure fn join$43(self$44, value$45) =
+    let return$13 = self$44.cap[0]
+    let x#2 = self$44.cap[1]
+    return value$45(x#2, return$13)
+  
+  toplevel fn Int#(return$14) =
+    let closure$54 = closure lambda$51()
+    return return$14(closure$54)
+  
+  closure fn lambda$51(self$52, constructor$5, return$15) =
+    let struct$53 = Int#(constructor$5)
+    return return$15(struct$53)
+  
+  toplevel fn Nil(return$16) =
+    let struct$56 = Nil()
+    return return$16(struct$56)
+  
+  toplevel fn Cons(return$17) =
+    let closure$64 = closure lambda$58()
+    return return$17(closure$64)
+  
+  closure fn lambda$58(self$59, constructor$6, return$18) =
+    let closure$63 = closure lambda$60(constructor$6)
+    return return$18(closure$63)
+  
+  closure fn lambda$60(self$61, constructor$7, return$19) =
+    let constructor$6 = self$61.cap[0]
+    let struct$62 = Cons(constructor$6, constructor$7)
+    return return$19(struct$62)
+  
+  toplevel fn malgo_int64_t_to_string(return$20) =
+    let closure$69 = closure lambda$66()
+    return return$20(closure$69)
+  
+  closure fn lambda$66(self$67, primitive$8, return$21) =
+    let prim_result$68 = #malgo_int64_t_to_string(primitive$8)
+    return return$21(prim_result$68)
+  
+  toplevel fn malgo_print_string(return$22) =
+    let closure$74 = closure lambda$71()
+    return return$22(closure$74)
+  
+  closure fn lambda$71(self$72, primitive$9, return$23) =
+    let prim_result$73 = #malgo_print_string(primitive$9)
+    return return$23(prim_result$73)
+  
+  toplevel fn zig_main$77() =
+    let finish$75 = closure join$79()
+    let after_main$76 = closure join$82(finish$75)
+    return main(after_main$76)
+  
+  closure fn join$79(self$80, value$81) = return value$81
+  
+  closure fn join$82(self$83, value$84) =
+    let finish$75 = self$83.cap[0]
+    let struct$85 = Tuple()
+    return value$84(struct$85, finish$75)
+  
+  entry = zig_main$77
+
+
+=== Peephole -> Perceus ===
+  toplevel fn main(return$10) =
+    let closure$49 = closure lambda$33()
+    return return$10(closure$49)
+  
+  closure fn lambda$33(self$34, param$3, return$11) =
++   drop param$3
++   drop self$34
+    if  then {
+      let closure$46 = closure lambda$35()
+      let lit$47 = 1L
+      let struct$48 = Int#(lit$47)
+      return closure$46(struct$48, return$11)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$35(self$36, param$4, return$12) =
++   drop self$36
+    if param$4.tag == Int# then {
+      let x#2 = param$4.0
++     dup x#2
++     drop param$4
+      let then$28 = closure join$37(return$12, x#2)
+      return malgo_print_string(then$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$37(self$38, value$39) =
+    let return$12 = self$38.cap[0]
++   dup return$12
+    let x#2 = self$38.cap[1]
++   dup x#2
++   drop self$38
+    let return$13 = closure join$40(return$12, value$39)
+    let apply$26 = closure join$43(return$13, x#2)
+    return malgo_int64_t_to_string(apply$26)
+  
+  closure fn join$40(self$41, value$42) =
+    let return$12 = self$41.cap[0]
++   dup return$12
+    let value$39 = self$41.cap[1]
++   dup value$39
++   drop self$41
+    return value$39(value$42, return$12)
+  
+  closure fn join$43(self$44, value$45) =
+    let return$13 = self$44.cap[0]
++   dup return$13
+    let x#2 = self$44.cap[1]
++   dup x#2
++   drop self$44
+    return value$45(x#2, return$13)
+  
+  toplevel fn Int#(return$14) =
+    let closure$54 = closure lambda$51()
+    return return$14(closure$54)
+  
+  closure fn lambda$51(self$52, constructor$5, return$15) =
++   drop self$52
+    let struct$53 = Int#(constructor$5)
+    return return$15(struct$53)
+  
+  toplevel fn Nil(return$16) =
+    let struct$56 = Nil()
+    return return$16(struct$56)
+  
+  toplevel fn Cons(return$17) =
+    let closure$64 = closure lambda$58()
+    return return$17(closure$64)
+  
+  closure fn lambda$58(self$59, constructor$6, return$18) =
++   drop self$59
+    let closure$63 = closure lambda$60(constructor$6)
+    return return$18(closure$63)
+  
+  closure fn lambda$60(self$61, constructor$7, return$19) =
+    let constructor$6 = self$61.cap[0]
++   dup constructor$6
++   drop self$61
+    let struct$62 = Cons(constructor$6, constructor$7)
+    return return$19(struct$62)
+  
+  toplevel fn malgo_int64_t_to_string(return$20) =
+    let closure$69 = closure lambda$66()
+    return return$20(closure$69)
+  
+  closure fn lambda$66(self$67, primitive$8, return$21) =
++   drop self$67
+    let prim_result$68 = #malgo_int64_t_to_string(primitive$8)
++   drop primitive$8
+    return return$21(prim_result$68)
+  
+  toplevel fn malgo_print_string(return$22) =
+    let closure$74 = closure lambda$71()
+    return return$22(closure$74)
+  
+  closure fn lambda$71(self$72, primitive$9, return$23) =
++   drop self$72
+    let prim_result$73 = #malgo_print_string(primitive$9)
++   drop primitive$9
+    return return$23(prim_result$73)
+  
+  toplevel fn zig_main$77() =
+    let finish$75 = closure join$79()
+    let after_main$76 = closure join$82(finish$75)
+    return main(after_main$76)
+  
+- closure fn join$79(self$80, value$81) = return value$81
++ closure fn join$79(self$80, value$81) =
++   drop self$80
++   return value$81
+  
+  closure fn join$82(self$83, value$84) =
+    let finish$75 = self$83.cap[0]
++   dup finish$75
++   drop self$83
+    let struct$85 = Tuple()
+    return value$84(struct$85, finish$75)
+  
+  entry = zig_main$77
+
+
+=== Perceus -> Reuse ===
+  toplevel fn main(return$10) =
+    let closure$49 = closure lambda$33()
+    return return$10(closure$49)
+  
+  closure fn lambda$33(self$34, param$3, return$11) =
+    drop param$3
+    drop self$34
+    if  then {
+      let closure$46 = closure lambda$35()
+      let lit$47 = 1L
+      let struct$48 = Int#(lit$47)
+      return closure$46(struct$48, return$11)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$35(self$36, param$4, return$12) =
+    drop self$36
+    if param$4.tag == Int# then {
+      let x#2 = param$4.0
+      dup x#2
+-     drop param$4
+      let then$28 = closure join$37(return$12, x#2)
++     drop param$4
+      return malgo_print_string(then$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$37(self$38, value$39) =
+    let return$12 = self$38.cap[0]
+    dup return$12
+    let x#2 = self$38.cap[1]
+    dup x#2
+-   drop self$38
+    let return$13 = closure join$40(return$12, value$39)
+    let apply$26 = closure join$43(return$13, x#2)
++   drop self$38
+    return malgo_int64_t_to_string(apply$26)
+  
+  closure fn join$40(self$41, value$42) =
+    let return$12 = self$41.cap[0]
+    dup return$12
+    let value$39 = self$41.cap[1]
+    dup value$39
+    drop self$41
+    return value$39(value$42, return$12)
+  
+  closure fn join$43(self$44, value$45) =
+    let return$13 = self$44.cap[0]
+    dup return$13
+    let x#2 = self$44.cap[1]
+    dup x#2
+    drop self$44
+    return value$45(x#2, return$13)
+  
+  toplevel fn Int#(return$14) =
+    let closure$54 = closure lambda$51()
+    return return$14(closure$54)
+  
+  closure fn lambda$51(self$52, constructor$5, return$15) =
+-   drop self$52
++   dropReuse reuse$86 = self$52 /1
+-   let struct$53 = Int#(constructor$5)
++   let struct$53 = reuse reuse$86 Int#(constructor$5)
+    return return$15(struct$53)
+  
+  toplevel fn Nil(return$16) =
+    let struct$56 = Nil()
+    return return$16(struct$56)
+  
+  toplevel fn Cons(return$17) =
+    let closure$64 = closure lambda$58()
+    return return$17(closure$64)
+  
+  closure fn lambda$58(self$59, constructor$6, return$18) =
+-   drop self$59
+    let closure$63 = closure lambda$60(constructor$6)
++   drop self$59
+    return return$18(closure$63)
+  
+  closure fn lambda$60(self$61, constructor$7, return$19) =
+    let constructor$6 = self$61.cap[0]
+    dup constructor$6
+-   drop self$61
++   dropReuse reuse$87 = self$61 /2
+-   let struct$62 = Cons(constructor$6, constructor$7)
++   let struct$62 = reuse reuse$87 Cons(constructor$6, constructor$7)
+    return return$19(struct$62)
+  
+  toplevel fn malgo_int64_t_to_string(return$20) =
+    let closure$69 = closure lambda$66()
+    return return$20(closure$69)
+  
+  closure fn lambda$66(self$67, primitive$8, return$21) =
+-   drop self$67
+    let prim_result$68 = #malgo_int64_t_to_string(primitive$8)
++   drop self$67
+    drop primitive$8
+    return return$21(prim_result$68)
+  
+  toplevel fn malgo_print_string(return$22) =
+    let closure$74 = closure lambda$71()
+    return return$22(closure$74)
+  
+  closure fn lambda$71(self$72, primitive$9, return$23) =
+-   drop self$72
+    let prim_result$73 = #malgo_print_string(primitive$9)
++   drop self$72
+    drop primitive$9
+    return return$23(prim_result$73)
+  
+  toplevel fn zig_main$77() =
+    let finish$75 = closure join$79()
+    let after_main$76 = closure join$82(finish$75)
+    return main(after_main$76)
+  
+  closure fn join$79(self$80, value$81) =
+    drop self$80
+    return value$81
+  
+  closure fn join$82(self$83, value$84) =
+    let finish$75 = self$83.cap[0]
+    dup finish$75
+-   drop self$83
++   dropReuse reuse$88 = self$83 /0
+-   let struct$85 = Tuple()
++   let struct$85 = reuse reuse$88 Tuple()
+    return value$84(struct$85, finish$75)
+  
+  entry = zig_main$77

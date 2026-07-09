@@ -1,0 +1,1459 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+def main =
+  fn {
+    _ ->
+      {
+        let x = 1
+        let x_ = malgo_unsafe_cast(x)
+        let x__ = malgo_unsafe_cast(x)
+        x__ |> toStringInt32 |> putStrLn
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+def main =
+  fn {
+    _#0 ->
+      {
+        let x#1 = Int32#(1)
+        let x_#2 = malgo_unsafe_cast(x#1)
+        let x__#3 = malgo_unsafe_cast(x#1)
+        x__#3 |> toStringInt32 |> putStrLn
+      }
+  }
+
+=== ToFun ===
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#0 ->
+        let x#1 =
+          invoke Int32#(1)
+        in
+          let x_#2 =
+            invoke malgo_unsafe_cast(x#1)
+          in
+            let x__#3 =
+              invoke malgo_unsafe_cast(x#1)
+            in
+              invoke |>(invoke |>(x__#3)(invoke toStringInt32))(invoke putStrLn)
+    }
+
+=== SaturateCtor ===
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#0 ->
+        let x#1 =
+          invoke Int32#(1)
+        in
+          let x_#2 =
+            invoke malgo_unsafe_cast(x#1)
+          in
+            let x__#3 =
+              invoke malgo_unsafe_cast(x#1)
+            in
+              invoke |>(invoke |>(x__#3)(invoke toStringInt32))(invoke putStrLn)
+    }
+
+=== ReuseSpecialize ===
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#0 ->
+        let x#1 =
+          invoke Int32#(1)
+        in
+          let x_#2 =
+            invoke malgo_unsafe_cast(x#1)
+          in
+            let x__#3 =
+              invoke malgo_unsafe_cast(x#1)
+            in
+              invoke |>(invoke |>(x__#3)(invoke toStringInt32))(invoke putStrLn)
+    }
+
+=== ToCore ===
+def main(return$5) =
+  \param$4 return$6 . {
+    param$4 ~ select {
+      _#0 ->
+        invoke Int32# ~ ( 1
+        , then x#1 -> {
+          invoke malgo_unsafe_cast ~ ( x#1
+          , then x_#2 -> {
+            invoke malgo_unsafe_cast ~ ( x#1
+            , then x__#3 -> {
+              invoke |> ~ ( do return$8 . {
+                invoke |> ~ ( x__#3
+                , ( do return$9 . {
+                  invoke toStringInt32 ~ return$9
+                }
+                , return$8 ) )
+              }
+              , ( do return$7 . {
+                invoke putStrLn ~ return$7
+              }
+              , return$6 ) )
+            } )
+          } )
+        } )
+    }
+  } ~ return$5
+
+=== Flat ===
+def main(return$5) =
+  \param$4 return$6 . {
+    param$4 ~ select {
+      _#0 ->
+        invoke Int32# ~ ( 1
+        , then x#1 -> {
+          invoke malgo_unsafe_cast ~ ( x#1
+          , then x_#2 -> {
+            invoke malgo_unsafe_cast ~ ( x#1
+            , then x__#3 -> {
+              invoke |> ~ then outer$10 -> {
+                join return$8 = then inner$11 -> {
+                  outer$10 ~ ( inner$11
+                  , then outer$12 -> {
+                    join return$7 = then inner$13 -> {
+                      outer$12 ~ (inner$13, return$6)
+                    }
+                    in invoke putStrLn ~ return$7
+                  } )
+                }
+                in invoke |> ~ ( x__#3
+                , then outer$14 -> {
+                  join return$9 = then inner$15 -> {
+                    outer$14 ~ (inner$15, return$8)
+                  }
+                  in invoke toStringInt32 ~ return$9
+                } )
+              }
+            } )
+          } )
+        } )
+    }
+  } ~ return$5
+
+=== Join ===
+def main(return$5) =
+  \param$4 return$6 . {
+    join select$29 = select {
+      _#0 ->
+        join then$27 = then x#1 -> {
+          join then$25 = then x_#2 -> {
+            join then$23 = then x__#3 -> {
+              join then$22 = then outer$10 -> {
+                join return$8 = then inner$11 -> {
+                  join then$20 = then outer$12 -> {
+                    join return$7 = then inner$13 -> {
+                      join apply$19 = (inner$13, return$6)
+                      in outer$12 ~ apply$19
+                    }
+                    in invoke putStrLn ~ return$7
+                  }
+                  in join apply$21 = (inner$11, then$20)
+                  in outer$10 ~ apply$21
+                }
+                in join then$17 = then outer$14 -> {
+                  join return$9 = then inner$15 -> {
+                    join apply$16 = (inner$15, return$8)
+                    in outer$14 ~ apply$16
+                  }
+                  in invoke toStringInt32 ~ return$9
+                }
+                in join apply$18 = (x__#3, then$17)
+                in invoke |> ~ apply$18
+              }
+              in invoke |> ~ then$22
+            }
+            in join apply$24 = (x#1, then$23)
+            in invoke malgo_unsafe_cast ~ apply$24
+          }
+          in join apply$26 = (x#1, then$25)
+          in invoke malgo_unsafe_cast ~ apply$26
+        }
+        in join apply$28 = (1, then$27)
+        in invoke Int32# ~ apply$28
+    }
+    in param$4 ~ select$29
+  } ~ return$5
+
+=== ClosureConv ===
+toplevel fn main(return$5) =
+  let closure$73 = closure lambda$31()
+  return return$5(closure$73)
+
+closure fn lambda$31(self$32, param$4, return$6) =
+  if  then {
+    let _#0 = param$4
+    let then$27 = closure join$33(return$6)
+    let apply$28 = closure join$69(then$27)
+    return Int32#(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$33(self$34, value$35) =
+  let return$6 = self$34.cap[0]
+  let then$25 = closure join$36(return$6, value$35)
+  let apply$26 = closure join$66(then$25, value$35)
+  return malgo_unsafe_cast(apply$26)
+
+closure fn join$36(self$37, value$38) =
+  let return$6 = self$37.cap[0]
+  let value$35 = self$37.cap[1]
+  let then$23 = closure join$39(return$6)
+  let apply$24 = closure join$63(then$23, value$35)
+  return malgo_unsafe_cast(apply$24)
+
+closure fn join$39(self$40, value$41) =
+  let return$6 = self$40.cap[0]
+  let then$22 = closure join$42(return$6, value$41)
+  return |>(then$22)
+
+closure fn join$42(self$43, value$44) =
+  let return$6 = self$43.cap[0]
+  let value$41 = self$43.cap[1]
+  let return$8 = closure join$45(return$6, value$44)
+  let then$17 = closure join$54(return$8)
+  let apply$18 = closure join$60(then$17, value$41)
+  return |>(apply$18)
+
+closure fn join$45(self$46, value$47) =
+  let return$6 = self$46.cap[0]
+  let value$44 = self$46.cap[1]
+  let then$20 = closure join$48(return$6)
+  return value$44(value$47, then$20)
+
+closure fn join$48(self$49, value$50) =
+  let return$6 = self$49.cap[0]
+  let return$7 = closure join$51(return$6, value$50)
+  return putStrLn(return$7)
+
+closure fn join$51(self$52, value$53) =
+  let return$6 = self$52.cap[0]
+  let value$50 = self$52.cap[1]
+  return value$50(value$53, return$6)
+
+closure fn join$54(self$55, value$56) =
+  let return$8 = self$55.cap[0]
+  let return$9 = closure join$57(return$8, value$56)
+  return toStringInt32(return$9)
+
+closure fn join$57(self$58, value$59) =
+  let return$8 = self$58.cap[0]
+  let value$56 = self$58.cap[1]
+  return value$56(value$59, return$8)
+
+closure fn join$60(self$61, value$62) =
+  let then$17 = self$61.cap[0]
+  let value$41 = self$61.cap[1]
+  return value$62(value$41, then$17)
+
+closure fn join$63(self$64, value$65) =
+  let then$23 = self$64.cap[0]
+  let value$35 = self$64.cap[1]
+  return value$65(value$35, then$23)
+
+closure fn join$66(self$67, value$68) =
+  let then$25 = self$67.cap[0]
+  let value$35 = self$67.cap[1]
+  return value$68(value$35, then$25)
+
+closure fn join$69(self$70, value$71) =
+  let then$27 = self$70.cap[0]
+  let lit$72 = 1
+  return value$71(lit$72, then$27)
+
+toplevel fn zig_main$76() =
+  let finish$74 = closure join$78()
+  let after_main$75 = closure join$81(finish$74)
+  return main(after_main$75)
+
+closure fn join$78(self$79, value$80) = return value$80
+
+closure fn join$81(self$82, value$83) =
+  let finish$74 = self$82.cap[0]
+  let struct$84 = Tuple()
+  return value$83(struct$84, finish$74)
+
+entry = zig_main$76
+
+=== Peephole ===
+toplevel fn main(return$5) =
+  let closure$73 = closure lambda$31()
+  return return$5(closure$73)
+
+closure fn lambda$31(self$32, param$4, return$6) =
+  if  then {
+    let then$27 = closure join$33(return$6)
+    let apply$28 = closure join$69(then$27)
+    return Int32#(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$33(self$34, value$35) =
+  let return$6 = self$34.cap[0]
+  let then$25 = closure join$36(return$6, value$35)
+  let apply$26 = closure join$66(then$25, value$35)
+  return malgo_unsafe_cast(apply$26)
+
+closure fn join$36(self$37, value$38) =
+  let return$6 = self$37.cap[0]
+  let value$35 = self$37.cap[1]
+  let then$23 = closure join$39(return$6)
+  let apply$24 = closure join$63(then$23, value$35)
+  return malgo_unsafe_cast(apply$24)
+
+closure fn join$39(self$40, value$41) =
+  let return$6 = self$40.cap[0]
+  let then$22 = closure join$42(return$6, value$41)
+  return |>(then$22)
+
+closure fn join$42(self$43, value$44) =
+  let return$6 = self$43.cap[0]
+  let value$41 = self$43.cap[1]
+  let return$8 = closure join$45(return$6, value$44)
+  let then$17 = closure join$54(return$8)
+  let apply$18 = closure join$60(then$17, value$41)
+  return |>(apply$18)
+
+closure fn join$45(self$46, value$47) =
+  let return$6 = self$46.cap[0]
+  let value$44 = self$46.cap[1]
+  let then$20 = closure join$48(return$6)
+  return value$44(value$47, then$20)
+
+closure fn join$48(self$49, value$50) =
+  let return$6 = self$49.cap[0]
+  let return$7 = closure join$51(return$6, value$50)
+  return putStrLn(return$7)
+
+closure fn join$51(self$52, value$53) =
+  let return$6 = self$52.cap[0]
+  let value$50 = self$52.cap[1]
+  return value$50(value$53, return$6)
+
+closure fn join$54(self$55, value$56) =
+  let return$8 = self$55.cap[0]
+  let return$9 = closure join$57(return$8, value$56)
+  return toStringInt32(return$9)
+
+closure fn join$57(self$58, value$59) =
+  let return$8 = self$58.cap[0]
+  let value$56 = self$58.cap[1]
+  return value$56(value$59, return$8)
+
+closure fn join$60(self$61, value$62) =
+  let then$17 = self$61.cap[0]
+  let value$41 = self$61.cap[1]
+  return value$62(value$41, then$17)
+
+closure fn join$63(self$64, value$65) =
+  let then$23 = self$64.cap[0]
+  let value$35 = self$64.cap[1]
+  return value$65(value$35, then$23)
+
+closure fn join$66(self$67, value$68) =
+  let then$25 = self$67.cap[0]
+  let value$35 = self$67.cap[1]
+  return value$68(value$35, then$25)
+
+closure fn join$69(self$70, value$71) =
+  let then$27 = self$70.cap[0]
+  let lit$72 = 1
+  return value$71(lit$72, then$27)
+
+toplevel fn zig_main$76() =
+  let finish$74 = closure join$78()
+  let after_main$75 = closure join$81(finish$74)
+  return main(after_main$75)
+
+closure fn join$78(self$79, value$80) = return value$80
+
+closure fn join$81(self$82, value$83) =
+  let finish$74 = self$82.cap[0]
+  let struct$84 = Tuple()
+  return value$83(struct$84, finish$74)
+
+entry = zig_main$76
+
+=== Perceus ===
+toplevel fn main(return$5) =
+  let closure$73 = closure lambda$31()
+  return return$5(closure$73)
+
+closure fn lambda$31(self$32, param$4, return$6) =
+  drop param$4
+  drop self$32
+  if  then {
+    let then$27 = closure join$33(return$6)
+    let apply$28 = closure join$69(then$27)
+    return Int32#(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$33(self$34, value$35) =
+  let return$6 = self$34.cap[0]
+  dup return$6
+  drop self$34
+  dup value$35
+  let then$25 = closure join$36(return$6, value$35)
+  let apply$26 = closure join$66(then$25, value$35)
+  return malgo_unsafe_cast(apply$26)
+
+closure fn join$36(self$37, value$38) =
+  drop value$38
+  let return$6 = self$37.cap[0]
+  dup return$6
+  let value$35 = self$37.cap[1]
+  dup value$35
+  drop self$37
+  let then$23 = closure join$39(return$6)
+  let apply$24 = closure join$63(then$23, value$35)
+  return malgo_unsafe_cast(apply$24)
+
+closure fn join$39(self$40, value$41) =
+  let return$6 = self$40.cap[0]
+  dup return$6
+  drop self$40
+  let then$22 = closure join$42(return$6, value$41)
+  return |>(then$22)
+
+closure fn join$42(self$43, value$44) =
+  let return$6 = self$43.cap[0]
+  dup return$6
+  let value$41 = self$43.cap[1]
+  dup value$41
+  drop self$43
+  let return$8 = closure join$45(return$6, value$44)
+  let then$17 = closure join$54(return$8)
+  let apply$18 = closure join$60(then$17, value$41)
+  return |>(apply$18)
+
+closure fn join$45(self$46, value$47) =
+  let return$6 = self$46.cap[0]
+  dup return$6
+  let value$44 = self$46.cap[1]
+  dup value$44
+  drop self$46
+  let then$20 = closure join$48(return$6)
+  return value$44(value$47, then$20)
+
+closure fn join$48(self$49, value$50) =
+  let return$6 = self$49.cap[0]
+  dup return$6
+  drop self$49
+  let return$7 = closure join$51(return$6, value$50)
+  return putStrLn(return$7)
+
+closure fn join$51(self$52, value$53) =
+  let return$6 = self$52.cap[0]
+  dup return$6
+  let value$50 = self$52.cap[1]
+  dup value$50
+  drop self$52
+  return value$50(value$53, return$6)
+
+closure fn join$54(self$55, value$56) =
+  let return$8 = self$55.cap[0]
+  dup return$8
+  drop self$55
+  let return$9 = closure join$57(return$8, value$56)
+  return toStringInt32(return$9)
+
+closure fn join$57(self$58, value$59) =
+  let return$8 = self$58.cap[0]
+  dup return$8
+  let value$56 = self$58.cap[1]
+  dup value$56
+  drop self$58
+  return value$56(value$59, return$8)
+
+closure fn join$60(self$61, value$62) =
+  let then$17 = self$61.cap[0]
+  dup then$17
+  let value$41 = self$61.cap[1]
+  dup value$41
+  drop self$61
+  return value$62(value$41, then$17)
+
+closure fn join$63(self$64, value$65) =
+  let then$23 = self$64.cap[0]
+  dup then$23
+  let value$35 = self$64.cap[1]
+  dup value$35
+  drop self$64
+  return value$65(value$35, then$23)
+
+closure fn join$66(self$67, value$68) =
+  let then$25 = self$67.cap[0]
+  dup then$25
+  let value$35 = self$67.cap[1]
+  dup value$35
+  drop self$67
+  return value$68(value$35, then$25)
+
+closure fn join$69(self$70, value$71) =
+  let then$27 = self$70.cap[0]
+  dup then$27
+  drop self$70
+  let lit$72 = 1
+  return value$71(lit$72, then$27)
+
+toplevel fn zig_main$76() =
+  let finish$74 = closure join$78()
+  let after_main$75 = closure join$81(finish$74)
+  return main(after_main$75)
+
+closure fn join$78(self$79, value$80) =
+  drop self$79
+  return value$80
+
+closure fn join$81(self$82, value$83) =
+  let finish$74 = self$82.cap[0]
+  dup finish$74
+  drop self$82
+  let struct$84 = Tuple()
+  return value$83(struct$84, finish$74)
+
+entry = zig_main$76
+
+=== Reuse ===
+toplevel fn main(return$5) =
+  let closure$73 = closure lambda$31()
+  return return$5(closure$73)
+
+closure fn lambda$31(self$32, param$4, return$6) =
+  drop param$4
+  drop self$32
+  if  then {
+    let then$27 = closure join$33(return$6)
+    let apply$28 = closure join$69(then$27)
+    return Int32#(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$33(self$34, value$35) =
+  let return$6 = self$34.cap[0]
+  dup return$6
+  dup value$35
+  let then$25 = closure join$36(return$6, value$35)
+  let apply$26 = closure join$66(then$25, value$35)
+  drop self$34
+  return malgo_unsafe_cast(apply$26)
+
+closure fn join$36(self$37, value$38) =
+  let return$6 = self$37.cap[0]
+  dup return$6
+  let value$35 = self$37.cap[1]
+  dup value$35
+  let then$23 = closure join$39(return$6)
+  let apply$24 = closure join$63(then$23, value$35)
+  drop value$38
+  drop self$37
+  return malgo_unsafe_cast(apply$24)
+
+closure fn join$39(self$40, value$41) =
+  let return$6 = self$40.cap[0]
+  dup return$6
+  let then$22 = closure join$42(return$6, value$41)
+  drop self$40
+  return |>(then$22)
+
+closure fn join$42(self$43, value$44) =
+  let return$6 = self$43.cap[0]
+  dup return$6
+  let value$41 = self$43.cap[1]
+  dup value$41
+  let return$8 = closure join$45(return$6, value$44)
+  let then$17 = closure join$54(return$8)
+  let apply$18 = closure join$60(then$17, value$41)
+  drop self$43
+  return |>(apply$18)
+
+closure fn join$45(self$46, value$47) =
+  let return$6 = self$46.cap[0]
+  dup return$6
+  let value$44 = self$46.cap[1]
+  dup value$44
+  let then$20 = closure join$48(return$6)
+  drop self$46
+  return value$44(value$47, then$20)
+
+closure fn join$48(self$49, value$50) =
+  let return$6 = self$49.cap[0]
+  dup return$6
+  let return$7 = closure join$51(return$6, value$50)
+  drop self$49
+  return putStrLn(return$7)
+
+closure fn join$51(self$52, value$53) =
+  let return$6 = self$52.cap[0]
+  dup return$6
+  let value$50 = self$52.cap[1]
+  dup value$50
+  drop self$52
+  return value$50(value$53, return$6)
+
+closure fn join$54(self$55, value$56) =
+  let return$8 = self$55.cap[0]
+  dup return$8
+  let return$9 = closure join$57(return$8, value$56)
+  drop self$55
+  return toStringInt32(return$9)
+
+closure fn join$57(self$58, value$59) =
+  let return$8 = self$58.cap[0]
+  dup return$8
+  let value$56 = self$58.cap[1]
+  dup value$56
+  drop self$58
+  return value$56(value$59, return$8)
+
+closure fn join$60(self$61, value$62) =
+  let then$17 = self$61.cap[0]
+  dup then$17
+  let value$41 = self$61.cap[1]
+  dup value$41
+  drop self$61
+  return value$62(value$41, then$17)
+
+closure fn join$63(self$64, value$65) =
+  let then$23 = self$64.cap[0]
+  dup then$23
+  let value$35 = self$64.cap[1]
+  dup value$35
+  drop self$64
+  return value$65(value$35, then$23)
+
+closure fn join$66(self$67, value$68) =
+  let then$25 = self$67.cap[0]
+  dup then$25
+  let value$35 = self$67.cap[1]
+  dup value$35
+  drop self$67
+  return value$68(value$35, then$25)
+
+closure fn join$69(self$70, value$71) =
+  let then$27 = self$70.cap[0]
+  dup then$27
+  let lit$72 = 1
+  drop self$70
+  return value$71(lit$72, then$27)
+
+toplevel fn zig_main$76() =
+  let finish$74 = closure join$78()
+  let after_main$75 = closure join$81(finish$74)
+  return main(after_main$75)
+
+closure fn join$78(self$79, value$80) =
+  drop self$79
+  return value$80
+
+closure fn join$81(self$82, value$83) =
+  let finish$74 = self$82.cap[0]
+  dup finish$74
+  dropReuse reuse$85 = self$82 /0
+  let struct$84 = reuse reuse$85 Tuple()
+  return value$83(struct$84, finish$74)
+
+entry = zig_main$76
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  def main =
+    fn {
+-     _ ->
++     _#0 ->
+        {
+-         let x = 1
++         let x#1 = Int32#(1)
+-         let x_ = malgo_unsafe_cast(x)
++         let x_#2 = malgo_unsafe_cast(x#1)
+-         let x__ = malgo_unsafe_cast(x)
++         let x__#3 = malgo_unsafe_cast(x#1)
+-         x__ |> toStringInt32 |> putStrLn
++         x__#3 |> toStringInt32 |> putStrLn
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+  def main =
+-   fn {
++   \param$4 ->
+-     _#0 ->
++     case param$4 of {
+-       {
++       _#0 ->
+-         let x#1 = Int32#(1)
++         let x#1 =
+-         let x_#2 = malgo_unsafe_cast(x#1)
++           invoke Int32#(1)
+-         let x__#3 = malgo_unsafe_cast(x#1)
++         in
+-         x__#3 |> toStringInt32 |> putStrLn
++           let x_#2 =
+-       }
++             invoke malgo_unsafe_cast(x#1)
+-   }
++           in
++             let x__#3 =
++               invoke malgo_unsafe_cast(x#1)
++             in
++               invoke |>(invoke |>(x__#3)(invoke toStringInt32))(invoke putStrLn)
++     }
+
+
+=== ToFun -> SaturateCtor ===
+  def main =
+    \param$4 ->
+      case param$4 of {
+        _#0 ->
+          let x#1 =
+            invoke Int32#(1)
+          in
+            let x_#2 =
+              invoke malgo_unsafe_cast(x#1)
+            in
+              let x__#3 =
+                invoke malgo_unsafe_cast(x#1)
+              in
+                invoke |>(invoke |>(x__#3)(invoke toStringInt32))(invoke putStrLn)
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def main =
+    \param$4 ->
+      case param$4 of {
+        _#0 ->
+          let x#1 =
+            invoke Int32#(1)
+          in
+            let x_#2 =
+              invoke malgo_unsafe_cast(x#1)
+            in
+              let x__#3 =
+                invoke malgo_unsafe_cast(x#1)
+              in
+                invoke |>(invoke |>(x__#3)(invoke toStringInt32))(invoke putStrLn)
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def main =
++ def main(return$5) =
+-   \param$4 ->
++   \param$4 return$6 . {
+-     case param$4 of {
++     param$4 ~ select {
+        _#0 ->
+-         let x#1 =
++         invoke Int32# ~ ( 1
+-           invoke Int32#(1)
++         , then x#1 -> {
+-         in
++           invoke malgo_unsafe_cast ~ ( x#1
+-           let x_#2 =
++           , then x_#2 -> {
+-             invoke malgo_unsafe_cast(x#1)
++             invoke malgo_unsafe_cast ~ ( x#1
+-           in
++             , then x__#3 -> {
+-             let x__#3 =
++               invoke |> ~ ( do return$8 . {
+-               invoke malgo_unsafe_cast(x#1)
++                 invoke |> ~ ( x__#3
+-             in
++                 , ( do return$9 . {
+-               invoke |>(invoke |>(x__#3)(invoke toStringInt32))(invoke putStrLn)
++                   invoke toStringInt32 ~ return$9
++                 }
++                 , return$8 ) )
++               }
++               , ( do return$7 . {
++                 invoke putStrLn ~ return$7
++               }
++               , return$6 ) )
++             } )
++           } )
++         } )
+      }
++   } ~ return$5
+
+
+=== ToCore -> Flat ===
+  def main(return$5) =
+    \param$4 return$6 . {
+      param$4 ~ select {
+        _#0 ->
+          invoke Int32# ~ ( 1
+          , then x#1 -> {
+            invoke malgo_unsafe_cast ~ ( x#1
+            , then x_#2 -> {
+              invoke malgo_unsafe_cast ~ ( x#1
+              , then x__#3 -> {
+-               invoke |> ~ ( do return$8 . {
++               invoke |> ~ then outer$10 -> {
+-                 invoke |> ~ ( x__#3
++                 join return$8 = then inner$11 -> {
+-                 , ( do return$9 . {
++                   outer$10 ~ ( inner$11
+-                   invoke toStringInt32 ~ return$9
++                   , then outer$12 -> {
++                     join return$7 = then inner$13 -> {
++                       outer$12 ~ (inner$13, return$6)
++                     }
++                     in invoke putStrLn ~ return$7
++                   } )
+                  }
+-                 , return$8 ) )
++                 in invoke |> ~ ( x__#3
+-               }
++                 , then outer$14 -> {
+-               , ( do return$7 . {
++                   join return$9 = then inner$15 -> {
+-                 invoke putStrLn ~ return$7
++                     outer$14 ~ (inner$15, return$8)
++                   }
++                   in invoke toStringInt32 ~ return$9
++                 } )
+                }
+-               , return$6 ) )
+              } )
+            } )
+          } )
+      }
+    } ~ return$5
+
+
+=== Flat -> Join ===
+  def main(return$5) =
+    \param$4 return$6 . {
+-     param$4 ~ select {
++     join select$29 = select {
+        _#0 ->
+-         invoke Int32# ~ ( 1
++         join then$27 = then x#1 -> {
+-         , then x#1 -> {
++           join then$25 = then x_#2 -> {
+-           invoke malgo_unsafe_cast ~ ( x#1
++             join then$23 = then x__#3 -> {
+-           , then x_#2 -> {
++               join then$22 = then outer$10 -> {
+-             invoke malgo_unsafe_cast ~ ( x#1
+-             , then x__#3 -> {
+-               invoke |> ~ then outer$10 -> {
+                  join return$8 = then inner$11 -> {
+-                   outer$10 ~ ( inner$11
++                   join then$20 = then outer$12 -> {
+-                   , then outer$12 -> {
+                      join return$7 = then inner$13 -> {
+-                       outer$12 ~ (inner$13, return$6)
++                       join apply$19 = (inner$13, return$6)
++                       in outer$12 ~ apply$19
+                      }
+                      in invoke putStrLn ~ return$7
+-                   } )
++                   }
++                   in join apply$21 = (inner$11, then$20)
++                   in outer$10 ~ apply$21
+                  }
+-                 in invoke |> ~ ( x__#3
++                 in join then$17 = then outer$14 -> {
+-                 , then outer$14 -> {
+                    join return$9 = then inner$15 -> {
+-                     outer$14 ~ (inner$15, return$8)
++                     join apply$16 = (inner$15, return$8)
++                     in outer$14 ~ apply$16
+                    }
+                    in invoke toStringInt32 ~ return$9
+-                 } )
++                 }
++                 in join apply$18 = (x__#3, then$17)
++                 in invoke |> ~ apply$18
+                }
+-             } )
++               in invoke |> ~ then$22
+-           } )
++             }
+-         } )
++             in join apply$24 = (x#1, then$23)
++             in invoke malgo_unsafe_cast ~ apply$24
++           }
++           in join apply$26 = (x#1, then$25)
++           in invoke malgo_unsafe_cast ~ apply$26
++         }
++         in join apply$28 = (1, then$27)
++         in invoke Int32# ~ apply$28
+      }
++     in param$4 ~ select$29
+    } ~ return$5
+
+
+=== Join -> ClosureConv ===
+- def main(return$5) =
++ toplevel fn main(return$5) =
+-   \param$4 return$6 . {
++   let closure$73 = closure lambda$31()
+-     join select$29 = select {
++   return return$5(closure$73)
+-       _#0 ->
++ 
+-         join then$27 = then x#1 -> {
++ closure fn lambda$31(self$32, param$4, return$6) =
+-           join then$25 = then x_#2 -> {
++   if  then {
+-             join then$23 = then x__#3 -> {
++     let _#0 = param$4
+-               join then$22 = then outer$10 -> {
++     let then$27 = closure join$33(return$6)
+-                 join return$8 = then inner$11 -> {
++     let apply$28 = closure join$69(then$27)
+-                   join then$20 = then outer$12 -> {
++     return Int32#(apply$28)
+-                     join return$7 = then inner$13 -> {
++   } else {
+-                       join apply$19 = (inner$13, return$6)
++     panic "no matching branch"
+-                       in outer$12 ~ apply$19
++   }
+-                     }
++ 
+-                     in invoke putStrLn ~ return$7
++ closure fn join$33(self$34, value$35) =
+-                   }
++   let return$6 = self$34.cap[0]
+-                   in join apply$21 = (inner$11, then$20)
++   let then$25 = closure join$36(return$6, value$35)
+-                   in outer$10 ~ apply$21
++   let apply$26 = closure join$66(then$25, value$35)
+-                 }
++   return malgo_unsafe_cast(apply$26)
+-                 in join then$17 = then outer$14 -> {
++ 
+-                   join return$9 = then inner$15 -> {
++ closure fn join$36(self$37, value$38) =
+-                     join apply$16 = (inner$15, return$8)
++   let return$6 = self$37.cap[0]
+-                     in outer$14 ~ apply$16
++   let value$35 = self$37.cap[1]
+-                   }
++   let then$23 = closure join$39(return$6)
+-                   in invoke toStringInt32 ~ return$9
++   let apply$24 = closure join$63(then$23, value$35)
+-                 }
++   return malgo_unsafe_cast(apply$24)
+-                 in join apply$18 = (x__#3, then$17)
++ 
+-                 in invoke |> ~ apply$18
++ closure fn join$39(self$40, value$41) =
+-               }
++   let return$6 = self$40.cap[0]
+-               in invoke |> ~ then$22
++   let then$22 = closure join$42(return$6, value$41)
+-             }
++   return |>(then$22)
+-             in join apply$24 = (x#1, then$23)
++ 
+-             in invoke malgo_unsafe_cast ~ apply$24
++ closure fn join$42(self$43, value$44) =
+-           }
++   let return$6 = self$43.cap[0]
+-           in join apply$26 = (x#1, then$25)
++   let value$41 = self$43.cap[1]
+-           in invoke malgo_unsafe_cast ~ apply$26
++   let return$8 = closure join$45(return$6, value$44)
+-         }
++   let then$17 = closure join$54(return$8)
+-         in join apply$28 = (1, then$27)
++   let apply$18 = closure join$60(then$17, value$41)
+-         in invoke Int32# ~ apply$28
++   return |>(apply$18)
+-     }
++ 
+-     in param$4 ~ select$29
++ closure fn join$45(self$46, value$47) =
+-   } ~ return$5
++   let return$6 = self$46.cap[0]
++   let value$44 = self$46.cap[1]
++   let then$20 = closure join$48(return$6)
++   return value$44(value$47, then$20)
++ 
++ closure fn join$48(self$49, value$50) =
++   let return$6 = self$49.cap[0]
++   let return$7 = closure join$51(return$6, value$50)
++   return putStrLn(return$7)
++ 
++ closure fn join$51(self$52, value$53) =
++   let return$6 = self$52.cap[0]
++   let value$50 = self$52.cap[1]
++   return value$50(value$53, return$6)
++ 
++ closure fn join$54(self$55, value$56) =
++   let return$8 = self$55.cap[0]
++   let return$9 = closure join$57(return$8, value$56)
++   return toStringInt32(return$9)
++ 
++ closure fn join$57(self$58, value$59) =
++   let return$8 = self$58.cap[0]
++   let value$56 = self$58.cap[1]
++   return value$56(value$59, return$8)
++ 
++ closure fn join$60(self$61, value$62) =
++   let then$17 = self$61.cap[0]
++   let value$41 = self$61.cap[1]
++   return value$62(value$41, then$17)
++ 
++ closure fn join$63(self$64, value$65) =
++   let then$23 = self$64.cap[0]
++   let value$35 = self$64.cap[1]
++   return value$65(value$35, then$23)
++ 
++ closure fn join$66(self$67, value$68) =
++   let then$25 = self$67.cap[0]
++   let value$35 = self$67.cap[1]
++   return value$68(value$35, then$25)
++ 
++ closure fn join$69(self$70, value$71) =
++   let then$27 = self$70.cap[0]
++   let lit$72 = 1
++   return value$71(lit$72, then$27)
++ 
++ toplevel fn zig_main$76() =
++   let finish$74 = closure join$78()
++   let after_main$75 = closure join$81(finish$74)
++   return main(after_main$75)
++ 
++ closure fn join$78(self$79, value$80) = return value$80
++ 
++ closure fn join$81(self$82, value$83) =
++   let finish$74 = self$82.cap[0]
++   let struct$84 = Tuple()
++   return value$83(struct$84, finish$74)
++ 
++ entry = zig_main$76
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn main(return$5) =
+    let closure$73 = closure lambda$31()
+    return return$5(closure$73)
+  
+  closure fn lambda$31(self$32, param$4, return$6) =
+    if  then {
+-     let _#0 = param$4
+      let then$27 = closure join$33(return$6)
+      let apply$28 = closure join$69(then$27)
+      return Int32#(apply$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$33(self$34, value$35) =
+    let return$6 = self$34.cap[0]
+    let then$25 = closure join$36(return$6, value$35)
+    let apply$26 = closure join$66(then$25, value$35)
+    return malgo_unsafe_cast(apply$26)
+  
+  closure fn join$36(self$37, value$38) =
+    let return$6 = self$37.cap[0]
+    let value$35 = self$37.cap[1]
+    let then$23 = closure join$39(return$6)
+    let apply$24 = closure join$63(then$23, value$35)
+    return malgo_unsafe_cast(apply$24)
+  
+  closure fn join$39(self$40, value$41) =
+    let return$6 = self$40.cap[0]
+    let then$22 = closure join$42(return$6, value$41)
+    return |>(then$22)
+  
+  closure fn join$42(self$43, value$44) =
+    let return$6 = self$43.cap[0]
+    let value$41 = self$43.cap[1]
+    let return$8 = closure join$45(return$6, value$44)
+    let then$17 = closure join$54(return$8)
+    let apply$18 = closure join$60(then$17, value$41)
+    return |>(apply$18)
+  
+  closure fn join$45(self$46, value$47) =
+    let return$6 = self$46.cap[0]
+    let value$44 = self$46.cap[1]
+    let then$20 = closure join$48(return$6)
+    return value$44(value$47, then$20)
+  
+  closure fn join$48(self$49, value$50) =
+    let return$6 = self$49.cap[0]
+    let return$7 = closure join$51(return$6, value$50)
+    return putStrLn(return$7)
+  
+  closure fn join$51(self$52, value$53) =
+    let return$6 = self$52.cap[0]
+    let value$50 = self$52.cap[1]
+    return value$50(value$53, return$6)
+  
+  closure fn join$54(self$55, value$56) =
+    let return$8 = self$55.cap[0]
+    let return$9 = closure join$57(return$8, value$56)
+    return toStringInt32(return$9)
+  
+  closure fn join$57(self$58, value$59) =
+    let return$8 = self$58.cap[0]
+    let value$56 = self$58.cap[1]
+    return value$56(value$59, return$8)
+  
+  closure fn join$60(self$61, value$62) =
+    let then$17 = self$61.cap[0]
+    let value$41 = self$61.cap[1]
+    return value$62(value$41, then$17)
+  
+  closure fn join$63(self$64, value$65) =
+    let then$23 = self$64.cap[0]
+    let value$35 = self$64.cap[1]
+    return value$65(value$35, then$23)
+  
+  closure fn join$66(self$67, value$68) =
+    let then$25 = self$67.cap[0]
+    let value$35 = self$67.cap[1]
+    return value$68(value$35, then$25)
+  
+  closure fn join$69(self$70, value$71) =
+    let then$27 = self$70.cap[0]
+    let lit$72 = 1
+    return value$71(lit$72, then$27)
+  
+  toplevel fn zig_main$76() =
+    let finish$74 = closure join$78()
+    let after_main$75 = closure join$81(finish$74)
+    return main(after_main$75)
+  
+  closure fn join$78(self$79, value$80) = return value$80
+  
+  closure fn join$81(self$82, value$83) =
+    let finish$74 = self$82.cap[0]
+    let struct$84 = Tuple()
+    return value$83(struct$84, finish$74)
+  
+  entry = zig_main$76
+
+
+=== Peephole -> Perceus ===
+  toplevel fn main(return$5) =
+    let closure$73 = closure lambda$31()
+    return return$5(closure$73)
+  
+  closure fn lambda$31(self$32, param$4, return$6) =
++   drop param$4
++   drop self$32
+    if  then {
+      let then$27 = closure join$33(return$6)
+      let apply$28 = closure join$69(then$27)
+      return Int32#(apply$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$33(self$34, value$35) =
+    let return$6 = self$34.cap[0]
++   dup return$6
++   drop self$34
++   dup value$35
+    let then$25 = closure join$36(return$6, value$35)
+    let apply$26 = closure join$66(then$25, value$35)
+    return malgo_unsafe_cast(apply$26)
+  
+  closure fn join$36(self$37, value$38) =
++   drop value$38
+    let return$6 = self$37.cap[0]
++   dup return$6
+    let value$35 = self$37.cap[1]
++   dup value$35
++   drop self$37
+    let then$23 = closure join$39(return$6)
+    let apply$24 = closure join$63(then$23, value$35)
+    return malgo_unsafe_cast(apply$24)
+  
+  closure fn join$39(self$40, value$41) =
+    let return$6 = self$40.cap[0]
++   dup return$6
++   drop self$40
+    let then$22 = closure join$42(return$6, value$41)
+    return |>(then$22)
+  
+  closure fn join$42(self$43, value$44) =
+    let return$6 = self$43.cap[0]
++   dup return$6
+    let value$41 = self$43.cap[1]
++   dup value$41
++   drop self$43
+    let return$8 = closure join$45(return$6, value$44)
+    let then$17 = closure join$54(return$8)
+    let apply$18 = closure join$60(then$17, value$41)
+    return |>(apply$18)
+  
+  closure fn join$45(self$46, value$47) =
+    let return$6 = self$46.cap[0]
++   dup return$6
+    let value$44 = self$46.cap[1]
++   dup value$44
++   drop self$46
+    let then$20 = closure join$48(return$6)
+    return value$44(value$47, then$20)
+  
+  closure fn join$48(self$49, value$50) =
+    let return$6 = self$49.cap[0]
++   dup return$6
++   drop self$49
+    let return$7 = closure join$51(return$6, value$50)
+    return putStrLn(return$7)
+  
+  closure fn join$51(self$52, value$53) =
+    let return$6 = self$52.cap[0]
++   dup return$6
+    let value$50 = self$52.cap[1]
++   dup value$50
++   drop self$52
+    return value$50(value$53, return$6)
+  
+  closure fn join$54(self$55, value$56) =
+    let return$8 = self$55.cap[0]
++   dup return$8
++   drop self$55
+    let return$9 = closure join$57(return$8, value$56)
+    return toStringInt32(return$9)
+  
+  closure fn join$57(self$58, value$59) =
+    let return$8 = self$58.cap[0]
++   dup return$8
+    let value$56 = self$58.cap[1]
++   dup value$56
++   drop self$58
+    return value$56(value$59, return$8)
+  
+  closure fn join$60(self$61, value$62) =
+    let then$17 = self$61.cap[0]
++   dup then$17
+    let value$41 = self$61.cap[1]
++   dup value$41
++   drop self$61
+    return value$62(value$41, then$17)
+  
+  closure fn join$63(self$64, value$65) =
+    let then$23 = self$64.cap[0]
++   dup then$23
+    let value$35 = self$64.cap[1]
++   dup value$35
++   drop self$64
+    return value$65(value$35, then$23)
+  
+  closure fn join$66(self$67, value$68) =
+    let then$25 = self$67.cap[0]
++   dup then$25
+    let value$35 = self$67.cap[1]
++   dup value$35
++   drop self$67
+    return value$68(value$35, then$25)
+  
+  closure fn join$69(self$70, value$71) =
+    let then$27 = self$70.cap[0]
++   dup then$27
++   drop self$70
+    let lit$72 = 1
+    return value$71(lit$72, then$27)
+  
+  toplevel fn zig_main$76() =
+    let finish$74 = closure join$78()
+    let after_main$75 = closure join$81(finish$74)
+    return main(after_main$75)
+  
+- closure fn join$78(self$79, value$80) = return value$80
++ closure fn join$78(self$79, value$80) =
++   drop self$79
++   return value$80
+  
+  closure fn join$81(self$82, value$83) =
+    let finish$74 = self$82.cap[0]
++   dup finish$74
++   drop self$82
+    let struct$84 = Tuple()
+    return value$83(struct$84, finish$74)
+  
+  entry = zig_main$76
+
+
+=== Perceus -> Reuse ===
+  toplevel fn main(return$5) =
+    let closure$73 = closure lambda$31()
+    return return$5(closure$73)
+  
+  closure fn lambda$31(self$32, param$4, return$6) =
+    drop param$4
+    drop self$32
+    if  then {
+      let then$27 = closure join$33(return$6)
+      let apply$28 = closure join$69(then$27)
+      return Int32#(apply$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$33(self$34, value$35) =
+    let return$6 = self$34.cap[0]
+    dup return$6
+-   drop self$34
+    dup value$35
+    let then$25 = closure join$36(return$6, value$35)
+    let apply$26 = closure join$66(then$25, value$35)
++   drop self$34
+    return malgo_unsafe_cast(apply$26)
+  
+  closure fn join$36(self$37, value$38) =
+-   drop value$38
+    let return$6 = self$37.cap[0]
+    dup return$6
+    let value$35 = self$37.cap[1]
+    dup value$35
+-   drop self$37
+    let then$23 = closure join$39(return$6)
+    let apply$24 = closure join$63(then$23, value$35)
++   drop value$38
++   drop self$37
+    return malgo_unsafe_cast(apply$24)
+  
+  closure fn join$39(self$40, value$41) =
+    let return$6 = self$40.cap[0]
+    dup return$6
+-   drop self$40
+    let then$22 = closure join$42(return$6, value$41)
++   drop self$40
+    return |>(then$22)
+  
+  closure fn join$42(self$43, value$44) =
+    let return$6 = self$43.cap[0]
+    dup return$6
+    let value$41 = self$43.cap[1]
+    dup value$41
+-   drop self$43
+    let return$8 = closure join$45(return$6, value$44)
+    let then$17 = closure join$54(return$8)
+    let apply$18 = closure join$60(then$17, value$41)
++   drop self$43
+    return |>(apply$18)
+  
+  closure fn join$45(self$46, value$47) =
+    let return$6 = self$46.cap[0]
+    dup return$6
+    let value$44 = self$46.cap[1]
+    dup value$44
+-   drop self$46
+    let then$20 = closure join$48(return$6)
++   drop self$46
+    return value$44(value$47, then$20)
+  
+  closure fn join$48(self$49, value$50) =
+    let return$6 = self$49.cap[0]
+    dup return$6
+-   drop self$49
+    let return$7 = closure join$51(return$6, value$50)
++   drop self$49
+    return putStrLn(return$7)
+  
+  closure fn join$51(self$52, value$53) =
+    let return$6 = self$52.cap[0]
+    dup return$6
+    let value$50 = self$52.cap[1]
+    dup value$50
+    drop self$52
+    return value$50(value$53, return$6)
+  
+  closure fn join$54(self$55, value$56) =
+    let return$8 = self$55.cap[0]
+    dup return$8
+-   drop self$55
+    let return$9 = closure join$57(return$8, value$56)
++   drop self$55
+    return toStringInt32(return$9)
+  
+  closure fn join$57(self$58, value$59) =
+    let return$8 = self$58.cap[0]
+    dup return$8
+    let value$56 = self$58.cap[1]
+    dup value$56
+    drop self$58
+    return value$56(value$59, return$8)
+  
+  closure fn join$60(self$61, value$62) =
+    let then$17 = self$61.cap[0]
+    dup then$17
+    let value$41 = self$61.cap[1]
+    dup value$41
+    drop self$61
+    return value$62(value$41, then$17)
+  
+  closure fn join$63(self$64, value$65) =
+    let then$23 = self$64.cap[0]
+    dup then$23
+    let value$35 = self$64.cap[1]
+    dup value$35
+    drop self$64
+    return value$65(value$35, then$23)
+  
+  closure fn join$66(self$67, value$68) =
+    let then$25 = self$67.cap[0]
+    dup then$25
+    let value$35 = self$67.cap[1]
+    dup value$35
+    drop self$67
+    return value$68(value$35, then$25)
+  
+  closure fn join$69(self$70, value$71) =
+    let then$27 = self$70.cap[0]
+    dup then$27
+-   drop self$70
+    let lit$72 = 1
++   drop self$70
+    return value$71(lit$72, then$27)
+  
+  toplevel fn zig_main$76() =
+    let finish$74 = closure join$78()
+    let after_main$75 = closure join$81(finish$74)
+    return main(after_main$75)
+  
+  closure fn join$78(self$79, value$80) =
+    drop self$79
+    return value$80
+  
+  closure fn join$81(self$82, value$83) =
+    let finish$74 = self$82.cap[0]
+    dup finish$74
+-   drop self$82
++   dropReuse reuse$85 = self$82 /0
+-   let struct$84 = Tuple()
++   let struct$84 = reuse reuse$85 Tuple()
+    return value$83(struct$84, finish$74)
+  
+  entry = zig_main$76

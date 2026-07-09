@@ -1,0 +1,5724 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+infix infixr 5 <>
+
+sig <> : String -> String -> String
+
+def <> =
+  fn {
+    x y ->
+      {
+        appendString(x)(y)
+      }
+  }
+
+type Show a = {show : a -> String}
+
+sig showInt32 : Show(Int32)
+
+def showInt32 =
+  { show = fn {
+    x ->
+      {
+        toStringInt32(x)
+      }
+  } }
+
+sig show : Show(a) -> a -> String
+
+def show =
+  fn {
+    {show = show} ->
+      {
+        show
+      }
+  }
+
+sig showTuple2 : Show(a) -> Show(b) -> Show((a, b))
+
+def showTuple2 =
+  fn {
+    showDictA showDictB ->
+      {
+        { show = fn {
+          (a, b) ->
+            {
+              "(" <> show(showDictA)(a) <> ", " <> show(showDictB)(b) <> ")"
+            }
+        } }
+      }
+  }
+
+sig printShow : Show(a) -> a -> ()
+
+def printShow =
+  fn {
+    showDict x ->
+      {
+        printString(show(showDict)(x))
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        printShow(showTuple2(showInt32)(showInt32))((1, 2))
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+type Show a#2 = {show : a#2 -> String}
+
+sig <> : String -> String -> String
+
+sig showInt32 : Show(Int32)
+
+sig show : Show(a#4) -> a#4 -> String
+
+sig showTuple2 : Show(a#6) -> Show(b#7) -> Show((a#6, b#7))
+
+sig printShow : Show(a#12) -> a#12 -> ()
+
+def showInt32 =
+  { show = fn {
+    x#3 ->
+      {
+        toStringInt32(x#3)
+      }
+  } }
+
+def show =
+  fn {
+    {show = show#5} ->
+      {
+        show#5
+      }
+  }
+
+def printShow =
+  fn {
+    showDict#13 x#14 ->
+      {
+        printString(show(showDict#13)(x#14))
+      }
+  }
+
+def <> =
+  fn {
+    x#0 y#1 ->
+      {
+        appendString(x#0)(y#1)
+      }
+  }
+
+def showTuple2 =
+  fn {
+    showDictA#8 showDictB#9 ->
+      {
+        { show = fn {
+          ( a#10
+          , b#11 ) ->
+            {
+              String#( "(" ) <> show( showDictA#8 )( a#10 ) <> String#( ", " ) <> show( showDictB#9 )( b#11 ) <> String#( ")" )
+            }
+        } }
+      }
+  }
+
+def main =
+  fn {
+    _#15 ->
+      {
+        printShow(showTuple2(showInt32)(showInt32))((Int32#(1), Int32#(2)))
+      }
+  }
+
+=== ToFun ===
+def showInt32 =
+  { show = \param$16 ->
+    case param$16 of {
+      x#3 -> invoke toStringInt32(x#3)
+    } }
+
+def show =
+  \param$17 ->
+    case param$17 of {
+      {show = show#5} -> show#5
+    }
+
+def printShow =
+  \param$18 ->
+    \param$19 ->
+      case Tuple(param$18, param$19) of {
+        Tuple(showDict#13, x#14) ->
+          invoke printString(invoke show(showDict#13)(x#14))
+      }
+
+def <> =
+  \param$20 ->
+    \param$21 ->
+      case Tuple(param$20, param$21) of {
+        Tuple(x#0, y#1) -> invoke appendString(x#0)(y#1)
+      }
+
+def showTuple2 =
+  \param$22 ->
+    \param$23 ->
+      case Tuple(param$22, param$23) of {
+        Tuple(showDictA#8, showDictB#9) ->
+          { show = \param$24 ->
+            case param$24 of {
+              Tuple(a#10, b#11) ->
+                invoke <>( invoke String#( "(" ) )( invoke <>( invoke show( showDictA#8 )( a#10 ) )( invoke <>( invoke String#( ", " ) )( invoke <>( invoke show( showDictB#9 )( b#11 ) )( invoke String#( ")" ) ) ) ) )
+            } }
+      }
+
+def main =
+  \param$25 ->
+    case param$25 of {
+      _#15 ->
+        invoke printShow( invoke showTuple2( invoke showInt32 )( invoke showInt32 ) )( Tuple( invoke Int32#( 1 )
+        , invoke Int32#(2) ) )
+    }
+
+=== SaturateCtor ===
+def showInt32 =
+  { show = \param$16 ->
+    case param$16 of {
+      x#3 -> invoke toStringInt32(x#3)
+    } }
+
+def show =
+  \param$17 ->
+    case param$17 of {
+      {show = show#5} -> show#5
+    }
+
+def printShow =
+  \param$18 ->
+    \param$19 ->
+      case Tuple(param$18, param$19) of {
+        Tuple(showDict#13, x#14) ->
+          invoke printString(invoke show(showDict#13)(x#14))
+      }
+
+def <> =
+  \param$20 ->
+    \param$21 ->
+      case Tuple(param$20, param$21) of {
+        Tuple(x#0, y#1) -> invoke appendString(x#0)(y#1)
+      }
+
+def showTuple2 =
+  \param$22 ->
+    \param$23 ->
+      case Tuple(param$22, param$23) of {
+        Tuple(showDictA#8, showDictB#9) ->
+          { show = \param$24 ->
+            case param$24 of {
+              Tuple(a#10, b#11) ->
+                invoke <>( invoke String#( "(" ) )( invoke <>( invoke show( showDictA#8 )( a#10 ) )( invoke <>( invoke String#( ", " ) )( invoke <>( invoke show( showDictB#9 )( b#11 ) )( invoke String#( ")" ) ) ) ) )
+            } }
+      }
+
+def main =
+  \param$25 ->
+    case param$25 of {
+      _#15 ->
+        invoke printShow( invoke showTuple2( invoke showInt32 )( invoke showInt32 ) )( Tuple( invoke Int32#( 1 )
+        , invoke Int32#(2) ) )
+    }
+
+=== ReuseSpecialize ===
+def showInt32 =
+  { show = \param$16 ->
+    case param$16 of {
+      x#3 -> invoke toStringInt32(x#3)
+    } }
+
+def show =
+  \param$17 ->
+    case param$17 of {
+      {show = show#5} -> show#5
+    }
+
+def printShow =
+  \param$18 ->
+    \param$19 ->
+      case Tuple(param$18, param$19) of {
+        Tuple(showDict#13, x#14) ->
+          invoke printString(invoke show(showDict#13)(x#14))
+      }
+
+def <> =
+  \param$20 ->
+    \param$21 ->
+      case Tuple(param$20, param$21) of {
+        Tuple(x#0, y#1) -> invoke appendString(x#0)(y#1)
+      }
+
+def showTuple2 =
+  \param$22 ->
+    \param$23 ->
+      case Tuple(param$22, param$23) of {
+        Tuple(showDictA#8, showDictB#9) ->
+          { show = \param$24 ->
+            case param$24 of {
+              Tuple(a#10, b#11) ->
+                invoke <>( invoke String#( "(" ) )( invoke <>( invoke show( showDictA#8 )( a#10 ) )( invoke <>( invoke String#( ", " ) )( invoke <>( invoke show( showDictB#9 )( b#11 ) )( invoke String#( ")" ) ) ) ) )
+            } }
+      }
+
+def main =
+  \param$25 ->
+    case param$25 of {
+      _#15 ->
+        invoke printShow( invoke showTuple2( invoke showInt32 )( invoke showInt32 ) )( Tuple( invoke Int32#( 1 )
+        , invoke Int32#(2) ) )
+    }
+
+=== ToCore ===
+def showInt32(return$26) =
+  { show(return$27) = {
+    \param$16 return$28 . {
+      param$16 ~ select {
+        x#3 -> invoke toStringInt32 ~ (x#3, return$28)
+      }
+    } ~ return$27
+  } } ~ return$26
+
+def show(return$29) =
+  \param$17 return$30 . {
+    param$17 ~ select {
+      {show = show#5} -> show#5 ~ return$30
+    }
+  } ~ return$29
+
+def printShow(return$31) =
+  \param$18 return$32 . {
+    \param$19 return$33 . {
+      Tuple(param$18, param$19) ~ select {
+        Tuple(showDict#13, x#14) ->
+          invoke printString ~ ( do return$34 . {
+            invoke show ~ (showDict#13, (x#14, return$34))
+          }
+          , return$33 )
+      }
+    } ~ return$32
+  } ~ return$31
+
+def <>(return$35) =
+  \param$20 return$36 . {
+    \param$21 return$37 . {
+      Tuple(param$20, param$21) ~ select {
+        Tuple(x#0, y#1) -> invoke appendString ~ (x#0, (y#1, return$37))
+      }
+    } ~ return$36
+  } ~ return$35
+
+def showTuple2(return$38) =
+  \param$22 return$39 . {
+    \param$23 return$40 . {
+      Tuple(param$22, param$23) ~ select {
+        Tuple(showDictA#8, showDictB#9) ->
+          { show(return$41) = {
+            \param$24 return$42 . {
+              param$24 ~ select {
+                Tuple(a#10, b#11) ->
+                  invoke <> ~ ( do return$50 . {
+                    invoke String# ~ ("(", return$50)
+                  }
+                  , ( do return$43 . {
+                    invoke <> ~ ( do return$49 . {
+                      invoke show ~ (showDictA#8, (a#10, return$49))
+                    }
+                    , ( do return$44 . {
+                      invoke <> ~ ( do return$48 . {
+                        invoke String# ~ (", ", return$48)
+                      }
+                      , ( do return$45 . {
+                        invoke <> ~ ( do return$47 . {
+                          invoke show ~ (showDictB#9, (b#11, return$47))
+                        }
+                        , ( do return$46 . {
+                          invoke String# ~ (")", return$46)
+                        }
+                        , return$45 ) )
+                      }
+                      , return$44 ) )
+                    }
+                    , return$43 ) )
+                  }
+                  , return$42 ) )
+              }
+            } ~ return$41
+          } } ~ return$40
+      }
+    } ~ return$39
+  } ~ return$38
+
+def main(return$51) =
+  \param$25 return$52 . {
+    param$25 ~ select {
+      _#15 ->
+        invoke printShow ~ ( do return$55 . {
+          invoke showTuple2 ~ ( do return$57 . {
+            invoke showInt32 ~ return$57
+          }
+          , ( do return$56 . {
+            invoke showInt32 ~ return$56
+          }
+          , return$55 ) )
+        }
+        , ( Tuple( do return$53 . {
+          invoke Int32# ~ (1, return$53)
+        }
+        , do return$54 . {
+          invoke Int32# ~ (2, return$54)
+        } )
+        , return$52 ) )
+    }
+  } ~ return$51
+
+=== Flat ===
+def showInt32(return$26) =
+  { show(return$27) = {
+    \param$16 return$28 . {
+      param$16 ~ select {
+        x#3 -> invoke toStringInt32 ~ (x#3, return$28)
+      }
+    } ~ return$27
+  } } ~ return$26
+
+def show(return$29) =
+  \param$17 return$30 . {
+    param$17 ~ select {
+      {show = show#5} -> show#5 ~ return$30
+    }
+  } ~ return$29
+
+def printShow(return$31) =
+  \param$18 return$32 . {
+    \param$19 return$33 . {
+      Tuple(param$18, param$19) ~ select {
+        Tuple(showDict#13, x#14) ->
+          invoke printString ~ then outer$58 -> {
+            join return$34 = then inner$59 -> {
+              outer$58 ~ (inner$59, return$33)
+            }
+            in invoke show ~ (showDict#13, (x#14, return$34))
+          }
+      }
+    } ~ return$32
+  } ~ return$31
+
+def <>(return$35) =
+  \param$20 return$36 . {
+    \param$21 return$37 . {
+      Tuple(param$20, param$21) ~ select {
+        Tuple(x#0, y#1) -> invoke appendString ~ (x#0, (y#1, return$37))
+      }
+    } ~ return$36
+  } ~ return$35
+
+def showTuple2(return$38) =
+  \param$22 return$39 . {
+    \param$23 return$40 . {
+      Tuple(param$22, param$23) ~ select {
+        Tuple(showDictA#8, showDictB#9) ->
+          { show(return$41) = {
+            \param$24 return$42 . {
+              param$24 ~ select {
+                Tuple(a#10, b#11) ->
+                  invoke <> ~ then outer$60 -> {
+                    join return$50 = then inner$61 -> {
+                      outer$60 ~ ( inner$61
+                      , then outer$62 -> {
+                        join return$43 = then inner$63 -> {
+                          outer$62 ~ (inner$63, return$42)
+                        }
+                        in invoke <> ~ then outer$64 -> {
+                          join return$49 = then inner$65 -> {
+                            outer$64 ~ ( inner$65
+                            , then outer$66 -> {
+                              join return$44 = then inner$67 -> {
+                                outer$66 ~ (inner$67, return$43)
+                              }
+                              in invoke <> ~ then outer$68 -> {
+                                join return$48 = then inner$69 -> {
+                                  outer$68 ~ ( inner$69
+                                  , then outer$70 -> {
+                                    join return$45 = then inner$71 -> {
+                                      outer$70 ~ (inner$71, return$44)
+                                    }
+                                    in invoke <> ~ then outer$72 -> {
+                                      join return$47 = then inner$73 -> {
+                                        outer$72 ~ ( inner$73
+                                        , then outer$74 -> {
+                                          join return$46 = then inner$75 -> {
+                                            outer$74 ~ (inner$75, return$45)
+                                          }
+                                          in invoke String# ~ (")", return$46)
+                                        } )
+                                      }
+                                      in invoke show ~ ( showDictB#9
+                                      , (b#11, return$47) )
+                                    }
+                                  } )
+                                }
+                                in invoke String# ~ (", ", return$48)
+                              }
+                            } )
+                          }
+                          in invoke show ~ (showDictA#8, (a#10, return$49))
+                        }
+                      } )
+                    }
+                    in invoke String# ~ ("(", return$50)
+                  }
+              }
+            } ~ return$41
+          } } ~ return$40
+      }
+    } ~ return$39
+  } ~ return$38
+
+def main(return$51) =
+  \param$25 return$52 . {
+    param$25 ~ select {
+      _#15 ->
+        invoke printShow ~ then outer$76 -> {
+          join return$55 = then inner$77 -> {
+            outer$76 ~ ( inner$77
+            , then outer$78 -> {
+              join label$80 = then inner$79 -> {
+                outer$78 ~ (inner$79, return$52)
+              }
+              in join return$53 = then var$81 -> {
+                join label$82 = label$80
+                in join return$54 = then var$83 -> {
+                  Tuple(var$81, var$83) ~ label$82
+                }
+                in invoke Int32# ~ (2, return$54)
+              }
+              in invoke Int32# ~ (1, return$53)
+            } )
+          }
+          in invoke showTuple2 ~ then outer$84 -> {
+            join return$57 = then inner$85 -> {
+              outer$84 ~ ( inner$85
+              , then outer$86 -> {
+                join return$56 = then inner$87 -> {
+                  outer$86 ~ (inner$87, return$55)
+                }
+                in invoke showInt32 ~ return$56
+              } )
+            }
+            in invoke showInt32 ~ return$57
+          }
+        }
+    }
+  } ~ return$51
+
+=== Join ===
+def showInt32(return$26) =
+  { show(return$27) = {
+    \param$16 return$28 . {
+      join select$89 = select {
+        x#3 ->
+          join apply$88 = (x#3, return$28)
+          in invoke toStringInt32 ~ apply$88
+      }
+      in param$16 ~ select$89
+    } ~ return$27
+  } } ~ return$26
+
+def show(return$29) =
+  \param$17 return$30 . {
+    join select$90 = select {
+      {show = show#5} -> show#5 ~ return$30
+    }
+    in param$17 ~ select$90
+  } ~ return$29
+
+def printShow(return$31) =
+  \param$18 return$32 . {
+    \param$19 return$33 . {
+      join select$95 = select {
+        Tuple(showDict#13, x#14) ->
+          join then$94 = then outer$58 -> {
+            join return$34 = then inner$59 -> {
+              join apply$93 = (inner$59, return$33)
+              in outer$58 ~ apply$93
+            }
+            in join apply$91 = (x#14, return$34)
+            in join apply$92 = (showDict#13, apply$91)
+            in invoke show ~ apply$92
+          }
+          in invoke printString ~ then$94
+      }
+      in Tuple(param$18, param$19) ~ select$95
+    } ~ return$32
+  } ~ return$31
+
+def <>(return$35) =
+  \param$20 return$36 . {
+    \param$21 return$37 . {
+      join select$98 = select {
+        Tuple(x#0, y#1) ->
+          join apply$96 = (y#1, return$37)
+          in join apply$97 = (x#0, apply$96)
+          in invoke appendString ~ apply$97
+      }
+      in Tuple(param$20, param$21) ~ select$98
+    } ~ return$36
+  } ~ return$35
+
+def showTuple2(return$38) =
+  \param$22 return$39 . {
+    \param$23 return$40 . {
+      join select$123 = select {
+        Tuple(showDictA#8, showDictB#9) ->
+          { show(return$41) = {
+            \param$24 return$42 . {
+              join select$122 = select {
+                Tuple(a#10, b#11) ->
+                  join then$121 = then outer$60 -> {
+                    join return$50 = then inner$61 -> {
+                      join then$119 = then outer$62 -> {
+                        join return$43 = then inner$63 -> {
+                          join apply$118 = (inner$63, return$42)
+                          in outer$62 ~ apply$118
+                        }
+                        in join then$117 = then outer$64 -> {
+                          join return$49 = then inner$65 -> {
+                            join then$115 = then outer$66 -> {
+                              join return$44 = then inner$67 -> {
+                                join apply$114 = (inner$67, return$43)
+                                in outer$66 ~ apply$114
+                              }
+                              in join then$113 = then outer$68 -> {
+                                join return$48 = then inner$69 -> {
+                                  join then$111 = then outer$70 -> {
+                                    join return$45 = then inner$71 -> {
+                                      join apply$110 = (inner$71, return$44)
+                                      in outer$70 ~ apply$110
+                                    }
+                                    in join then$109 = then outer$72 -> {
+                                      join return$47 = then inner$73 -> {
+                                        join then$107 = then outer$74 -> {
+                                          join return$46 = then inner$75 -> {
+                                            join apply$106 = ( inner$75
+                                            , return$45 )
+                                            in outer$74 ~ apply$106
+                                          }
+                                          in join apply$105 = (")", return$46)
+                                          in invoke String# ~ apply$105
+                                        }
+                                        in join apply$108 = (inner$73, then$107)
+                                        in outer$72 ~ apply$108
+                                      }
+                                      in join apply$103 = (b#11, return$47)
+                                      in join apply$104 = ( showDictB#9
+                                      , apply$103 )
+                                      in invoke show ~ apply$104
+                                    }
+                                    in invoke <> ~ then$109
+                                  }
+                                  in join apply$112 = (inner$69, then$111)
+                                  in outer$68 ~ apply$112
+                                }
+                                in join apply$102 = (", ", return$48)
+                                in invoke String# ~ apply$102
+                              }
+                              in invoke <> ~ then$113
+                            }
+                            in join apply$116 = (inner$65, then$115)
+                            in outer$64 ~ apply$116
+                          }
+                          in join apply$100 = (a#10, return$49)
+                          in join apply$101 = (showDictA#8, apply$100)
+                          in invoke show ~ apply$101
+                        }
+                        in invoke <> ~ then$117
+                      }
+                      in join apply$120 = (inner$61, then$119)
+                      in outer$60 ~ apply$120
+                    }
+                    in join apply$99 = ("(", return$50)
+                    in invoke String# ~ apply$99
+                  }
+                  in invoke <> ~ then$121
+              }
+              in param$24 ~ select$122
+            } ~ return$41
+          } } ~ return$40
+      }
+      in Tuple(param$22, param$23) ~ select$123
+    } ~ return$39
+  } ~ return$38
+
+def main(return$51) =
+  \param$25 return$52 . {
+    join select$134 = select {
+      _#15 ->
+        join then$133 = then outer$76 -> {
+          join return$55 = then inner$77 -> {
+            join then$131 = then outer$78 -> {
+              join label$80 = then inner$79 -> {
+                join apply$130 = (inner$79, return$52)
+                in outer$78 ~ apply$130
+              }
+              in join return$53 = then var$81 -> {
+                join label$82 = label$80
+                in join return$54 = then var$83 -> {
+                  Tuple(var$81, var$83) ~ label$82
+                }
+                in join apply$129 = (2, return$54)
+                in invoke Int32# ~ apply$129
+              }
+              in join apply$128 = (1, return$53)
+              in invoke Int32# ~ apply$128
+            }
+            in join apply$132 = (inner$77, then$131)
+            in outer$76 ~ apply$132
+          }
+          in join then$127 = then outer$84 -> {
+            join return$57 = then inner$85 -> {
+              join then$125 = then outer$86 -> {
+                join return$56 = then inner$87 -> {
+                  join apply$124 = (inner$87, return$55)
+                  in outer$86 ~ apply$124
+                }
+                in invoke showInt32 ~ return$56
+              }
+              in join apply$126 = (inner$85, then$125)
+              in outer$84 ~ apply$126
+            }
+            in invoke showInt32 ~ return$57
+          }
+          in invoke showTuple2 ~ then$127
+        }
+        in invoke printShow ~ then$133
+    }
+    in param$25 ~ select$134
+  } ~ return$51
+
+=== ClosureConv ===
+toplevel fn showInt32(return$26) =
+  let record$144 = record(show = field$136) captures()
+  return return$26(record$144)
+
+field fn field$136(self$137, return$27) =
+  let closure$143 = closure lambda$138()
+  return return$27(closure$143)
+
+closure fn lambda$138(self$139, param$16, return$28) =
+  if  then {
+    let x#3 = param$16
+    let apply$88 = closure join$140(return$28, x#3)
+    return toStringInt32(apply$88)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$140(self$141, value$142) =
+  let return$28 = self$141.cap[0]
+  let x#3 = self$141.cap[1]
+  return value$142(x#3, return$28)
+
+toplevel fn show(return$29) =
+  let closure$148 = closure lambda$146()
+  return return$29(closure$148)
+
+closure fn lambda$146(self$147, param$17, return$30) =
+  if param$17.kind == record then {
+    let show#5 = param$17!show
+    return return$30(show#5)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn printShow(return$31) =
+  let closure$168 = closure lambda$150()
+  return return$31(closure$168)
+
+closure fn lambda$150(self$151, param$18, return$32) =
+  let closure$167 = closure lambda$152(param$18)
+  return return$32(closure$167)
+
+closure fn lambda$152(self$153, param$19, return$33) =
+  let param$18 = self$153.cap[0]
+  let struct$154 = Tuple(param$18, param$19)
+  if struct$154.tag == Tuple then {
+    let showDict#13 = struct$154.0
+    let x#14 = struct$154.1
+    let then$94 = closure join$155(return$33, showDict#13, x#14)
+    return printString(then$94)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$155(self$156, value$157) =
+  let return$33 = self$156.cap[0]
+  let showDict#13 = self$156.cap[1]
+  let x#14 = self$156.cap[2]
+  let return$34 = closure join$158(return$33, value$157)
+  let apply$91 = closure join$161(return$34, x#14)
+  let apply$92 = closure join$164(apply$91, showDict#13)
+  return show(apply$92)
+
+closure fn join$158(self$159, value$160) =
+  let return$33 = self$159.cap[0]
+  let value$157 = self$159.cap[1]
+  return value$157(value$160, return$33)
+
+closure fn join$161(self$162, value$163) =
+  let return$34 = self$162.cap[0]
+  let x#14 = self$162.cap[1]
+  return value$163(x#14, return$34)
+
+closure fn join$164(self$165, value$166) =
+  let apply$91 = self$165.cap[0]
+  let showDict#13 = self$165.cap[1]
+  return value$166(showDict#13, apply$91)
+
+toplevel fn <>(return$35) =
+  let closure$182 = closure lambda$170()
+  return return$35(closure$182)
+
+closure fn lambda$170(self$171, param$20, return$36) =
+  let closure$181 = closure lambda$172(param$20)
+  return return$36(closure$181)
+
+closure fn lambda$172(self$173, param$21, return$37) =
+  let param$20 = self$173.cap[0]
+  let struct$174 = Tuple(param$20, param$21)
+  if struct$174.tag == Tuple then {
+    let x#0 = struct$174.0
+    let y#1 = struct$174.1
+    let apply$96 = closure join$175(return$37, y#1)
+    let apply$97 = closure join$178(apply$96, x#0)
+    return appendString(apply$97)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$175(self$176, value$177) =
+  let return$37 = self$176.cap[0]
+  let y#1 = self$176.cap[1]
+  return value$177(y#1, return$37)
+
+closure fn join$178(self$179, value$180) =
+  let apply$96 = self$179.cap[0]
+  let x#0 = self$179.cap[1]
+  return value$180(x#0, apply$96)
+
+toplevel fn showTuple2(return$38) =
+  let closure$268 = closure lambda$184()
+  return return$38(closure$268)
+
+closure fn lambda$184(self$185, param$22, return$39) =
+  let closure$267 = closure lambda$186(param$22)
+  return return$39(closure$267)
+
+closure fn lambda$186(self$187, param$23, return$40) =
+  let param$22 = self$187.cap[0]
+  let struct$188 = Tuple(param$22, param$23)
+  if struct$188.tag == Tuple then {
+    let showDictA#8 = struct$188.0
+    let showDictB#9 = struct$188.1
+    let record$266 = record(show = field$189) captures(showDictA#8, showDictB#9)
+    return return$40(record$266)
+  } else {
+    panic "no matching branch"
+  }
+
+field fn field$189(self$190, return$41) =
+  let showDictA#8 = self$190.cap[0]
+  let showDictB#9 = self$190.cap[1]
+  let closure$265 = closure lambda$191(showDictA#8, showDictB#9)
+  return return$41(closure$265)
+
+closure fn lambda$191(self$192, param$24, return$42) =
+  let showDictA#8 = self$192.cap[0]
+  let showDictB#9 = self$192.cap[1]
+  if param$24.tag == Tuple then {
+    let a#10 = param$24.0
+    let b#11 = param$24.1
+    let then$121 = closure join$193( a#10
+    , b#11
+    , return$42
+    , showDictA#8
+    , showDictB#9 )
+    return <>(then$121)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$193(self$194, value$195) =
+  let a#10 = self$194.cap[0]
+  let b#11 = self$194.cap[1]
+  let return$42 = self$194.cap[2]
+  let showDictA#8 = self$194.cap[3]
+  let showDictB#9 = self$194.cap[4]
+  let return$50 = closure join$196( a#10
+  , b#11
+  , return$42
+  , showDictA#8
+  , showDictB#9
+  , value$195 )
+  let apply$99 = closure join$261(return$50)
+  return String#(apply$99)
+
+closure fn join$196(self$197, value$198) =
+  let a#10 = self$197.cap[0]
+  let b#11 = self$197.cap[1]
+  let return$42 = self$197.cap[2]
+  let showDictA#8 = self$197.cap[3]
+  let showDictB#9 = self$197.cap[4]
+  let value$195 = self$197.cap[5]
+  let then$119 = closure join$199( a#10
+  , b#11
+  , return$42
+  , showDictA#8
+  , showDictB#9 )
+  return value$195(value$198, then$119)
+
+closure fn join$199(self$200, value$201) =
+  let a#10 = self$200.cap[0]
+  let b#11 = self$200.cap[1]
+  let return$42 = self$200.cap[2]
+  let showDictA#8 = self$200.cap[3]
+  let showDictB#9 = self$200.cap[4]
+  let return$43 = closure join$202(return$42, value$201)
+  let then$117 = closure join$205( a#10
+  , b#11
+  , return$43
+  , showDictA#8
+  , showDictB#9 )
+  return <>(then$117)
+
+closure fn join$202(self$203, value$204) =
+  let return$42 = self$203.cap[0]
+  let value$201 = self$203.cap[1]
+  return value$201(value$204, return$42)
+
+closure fn join$205(self$206, value$207) =
+  let a#10 = self$206.cap[0]
+  let b#11 = self$206.cap[1]
+  let return$43 = self$206.cap[2]
+  let showDictA#8 = self$206.cap[3]
+  let showDictB#9 = self$206.cap[4]
+  let return$49 = closure join$208(b#11, return$43, showDictB#9, value$207)
+  let apply$100 = closure join$255(a#10, return$49)
+  let apply$101 = closure join$258(apply$100, showDictA#8)
+  return show(apply$101)
+
+closure fn join$208(self$209, value$210) =
+  let b#11 = self$209.cap[0]
+  let return$43 = self$209.cap[1]
+  let showDictB#9 = self$209.cap[2]
+  let value$207 = self$209.cap[3]
+  let then$115 = closure join$211(b#11, return$43, showDictB#9)
+  return value$207(value$210, then$115)
+
+closure fn join$211(self$212, value$213) =
+  let b#11 = self$212.cap[0]
+  let return$43 = self$212.cap[1]
+  let showDictB#9 = self$212.cap[2]
+  let return$44 = closure join$214(return$43, value$213)
+  let then$113 = closure join$217(b#11, return$44, showDictB#9)
+  return <>(then$113)
+
+closure fn join$214(self$215, value$216) =
+  let return$43 = self$215.cap[0]
+  let value$213 = self$215.cap[1]
+  return value$213(value$216, return$43)
+
+closure fn join$217(self$218, value$219) =
+  let b#11 = self$218.cap[0]
+  let return$44 = self$218.cap[1]
+  let showDictB#9 = self$218.cap[2]
+  let return$48 = closure join$220(b#11, return$44, showDictB#9, value$219)
+  let apply$102 = closure join$251(return$48)
+  return String#(apply$102)
+
+closure fn join$220(self$221, value$222) =
+  let b#11 = self$221.cap[0]
+  let return$44 = self$221.cap[1]
+  let showDictB#9 = self$221.cap[2]
+  let value$219 = self$221.cap[3]
+  let then$111 = closure join$223(b#11, return$44, showDictB#9)
+  return value$219(value$222, then$111)
+
+closure fn join$223(self$224, value$225) =
+  let b#11 = self$224.cap[0]
+  let return$44 = self$224.cap[1]
+  let showDictB#9 = self$224.cap[2]
+  let return$45 = closure join$226(return$44, value$225)
+  let then$109 = closure join$229(b#11, return$45, showDictB#9)
+  return <>(then$109)
+
+closure fn join$226(self$227, value$228) =
+  let return$44 = self$227.cap[0]
+  let value$225 = self$227.cap[1]
+  return value$225(value$228, return$44)
+
+closure fn join$229(self$230, value$231) =
+  let b#11 = self$230.cap[0]
+  let return$45 = self$230.cap[1]
+  let showDictB#9 = self$230.cap[2]
+  let return$47 = closure join$232(return$45, value$231)
+  let apply$103 = closure join$245(b#11, return$47)
+  let apply$104 = closure join$248(apply$103, showDictB#9)
+  return show(apply$104)
+
+closure fn join$232(self$233, value$234) =
+  let return$45 = self$233.cap[0]
+  let value$231 = self$233.cap[1]
+  let then$107 = closure join$235(return$45)
+  return value$231(value$234, then$107)
+
+closure fn join$235(self$236, value$237) =
+  let return$45 = self$236.cap[0]
+  let return$46 = closure join$238(return$45, value$237)
+  let apply$105 = closure join$241(return$46)
+  return String#(apply$105)
+
+closure fn join$238(self$239, value$240) =
+  let return$45 = self$239.cap[0]
+  let value$237 = self$239.cap[1]
+  return value$237(value$240, return$45)
+
+closure fn join$241(self$242, value$243) =
+  let return$46 = self$242.cap[0]
+  let lit$244 = ")"
+  return value$243(lit$244, return$46)
+
+closure fn join$245(self$246, value$247) =
+  let b#11 = self$246.cap[0]
+  let return$47 = self$246.cap[1]
+  return value$247(b#11, return$47)
+
+closure fn join$248(self$249, value$250) =
+  let apply$103 = self$249.cap[0]
+  let showDictB#9 = self$249.cap[1]
+  return value$250(showDictB#9, apply$103)
+
+closure fn join$251(self$252, value$253) =
+  let return$48 = self$252.cap[0]
+  let lit$254 = ", "
+  return value$253(lit$254, return$48)
+
+closure fn join$255(self$256, value$257) =
+  let a#10 = self$256.cap[0]
+  let return$49 = self$256.cap[1]
+  return value$257(a#10, return$49)
+
+closure fn join$258(self$259, value$260) =
+  let apply$100 = self$259.cap[0]
+  let showDictA#8 = self$259.cap[1]
+  return value$260(showDictA#8, apply$100)
+
+closure fn join$261(self$262, value$263) =
+  let return$50 = self$262.cap[0]
+  let lit$264 = "("
+  return value$263(lit$264, return$50)
+
+toplevel fn main(return$51) =
+  let closure$311 = closure lambda$270()
+  return return$51(closure$311)
+
+closure fn lambda$270(self$271, param$25, return$52) =
+  if  then {
+    let _#15 = param$25
+    let then$133 = closure join$272(return$52)
+    return printShow(then$133)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$272(self$273, value$274) =
+  let return$52 = self$273.cap[0]
+  let return$55 = closure join$275(return$52, value$274)
+  let then$127 = closure join$299(return$55)
+  return showTuple2(then$127)
+
+closure fn join$275(self$276, value$277) =
+  let return$52 = self$276.cap[0]
+  let value$274 = self$276.cap[1]
+  let then$131 = closure join$278(return$52)
+  return value$274(value$277, then$131)
+
+closure fn join$278(self$279, value$280) =
+  let return$52 = self$279.cap[0]
+  let label$80 = closure join$281(return$52, value$280)
+  let return$53 = closure join$284(label$80)
+  let apply$128 = closure join$295(return$53)
+  return Int32#(apply$128)
+
+closure fn join$281(self$282, value$283) =
+  let return$52 = self$282.cap[0]
+  let value$280 = self$282.cap[1]
+  return value$280(value$283, return$52)
+
+closure fn join$284(self$285, value$286) =
+  let label$80 = self$285.cap[0]
+  let return$54 = closure join$287(label$80, value$286)
+  let apply$129 = closure join$291(return$54)
+  return Int32#(apply$129)
+
+closure fn join$287(self$288, value$289) =
+  let label$80 = self$288.cap[0]
+  let value$286 = self$288.cap[1]
+  let struct$290 = Tuple(value$286, value$289)
+  return label$80(struct$290)
+
+closure fn join$291(self$292, value$293) =
+  let return$54 = self$292.cap[0]
+  let lit$294 = 2
+  return value$293(lit$294, return$54)
+
+closure fn join$295(self$296, value$297) =
+  let return$53 = self$296.cap[0]
+  let lit$298 = 1
+  return value$297(lit$298, return$53)
+
+closure fn join$299(self$300, value$301) =
+  let return$55 = self$300.cap[0]
+  let return$57 = closure join$302(return$55, value$301)
+  return showInt32(return$57)
+
+closure fn join$302(self$303, value$304) =
+  let return$55 = self$303.cap[0]
+  let value$301 = self$303.cap[1]
+  let then$125 = closure join$305(return$55)
+  return value$301(value$304, then$125)
+
+closure fn join$305(self$306, value$307) =
+  let return$55 = self$306.cap[0]
+  let return$56 = closure join$308(return$55, value$307)
+  return showInt32(return$56)
+
+closure fn join$308(self$309, value$310) =
+  let return$55 = self$309.cap[0]
+  let value$307 = self$309.cap[1]
+  return value$307(value$310, return$55)
+
+toplevel fn zig_main$314() =
+  let finish$312 = closure join$316()
+  let after_main$313 = closure join$319(finish$312)
+  return main(after_main$313)
+
+closure fn join$316(self$317, value$318) = return value$318
+
+closure fn join$319(self$320, value$321) =
+  let finish$312 = self$320.cap[0]
+  let struct$322 = Tuple()
+  return value$321(struct$322, finish$312)
+
+entry = zig_main$314
+
+=== Peephole ===
+toplevel fn showInt32(return$26) =
+  let record$144 = record(show = field$136) captures()
+  return return$26(record$144)
+
+field fn field$136(self$137, return$27) =
+  let closure$143 = closure lambda$138()
+  return return$27(closure$143)
+
+closure fn lambda$138(self$139, param$16, return$28) =
+  if  then {
+    let apply$88 = closure join$140(return$28, param$16)
+    return toStringInt32(apply$88)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$140(self$141, value$142) =
+  let return$28 = self$141.cap[0]
+  let x#3 = self$141.cap[1]
+  return value$142(x#3, return$28)
+
+toplevel fn show(return$29) =
+  let closure$148 = closure lambda$146()
+  return return$29(closure$148)
+
+closure fn lambda$146(self$147, param$17, return$30) =
+  if param$17.kind == record then {
+    let show#5 = param$17!show
+    return return$30(show#5)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn printShow(return$31) =
+  let closure$168 = closure lambda$150()
+  return return$31(closure$168)
+
+closure fn lambda$150(self$151, param$18, return$32) =
+  let closure$167 = closure lambda$152(param$18)
+  return return$32(closure$167)
+
+closure fn lambda$152(self$153, param$19, return$33) =
+  let param$18 = self$153.cap[0]
+  if  then {
+    let then$94 = closure join$155(return$33, param$18, param$19)
+    return printString(then$94)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$155(self$156, value$157) =
+  let return$33 = self$156.cap[0]
+  let showDict#13 = self$156.cap[1]
+  let x#14 = self$156.cap[2]
+  let return$34 = closure join$158(return$33, value$157)
+  let apply$91 = closure join$161(return$34, x#14)
+  let apply$92 = closure join$164(apply$91, showDict#13)
+  return show(apply$92)
+
+closure fn join$158(self$159, value$160) =
+  let return$33 = self$159.cap[0]
+  let value$157 = self$159.cap[1]
+  return value$157(value$160, return$33)
+
+closure fn join$161(self$162, value$163) =
+  let return$34 = self$162.cap[0]
+  let x#14 = self$162.cap[1]
+  return value$163(x#14, return$34)
+
+closure fn join$164(self$165, value$166) =
+  let apply$91 = self$165.cap[0]
+  let showDict#13 = self$165.cap[1]
+  return value$166(showDict#13, apply$91)
+
+toplevel fn <>(return$35) =
+  let closure$182 = closure lambda$170()
+  return return$35(closure$182)
+
+closure fn lambda$170(self$171, param$20, return$36) =
+  let closure$181 = closure lambda$172(param$20)
+  return return$36(closure$181)
+
+closure fn lambda$172(self$173, param$21, return$37) =
+  let param$20 = self$173.cap[0]
+  if  then {
+    let apply$96 = closure join$175(return$37, param$21)
+    let apply$97 = closure join$178(apply$96, param$20)
+    return appendString(apply$97)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$175(self$176, value$177) =
+  let return$37 = self$176.cap[0]
+  let y#1 = self$176.cap[1]
+  return value$177(y#1, return$37)
+
+closure fn join$178(self$179, value$180) =
+  let apply$96 = self$179.cap[0]
+  let x#0 = self$179.cap[1]
+  return value$180(x#0, apply$96)
+
+toplevel fn showTuple2(return$38) =
+  let closure$268 = closure lambda$184()
+  return return$38(closure$268)
+
+closure fn lambda$184(self$185, param$22, return$39) =
+  let closure$267 = closure lambda$186(param$22)
+  return return$39(closure$267)
+
+closure fn lambda$186(self$187, param$23, return$40) =
+  let param$22 = self$187.cap[0]
+  if  then {
+    let record$266 = record(show = field$189) captures(param$22, param$23)
+    return return$40(record$266)
+  } else {
+    panic "no matching branch"
+  }
+
+field fn field$189(self$190, return$41) =
+  let showDictA#8 = self$190.cap[0]
+  let showDictB#9 = self$190.cap[1]
+  let closure$265 = closure lambda$191(showDictA#8, showDictB#9)
+  return return$41(closure$265)
+
+closure fn lambda$191(self$192, param$24, return$42) =
+  let showDictA#8 = self$192.cap[0]
+  let showDictB#9 = self$192.cap[1]
+  if param$24.tag == Tuple then {
+    let a#10 = param$24.0
+    let b#11 = param$24.1
+    let then$121 = closure join$193( a#10
+    , b#11
+    , return$42
+    , showDictA#8
+    , showDictB#9 )
+    return <>(then$121)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$193(self$194, value$195) =
+  let a#10 = self$194.cap[0]
+  let b#11 = self$194.cap[1]
+  let return$42 = self$194.cap[2]
+  let showDictA#8 = self$194.cap[3]
+  let showDictB#9 = self$194.cap[4]
+  let return$50 = closure join$196( a#10
+  , b#11
+  , return$42
+  , showDictA#8
+  , showDictB#9
+  , value$195 )
+  let apply$99 = closure join$261(return$50)
+  return String#(apply$99)
+
+closure fn join$196(self$197, value$198) =
+  let a#10 = self$197.cap[0]
+  let b#11 = self$197.cap[1]
+  let return$42 = self$197.cap[2]
+  let showDictA#8 = self$197.cap[3]
+  let showDictB#9 = self$197.cap[4]
+  let value$195 = self$197.cap[5]
+  let then$119 = closure join$199( a#10
+  , b#11
+  , return$42
+  , showDictA#8
+  , showDictB#9 )
+  return value$195(value$198, then$119)
+
+closure fn join$199(self$200, value$201) =
+  let a#10 = self$200.cap[0]
+  let b#11 = self$200.cap[1]
+  let return$42 = self$200.cap[2]
+  let showDictA#8 = self$200.cap[3]
+  let showDictB#9 = self$200.cap[4]
+  let return$43 = closure join$202(return$42, value$201)
+  let then$117 = closure join$205( a#10
+  , b#11
+  , return$43
+  , showDictA#8
+  , showDictB#9 )
+  return <>(then$117)
+
+closure fn join$202(self$203, value$204) =
+  let return$42 = self$203.cap[0]
+  let value$201 = self$203.cap[1]
+  return value$201(value$204, return$42)
+
+closure fn join$205(self$206, value$207) =
+  let a#10 = self$206.cap[0]
+  let b#11 = self$206.cap[1]
+  let return$43 = self$206.cap[2]
+  let showDictA#8 = self$206.cap[3]
+  let showDictB#9 = self$206.cap[4]
+  let return$49 = closure join$208(b#11, return$43, showDictB#9, value$207)
+  let apply$100 = closure join$255(a#10, return$49)
+  let apply$101 = closure join$258(apply$100, showDictA#8)
+  return show(apply$101)
+
+closure fn join$208(self$209, value$210) =
+  let b#11 = self$209.cap[0]
+  let return$43 = self$209.cap[1]
+  let showDictB#9 = self$209.cap[2]
+  let value$207 = self$209.cap[3]
+  let then$115 = closure join$211(b#11, return$43, showDictB#9)
+  return value$207(value$210, then$115)
+
+closure fn join$211(self$212, value$213) =
+  let b#11 = self$212.cap[0]
+  let return$43 = self$212.cap[1]
+  let showDictB#9 = self$212.cap[2]
+  let return$44 = closure join$214(return$43, value$213)
+  let then$113 = closure join$217(b#11, return$44, showDictB#9)
+  return <>(then$113)
+
+closure fn join$214(self$215, value$216) =
+  let return$43 = self$215.cap[0]
+  let value$213 = self$215.cap[1]
+  return value$213(value$216, return$43)
+
+closure fn join$217(self$218, value$219) =
+  let b#11 = self$218.cap[0]
+  let return$44 = self$218.cap[1]
+  let showDictB#9 = self$218.cap[2]
+  let return$48 = closure join$220(b#11, return$44, showDictB#9, value$219)
+  let apply$102 = closure join$251(return$48)
+  return String#(apply$102)
+
+closure fn join$220(self$221, value$222) =
+  let b#11 = self$221.cap[0]
+  let return$44 = self$221.cap[1]
+  let showDictB#9 = self$221.cap[2]
+  let value$219 = self$221.cap[3]
+  let then$111 = closure join$223(b#11, return$44, showDictB#9)
+  return value$219(value$222, then$111)
+
+closure fn join$223(self$224, value$225) =
+  let b#11 = self$224.cap[0]
+  let return$44 = self$224.cap[1]
+  let showDictB#9 = self$224.cap[2]
+  let return$45 = closure join$226(return$44, value$225)
+  let then$109 = closure join$229(b#11, return$45, showDictB#9)
+  return <>(then$109)
+
+closure fn join$226(self$227, value$228) =
+  let return$44 = self$227.cap[0]
+  let value$225 = self$227.cap[1]
+  return value$225(value$228, return$44)
+
+closure fn join$229(self$230, value$231) =
+  let b#11 = self$230.cap[0]
+  let return$45 = self$230.cap[1]
+  let showDictB#9 = self$230.cap[2]
+  let return$47 = closure join$232(return$45, value$231)
+  let apply$103 = closure join$245(b#11, return$47)
+  let apply$104 = closure join$248(apply$103, showDictB#9)
+  return show(apply$104)
+
+closure fn join$232(self$233, value$234) =
+  let return$45 = self$233.cap[0]
+  let value$231 = self$233.cap[1]
+  let then$107 = closure join$235(return$45)
+  return value$231(value$234, then$107)
+
+closure fn join$235(self$236, value$237) =
+  let return$45 = self$236.cap[0]
+  let return$46 = closure join$238(return$45, value$237)
+  let apply$105 = closure join$241(return$46)
+  return String#(apply$105)
+
+closure fn join$238(self$239, value$240) =
+  let return$45 = self$239.cap[0]
+  let value$237 = self$239.cap[1]
+  return value$237(value$240, return$45)
+
+closure fn join$241(self$242, value$243) =
+  let return$46 = self$242.cap[0]
+  let lit$244 = ")"
+  return value$243(lit$244, return$46)
+
+closure fn join$245(self$246, value$247) =
+  let b#11 = self$246.cap[0]
+  let return$47 = self$246.cap[1]
+  return value$247(b#11, return$47)
+
+closure fn join$248(self$249, value$250) =
+  let apply$103 = self$249.cap[0]
+  let showDictB#9 = self$249.cap[1]
+  return value$250(showDictB#9, apply$103)
+
+closure fn join$251(self$252, value$253) =
+  let return$48 = self$252.cap[0]
+  let lit$254 = ", "
+  return value$253(lit$254, return$48)
+
+closure fn join$255(self$256, value$257) =
+  let a#10 = self$256.cap[0]
+  let return$49 = self$256.cap[1]
+  return value$257(a#10, return$49)
+
+closure fn join$258(self$259, value$260) =
+  let apply$100 = self$259.cap[0]
+  let showDictA#8 = self$259.cap[1]
+  return value$260(showDictA#8, apply$100)
+
+closure fn join$261(self$262, value$263) =
+  let return$50 = self$262.cap[0]
+  let lit$264 = "("
+  return value$263(lit$264, return$50)
+
+toplevel fn main(return$51) =
+  let closure$311 = closure lambda$270()
+  return return$51(closure$311)
+
+closure fn lambda$270(self$271, param$25, return$52) =
+  if  then {
+    let then$133 = closure join$272(return$52)
+    return printShow(then$133)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$272(self$273, value$274) =
+  let return$52 = self$273.cap[0]
+  let return$55 = closure join$275(return$52, value$274)
+  let then$127 = closure join$299(return$55)
+  return showTuple2(then$127)
+
+closure fn join$275(self$276, value$277) =
+  let return$52 = self$276.cap[0]
+  let value$274 = self$276.cap[1]
+  let then$131 = closure join$278(return$52)
+  return value$274(value$277, then$131)
+
+closure fn join$278(self$279, value$280) =
+  let return$52 = self$279.cap[0]
+  let label$80 = closure join$281(return$52, value$280)
+  let return$53 = closure join$284(label$80)
+  let apply$128 = closure join$295(return$53)
+  return Int32#(apply$128)
+
+closure fn join$281(self$282, value$283) =
+  let return$52 = self$282.cap[0]
+  let value$280 = self$282.cap[1]
+  return value$280(value$283, return$52)
+
+closure fn join$284(self$285, value$286) =
+  let label$80 = self$285.cap[0]
+  let return$54 = closure join$287(label$80, value$286)
+  let apply$129 = closure join$291(return$54)
+  return Int32#(apply$129)
+
+closure fn join$287(self$288, value$289) =
+  let label$80 = self$288.cap[0]
+  let value$286 = self$288.cap[1]
+  let struct$290 = Tuple(value$286, value$289)
+  return label$80(struct$290)
+
+closure fn join$291(self$292, value$293) =
+  let return$54 = self$292.cap[0]
+  let lit$294 = 2
+  return value$293(lit$294, return$54)
+
+closure fn join$295(self$296, value$297) =
+  let return$53 = self$296.cap[0]
+  let lit$298 = 1
+  return value$297(lit$298, return$53)
+
+closure fn join$299(self$300, value$301) =
+  let return$55 = self$300.cap[0]
+  let return$57 = closure join$302(return$55, value$301)
+  return showInt32(return$57)
+
+closure fn join$302(self$303, value$304) =
+  let return$55 = self$303.cap[0]
+  let value$301 = self$303.cap[1]
+  let then$125 = closure join$305(return$55)
+  return value$301(value$304, then$125)
+
+closure fn join$305(self$306, value$307) =
+  let return$55 = self$306.cap[0]
+  let return$56 = closure join$308(return$55, value$307)
+  return showInt32(return$56)
+
+closure fn join$308(self$309, value$310) =
+  let return$55 = self$309.cap[0]
+  let value$307 = self$309.cap[1]
+  return value$307(value$310, return$55)
+
+toplevel fn zig_main$314() =
+  let finish$312 = closure join$316()
+  let after_main$313 = closure join$319(finish$312)
+  return main(after_main$313)
+
+closure fn join$316(self$317, value$318) = return value$318
+
+closure fn join$319(self$320, value$321) =
+  let finish$312 = self$320.cap[0]
+  let struct$322 = Tuple()
+  return value$321(struct$322, finish$312)
+
+entry = zig_main$314
+
+=== Perceus ===
+toplevel fn showInt32(return$26) =
+  let record$144 = record(show = field$136) captures()
+  return return$26(record$144)
+
+field fn field$136(self$137, return$27) =
+  drop self$137
+  let closure$143 = closure lambda$138()
+  return return$27(closure$143)
+
+closure fn lambda$138(self$139, param$16, return$28) =
+  drop self$139
+  if  then {
+    let apply$88 = closure join$140(return$28, param$16)
+    return toStringInt32(apply$88)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$140(self$141, value$142) =
+  let return$28 = self$141.cap[0]
+  dup return$28
+  let x#3 = self$141.cap[1]
+  dup x#3
+  drop self$141
+  return value$142(x#3, return$28)
+
+toplevel fn show(return$29) =
+  let closure$148 = closure lambda$146()
+  return return$29(closure$148)
+
+closure fn lambda$146(self$147, param$17, return$30) =
+  drop self$147
+  if param$17.kind == record then {
+    let show#5 = param$17!show
+    return return$30(show#5)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn printShow(return$31) =
+  let closure$168 = closure lambda$150()
+  return return$31(closure$168)
+
+closure fn lambda$150(self$151, param$18, return$32) =
+  drop self$151
+  let closure$167 = closure lambda$152(param$18)
+  return return$32(closure$167)
+
+closure fn lambda$152(self$153, param$19, return$33) =
+  let param$18 = self$153.cap[0]
+  dup param$18
+  drop self$153
+  if  then {
+    let then$94 = closure join$155(return$33, param$18, param$19)
+    return printString(then$94)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$155(self$156, value$157) =
+  let return$33 = self$156.cap[0]
+  dup return$33
+  let showDict#13 = self$156.cap[1]
+  dup showDict#13
+  let x#14 = self$156.cap[2]
+  dup x#14
+  drop self$156
+  let return$34 = closure join$158(return$33, value$157)
+  let apply$91 = closure join$161(return$34, x#14)
+  let apply$92 = closure join$164(apply$91, showDict#13)
+  return show(apply$92)
+
+closure fn join$158(self$159, value$160) =
+  let return$33 = self$159.cap[0]
+  dup return$33
+  let value$157 = self$159.cap[1]
+  dup value$157
+  drop self$159
+  return value$157(value$160, return$33)
+
+closure fn join$161(self$162, value$163) =
+  let return$34 = self$162.cap[0]
+  dup return$34
+  let x#14 = self$162.cap[1]
+  dup x#14
+  drop self$162
+  return value$163(x#14, return$34)
+
+closure fn join$164(self$165, value$166) =
+  let apply$91 = self$165.cap[0]
+  dup apply$91
+  let showDict#13 = self$165.cap[1]
+  dup showDict#13
+  drop self$165
+  return value$166(showDict#13, apply$91)
+
+toplevel fn <>(return$35) =
+  let closure$182 = closure lambda$170()
+  return return$35(closure$182)
+
+closure fn lambda$170(self$171, param$20, return$36) =
+  drop self$171
+  let closure$181 = closure lambda$172(param$20)
+  return return$36(closure$181)
+
+closure fn lambda$172(self$173, param$21, return$37) =
+  let param$20 = self$173.cap[0]
+  dup param$20
+  drop self$173
+  if  then {
+    let apply$96 = closure join$175(return$37, param$21)
+    let apply$97 = closure join$178(apply$96, param$20)
+    return appendString(apply$97)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$175(self$176, value$177) =
+  let return$37 = self$176.cap[0]
+  dup return$37
+  let y#1 = self$176.cap[1]
+  dup y#1
+  drop self$176
+  return value$177(y#1, return$37)
+
+closure fn join$178(self$179, value$180) =
+  let apply$96 = self$179.cap[0]
+  dup apply$96
+  let x#0 = self$179.cap[1]
+  dup x#0
+  drop self$179
+  return value$180(x#0, apply$96)
+
+toplevel fn showTuple2(return$38) =
+  let closure$268 = closure lambda$184()
+  return return$38(closure$268)
+
+closure fn lambda$184(self$185, param$22, return$39) =
+  drop self$185
+  let closure$267 = closure lambda$186(param$22)
+  return return$39(closure$267)
+
+closure fn lambda$186(self$187, param$23, return$40) =
+  let param$22 = self$187.cap[0]
+  dup param$22
+  drop self$187
+  if  then {
+    let record$266 = record(show = field$189) captures(param$22, param$23)
+    return return$40(record$266)
+  } else {
+    panic "no matching branch"
+  }
+
+field fn field$189(self$190, return$41) =
+  let showDictA#8 = self$190.cap[0]
+  dup showDictA#8
+  let showDictB#9 = self$190.cap[1]
+  dup showDictB#9
+  drop self$190
+  let closure$265 = closure lambda$191(showDictA#8, showDictB#9)
+  return return$41(closure$265)
+
+closure fn lambda$191(self$192, param$24, return$42) =
+  let showDictA#8 = self$192.cap[0]
+  dup showDictA#8
+  let showDictB#9 = self$192.cap[1]
+  dup showDictB#9
+  drop self$192
+  if param$24.tag == Tuple then {
+    let a#10 = param$24.0
+    dup a#10
+    let b#11 = param$24.1
+    dup b#11
+    drop param$24
+    let then$121 = closure join$193( a#10
+    , b#11
+    , return$42
+    , showDictA#8
+    , showDictB#9 )
+    return <>(then$121)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$193(self$194, value$195) =
+  let a#10 = self$194.cap[0]
+  dup a#10
+  let b#11 = self$194.cap[1]
+  dup b#11
+  let return$42 = self$194.cap[2]
+  dup return$42
+  let showDictA#8 = self$194.cap[3]
+  dup showDictA#8
+  let showDictB#9 = self$194.cap[4]
+  dup showDictB#9
+  drop self$194
+  let return$50 = closure join$196( a#10
+  , b#11
+  , return$42
+  , showDictA#8
+  , showDictB#9
+  , value$195 )
+  let apply$99 = closure join$261(return$50)
+  return String#(apply$99)
+
+closure fn join$196(self$197, value$198) =
+  let a#10 = self$197.cap[0]
+  dup a#10
+  let b#11 = self$197.cap[1]
+  dup b#11
+  let return$42 = self$197.cap[2]
+  dup return$42
+  let showDictA#8 = self$197.cap[3]
+  dup showDictA#8
+  let showDictB#9 = self$197.cap[4]
+  dup showDictB#9
+  let value$195 = self$197.cap[5]
+  dup value$195
+  drop self$197
+  let then$119 = closure join$199( a#10
+  , b#11
+  , return$42
+  , showDictA#8
+  , showDictB#9 )
+  return value$195(value$198, then$119)
+
+closure fn join$199(self$200, value$201) =
+  let a#10 = self$200.cap[0]
+  dup a#10
+  let b#11 = self$200.cap[1]
+  dup b#11
+  let return$42 = self$200.cap[2]
+  dup return$42
+  let showDictA#8 = self$200.cap[3]
+  dup showDictA#8
+  let showDictB#9 = self$200.cap[4]
+  dup showDictB#9
+  drop self$200
+  let return$43 = closure join$202(return$42, value$201)
+  let then$117 = closure join$205( a#10
+  , b#11
+  , return$43
+  , showDictA#8
+  , showDictB#9 )
+  return <>(then$117)
+
+closure fn join$202(self$203, value$204) =
+  let return$42 = self$203.cap[0]
+  dup return$42
+  let value$201 = self$203.cap[1]
+  dup value$201
+  drop self$203
+  return value$201(value$204, return$42)
+
+closure fn join$205(self$206, value$207) =
+  let a#10 = self$206.cap[0]
+  dup a#10
+  let b#11 = self$206.cap[1]
+  dup b#11
+  let return$43 = self$206.cap[2]
+  dup return$43
+  let showDictA#8 = self$206.cap[3]
+  dup showDictA#8
+  let showDictB#9 = self$206.cap[4]
+  dup showDictB#9
+  drop self$206
+  let return$49 = closure join$208(b#11, return$43, showDictB#9, value$207)
+  let apply$100 = closure join$255(a#10, return$49)
+  let apply$101 = closure join$258(apply$100, showDictA#8)
+  return show(apply$101)
+
+closure fn join$208(self$209, value$210) =
+  let b#11 = self$209.cap[0]
+  dup b#11
+  let return$43 = self$209.cap[1]
+  dup return$43
+  let showDictB#9 = self$209.cap[2]
+  dup showDictB#9
+  let value$207 = self$209.cap[3]
+  dup value$207
+  drop self$209
+  let then$115 = closure join$211(b#11, return$43, showDictB#9)
+  return value$207(value$210, then$115)
+
+closure fn join$211(self$212, value$213) =
+  let b#11 = self$212.cap[0]
+  dup b#11
+  let return$43 = self$212.cap[1]
+  dup return$43
+  let showDictB#9 = self$212.cap[2]
+  dup showDictB#9
+  drop self$212
+  let return$44 = closure join$214(return$43, value$213)
+  let then$113 = closure join$217(b#11, return$44, showDictB#9)
+  return <>(then$113)
+
+closure fn join$214(self$215, value$216) =
+  let return$43 = self$215.cap[0]
+  dup return$43
+  let value$213 = self$215.cap[1]
+  dup value$213
+  drop self$215
+  return value$213(value$216, return$43)
+
+closure fn join$217(self$218, value$219) =
+  let b#11 = self$218.cap[0]
+  dup b#11
+  let return$44 = self$218.cap[1]
+  dup return$44
+  let showDictB#9 = self$218.cap[2]
+  dup showDictB#9
+  drop self$218
+  let return$48 = closure join$220(b#11, return$44, showDictB#9, value$219)
+  let apply$102 = closure join$251(return$48)
+  return String#(apply$102)
+
+closure fn join$220(self$221, value$222) =
+  let b#11 = self$221.cap[0]
+  dup b#11
+  let return$44 = self$221.cap[1]
+  dup return$44
+  let showDictB#9 = self$221.cap[2]
+  dup showDictB#9
+  let value$219 = self$221.cap[3]
+  dup value$219
+  drop self$221
+  let then$111 = closure join$223(b#11, return$44, showDictB#9)
+  return value$219(value$222, then$111)
+
+closure fn join$223(self$224, value$225) =
+  let b#11 = self$224.cap[0]
+  dup b#11
+  let return$44 = self$224.cap[1]
+  dup return$44
+  let showDictB#9 = self$224.cap[2]
+  dup showDictB#9
+  drop self$224
+  let return$45 = closure join$226(return$44, value$225)
+  let then$109 = closure join$229(b#11, return$45, showDictB#9)
+  return <>(then$109)
+
+closure fn join$226(self$227, value$228) =
+  let return$44 = self$227.cap[0]
+  dup return$44
+  let value$225 = self$227.cap[1]
+  dup value$225
+  drop self$227
+  return value$225(value$228, return$44)
+
+closure fn join$229(self$230, value$231) =
+  let b#11 = self$230.cap[0]
+  dup b#11
+  let return$45 = self$230.cap[1]
+  dup return$45
+  let showDictB#9 = self$230.cap[2]
+  dup showDictB#9
+  drop self$230
+  let return$47 = closure join$232(return$45, value$231)
+  let apply$103 = closure join$245(b#11, return$47)
+  let apply$104 = closure join$248(apply$103, showDictB#9)
+  return show(apply$104)
+
+closure fn join$232(self$233, value$234) =
+  let return$45 = self$233.cap[0]
+  dup return$45
+  let value$231 = self$233.cap[1]
+  dup value$231
+  drop self$233
+  let then$107 = closure join$235(return$45)
+  return value$231(value$234, then$107)
+
+closure fn join$235(self$236, value$237) =
+  let return$45 = self$236.cap[0]
+  dup return$45
+  drop self$236
+  let return$46 = closure join$238(return$45, value$237)
+  let apply$105 = closure join$241(return$46)
+  return String#(apply$105)
+
+closure fn join$238(self$239, value$240) =
+  let return$45 = self$239.cap[0]
+  dup return$45
+  let value$237 = self$239.cap[1]
+  dup value$237
+  drop self$239
+  return value$237(value$240, return$45)
+
+closure fn join$241(self$242, value$243) =
+  let return$46 = self$242.cap[0]
+  dup return$46
+  drop self$242
+  let lit$244 = ")"
+  return value$243(lit$244, return$46)
+
+closure fn join$245(self$246, value$247) =
+  let b#11 = self$246.cap[0]
+  dup b#11
+  let return$47 = self$246.cap[1]
+  dup return$47
+  drop self$246
+  return value$247(b#11, return$47)
+
+closure fn join$248(self$249, value$250) =
+  let apply$103 = self$249.cap[0]
+  dup apply$103
+  let showDictB#9 = self$249.cap[1]
+  dup showDictB#9
+  drop self$249
+  return value$250(showDictB#9, apply$103)
+
+closure fn join$251(self$252, value$253) =
+  let return$48 = self$252.cap[0]
+  dup return$48
+  drop self$252
+  let lit$254 = ", "
+  return value$253(lit$254, return$48)
+
+closure fn join$255(self$256, value$257) =
+  let a#10 = self$256.cap[0]
+  dup a#10
+  let return$49 = self$256.cap[1]
+  dup return$49
+  drop self$256
+  return value$257(a#10, return$49)
+
+closure fn join$258(self$259, value$260) =
+  let apply$100 = self$259.cap[0]
+  dup apply$100
+  let showDictA#8 = self$259.cap[1]
+  dup showDictA#8
+  drop self$259
+  return value$260(showDictA#8, apply$100)
+
+closure fn join$261(self$262, value$263) =
+  let return$50 = self$262.cap[0]
+  dup return$50
+  drop self$262
+  let lit$264 = "("
+  return value$263(lit$264, return$50)
+
+toplevel fn main(return$51) =
+  let closure$311 = closure lambda$270()
+  return return$51(closure$311)
+
+closure fn lambda$270(self$271, param$25, return$52) =
+  drop param$25
+  drop self$271
+  if  then {
+    let then$133 = closure join$272(return$52)
+    return printShow(then$133)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$272(self$273, value$274) =
+  let return$52 = self$273.cap[0]
+  dup return$52
+  drop self$273
+  let return$55 = closure join$275(return$52, value$274)
+  let then$127 = closure join$299(return$55)
+  return showTuple2(then$127)
+
+closure fn join$275(self$276, value$277) =
+  let return$52 = self$276.cap[0]
+  dup return$52
+  let value$274 = self$276.cap[1]
+  dup value$274
+  drop self$276
+  let then$131 = closure join$278(return$52)
+  return value$274(value$277, then$131)
+
+closure fn join$278(self$279, value$280) =
+  let return$52 = self$279.cap[0]
+  dup return$52
+  drop self$279
+  let label$80 = closure join$281(return$52, value$280)
+  let return$53 = closure join$284(label$80)
+  let apply$128 = closure join$295(return$53)
+  return Int32#(apply$128)
+
+closure fn join$281(self$282, value$283) =
+  let return$52 = self$282.cap[0]
+  dup return$52
+  let value$280 = self$282.cap[1]
+  dup value$280
+  drop self$282
+  return value$280(value$283, return$52)
+
+closure fn join$284(self$285, value$286) =
+  let label$80 = self$285.cap[0]
+  dup label$80
+  drop self$285
+  let return$54 = closure join$287(label$80, value$286)
+  let apply$129 = closure join$291(return$54)
+  return Int32#(apply$129)
+
+closure fn join$287(self$288, value$289) =
+  let label$80 = self$288.cap[0]
+  dup label$80
+  let value$286 = self$288.cap[1]
+  dup value$286
+  drop self$288
+  let struct$290 = Tuple(value$286, value$289)
+  return label$80(struct$290)
+
+closure fn join$291(self$292, value$293) =
+  let return$54 = self$292.cap[0]
+  dup return$54
+  drop self$292
+  let lit$294 = 2
+  return value$293(lit$294, return$54)
+
+closure fn join$295(self$296, value$297) =
+  let return$53 = self$296.cap[0]
+  dup return$53
+  drop self$296
+  let lit$298 = 1
+  return value$297(lit$298, return$53)
+
+closure fn join$299(self$300, value$301) =
+  let return$55 = self$300.cap[0]
+  dup return$55
+  drop self$300
+  let return$57 = closure join$302(return$55, value$301)
+  return showInt32(return$57)
+
+closure fn join$302(self$303, value$304) =
+  let return$55 = self$303.cap[0]
+  dup return$55
+  let value$301 = self$303.cap[1]
+  dup value$301
+  drop self$303
+  let then$125 = closure join$305(return$55)
+  return value$301(value$304, then$125)
+
+closure fn join$305(self$306, value$307) =
+  let return$55 = self$306.cap[0]
+  dup return$55
+  drop self$306
+  let return$56 = closure join$308(return$55, value$307)
+  return showInt32(return$56)
+
+closure fn join$308(self$309, value$310) =
+  let return$55 = self$309.cap[0]
+  dup return$55
+  let value$307 = self$309.cap[1]
+  dup value$307
+  drop self$309
+  return value$307(value$310, return$55)
+
+toplevel fn zig_main$314() =
+  let finish$312 = closure join$316()
+  let after_main$313 = closure join$319(finish$312)
+  return main(after_main$313)
+
+closure fn join$316(self$317, value$318) =
+  drop self$317
+  return value$318
+
+closure fn join$319(self$320, value$321) =
+  let finish$312 = self$320.cap[0]
+  dup finish$312
+  drop self$320
+  let struct$322 = Tuple()
+  return value$321(struct$322, finish$312)
+
+entry = zig_main$314
+
+=== Reuse ===
+toplevel fn showInt32(return$26) =
+  let record$144 = record(show = field$136) captures()
+  return return$26(record$144)
+
+field fn field$136(self$137, return$27) =
+  let closure$143 = closure lambda$138()
+  drop self$137
+  return return$27(closure$143)
+
+closure fn lambda$138(self$139, param$16, return$28) =
+  drop self$139
+  if  then {
+    let apply$88 = closure join$140(return$28, param$16)
+    return toStringInt32(apply$88)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$140(self$141, value$142) =
+  let return$28 = self$141.cap[0]
+  dup return$28
+  let x#3 = self$141.cap[1]
+  dup x#3
+  drop self$141
+  return value$142(x#3, return$28)
+
+toplevel fn show(return$29) =
+  let closure$148 = closure lambda$146()
+  return return$29(closure$148)
+
+closure fn lambda$146(self$147, param$17, return$30) =
+  drop self$147
+  if param$17.kind == record then {
+    let show#5 = param$17!show
+    return return$30(show#5)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn printShow(return$31) =
+  let closure$168 = closure lambda$150()
+  return return$31(closure$168)
+
+closure fn lambda$150(self$151, param$18, return$32) =
+  let closure$167 = closure lambda$152(param$18)
+  drop self$151
+  return return$32(closure$167)
+
+closure fn lambda$152(self$153, param$19, return$33) =
+  let param$18 = self$153.cap[0]
+  dup param$18
+  drop self$153
+  if  then {
+    let then$94 = closure join$155(return$33, param$18, param$19)
+    return printString(then$94)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$155(self$156, value$157) =
+  let return$33 = self$156.cap[0]
+  dup return$33
+  let showDict#13 = self$156.cap[1]
+  dup showDict#13
+  let x#14 = self$156.cap[2]
+  dup x#14
+  let return$34 = closure join$158(return$33, value$157)
+  let apply$91 = closure join$161(return$34, x#14)
+  let apply$92 = closure join$164(apply$91, showDict#13)
+  drop self$156
+  return show(apply$92)
+
+closure fn join$158(self$159, value$160) =
+  let return$33 = self$159.cap[0]
+  dup return$33
+  let value$157 = self$159.cap[1]
+  dup value$157
+  drop self$159
+  return value$157(value$160, return$33)
+
+closure fn join$161(self$162, value$163) =
+  let return$34 = self$162.cap[0]
+  dup return$34
+  let x#14 = self$162.cap[1]
+  dup x#14
+  drop self$162
+  return value$163(x#14, return$34)
+
+closure fn join$164(self$165, value$166) =
+  let apply$91 = self$165.cap[0]
+  dup apply$91
+  let showDict#13 = self$165.cap[1]
+  dup showDict#13
+  drop self$165
+  return value$166(showDict#13, apply$91)
+
+toplevel fn <>(return$35) =
+  let closure$182 = closure lambda$170()
+  return return$35(closure$182)
+
+closure fn lambda$170(self$171, param$20, return$36) =
+  let closure$181 = closure lambda$172(param$20)
+  drop self$171
+  return return$36(closure$181)
+
+closure fn lambda$172(self$173, param$21, return$37) =
+  let param$20 = self$173.cap[0]
+  dup param$20
+  drop self$173
+  if  then {
+    let apply$96 = closure join$175(return$37, param$21)
+    let apply$97 = closure join$178(apply$96, param$20)
+    return appendString(apply$97)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$175(self$176, value$177) =
+  let return$37 = self$176.cap[0]
+  dup return$37
+  let y#1 = self$176.cap[1]
+  dup y#1
+  drop self$176
+  return value$177(y#1, return$37)
+
+closure fn join$178(self$179, value$180) =
+  let apply$96 = self$179.cap[0]
+  dup apply$96
+  let x#0 = self$179.cap[1]
+  dup x#0
+  drop self$179
+  return value$180(x#0, apply$96)
+
+toplevel fn showTuple2(return$38) =
+  let closure$268 = closure lambda$184()
+  return return$38(closure$268)
+
+closure fn lambda$184(self$185, param$22, return$39) =
+  let closure$267 = closure lambda$186(param$22)
+  drop self$185
+  return return$39(closure$267)
+
+closure fn lambda$186(self$187, param$23, return$40) =
+  let param$22 = self$187.cap[0]
+  dup param$22
+  drop self$187
+  if  then {
+    let record$266 = record(show = field$189) captures(param$22, param$23)
+    return return$40(record$266)
+  } else {
+    panic "no matching branch"
+  }
+
+field fn field$189(self$190, return$41) =
+  let showDictA#8 = self$190.cap[0]
+  dup showDictA#8
+  let showDictB#9 = self$190.cap[1]
+  dup showDictB#9
+  let closure$265 = closure lambda$191(showDictA#8, showDictB#9)
+  drop self$190
+  return return$41(closure$265)
+
+closure fn lambda$191(self$192, param$24, return$42) =
+  let showDictA#8 = self$192.cap[0]
+  dup showDictA#8
+  let showDictB#9 = self$192.cap[1]
+  dup showDictB#9
+  drop self$192
+  if param$24.tag == Tuple then {
+    let a#10 = param$24.0
+    dup a#10
+    let b#11 = param$24.1
+    dup b#11
+    let then$121 = closure join$193( a#10
+    , b#11
+    , return$42
+    , showDictA#8
+    , showDictB#9 )
+    drop param$24
+    return <>(then$121)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$193(self$194, value$195) =
+  let a#10 = self$194.cap[0]
+  dup a#10
+  let b#11 = self$194.cap[1]
+  dup b#11
+  let return$42 = self$194.cap[2]
+  dup return$42
+  let showDictA#8 = self$194.cap[3]
+  dup showDictA#8
+  let showDictB#9 = self$194.cap[4]
+  dup showDictB#9
+  let return$50 = closure join$196( a#10
+  , b#11
+  , return$42
+  , showDictA#8
+  , showDictB#9
+  , value$195 )
+  let apply$99 = closure join$261(return$50)
+  drop self$194
+  return String#(apply$99)
+
+closure fn join$196(self$197, value$198) =
+  let a#10 = self$197.cap[0]
+  dup a#10
+  let b#11 = self$197.cap[1]
+  dup b#11
+  let return$42 = self$197.cap[2]
+  dup return$42
+  let showDictA#8 = self$197.cap[3]
+  dup showDictA#8
+  let showDictB#9 = self$197.cap[4]
+  dup showDictB#9
+  let value$195 = self$197.cap[5]
+  dup value$195
+  let then$119 = closure join$199( a#10
+  , b#11
+  , return$42
+  , showDictA#8
+  , showDictB#9 )
+  drop self$197
+  return value$195(value$198, then$119)
+
+closure fn join$199(self$200, value$201) =
+  let a#10 = self$200.cap[0]
+  dup a#10
+  let b#11 = self$200.cap[1]
+  dup b#11
+  let return$42 = self$200.cap[2]
+  dup return$42
+  let showDictA#8 = self$200.cap[3]
+  dup showDictA#8
+  let showDictB#9 = self$200.cap[4]
+  dup showDictB#9
+  let return$43 = closure join$202(return$42, value$201)
+  let then$117 = closure join$205( a#10
+  , b#11
+  , return$43
+  , showDictA#8
+  , showDictB#9 )
+  drop self$200
+  return <>(then$117)
+
+closure fn join$202(self$203, value$204) =
+  let return$42 = self$203.cap[0]
+  dup return$42
+  let value$201 = self$203.cap[1]
+  dup value$201
+  drop self$203
+  return value$201(value$204, return$42)
+
+closure fn join$205(self$206, value$207) =
+  let a#10 = self$206.cap[0]
+  dup a#10
+  let b#11 = self$206.cap[1]
+  dup b#11
+  let return$43 = self$206.cap[2]
+  dup return$43
+  let showDictA#8 = self$206.cap[3]
+  dup showDictA#8
+  let showDictB#9 = self$206.cap[4]
+  dup showDictB#9
+  let return$49 = closure join$208(b#11, return$43, showDictB#9, value$207)
+  let apply$100 = closure join$255(a#10, return$49)
+  let apply$101 = closure join$258(apply$100, showDictA#8)
+  drop self$206
+  return show(apply$101)
+
+closure fn join$208(self$209, value$210) =
+  let b#11 = self$209.cap[0]
+  dup b#11
+  let return$43 = self$209.cap[1]
+  dup return$43
+  let showDictB#9 = self$209.cap[2]
+  dup showDictB#9
+  let value$207 = self$209.cap[3]
+  dup value$207
+  let then$115 = closure join$211(b#11, return$43, showDictB#9)
+  drop self$209
+  return value$207(value$210, then$115)
+
+closure fn join$211(self$212, value$213) =
+  let b#11 = self$212.cap[0]
+  dup b#11
+  let return$43 = self$212.cap[1]
+  dup return$43
+  let showDictB#9 = self$212.cap[2]
+  dup showDictB#9
+  let return$44 = closure join$214(return$43, value$213)
+  let then$113 = closure join$217(b#11, return$44, showDictB#9)
+  drop self$212
+  return <>(then$113)
+
+closure fn join$214(self$215, value$216) =
+  let return$43 = self$215.cap[0]
+  dup return$43
+  let value$213 = self$215.cap[1]
+  dup value$213
+  drop self$215
+  return value$213(value$216, return$43)
+
+closure fn join$217(self$218, value$219) =
+  let b#11 = self$218.cap[0]
+  dup b#11
+  let return$44 = self$218.cap[1]
+  dup return$44
+  let showDictB#9 = self$218.cap[2]
+  dup showDictB#9
+  let return$48 = closure join$220(b#11, return$44, showDictB#9, value$219)
+  let apply$102 = closure join$251(return$48)
+  drop self$218
+  return String#(apply$102)
+
+closure fn join$220(self$221, value$222) =
+  let b#11 = self$221.cap[0]
+  dup b#11
+  let return$44 = self$221.cap[1]
+  dup return$44
+  let showDictB#9 = self$221.cap[2]
+  dup showDictB#9
+  let value$219 = self$221.cap[3]
+  dup value$219
+  let then$111 = closure join$223(b#11, return$44, showDictB#9)
+  drop self$221
+  return value$219(value$222, then$111)
+
+closure fn join$223(self$224, value$225) =
+  let b#11 = self$224.cap[0]
+  dup b#11
+  let return$44 = self$224.cap[1]
+  dup return$44
+  let showDictB#9 = self$224.cap[2]
+  dup showDictB#9
+  let return$45 = closure join$226(return$44, value$225)
+  let then$109 = closure join$229(b#11, return$45, showDictB#9)
+  drop self$224
+  return <>(then$109)
+
+closure fn join$226(self$227, value$228) =
+  let return$44 = self$227.cap[0]
+  dup return$44
+  let value$225 = self$227.cap[1]
+  dup value$225
+  drop self$227
+  return value$225(value$228, return$44)
+
+closure fn join$229(self$230, value$231) =
+  let b#11 = self$230.cap[0]
+  dup b#11
+  let return$45 = self$230.cap[1]
+  dup return$45
+  let showDictB#9 = self$230.cap[2]
+  dup showDictB#9
+  let return$47 = closure join$232(return$45, value$231)
+  let apply$103 = closure join$245(b#11, return$47)
+  let apply$104 = closure join$248(apply$103, showDictB#9)
+  drop self$230
+  return show(apply$104)
+
+closure fn join$232(self$233, value$234) =
+  let return$45 = self$233.cap[0]
+  dup return$45
+  let value$231 = self$233.cap[1]
+  dup value$231
+  let then$107 = closure join$235(return$45)
+  drop self$233
+  return value$231(value$234, then$107)
+
+closure fn join$235(self$236, value$237) =
+  let return$45 = self$236.cap[0]
+  dup return$45
+  let return$46 = closure join$238(return$45, value$237)
+  let apply$105 = closure join$241(return$46)
+  drop self$236
+  return String#(apply$105)
+
+closure fn join$238(self$239, value$240) =
+  let return$45 = self$239.cap[0]
+  dup return$45
+  let value$237 = self$239.cap[1]
+  dup value$237
+  drop self$239
+  return value$237(value$240, return$45)
+
+closure fn join$241(self$242, value$243) =
+  let return$46 = self$242.cap[0]
+  dup return$46
+  let lit$244 = ")"
+  drop self$242
+  return value$243(lit$244, return$46)
+
+closure fn join$245(self$246, value$247) =
+  let b#11 = self$246.cap[0]
+  dup b#11
+  let return$47 = self$246.cap[1]
+  dup return$47
+  drop self$246
+  return value$247(b#11, return$47)
+
+closure fn join$248(self$249, value$250) =
+  let apply$103 = self$249.cap[0]
+  dup apply$103
+  let showDictB#9 = self$249.cap[1]
+  dup showDictB#9
+  drop self$249
+  return value$250(showDictB#9, apply$103)
+
+closure fn join$251(self$252, value$253) =
+  let return$48 = self$252.cap[0]
+  dup return$48
+  let lit$254 = ", "
+  drop self$252
+  return value$253(lit$254, return$48)
+
+closure fn join$255(self$256, value$257) =
+  let a#10 = self$256.cap[0]
+  dup a#10
+  let return$49 = self$256.cap[1]
+  dup return$49
+  drop self$256
+  return value$257(a#10, return$49)
+
+closure fn join$258(self$259, value$260) =
+  let apply$100 = self$259.cap[0]
+  dup apply$100
+  let showDictA#8 = self$259.cap[1]
+  dup showDictA#8
+  drop self$259
+  return value$260(showDictA#8, apply$100)
+
+closure fn join$261(self$262, value$263) =
+  let return$50 = self$262.cap[0]
+  dup return$50
+  let lit$264 = "("
+  drop self$262
+  return value$263(lit$264, return$50)
+
+toplevel fn main(return$51) =
+  let closure$311 = closure lambda$270()
+  return return$51(closure$311)
+
+closure fn lambda$270(self$271, param$25, return$52) =
+  drop param$25
+  drop self$271
+  if  then {
+    let then$133 = closure join$272(return$52)
+    return printShow(then$133)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$272(self$273, value$274) =
+  let return$52 = self$273.cap[0]
+  dup return$52
+  let return$55 = closure join$275(return$52, value$274)
+  let then$127 = closure join$299(return$55)
+  drop self$273
+  return showTuple2(then$127)
+
+closure fn join$275(self$276, value$277) =
+  let return$52 = self$276.cap[0]
+  dup return$52
+  let value$274 = self$276.cap[1]
+  dup value$274
+  let then$131 = closure join$278(return$52)
+  drop self$276
+  return value$274(value$277, then$131)
+
+closure fn join$278(self$279, value$280) =
+  let return$52 = self$279.cap[0]
+  dup return$52
+  let label$80 = closure join$281(return$52, value$280)
+  let return$53 = closure join$284(label$80)
+  let apply$128 = closure join$295(return$53)
+  drop self$279
+  return Int32#(apply$128)
+
+closure fn join$281(self$282, value$283) =
+  let return$52 = self$282.cap[0]
+  dup return$52
+  let value$280 = self$282.cap[1]
+  dup value$280
+  drop self$282
+  return value$280(value$283, return$52)
+
+closure fn join$284(self$285, value$286) =
+  let label$80 = self$285.cap[0]
+  dup label$80
+  let return$54 = closure join$287(label$80, value$286)
+  let apply$129 = closure join$291(return$54)
+  drop self$285
+  return Int32#(apply$129)
+
+closure fn join$287(self$288, value$289) =
+  let label$80 = self$288.cap[0]
+  dup label$80
+  let value$286 = self$288.cap[1]
+  dup value$286
+  dropReuse reuse$323 = self$288 /2
+  let struct$290 = reuse reuse$323 Tuple(value$286, value$289)
+  return label$80(struct$290)
+
+closure fn join$291(self$292, value$293) =
+  let return$54 = self$292.cap[0]
+  dup return$54
+  let lit$294 = 2
+  drop self$292
+  return value$293(lit$294, return$54)
+
+closure fn join$295(self$296, value$297) =
+  let return$53 = self$296.cap[0]
+  dup return$53
+  let lit$298 = 1
+  drop self$296
+  return value$297(lit$298, return$53)
+
+closure fn join$299(self$300, value$301) =
+  let return$55 = self$300.cap[0]
+  dup return$55
+  let return$57 = closure join$302(return$55, value$301)
+  drop self$300
+  return showInt32(return$57)
+
+closure fn join$302(self$303, value$304) =
+  let return$55 = self$303.cap[0]
+  dup return$55
+  let value$301 = self$303.cap[1]
+  dup value$301
+  let then$125 = closure join$305(return$55)
+  drop self$303
+  return value$301(value$304, then$125)
+
+closure fn join$305(self$306, value$307) =
+  let return$55 = self$306.cap[0]
+  dup return$55
+  let return$56 = closure join$308(return$55, value$307)
+  drop self$306
+  return showInt32(return$56)
+
+closure fn join$308(self$309, value$310) =
+  let return$55 = self$309.cap[0]
+  dup return$55
+  let value$307 = self$309.cap[1]
+  dup value$307
+  drop self$309
+  return value$307(value$310, return$55)
+
+toplevel fn zig_main$314() =
+  let finish$312 = closure join$316()
+  let after_main$313 = closure join$319(finish$312)
+  return main(after_main$313)
+
+closure fn join$316(self$317, value$318) =
+  drop self$317
+  return value$318
+
+closure fn join$319(self$320, value$321) =
+  let finish$312 = self$320.cap[0]
+  dup finish$312
+  dropReuse reuse$324 = self$320 /0
+  let struct$322 = reuse reuse$324 Tuple()
+  return value$321(struct$322, finish$312)
+
+entry = zig_main$314
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+- infix infixr 5 <>
++ type Show a#2 = {show : a#2 -> String}
+  
+  sig <> : String -> String -> String
+  
+- def <> =
++ sig showInt32 : Show(Int32)
+-   fn {
+-     x y ->
+-       {
+-         appendString(x)(y)
+-       }
+-   }
+  
+- type Show a = {show : a -> String}
++ sig show : Show(a#4) -> a#4 -> String
+  
+- sig showInt32 : Show(Int32)
++ sig showTuple2 : Show(a#6) -> Show(b#7) -> Show((a#6, b#7))
+  
++ sig printShow : Show(a#12) -> a#12 -> ()
++ 
+  def showInt32 =
+    { show = fn {
+-     x ->
++     x#3 ->
+        {
+-         toStringInt32(x)
++         toStringInt32(x#3)
+        }
+    } }
+  
+- sig show : Show(a) -> a -> String
+- 
+  def show =
+    fn {
+-     {show = show} ->
++     {show = show#5} ->
+        {
+-         show
++         show#5
+        }
+    }
+  
+- sig showTuple2 : Show(a) -> Show(b) -> Show((a, b))
++ def printShow =
+- 
+- def showTuple2 =
+    fn {
+-     showDictA showDictB ->
++     showDict#13 x#14 ->
+        {
+-         { show = fn {
++         printString(show(showDict#13)(x#14))
+-           (a, b) ->
+-             {
+-               "(" <> show(showDictA)(a) <> ", " <> show(showDictB)(b) <> ")"
+-             }
+-         } }
+        }
+    }
+  
+- sig printShow : Show(a) -> a -> ()
++ def <> =
++   fn {
++     x#0 y#1 ->
++       {
++         appendString(x#0)(y#1)
++       }
++   }
+  
+- def printShow =
++ def showTuple2 =
+    fn {
+-     showDict x ->
++     showDictA#8 showDictB#9 ->
+        {
+-         printString(show(showDict)(x))
++         { show = fn {
++           ( a#10
++           , b#11 ) ->
++             {
++               String#( "(" ) <> show( showDictA#8 )( a#10 ) <> String#( ", " ) <> show( showDictB#9 )( b#11 ) <> String#( ")" )
++             }
++         } }
+        }
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#15 ->
+        {
+-         printShow(showTuple2(showInt32)(showInt32))((1, 2))
++         printShow(showTuple2(showInt32)(showInt32))((Int32#(1), Int32#(2)))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- type Show a#2 = {show : a#2 -> String}
+- 
+- sig <> : String -> String -> String
+- 
+- sig showInt32 : Show(Int32)
+- 
+- sig show : Show(a#4) -> a#4 -> String
+- 
+- sig showTuple2 : Show(a#6) -> Show(b#7) -> Show((a#6, b#7))
+- 
+- sig printShow : Show(a#12) -> a#12 -> ()
+- 
+  def showInt32 =
+-   { show = fn {
++   { show = \param$16 ->
+-     x#3 ->
++     case param$16 of {
+-       {
++       x#3 -> invoke toStringInt32(x#3)
+-         toStringInt32(x#3)
++     } }
+-       }
+-   } }
+  
+  def show =
+-   fn {
++   \param$17 ->
+-     {show = show#5} ->
++     case param$17 of {
+-       {
++       {show = show#5} -> show#5
+-         show#5
++     }
+-       }
+-   }
+  
+  def printShow =
+-   fn {
++   \param$18 ->
+-     showDict#13 x#14 ->
++     \param$19 ->
+-       {
++       case Tuple(param$18, param$19) of {
+-         printString(show(showDict#13)(x#14))
++         Tuple(showDict#13, x#14) ->
++           invoke printString(invoke show(showDict#13)(x#14))
+        }
+-   }
+  
+  def <> =
+-   fn {
++   \param$20 ->
+-     x#0 y#1 ->
++     \param$21 ->
+-       {
++       case Tuple(param$20, param$21) of {
+-         appendString(x#0)(y#1)
++         Tuple(x#0, y#1) -> invoke appendString(x#0)(y#1)
+        }
+-   }
+  
+  def showTuple2 =
+-   fn {
++   \param$22 ->
+-     showDictA#8 showDictB#9 ->
++     \param$23 ->
+-       {
++       case Tuple(param$22, param$23) of {
+-         { show = fn {
++         Tuple(showDictA#8, showDictB#9) ->
+-           ( a#10
++           { show = \param$24 ->
+-           , b#11 ) ->
++             case param$24 of {
+-             {
++               Tuple(a#10, b#11) ->
+-               String#( "(" ) <> show( showDictA#8 )( a#10 ) <> String#( ", " ) <> show( showDictB#9 )( b#11 ) <> String#( ")" )
++                 invoke <>( invoke String#( "(" ) )( invoke <>( invoke show( showDictA#8 )( a#10 ) )( invoke <>( invoke String#( ", " ) )( invoke <>( invoke show( showDictB#9 )( b#11 ) )( invoke String#( ")" ) ) ) ) )
+-             }
++             } }
+-         } }
+        }
+-   }
+  
+  def main =
+-   fn {
++   \param$25 ->
+-     _#15 ->
++     case param$25 of {
+-       {
++       _#15 ->
+-         printShow(showTuple2(showInt32)(showInt32))((Int32#(1), Int32#(2)))
++         invoke printShow( invoke showTuple2( invoke showInt32 )( invoke showInt32 ) )( Tuple( invoke Int32#( 1 )
+-       }
++         , invoke Int32#(2) ) )
+-   }
++     }
+
+
+=== ToFun -> SaturateCtor ===
+  def showInt32 =
+    { show = \param$16 ->
+      case param$16 of {
+        x#3 -> invoke toStringInt32(x#3)
+      } }
+  
+  def show =
+    \param$17 ->
+      case param$17 of {
+        {show = show#5} -> show#5
+      }
+  
+  def printShow =
+    \param$18 ->
+      \param$19 ->
+        case Tuple(param$18, param$19) of {
+          Tuple(showDict#13, x#14) ->
+            invoke printString(invoke show(showDict#13)(x#14))
+        }
+  
+  def <> =
+    \param$20 ->
+      \param$21 ->
+        case Tuple(param$20, param$21) of {
+          Tuple(x#0, y#1) -> invoke appendString(x#0)(y#1)
+        }
+  
+  def showTuple2 =
+    \param$22 ->
+      \param$23 ->
+        case Tuple(param$22, param$23) of {
+          Tuple(showDictA#8, showDictB#9) ->
+            { show = \param$24 ->
+              case param$24 of {
+                Tuple(a#10, b#11) ->
+                  invoke <>( invoke String#( "(" ) )( invoke <>( invoke show( showDictA#8 )( a#10 ) )( invoke <>( invoke String#( ", " ) )( invoke <>( invoke show( showDictB#9 )( b#11 ) )( invoke String#( ")" ) ) ) ) )
+              } }
+        }
+  
+  def main =
+    \param$25 ->
+      case param$25 of {
+        _#15 ->
+          invoke printShow( invoke showTuple2( invoke showInt32 )( invoke showInt32 ) )( Tuple( invoke Int32#( 1 )
+          , invoke Int32#(2) ) )
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def showInt32 =
+    { show = \param$16 ->
+      case param$16 of {
+        x#3 -> invoke toStringInt32(x#3)
+      } }
+  
+  def show =
+    \param$17 ->
+      case param$17 of {
+        {show = show#5} -> show#5
+      }
+  
+  def printShow =
+    \param$18 ->
+      \param$19 ->
+        case Tuple(param$18, param$19) of {
+          Tuple(showDict#13, x#14) ->
+            invoke printString(invoke show(showDict#13)(x#14))
+        }
+  
+  def <> =
+    \param$20 ->
+      \param$21 ->
+        case Tuple(param$20, param$21) of {
+          Tuple(x#0, y#1) -> invoke appendString(x#0)(y#1)
+        }
+  
+  def showTuple2 =
+    \param$22 ->
+      \param$23 ->
+        case Tuple(param$22, param$23) of {
+          Tuple(showDictA#8, showDictB#9) ->
+            { show = \param$24 ->
+              case param$24 of {
+                Tuple(a#10, b#11) ->
+                  invoke <>( invoke String#( "(" ) )( invoke <>( invoke show( showDictA#8 )( a#10 ) )( invoke <>( invoke String#( ", " ) )( invoke <>( invoke show( showDictB#9 )( b#11 ) )( invoke String#( ")" ) ) ) ) )
+              } }
+        }
+  
+  def main =
+    \param$25 ->
+      case param$25 of {
+        _#15 ->
+          invoke printShow( invoke showTuple2( invoke showInt32 )( invoke showInt32 ) )( Tuple( invoke Int32#( 1 )
+          , invoke Int32#(2) ) )
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def showInt32 =
++ def showInt32(return$26) =
+-   { show = \param$16 ->
++   { show(return$27) = {
+-     case param$16 of {
++     \param$16 return$28 . {
+-       x#3 -> invoke toStringInt32(x#3)
++       param$16 ~ select {
+-     } }
++         x#3 -> invoke toStringInt32 ~ (x#3, return$28)
++       }
++     } ~ return$27
++   } } ~ return$26
+  
+- def show =
++ def show(return$29) =
+-   \param$17 ->
++   \param$17 return$30 . {
+-     case param$17 of {
++     param$17 ~ select {
+-       {show = show#5} -> show#5
++       {show = show#5} -> show#5 ~ return$30
+      }
++   } ~ return$29
+  
+- def printShow =
++ def printShow(return$31) =
+-   \param$18 ->
++   \param$18 return$32 . {
+-     \param$19 ->
++     \param$19 return$33 . {
+-       case Tuple(param$18, param$19) of {
++       Tuple(param$18, param$19) ~ select {
+          Tuple(showDict#13, x#14) ->
+-           invoke printString(invoke show(showDict#13)(x#14))
++           invoke printString ~ ( do return$34 . {
++             invoke show ~ (showDict#13, (x#14, return$34))
++           }
++           , return$33 )
+        }
++     } ~ return$32
++   } ~ return$31
+  
+- def <> =
++ def <>(return$35) =
+-   \param$20 ->
++   \param$20 return$36 . {
+-     \param$21 ->
++     \param$21 return$37 . {
+-       case Tuple(param$20, param$21) of {
++       Tuple(param$20, param$21) ~ select {
+-         Tuple(x#0, y#1) -> invoke appendString(x#0)(y#1)
++         Tuple(x#0, y#1) -> invoke appendString ~ (x#0, (y#1, return$37))
+        }
++     } ~ return$36
++   } ~ return$35
+  
+- def showTuple2 =
++ def showTuple2(return$38) =
+-   \param$22 ->
++   \param$22 return$39 . {
+-     \param$23 ->
++     \param$23 return$40 . {
+-       case Tuple(param$22, param$23) of {
++       Tuple(param$22, param$23) ~ select {
+          Tuple(showDictA#8, showDictB#9) ->
+-           { show = \param$24 ->
++           { show(return$41) = {
+-             case param$24 of {
++             \param$24 return$42 . {
+-               Tuple(a#10, b#11) ->
++               param$24 ~ select {
+-                 invoke <>( invoke String#( "(" ) )( invoke <>( invoke show( showDictA#8 )( a#10 ) )( invoke <>( invoke String#( ", " ) )( invoke <>( invoke show( showDictB#9 )( b#11 ) )( invoke String#( ")" ) ) ) ) )
++                 Tuple(a#10, b#11) ->
+-             } }
++                   invoke <> ~ ( do return$50 . {
++                     invoke String# ~ ("(", return$50)
++                   }
++                   , ( do return$43 . {
++                     invoke <> ~ ( do return$49 . {
++                       invoke show ~ (showDictA#8, (a#10, return$49))
++                     }
++                     , ( do return$44 . {
++                       invoke <> ~ ( do return$48 . {
++                         invoke String# ~ (", ", return$48)
++                       }
++                       , ( do return$45 . {
++                         invoke <> ~ ( do return$47 . {
++                           invoke show ~ (showDictB#9, (b#11, return$47))
++                         }
++                         , ( do return$46 . {
++                           invoke String# ~ (")", return$46)
++                         }
++                         , return$45 ) )
++                       }
++                       , return$44 ) )
++                     }
++                     , return$43 ) )
++                   }
++                   , return$42 ) )
++               }
++             } ~ return$41
++           } } ~ return$40
+        }
++     } ~ return$39
++   } ~ return$38
+  
+- def main =
++ def main(return$51) =
+-   \param$25 ->
++   \param$25 return$52 . {
+-     case param$25 of {
++     param$25 ~ select {
+        _#15 ->
+-         invoke printShow( invoke showTuple2( invoke showInt32 )( invoke showInt32 ) )( Tuple( invoke Int32#( 1 )
++         invoke printShow ~ ( do return$55 . {
+-         , invoke Int32#(2) ) )
++           invoke showTuple2 ~ ( do return$57 . {
++             invoke showInt32 ~ return$57
++           }
++           , ( do return$56 . {
++             invoke showInt32 ~ return$56
++           }
++           , return$55 ) )
++         }
++         , ( Tuple( do return$53 . {
++           invoke Int32# ~ (1, return$53)
++         }
++         , do return$54 . {
++           invoke Int32# ~ (2, return$54)
++         } )
++         , return$52 ) )
+      }
++   } ~ return$51
+
+
+=== ToCore -> Flat ===
+  def showInt32(return$26) =
+    { show(return$27) = {
+      \param$16 return$28 . {
+        param$16 ~ select {
+          x#3 -> invoke toStringInt32 ~ (x#3, return$28)
+        }
+      } ~ return$27
+    } } ~ return$26
+  
+  def show(return$29) =
+    \param$17 return$30 . {
+      param$17 ~ select {
+        {show = show#5} -> show#5 ~ return$30
+      }
+    } ~ return$29
+  
+  def printShow(return$31) =
+    \param$18 return$32 . {
+      \param$19 return$33 . {
+        Tuple(param$18, param$19) ~ select {
+          Tuple(showDict#13, x#14) ->
+-           invoke printString ~ ( do return$34 . {
++           invoke printString ~ then outer$58 -> {
+-             invoke show ~ (showDict#13, (x#14, return$34))
++             join return$34 = then inner$59 -> {
++               outer$58 ~ (inner$59, return$33)
++             }
++             in invoke show ~ (showDict#13, (x#14, return$34))
+            }
+-           , return$33 )
+        }
+      } ~ return$32
+    } ~ return$31
+  
+  def <>(return$35) =
+    \param$20 return$36 . {
+      \param$21 return$37 . {
+        Tuple(param$20, param$21) ~ select {
+          Tuple(x#0, y#1) -> invoke appendString ~ (x#0, (y#1, return$37))
+        }
+      } ~ return$36
+    } ~ return$35
+  
+  def showTuple2(return$38) =
+    \param$22 return$39 . {
+      \param$23 return$40 . {
+        Tuple(param$22, param$23) ~ select {
+          Tuple(showDictA#8, showDictB#9) ->
+            { show(return$41) = {
+              \param$24 return$42 . {
+                param$24 ~ select {
+                  Tuple(a#10, b#11) ->
+-                   invoke <> ~ ( do return$50 . {
++                   invoke <> ~ then outer$60 -> {
+-                     invoke String# ~ ("(", return$50)
++                     join return$50 = then inner$61 -> {
+-                   }
++                       outer$60 ~ ( inner$61
+-                   , ( do return$43 . {
++                       , then outer$62 -> {
+-                     invoke <> ~ ( do return$49 . {
++                         join return$43 = then inner$63 -> {
+-                       invoke show ~ (showDictA#8, (a#10, return$49))
++                           outer$62 ~ (inner$63, return$42)
+-                     }
+-                     , ( do return$44 . {
+-                       invoke <> ~ ( do return$48 . {
+-                         invoke String# ~ (", ", return$48)
+-                       }
+-                       , ( do return$45 . {
+-                         invoke <> ~ ( do return$47 . {
+-                           invoke show ~ (showDictB#9, (b#11, return$47))
+                          }
+-                         , ( do return$46 . {
++                         in invoke <> ~ then outer$64 -> {
+-                           invoke String# ~ (")", return$46)
++                           join return$49 = then inner$65 -> {
++                             outer$64 ~ ( inner$65
++                             , then outer$66 -> {
++                               join return$44 = then inner$67 -> {
++                                 outer$66 ~ (inner$67, return$43)
++                               }
++                               in invoke <> ~ then outer$68 -> {
++                                 join return$48 = then inner$69 -> {
++                                   outer$68 ~ ( inner$69
++                                   , then outer$70 -> {
++                                     join return$45 = then inner$71 -> {
++                                       outer$70 ~ (inner$71, return$44)
++                                     }
++                                     in invoke <> ~ then outer$72 -> {
++                                       join return$47 = then inner$73 -> {
++                                         outer$72 ~ ( inner$73
++                                         , then outer$74 -> {
++                                           join return$46 = then inner$75 -> {
++                                             outer$74 ~ (inner$75, return$45)
++                                           }
++                                           in invoke String# ~ (")", return$46)
++                                         } )
++                                       }
++                                       in invoke show ~ ( showDictB#9
++                                       , (b#11, return$47) )
++                                     }
++                                   } )
++                                 }
++                                 in invoke String# ~ (", ", return$48)
++                               }
++                             } )
++                           }
++                           in invoke show ~ (showDictA#8, (a#10, return$49))
+                          }
+-                         , return$45 ) )
++                       } )
+-                       }
+-                       , return$44 ) )
+                      }
+-                     , return$43 ) )
++                     in invoke String# ~ ("(", return$50)
+                    }
+-                   , return$42 ) )
+                }
+              } ~ return$41
+            } } ~ return$40
+        }
+      } ~ return$39
+    } ~ return$38
+  
+  def main(return$51) =
+    \param$25 return$52 . {
+      param$25 ~ select {
+        _#15 ->
+-         invoke printShow ~ ( do return$55 . {
++         invoke printShow ~ then outer$76 -> {
+-           invoke showTuple2 ~ ( do return$57 . {
++           join return$55 = then inner$77 -> {
+-             invoke showInt32 ~ return$57
++             outer$76 ~ ( inner$77
++             , then outer$78 -> {
++               join label$80 = then inner$79 -> {
++                 outer$78 ~ (inner$79, return$52)
++               }
++               in join return$53 = then var$81 -> {
++                 join label$82 = label$80
++                 in join return$54 = then var$83 -> {
++                   Tuple(var$81, var$83) ~ label$82
++                 }
++                 in invoke Int32# ~ (2, return$54)
++               }
++               in invoke Int32# ~ (1, return$53)
++             } )
+            }
+-           , ( do return$56 . {
++           in invoke showTuple2 ~ then outer$84 -> {
+-             invoke showInt32 ~ return$56
++             join return$57 = then inner$85 -> {
++               outer$84 ~ ( inner$85
++               , then outer$86 -> {
++                 join return$56 = then inner$87 -> {
++                   outer$86 ~ (inner$87, return$55)
++                 }
++                 in invoke showInt32 ~ return$56
++               } )
++             }
++             in invoke showInt32 ~ return$57
+            }
+-           , return$55 ) )
+          }
+-         , ( Tuple( do return$53 . {
+-           invoke Int32# ~ (1, return$53)
+-         }
+-         , do return$54 . {
+-           invoke Int32# ~ (2, return$54)
+-         } )
+-         , return$52 ) )
+      }
+    } ~ return$51
+
+
+=== Flat -> Join ===
+  def showInt32(return$26) =
+    { show(return$27) = {
+      \param$16 return$28 . {
+-       param$16 ~ select {
++       join select$89 = select {
+-         x#3 -> invoke toStringInt32 ~ (x#3, return$28)
++         x#3 ->
++           join apply$88 = (x#3, return$28)
++           in invoke toStringInt32 ~ apply$88
+        }
++       in param$16 ~ select$89
+      } ~ return$27
+    } } ~ return$26
+  
+  def show(return$29) =
+    \param$17 return$30 . {
+-     param$17 ~ select {
++     join select$90 = select {
+        {show = show#5} -> show#5 ~ return$30
+      }
++     in param$17 ~ select$90
+    } ~ return$29
+  
+  def printShow(return$31) =
+    \param$18 return$32 . {
+      \param$19 return$33 . {
+-       Tuple(param$18, param$19) ~ select {
++       join select$95 = select {
+          Tuple(showDict#13, x#14) ->
+-           invoke printString ~ then outer$58 -> {
++           join then$94 = then outer$58 -> {
+              join return$34 = then inner$59 -> {
+-               outer$58 ~ (inner$59, return$33)
++               join apply$93 = (inner$59, return$33)
++               in outer$58 ~ apply$93
+              }
+-             in invoke show ~ (showDict#13, (x#14, return$34))
++             in join apply$91 = (x#14, return$34)
++             in join apply$92 = (showDict#13, apply$91)
++             in invoke show ~ apply$92
+            }
++           in invoke printString ~ then$94
+        }
++       in Tuple(param$18, param$19) ~ select$95
+      } ~ return$32
+    } ~ return$31
+  
+  def <>(return$35) =
+    \param$20 return$36 . {
+      \param$21 return$37 . {
+-       Tuple(param$20, param$21) ~ select {
++       join select$98 = select {
+-         Tuple(x#0, y#1) -> invoke appendString ~ (x#0, (y#1, return$37))
++         Tuple(x#0, y#1) ->
++           join apply$96 = (y#1, return$37)
++           in join apply$97 = (x#0, apply$96)
++           in invoke appendString ~ apply$97
+        }
++       in Tuple(param$20, param$21) ~ select$98
+      } ~ return$36
+    } ~ return$35
+  
+  def showTuple2(return$38) =
+    \param$22 return$39 . {
+      \param$23 return$40 . {
+-       Tuple(param$22, param$23) ~ select {
++       join select$123 = select {
+          Tuple(showDictA#8, showDictB#9) ->
+            { show(return$41) = {
+              \param$24 return$42 . {
+-               param$24 ~ select {
++               join select$122 = select {
+                  Tuple(a#10, b#11) ->
+-                   invoke <> ~ then outer$60 -> {
++                   join then$121 = then outer$60 -> {
+                      join return$50 = then inner$61 -> {
+-                       outer$60 ~ ( inner$61
++                       join then$119 = then outer$62 -> {
+-                       , then outer$62 -> {
+                          join return$43 = then inner$63 -> {
+-                           outer$62 ~ (inner$63, return$42)
++                           join apply$118 = (inner$63, return$42)
++                           in outer$62 ~ apply$118
+                          }
+-                         in invoke <> ~ then outer$64 -> {
++                         in join then$117 = then outer$64 -> {
+                            join return$49 = then inner$65 -> {
+-                             outer$64 ~ ( inner$65
++                             join then$115 = then outer$66 -> {
+-                             , then outer$66 -> {
+                                join return$44 = then inner$67 -> {
+-                                 outer$66 ~ (inner$67, return$43)
++                                 join apply$114 = (inner$67, return$43)
++                                 in outer$66 ~ apply$114
+                                }
+-                               in invoke <> ~ then outer$68 -> {
++                               in join then$113 = then outer$68 -> {
+                                  join return$48 = then inner$69 -> {
+-                                   outer$68 ~ ( inner$69
++                                   join then$111 = then outer$70 -> {
+-                                   , then outer$70 -> {
+                                      join return$45 = then inner$71 -> {
+-                                       outer$70 ~ (inner$71, return$44)
++                                       join apply$110 = (inner$71, return$44)
++                                       in outer$70 ~ apply$110
+                                      }
+-                                     in invoke <> ~ then outer$72 -> {
++                                     in join then$109 = then outer$72 -> {
+                                        join return$47 = then inner$73 -> {
+-                                         outer$72 ~ ( inner$73
++                                         join then$107 = then outer$74 -> {
+-                                         , then outer$74 -> {
+                                            join return$46 = then inner$75 -> {
+-                                             outer$74 ~ (inner$75, return$45)
++                                             join apply$106 = ( inner$75
++                                             , return$45 )
++                                             in outer$74 ~ apply$106
+                                            }
+-                                           in invoke String# ~ (")", return$46)
++                                           in join apply$105 = (")", return$46)
+-                                         } )
++                                           in invoke String# ~ apply$105
++                                         }
++                                         in join apply$108 = (inner$73, then$107)
++                                         in outer$72 ~ apply$108
+                                        }
+-                                       in invoke show ~ ( showDictB#9
++                                       in join apply$103 = (b#11, return$47)
+-                                       , (b#11, return$47) )
++                                       in join apply$104 = ( showDictB#9
++                                       , apply$103 )
++                                       in invoke show ~ apply$104
+                                      }
+-                                   } )
++                                     in invoke <> ~ then$109
++                                   }
++                                   in join apply$112 = (inner$69, then$111)
++                                   in outer$68 ~ apply$112
+                                  }
+-                                 in invoke String# ~ (", ", return$48)
++                                 in join apply$102 = (", ", return$48)
++                                 in invoke String# ~ apply$102
+                                }
+-                             } )
++                               in invoke <> ~ then$113
++                             }
++                             in join apply$116 = (inner$65, then$115)
++                             in outer$64 ~ apply$116
+                            }
+-                           in invoke show ~ (showDictA#8, (a#10, return$49))
++                           in join apply$100 = (a#10, return$49)
++                           in join apply$101 = (showDictA#8, apply$100)
++                           in invoke show ~ apply$101
+                          }
+-                       } )
++                         in invoke <> ~ then$117
++                       }
++                       in join apply$120 = (inner$61, then$119)
++                       in outer$60 ~ apply$120
+                      }
+-                     in invoke String# ~ ("(", return$50)
++                     in join apply$99 = ("(", return$50)
++                     in invoke String# ~ apply$99
+                    }
++                   in invoke <> ~ then$121
+                }
++               in param$24 ~ select$122
+              } ~ return$41
+            } } ~ return$40
+        }
++       in Tuple(param$22, param$23) ~ select$123
+      } ~ return$39
+    } ~ return$38
+  
+  def main(return$51) =
+    \param$25 return$52 . {
+-     param$25 ~ select {
++     join select$134 = select {
+        _#15 ->
+-         invoke printShow ~ then outer$76 -> {
++         join then$133 = then outer$76 -> {
+            join return$55 = then inner$77 -> {
+-             outer$76 ~ ( inner$77
++             join then$131 = then outer$78 -> {
+-             , then outer$78 -> {
+                join label$80 = then inner$79 -> {
+-                 outer$78 ~ (inner$79, return$52)
++                 join apply$130 = (inner$79, return$52)
++                 in outer$78 ~ apply$130
+                }
+                in join return$53 = then var$81 -> {
+                  join label$82 = label$80
+                  in join return$54 = then var$83 -> {
+                    Tuple(var$81, var$83) ~ label$82
+                  }
+-                 in invoke Int32# ~ (2, return$54)
++                 in join apply$129 = (2, return$54)
++                 in invoke Int32# ~ apply$129
+                }
+-               in invoke Int32# ~ (1, return$53)
++               in join apply$128 = (1, return$53)
+-             } )
++               in invoke Int32# ~ apply$128
++             }
++             in join apply$132 = (inner$77, then$131)
++             in outer$76 ~ apply$132
+            }
+-           in invoke showTuple2 ~ then outer$84 -> {
++           in join then$127 = then outer$84 -> {
+              join return$57 = then inner$85 -> {
+-               outer$84 ~ ( inner$85
++               join then$125 = then outer$86 -> {
+-               , then outer$86 -> {
+                  join return$56 = then inner$87 -> {
+-                   outer$86 ~ (inner$87, return$55)
++                   join apply$124 = (inner$87, return$55)
++                   in outer$86 ~ apply$124
+                  }
+                  in invoke showInt32 ~ return$56
+-               } )
++               }
++               in join apply$126 = (inner$85, then$125)
++               in outer$84 ~ apply$126
+              }
+              in invoke showInt32 ~ return$57
+            }
++           in invoke showTuple2 ~ then$127
+          }
++         in invoke printShow ~ then$133
+      }
++     in param$25 ~ select$134
+    } ~ return$51
+
+
+=== Join -> ClosureConv ===
+- def showInt32(return$26) =
++ toplevel fn showInt32(return$26) =
+-   { show(return$27) = {
++   let record$144 = record(show = field$136) captures()
+-     \param$16 return$28 . {
++   return return$26(record$144)
+-       join select$89 = select {
+-         x#3 ->
+-           join apply$88 = (x#3, return$28)
+-           in invoke toStringInt32 ~ apply$88
+-       }
+-       in param$16 ~ select$89
+-     } ~ return$27
+-   } } ~ return$26
+  
+- def show(return$29) =
++ field fn field$136(self$137, return$27) =
+-   \param$17 return$30 . {
++   let closure$143 = closure lambda$138()
+-     join select$90 = select {
++   return return$27(closure$143)
+-       {show = show#5} -> show#5 ~ return$30
+-     }
+-     in param$17 ~ select$90
+-   } ~ return$29
+  
+- def printShow(return$31) =
++ closure fn lambda$138(self$139, param$16, return$28) =
+-   \param$18 return$32 . {
++   if  then {
+-     \param$19 return$33 . {
++     let x#3 = param$16
+-       join select$95 = select {
++     let apply$88 = closure join$140(return$28, x#3)
+-         Tuple(showDict#13, x#14) ->
++     return toStringInt32(apply$88)
+-           join then$94 = then outer$58 -> {
++   } else {
+-             join return$34 = then inner$59 -> {
++     panic "no matching branch"
+-               join apply$93 = (inner$59, return$33)
++   }
+-               in outer$58 ~ apply$93
+-             }
+-             in join apply$91 = (x#14, return$34)
+-             in join apply$92 = (showDict#13, apply$91)
+-             in invoke show ~ apply$92
+-           }
+-           in invoke printString ~ then$94
+-       }
+-       in Tuple(param$18, param$19) ~ select$95
+-     } ~ return$32
+-   } ~ return$31
+  
+- def <>(return$35) =
++ closure fn join$140(self$141, value$142) =
+-   \param$20 return$36 . {
++   let return$28 = self$141.cap[0]
+-     \param$21 return$37 . {
++   let x#3 = self$141.cap[1]
+-       join select$98 = select {
++   return value$142(x#3, return$28)
+-         Tuple(x#0, y#1) ->
+-           join apply$96 = (y#1, return$37)
+-           in join apply$97 = (x#0, apply$96)
+-           in invoke appendString ~ apply$97
+-       }
+-       in Tuple(param$20, param$21) ~ select$98
+-     } ~ return$36
+-   } ~ return$35
+  
+- def showTuple2(return$38) =
++ toplevel fn show(return$29) =
+-   \param$22 return$39 . {
++   let closure$148 = closure lambda$146()
+-     \param$23 return$40 . {
++   return return$29(closure$148)
+-       join select$123 = select {
+-         Tuple(showDictA#8, showDictB#9) ->
+-           { show(return$41) = {
+-             \param$24 return$42 . {
+-               join select$122 = select {
+-                 Tuple(a#10, b#11) ->
+-                   join then$121 = then outer$60 -> {
+-                     join return$50 = then inner$61 -> {
+-                       join then$119 = then outer$62 -> {
+-                         join return$43 = then inner$63 -> {
+-                           join apply$118 = (inner$63, return$42)
+-                           in outer$62 ~ apply$118
+-                         }
+-                         in join then$117 = then outer$64 -> {
+-                           join return$49 = then inner$65 -> {
+-                             join then$115 = then outer$66 -> {
+-                               join return$44 = then inner$67 -> {
+-                                 join apply$114 = (inner$67, return$43)
+-                                 in outer$66 ~ apply$114
+-                               }
+-                               in join then$113 = then outer$68 -> {
+-                                 join return$48 = then inner$69 -> {
+-                                   join then$111 = then outer$70 -> {
+-                                     join return$45 = then inner$71 -> {
+-                                       join apply$110 = (inner$71, return$44)
+-                                       in outer$70 ~ apply$110
+-                                     }
+-                                     in join then$109 = then outer$72 -> {
+-                                       join return$47 = then inner$73 -> {
+-                                         join then$107 = then outer$74 -> {
+-                                           join return$46 = then inner$75 -> {
+-                                             join apply$106 = ( inner$75
+-                                             , return$45 )
+-                                             in outer$74 ~ apply$106
+-                                           }
+-                                           in join apply$105 = (")", return$46)
+-                                           in invoke String# ~ apply$105
+-                                         }
+-                                         in join apply$108 = (inner$73, then$107)
+-                                         in outer$72 ~ apply$108
+-                                       }
+-                                       in join apply$103 = (b#11, return$47)
+-                                       in join apply$104 = ( showDictB#9
+-                                       , apply$103 )
+-                                       in invoke show ~ apply$104
+-                                     }
+-                                     in invoke <> ~ then$109
+-                                   }
+-                                   in join apply$112 = (inner$69, then$111)
+-                                   in outer$68 ~ apply$112
+-                                 }
+-                                 in join apply$102 = (", ", return$48)
+-                                 in invoke String# ~ apply$102
+-                               }
+-                               in invoke <> ~ then$113
+-                             }
+-                             in join apply$116 = (inner$65, then$115)
+-                             in outer$64 ~ apply$116
+-                           }
+-                           in join apply$100 = (a#10, return$49)
+-                           in join apply$101 = (showDictA#8, apply$100)
+-                           in invoke show ~ apply$101
+-                         }
+-                         in invoke <> ~ then$117
+-                       }
+-                       in join apply$120 = (inner$61, then$119)
+-                       in outer$60 ~ apply$120
+-                     }
+-                     in join apply$99 = ("(", return$50)
+-                     in invoke String# ~ apply$99
+-                   }
+-                   in invoke <> ~ then$121
+-               }
+-               in param$24 ~ select$122
+-             } ~ return$41
+-           } } ~ return$40
+-       }
+-       in Tuple(param$22, param$23) ~ select$123
+-     } ~ return$39
+-   } ~ return$38
+  
+- def main(return$51) =
++ closure fn lambda$146(self$147, param$17, return$30) =
+-   \param$25 return$52 . {
++   if param$17.kind == record then {
+-     join select$134 = select {
++     let show#5 = param$17!show
+-       _#15 ->
++     return return$30(show#5)
+-         join then$133 = then outer$76 -> {
++   } else {
+-           join return$55 = then inner$77 -> {
++     panic "no matching branch"
+-             join then$131 = then outer$78 -> {
++   }
+-               join label$80 = then inner$79 -> {
++ 
+-                 join apply$130 = (inner$79, return$52)
++ toplevel fn printShow(return$31) =
+-                 in outer$78 ~ apply$130
++   let closure$168 = closure lambda$150()
+-               }
++   return return$31(closure$168)
+-               in join return$53 = then var$81 -> {
++ 
+-                 join label$82 = label$80
++ closure fn lambda$150(self$151, param$18, return$32) =
+-                 in join return$54 = then var$83 -> {
++   let closure$167 = closure lambda$152(param$18)
+-                   Tuple(var$81, var$83) ~ label$82
++   return return$32(closure$167)
+-                 }
++ 
+-                 in join apply$129 = (2, return$54)
++ closure fn lambda$152(self$153, param$19, return$33) =
+-                 in invoke Int32# ~ apply$129
++   let param$18 = self$153.cap[0]
+-               }
++   let struct$154 = Tuple(param$18, param$19)
+-               in join apply$128 = (1, return$53)
++   if struct$154.tag == Tuple then {
+-               in invoke Int32# ~ apply$128
++     let showDict#13 = struct$154.0
+-             }
++     let x#14 = struct$154.1
+-             in join apply$132 = (inner$77, then$131)
++     let then$94 = closure join$155(return$33, showDict#13, x#14)
+-             in outer$76 ~ apply$132
++     return printString(then$94)
+-           }
++   } else {
+-           in join then$127 = then outer$84 -> {
++     panic "no matching branch"
+-             join return$57 = then inner$85 -> {
++   }
+-               join then$125 = then outer$86 -> {
++ 
+-                 join return$56 = then inner$87 -> {
++ closure fn join$155(self$156, value$157) =
+-                   join apply$124 = (inner$87, return$55)
++   let return$33 = self$156.cap[0]
+-                   in outer$86 ~ apply$124
++   let showDict#13 = self$156.cap[1]
+-                 }
++   let x#14 = self$156.cap[2]
+-                 in invoke showInt32 ~ return$56
++   let return$34 = closure join$158(return$33, value$157)
+-               }
++   let apply$91 = closure join$161(return$34, x#14)
+-               in join apply$126 = (inner$85, then$125)
++   let apply$92 = closure join$164(apply$91, showDict#13)
+-               in outer$84 ~ apply$126
++   return show(apply$92)
+-             }
++ 
+-             in invoke showInt32 ~ return$57
++ closure fn join$158(self$159, value$160) =
+-           }
++   let return$33 = self$159.cap[0]
+-           in invoke showTuple2 ~ then$127
++   let value$157 = self$159.cap[1]
+-         }
++   return value$157(value$160, return$33)
+-         in invoke printShow ~ then$133
++ 
+-     }
++ closure fn join$161(self$162, value$163) =
+-     in param$25 ~ select$134
++   let return$34 = self$162.cap[0]
+-   } ~ return$51
++   let x#14 = self$162.cap[1]
++   return value$163(x#14, return$34)
++ 
++ closure fn join$164(self$165, value$166) =
++   let apply$91 = self$165.cap[0]
++   let showDict#13 = self$165.cap[1]
++   return value$166(showDict#13, apply$91)
++ 
++ toplevel fn <>(return$35) =
++   let closure$182 = closure lambda$170()
++   return return$35(closure$182)
++ 
++ closure fn lambda$170(self$171, param$20, return$36) =
++   let closure$181 = closure lambda$172(param$20)
++   return return$36(closure$181)
++ 
++ closure fn lambda$172(self$173, param$21, return$37) =
++   let param$20 = self$173.cap[0]
++   let struct$174 = Tuple(param$20, param$21)
++   if struct$174.tag == Tuple then {
++     let x#0 = struct$174.0
++     let y#1 = struct$174.1
++     let apply$96 = closure join$175(return$37, y#1)
++     let apply$97 = closure join$178(apply$96, x#0)
++     return appendString(apply$97)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$175(self$176, value$177) =
++   let return$37 = self$176.cap[0]
++   let y#1 = self$176.cap[1]
++   return value$177(y#1, return$37)
++ 
++ closure fn join$178(self$179, value$180) =
++   let apply$96 = self$179.cap[0]
++   let x#0 = self$179.cap[1]
++   return value$180(x#0, apply$96)
++ 
++ toplevel fn showTuple2(return$38) =
++   let closure$268 = closure lambda$184()
++   return return$38(closure$268)
++ 
++ closure fn lambda$184(self$185, param$22, return$39) =
++   let closure$267 = closure lambda$186(param$22)
++   return return$39(closure$267)
++ 
++ closure fn lambda$186(self$187, param$23, return$40) =
++   let param$22 = self$187.cap[0]
++   let struct$188 = Tuple(param$22, param$23)
++   if struct$188.tag == Tuple then {
++     let showDictA#8 = struct$188.0
++     let showDictB#9 = struct$188.1
++     let record$266 = record(show = field$189) captures(showDictA#8, showDictB#9)
++     return return$40(record$266)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ field fn field$189(self$190, return$41) =
++   let showDictA#8 = self$190.cap[0]
++   let showDictB#9 = self$190.cap[1]
++   let closure$265 = closure lambda$191(showDictA#8, showDictB#9)
++   return return$41(closure$265)
++ 
++ closure fn lambda$191(self$192, param$24, return$42) =
++   let showDictA#8 = self$192.cap[0]
++   let showDictB#9 = self$192.cap[1]
++   if param$24.tag == Tuple then {
++     let a#10 = param$24.0
++     let b#11 = param$24.1
++     let then$121 = closure join$193( a#10
++     , b#11
++     , return$42
++     , showDictA#8
++     , showDictB#9 )
++     return <>(then$121)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$193(self$194, value$195) =
++   let a#10 = self$194.cap[0]
++   let b#11 = self$194.cap[1]
++   let return$42 = self$194.cap[2]
++   let showDictA#8 = self$194.cap[3]
++   let showDictB#9 = self$194.cap[4]
++   let return$50 = closure join$196( a#10
++   , b#11
++   , return$42
++   , showDictA#8
++   , showDictB#9
++   , value$195 )
++   let apply$99 = closure join$261(return$50)
++   return String#(apply$99)
++ 
++ closure fn join$196(self$197, value$198) =
++   let a#10 = self$197.cap[0]
++   let b#11 = self$197.cap[1]
++   let return$42 = self$197.cap[2]
++   let showDictA#8 = self$197.cap[3]
++   let showDictB#9 = self$197.cap[4]
++   let value$195 = self$197.cap[5]
++   let then$119 = closure join$199( a#10
++   , b#11
++   , return$42
++   , showDictA#8
++   , showDictB#9 )
++   return value$195(value$198, then$119)
++ 
++ closure fn join$199(self$200, value$201) =
++   let a#10 = self$200.cap[0]
++   let b#11 = self$200.cap[1]
++   let return$42 = self$200.cap[2]
++   let showDictA#8 = self$200.cap[3]
++   let showDictB#9 = self$200.cap[4]
++   let return$43 = closure join$202(return$42, value$201)
++   let then$117 = closure join$205( a#10
++   , b#11
++   , return$43
++   , showDictA#8
++   , showDictB#9 )
++   return <>(then$117)
++ 
++ closure fn join$202(self$203, value$204) =
++   let return$42 = self$203.cap[0]
++   let value$201 = self$203.cap[1]
++   return value$201(value$204, return$42)
++ 
++ closure fn join$205(self$206, value$207) =
++   let a#10 = self$206.cap[0]
++   let b#11 = self$206.cap[1]
++   let return$43 = self$206.cap[2]
++   let showDictA#8 = self$206.cap[3]
++   let showDictB#9 = self$206.cap[4]
++   let return$49 = closure join$208(b#11, return$43, showDictB#9, value$207)
++   let apply$100 = closure join$255(a#10, return$49)
++   let apply$101 = closure join$258(apply$100, showDictA#8)
++   return show(apply$101)
++ 
++ closure fn join$208(self$209, value$210) =
++   let b#11 = self$209.cap[0]
++   let return$43 = self$209.cap[1]
++   let showDictB#9 = self$209.cap[2]
++   let value$207 = self$209.cap[3]
++   let then$115 = closure join$211(b#11, return$43, showDictB#9)
++   return value$207(value$210, then$115)
++ 
++ closure fn join$211(self$212, value$213) =
++   let b#11 = self$212.cap[0]
++   let return$43 = self$212.cap[1]
++   let showDictB#9 = self$212.cap[2]
++   let return$44 = closure join$214(return$43, value$213)
++   let then$113 = closure join$217(b#11, return$44, showDictB#9)
++   return <>(then$113)
++ 
++ closure fn join$214(self$215, value$216) =
++   let return$43 = self$215.cap[0]
++   let value$213 = self$215.cap[1]
++   return value$213(value$216, return$43)
++ 
++ closure fn join$217(self$218, value$219) =
++   let b#11 = self$218.cap[0]
++   let return$44 = self$218.cap[1]
++   let showDictB#9 = self$218.cap[2]
++   let return$48 = closure join$220(b#11, return$44, showDictB#9, value$219)
++   let apply$102 = closure join$251(return$48)
++   return String#(apply$102)
++ 
++ closure fn join$220(self$221, value$222) =
++   let b#11 = self$221.cap[0]
++   let return$44 = self$221.cap[1]
++   let showDictB#9 = self$221.cap[2]
++   let value$219 = self$221.cap[3]
++   let then$111 = closure join$223(b#11, return$44, showDictB#9)
++   return value$219(value$222, then$111)
++ 
++ closure fn join$223(self$224, value$225) =
++   let b#11 = self$224.cap[0]
++   let return$44 = self$224.cap[1]
++   let showDictB#9 = self$224.cap[2]
++   let return$45 = closure join$226(return$44, value$225)
++   let then$109 = closure join$229(b#11, return$45, showDictB#9)
++   return <>(then$109)
++ 
++ closure fn join$226(self$227, value$228) =
++   let return$44 = self$227.cap[0]
++   let value$225 = self$227.cap[1]
++   return value$225(value$228, return$44)
++ 
++ closure fn join$229(self$230, value$231) =
++   let b#11 = self$230.cap[0]
++   let return$45 = self$230.cap[1]
++   let showDictB#9 = self$230.cap[2]
++   let return$47 = closure join$232(return$45, value$231)
++   let apply$103 = closure join$245(b#11, return$47)
++   let apply$104 = closure join$248(apply$103, showDictB#9)
++   return show(apply$104)
++ 
++ closure fn join$232(self$233, value$234) =
++   let return$45 = self$233.cap[0]
++   let value$231 = self$233.cap[1]
++   let then$107 = closure join$235(return$45)
++   return value$231(value$234, then$107)
++ 
++ closure fn join$235(self$236, value$237) =
++   let return$45 = self$236.cap[0]
++   let return$46 = closure join$238(return$45, value$237)
++   let apply$105 = closure join$241(return$46)
++   return String#(apply$105)
++ 
++ closure fn join$238(self$239, value$240) =
++   let return$45 = self$239.cap[0]
++   let value$237 = self$239.cap[1]
++   return value$237(value$240, return$45)
++ 
++ closure fn join$241(self$242, value$243) =
++   let return$46 = self$242.cap[0]
++   let lit$244 = ")"
++   return value$243(lit$244, return$46)
++ 
++ closure fn join$245(self$246, value$247) =
++   let b#11 = self$246.cap[0]
++   let return$47 = self$246.cap[1]
++   return value$247(b#11, return$47)
++ 
++ closure fn join$248(self$249, value$250) =
++   let apply$103 = self$249.cap[0]
++   let showDictB#9 = self$249.cap[1]
++   return value$250(showDictB#9, apply$103)
++ 
++ closure fn join$251(self$252, value$253) =
++   let return$48 = self$252.cap[0]
++   let lit$254 = ", "
++   return value$253(lit$254, return$48)
++ 
++ closure fn join$255(self$256, value$257) =
++   let a#10 = self$256.cap[0]
++   let return$49 = self$256.cap[1]
++   return value$257(a#10, return$49)
++ 
++ closure fn join$258(self$259, value$260) =
++   let apply$100 = self$259.cap[0]
++   let showDictA#8 = self$259.cap[1]
++   return value$260(showDictA#8, apply$100)
++ 
++ closure fn join$261(self$262, value$263) =
++   let return$50 = self$262.cap[0]
++   let lit$264 = "("
++   return value$263(lit$264, return$50)
++ 
++ toplevel fn main(return$51) =
++   let closure$311 = closure lambda$270()
++   return return$51(closure$311)
++ 
++ closure fn lambda$270(self$271, param$25, return$52) =
++   if  then {
++     let _#15 = param$25
++     let then$133 = closure join$272(return$52)
++     return printShow(then$133)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$272(self$273, value$274) =
++   let return$52 = self$273.cap[0]
++   let return$55 = closure join$275(return$52, value$274)
++   let then$127 = closure join$299(return$55)
++   return showTuple2(then$127)
++ 
++ closure fn join$275(self$276, value$277) =
++   let return$52 = self$276.cap[0]
++   let value$274 = self$276.cap[1]
++   let then$131 = closure join$278(return$52)
++   return value$274(value$277, then$131)
++ 
++ closure fn join$278(self$279, value$280) =
++   let return$52 = self$279.cap[0]
++   let label$80 = closure join$281(return$52, value$280)
++   let return$53 = closure join$284(label$80)
++   let apply$128 = closure join$295(return$53)
++   return Int32#(apply$128)
++ 
++ closure fn join$281(self$282, value$283) =
++   let return$52 = self$282.cap[0]
++   let value$280 = self$282.cap[1]
++   return value$280(value$283, return$52)
++ 
++ closure fn join$284(self$285, value$286) =
++   let label$80 = self$285.cap[0]
++   let return$54 = closure join$287(label$80, value$286)
++   let apply$129 = closure join$291(return$54)
++   return Int32#(apply$129)
++ 
++ closure fn join$287(self$288, value$289) =
++   let label$80 = self$288.cap[0]
++   let value$286 = self$288.cap[1]
++   let struct$290 = Tuple(value$286, value$289)
++   return label$80(struct$290)
++ 
++ closure fn join$291(self$292, value$293) =
++   let return$54 = self$292.cap[0]
++   let lit$294 = 2
++   return value$293(lit$294, return$54)
++ 
++ closure fn join$295(self$296, value$297) =
++   let return$53 = self$296.cap[0]
++   let lit$298 = 1
++   return value$297(lit$298, return$53)
++ 
++ closure fn join$299(self$300, value$301) =
++   let return$55 = self$300.cap[0]
++   let return$57 = closure join$302(return$55, value$301)
++   return showInt32(return$57)
++ 
++ closure fn join$302(self$303, value$304) =
++   let return$55 = self$303.cap[0]
++   let value$301 = self$303.cap[1]
++   let then$125 = closure join$305(return$55)
++   return value$301(value$304, then$125)
++ 
++ closure fn join$305(self$306, value$307) =
++   let return$55 = self$306.cap[0]
++   let return$56 = closure join$308(return$55, value$307)
++   return showInt32(return$56)
++ 
++ closure fn join$308(self$309, value$310) =
++   let return$55 = self$309.cap[0]
++   let value$307 = self$309.cap[1]
++   return value$307(value$310, return$55)
++ 
++ toplevel fn zig_main$314() =
++   let finish$312 = closure join$316()
++   let after_main$313 = closure join$319(finish$312)
++   return main(after_main$313)
++ 
++ closure fn join$316(self$317, value$318) = return value$318
++ 
++ closure fn join$319(self$320, value$321) =
++   let finish$312 = self$320.cap[0]
++   let struct$322 = Tuple()
++   return value$321(struct$322, finish$312)
++ 
++ entry = zig_main$314
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn showInt32(return$26) =
+    let record$144 = record(show = field$136) captures()
+    return return$26(record$144)
+  
+  field fn field$136(self$137, return$27) =
+    let closure$143 = closure lambda$138()
+    return return$27(closure$143)
+  
+  closure fn lambda$138(self$139, param$16, return$28) =
+    if  then {
+-     let x#3 = param$16
++     let apply$88 = closure join$140(return$28, param$16)
+-     let apply$88 = closure join$140(return$28, x#3)
+      return toStringInt32(apply$88)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$140(self$141, value$142) =
+    let return$28 = self$141.cap[0]
+    let x#3 = self$141.cap[1]
+    return value$142(x#3, return$28)
+  
+  toplevel fn show(return$29) =
+    let closure$148 = closure lambda$146()
+    return return$29(closure$148)
+  
+  closure fn lambda$146(self$147, param$17, return$30) =
+    if param$17.kind == record then {
+      let show#5 = param$17!show
+      return return$30(show#5)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn printShow(return$31) =
+    let closure$168 = closure lambda$150()
+    return return$31(closure$168)
+  
+  closure fn lambda$150(self$151, param$18, return$32) =
+    let closure$167 = closure lambda$152(param$18)
+    return return$32(closure$167)
+  
+  closure fn lambda$152(self$153, param$19, return$33) =
+    let param$18 = self$153.cap[0]
+-   let struct$154 = Tuple(param$18, param$19)
++   if  then {
+-   if struct$154.tag == Tuple then {
++     let then$94 = closure join$155(return$33, param$18, param$19)
+-     let showDict#13 = struct$154.0
+-     let x#14 = struct$154.1
+-     let then$94 = closure join$155(return$33, showDict#13, x#14)
+      return printString(then$94)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$155(self$156, value$157) =
+    let return$33 = self$156.cap[0]
+    let showDict#13 = self$156.cap[1]
+    let x#14 = self$156.cap[2]
+    let return$34 = closure join$158(return$33, value$157)
+    let apply$91 = closure join$161(return$34, x#14)
+    let apply$92 = closure join$164(apply$91, showDict#13)
+    return show(apply$92)
+  
+  closure fn join$158(self$159, value$160) =
+    let return$33 = self$159.cap[0]
+    let value$157 = self$159.cap[1]
+    return value$157(value$160, return$33)
+  
+  closure fn join$161(self$162, value$163) =
+    let return$34 = self$162.cap[0]
+    let x#14 = self$162.cap[1]
+    return value$163(x#14, return$34)
+  
+  closure fn join$164(self$165, value$166) =
+    let apply$91 = self$165.cap[0]
+    let showDict#13 = self$165.cap[1]
+    return value$166(showDict#13, apply$91)
+  
+  toplevel fn <>(return$35) =
+    let closure$182 = closure lambda$170()
+    return return$35(closure$182)
+  
+  closure fn lambda$170(self$171, param$20, return$36) =
+    let closure$181 = closure lambda$172(param$20)
+    return return$36(closure$181)
+  
+  closure fn lambda$172(self$173, param$21, return$37) =
+    let param$20 = self$173.cap[0]
+-   let struct$174 = Tuple(param$20, param$21)
++   if  then {
+-   if struct$174.tag == Tuple then {
++     let apply$96 = closure join$175(return$37, param$21)
+-     let x#0 = struct$174.0
++     let apply$97 = closure join$178(apply$96, param$20)
+-     let y#1 = struct$174.1
+-     let apply$96 = closure join$175(return$37, y#1)
+-     let apply$97 = closure join$178(apply$96, x#0)
+      return appendString(apply$97)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$175(self$176, value$177) =
+    let return$37 = self$176.cap[0]
+    let y#1 = self$176.cap[1]
+    return value$177(y#1, return$37)
+  
+  closure fn join$178(self$179, value$180) =
+    let apply$96 = self$179.cap[0]
+    let x#0 = self$179.cap[1]
+    return value$180(x#0, apply$96)
+  
+  toplevel fn showTuple2(return$38) =
+    let closure$268 = closure lambda$184()
+    return return$38(closure$268)
+  
+  closure fn lambda$184(self$185, param$22, return$39) =
+    let closure$267 = closure lambda$186(param$22)
+    return return$39(closure$267)
+  
+  closure fn lambda$186(self$187, param$23, return$40) =
+    let param$22 = self$187.cap[0]
+-   let struct$188 = Tuple(param$22, param$23)
++   if  then {
+-   if struct$188.tag == Tuple then {
++     let record$266 = record(show = field$189) captures(param$22, param$23)
+-     let showDictA#8 = struct$188.0
+-     let showDictB#9 = struct$188.1
+-     let record$266 = record(show = field$189) captures(showDictA#8, showDictB#9)
+      return return$40(record$266)
+    } else {
+      panic "no matching branch"
+    }
+  
+  field fn field$189(self$190, return$41) =
+    let showDictA#8 = self$190.cap[0]
+    let showDictB#9 = self$190.cap[1]
+    let closure$265 = closure lambda$191(showDictA#8, showDictB#9)
+    return return$41(closure$265)
+  
+  closure fn lambda$191(self$192, param$24, return$42) =
+    let showDictA#8 = self$192.cap[0]
+    let showDictB#9 = self$192.cap[1]
+    if param$24.tag == Tuple then {
+      let a#10 = param$24.0
+      let b#11 = param$24.1
+      let then$121 = closure join$193( a#10
+      , b#11
+      , return$42
+      , showDictA#8
+      , showDictB#9 )
+      return <>(then$121)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$193(self$194, value$195) =
+    let a#10 = self$194.cap[0]
+    let b#11 = self$194.cap[1]
+    let return$42 = self$194.cap[2]
+    let showDictA#8 = self$194.cap[3]
+    let showDictB#9 = self$194.cap[4]
+    let return$50 = closure join$196( a#10
+    , b#11
+    , return$42
+    , showDictA#8
+    , showDictB#9
+    , value$195 )
+    let apply$99 = closure join$261(return$50)
+    return String#(apply$99)
+  
+  closure fn join$196(self$197, value$198) =
+    let a#10 = self$197.cap[0]
+    let b#11 = self$197.cap[1]
+    let return$42 = self$197.cap[2]
+    let showDictA#8 = self$197.cap[3]
+    let showDictB#9 = self$197.cap[4]
+    let value$195 = self$197.cap[5]
+    let then$119 = closure join$199( a#10
+    , b#11
+    , return$42
+    , showDictA#8
+    , showDictB#9 )
+    return value$195(value$198, then$119)
+  
+  closure fn join$199(self$200, value$201) =
+    let a#10 = self$200.cap[0]
+    let b#11 = self$200.cap[1]
+    let return$42 = self$200.cap[2]
+    let showDictA#8 = self$200.cap[3]
+    let showDictB#9 = self$200.cap[4]
+    let return$43 = closure join$202(return$42, value$201)
+    let then$117 = closure join$205( a#10
+    , b#11
+    , return$43
+    , showDictA#8
+    , showDictB#9 )
+    return <>(then$117)
+  
+  closure fn join$202(self$203, value$204) =
+    let return$42 = self$203.cap[0]
+    let value$201 = self$203.cap[1]
+    return value$201(value$204, return$42)
+  
+  closure fn join$205(self$206, value$207) =
+    let a#10 = self$206.cap[0]
+    let b#11 = self$206.cap[1]
+    let return$43 = self$206.cap[2]
+    let showDictA#8 = self$206.cap[3]
+    let showDictB#9 = self$206.cap[4]
+    let return$49 = closure join$208(b#11, return$43, showDictB#9, value$207)
+    let apply$100 = closure join$255(a#10, return$49)
+    let apply$101 = closure join$258(apply$100, showDictA#8)
+    return show(apply$101)
+  
+  closure fn join$208(self$209, value$210) =
+    let b#11 = self$209.cap[0]
+    let return$43 = self$209.cap[1]
+    let showDictB#9 = self$209.cap[2]
+    let value$207 = self$209.cap[3]
+    let then$115 = closure join$211(b#11, return$43, showDictB#9)
+    return value$207(value$210, then$115)
+  
+  closure fn join$211(self$212, value$213) =
+    let b#11 = self$212.cap[0]
+    let return$43 = self$212.cap[1]
+    let showDictB#9 = self$212.cap[2]
+    let return$44 = closure join$214(return$43, value$213)
+    let then$113 = closure join$217(b#11, return$44, showDictB#9)
+    return <>(then$113)
+  
+  closure fn join$214(self$215, value$216) =
+    let return$43 = self$215.cap[0]
+    let value$213 = self$215.cap[1]
+    return value$213(value$216, return$43)
+  
+  closure fn join$217(self$218, value$219) =
+    let b#11 = self$218.cap[0]
+    let return$44 = self$218.cap[1]
+    let showDictB#9 = self$218.cap[2]
+    let return$48 = closure join$220(b#11, return$44, showDictB#9, value$219)
+    let apply$102 = closure join$251(return$48)
+    return String#(apply$102)
+  
+  closure fn join$220(self$221, value$222) =
+    let b#11 = self$221.cap[0]
+    let return$44 = self$221.cap[1]
+    let showDictB#9 = self$221.cap[2]
+    let value$219 = self$221.cap[3]
+    let then$111 = closure join$223(b#11, return$44, showDictB#9)
+    return value$219(value$222, then$111)
+  
+  closure fn join$223(self$224, value$225) =
+    let b#11 = self$224.cap[0]
+    let return$44 = self$224.cap[1]
+    let showDictB#9 = self$224.cap[2]
+    let return$45 = closure join$226(return$44, value$225)
+    let then$109 = closure join$229(b#11, return$45, showDictB#9)
+    return <>(then$109)
+  
+  closure fn join$226(self$227, value$228) =
+    let return$44 = self$227.cap[0]
+    let value$225 = self$227.cap[1]
+    return value$225(value$228, return$44)
+  
+  closure fn join$229(self$230, value$231) =
+    let b#11 = self$230.cap[0]
+    let return$45 = self$230.cap[1]
+    let showDictB#9 = self$230.cap[2]
+    let return$47 = closure join$232(return$45, value$231)
+    let apply$103 = closure join$245(b#11, return$47)
+    let apply$104 = closure join$248(apply$103, showDictB#9)
+    return show(apply$104)
+  
+  closure fn join$232(self$233, value$234) =
+    let return$45 = self$233.cap[0]
+    let value$231 = self$233.cap[1]
+    let then$107 = closure join$235(return$45)
+    return value$231(value$234, then$107)
+  
+  closure fn join$235(self$236, value$237) =
+    let return$45 = self$236.cap[0]
+    let return$46 = closure join$238(return$45, value$237)
+    let apply$105 = closure join$241(return$46)
+    return String#(apply$105)
+  
+  closure fn join$238(self$239, value$240) =
+    let return$45 = self$239.cap[0]
+    let value$237 = self$239.cap[1]
+    return value$237(value$240, return$45)
+  
+  closure fn join$241(self$242, value$243) =
+    let return$46 = self$242.cap[0]
+    let lit$244 = ")"
+    return value$243(lit$244, return$46)
+  
+  closure fn join$245(self$246, value$247) =
+    let b#11 = self$246.cap[0]
+    let return$47 = self$246.cap[1]
+    return value$247(b#11, return$47)
+  
+  closure fn join$248(self$249, value$250) =
+    let apply$103 = self$249.cap[0]
+    let showDictB#9 = self$249.cap[1]
+    return value$250(showDictB#9, apply$103)
+  
+  closure fn join$251(self$252, value$253) =
+    let return$48 = self$252.cap[0]
+    let lit$254 = ", "
+    return value$253(lit$254, return$48)
+  
+  closure fn join$255(self$256, value$257) =
+    let a#10 = self$256.cap[0]
+    let return$49 = self$256.cap[1]
+    return value$257(a#10, return$49)
+  
+  closure fn join$258(self$259, value$260) =
+    let apply$100 = self$259.cap[0]
+    let showDictA#8 = self$259.cap[1]
+    return value$260(showDictA#8, apply$100)
+  
+  closure fn join$261(self$262, value$263) =
+    let return$50 = self$262.cap[0]
+    let lit$264 = "("
+    return value$263(lit$264, return$50)
+  
+  toplevel fn main(return$51) =
+    let closure$311 = closure lambda$270()
+    return return$51(closure$311)
+  
+  closure fn lambda$270(self$271, param$25, return$52) =
+    if  then {
+-     let _#15 = param$25
+      let then$133 = closure join$272(return$52)
+      return printShow(then$133)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$272(self$273, value$274) =
+    let return$52 = self$273.cap[0]
+    let return$55 = closure join$275(return$52, value$274)
+    let then$127 = closure join$299(return$55)
+    return showTuple2(then$127)
+  
+  closure fn join$275(self$276, value$277) =
+    let return$52 = self$276.cap[0]
+    let value$274 = self$276.cap[1]
+    let then$131 = closure join$278(return$52)
+    return value$274(value$277, then$131)
+  
+  closure fn join$278(self$279, value$280) =
+    let return$52 = self$279.cap[0]
+    let label$80 = closure join$281(return$52, value$280)
+    let return$53 = closure join$284(label$80)
+    let apply$128 = closure join$295(return$53)
+    return Int32#(apply$128)
+  
+  closure fn join$281(self$282, value$283) =
+    let return$52 = self$282.cap[0]
+    let value$280 = self$282.cap[1]
+    return value$280(value$283, return$52)
+  
+  closure fn join$284(self$285, value$286) =
+    let label$80 = self$285.cap[0]
+    let return$54 = closure join$287(label$80, value$286)
+    let apply$129 = closure join$291(return$54)
+    return Int32#(apply$129)
+  
+  closure fn join$287(self$288, value$289) =
+    let label$80 = self$288.cap[0]
+    let value$286 = self$288.cap[1]
+    let struct$290 = Tuple(value$286, value$289)
+    return label$80(struct$290)
+  
+  closure fn join$291(self$292, value$293) =
+    let return$54 = self$292.cap[0]
+    let lit$294 = 2
+    return value$293(lit$294, return$54)
+  
+  closure fn join$295(self$296, value$297) =
+    let return$53 = self$296.cap[0]
+    let lit$298 = 1
+    return value$297(lit$298, return$53)
+  
+  closure fn join$299(self$300, value$301) =
+    let return$55 = self$300.cap[0]
+    let return$57 = closure join$302(return$55, value$301)
+    return showInt32(return$57)
+  
+  closure fn join$302(self$303, value$304) =
+    let return$55 = self$303.cap[0]
+    let value$301 = self$303.cap[1]
+    let then$125 = closure join$305(return$55)
+    return value$301(value$304, then$125)
+  
+  closure fn join$305(self$306, value$307) =
+    let return$55 = self$306.cap[0]
+    let return$56 = closure join$308(return$55, value$307)
+    return showInt32(return$56)
+  
+  closure fn join$308(self$309, value$310) =
+    let return$55 = self$309.cap[0]
+    let value$307 = self$309.cap[1]
+    return value$307(value$310, return$55)
+  
+  toplevel fn zig_main$314() =
+    let finish$312 = closure join$316()
+    let after_main$313 = closure join$319(finish$312)
+    return main(after_main$313)
+  
+  closure fn join$316(self$317, value$318) = return value$318
+  
+  closure fn join$319(self$320, value$321) =
+    let finish$312 = self$320.cap[0]
+    let struct$322 = Tuple()
+    return value$321(struct$322, finish$312)
+  
+  entry = zig_main$314
+
+
+=== Peephole -> Perceus ===
+  toplevel fn showInt32(return$26) =
+    let record$144 = record(show = field$136) captures()
+    return return$26(record$144)
+  
+  field fn field$136(self$137, return$27) =
++   drop self$137
+    let closure$143 = closure lambda$138()
+    return return$27(closure$143)
+  
+  closure fn lambda$138(self$139, param$16, return$28) =
++   drop self$139
+    if  then {
+      let apply$88 = closure join$140(return$28, param$16)
+      return toStringInt32(apply$88)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$140(self$141, value$142) =
+    let return$28 = self$141.cap[0]
++   dup return$28
+    let x#3 = self$141.cap[1]
++   dup x#3
++   drop self$141
+    return value$142(x#3, return$28)
+  
+  toplevel fn show(return$29) =
+    let closure$148 = closure lambda$146()
+    return return$29(closure$148)
+  
+  closure fn lambda$146(self$147, param$17, return$30) =
++   drop self$147
+    if param$17.kind == record then {
+      let show#5 = param$17!show
+      return return$30(show#5)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn printShow(return$31) =
+    let closure$168 = closure lambda$150()
+    return return$31(closure$168)
+  
+  closure fn lambda$150(self$151, param$18, return$32) =
++   drop self$151
+    let closure$167 = closure lambda$152(param$18)
+    return return$32(closure$167)
+  
+  closure fn lambda$152(self$153, param$19, return$33) =
+    let param$18 = self$153.cap[0]
++   dup param$18
++   drop self$153
+    if  then {
+      let then$94 = closure join$155(return$33, param$18, param$19)
+      return printString(then$94)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$155(self$156, value$157) =
+    let return$33 = self$156.cap[0]
++   dup return$33
+    let showDict#13 = self$156.cap[1]
++   dup showDict#13
+    let x#14 = self$156.cap[2]
++   dup x#14
++   drop self$156
+    let return$34 = closure join$158(return$33, value$157)
+    let apply$91 = closure join$161(return$34, x#14)
+    let apply$92 = closure join$164(apply$91, showDict#13)
+    return show(apply$92)
+  
+  closure fn join$158(self$159, value$160) =
+    let return$33 = self$159.cap[0]
++   dup return$33
+    let value$157 = self$159.cap[1]
++   dup value$157
++   drop self$159
+    return value$157(value$160, return$33)
+  
+  closure fn join$161(self$162, value$163) =
+    let return$34 = self$162.cap[0]
++   dup return$34
+    let x#14 = self$162.cap[1]
++   dup x#14
++   drop self$162
+    return value$163(x#14, return$34)
+  
+  closure fn join$164(self$165, value$166) =
+    let apply$91 = self$165.cap[0]
++   dup apply$91
+    let showDict#13 = self$165.cap[1]
++   dup showDict#13
++   drop self$165
+    return value$166(showDict#13, apply$91)
+  
+  toplevel fn <>(return$35) =
+    let closure$182 = closure lambda$170()
+    return return$35(closure$182)
+  
+  closure fn lambda$170(self$171, param$20, return$36) =
++   drop self$171
+    let closure$181 = closure lambda$172(param$20)
+    return return$36(closure$181)
+  
+  closure fn lambda$172(self$173, param$21, return$37) =
+    let param$20 = self$173.cap[0]
++   dup param$20
++   drop self$173
+    if  then {
+      let apply$96 = closure join$175(return$37, param$21)
+      let apply$97 = closure join$178(apply$96, param$20)
+      return appendString(apply$97)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$175(self$176, value$177) =
+    let return$37 = self$176.cap[0]
++   dup return$37
+    let y#1 = self$176.cap[1]
++   dup y#1
++   drop self$176
+    return value$177(y#1, return$37)
+  
+  closure fn join$178(self$179, value$180) =
+    let apply$96 = self$179.cap[0]
++   dup apply$96
+    let x#0 = self$179.cap[1]
++   dup x#0
++   drop self$179
+    return value$180(x#0, apply$96)
+  
+  toplevel fn showTuple2(return$38) =
+    let closure$268 = closure lambda$184()
+    return return$38(closure$268)
+  
+  closure fn lambda$184(self$185, param$22, return$39) =
++   drop self$185
+    let closure$267 = closure lambda$186(param$22)
+    return return$39(closure$267)
+  
+  closure fn lambda$186(self$187, param$23, return$40) =
+    let param$22 = self$187.cap[0]
++   dup param$22
++   drop self$187
+    if  then {
+      let record$266 = record(show = field$189) captures(param$22, param$23)
+      return return$40(record$266)
+    } else {
+      panic "no matching branch"
+    }
+  
+  field fn field$189(self$190, return$41) =
+    let showDictA#8 = self$190.cap[0]
++   dup showDictA#8
+    let showDictB#9 = self$190.cap[1]
++   dup showDictB#9
++   drop self$190
+    let closure$265 = closure lambda$191(showDictA#8, showDictB#9)
+    return return$41(closure$265)
+  
+  closure fn lambda$191(self$192, param$24, return$42) =
+    let showDictA#8 = self$192.cap[0]
++   dup showDictA#8
+    let showDictB#9 = self$192.cap[1]
++   dup showDictB#9
++   drop self$192
+    if param$24.tag == Tuple then {
+      let a#10 = param$24.0
++     dup a#10
+      let b#11 = param$24.1
++     dup b#11
++     drop param$24
+      let then$121 = closure join$193( a#10
+      , b#11
+      , return$42
+      , showDictA#8
+      , showDictB#9 )
+      return <>(then$121)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$193(self$194, value$195) =
+    let a#10 = self$194.cap[0]
++   dup a#10
+    let b#11 = self$194.cap[1]
++   dup b#11
+    let return$42 = self$194.cap[2]
++   dup return$42
+    let showDictA#8 = self$194.cap[3]
++   dup showDictA#8
+    let showDictB#9 = self$194.cap[4]
++   dup showDictB#9
++   drop self$194
+    let return$50 = closure join$196( a#10
+    , b#11
+    , return$42
+    , showDictA#8
+    , showDictB#9
+    , value$195 )
+    let apply$99 = closure join$261(return$50)
+    return String#(apply$99)
+  
+  closure fn join$196(self$197, value$198) =
+    let a#10 = self$197.cap[0]
++   dup a#10
+    let b#11 = self$197.cap[1]
++   dup b#11
+    let return$42 = self$197.cap[2]
++   dup return$42
+    let showDictA#8 = self$197.cap[3]
++   dup showDictA#8
+    let showDictB#9 = self$197.cap[4]
++   dup showDictB#9
+    let value$195 = self$197.cap[5]
++   dup value$195
++   drop self$197
+    let then$119 = closure join$199( a#10
+    , b#11
+    , return$42
+    , showDictA#8
+    , showDictB#9 )
+    return value$195(value$198, then$119)
+  
+  closure fn join$199(self$200, value$201) =
+    let a#10 = self$200.cap[0]
++   dup a#10
+    let b#11 = self$200.cap[1]
++   dup b#11
+    let return$42 = self$200.cap[2]
++   dup return$42
+    let showDictA#8 = self$200.cap[3]
++   dup showDictA#8
+    let showDictB#9 = self$200.cap[4]
++   dup showDictB#9
++   drop self$200
+    let return$43 = closure join$202(return$42, value$201)
+    let then$117 = closure join$205( a#10
+    , b#11
+    , return$43
+    , showDictA#8
+    , showDictB#9 )
+    return <>(then$117)
+  
+  closure fn join$202(self$203, value$204) =
+    let return$42 = self$203.cap[0]
++   dup return$42
+    let value$201 = self$203.cap[1]
++   dup value$201
++   drop self$203
+    return value$201(value$204, return$42)
+  
+  closure fn join$205(self$206, value$207) =
+    let a#10 = self$206.cap[0]
++   dup a#10
+    let b#11 = self$206.cap[1]
++   dup b#11
+    let return$43 = self$206.cap[2]
++   dup return$43
+    let showDictA#8 = self$206.cap[3]
++   dup showDictA#8
+    let showDictB#9 = self$206.cap[4]
++   dup showDictB#9
++   drop self$206
+    let return$49 = closure join$208(b#11, return$43, showDictB#9, value$207)
+    let apply$100 = closure join$255(a#10, return$49)
+    let apply$101 = closure join$258(apply$100, showDictA#8)
+    return show(apply$101)
+  
+  closure fn join$208(self$209, value$210) =
+    let b#11 = self$209.cap[0]
++   dup b#11
+    let return$43 = self$209.cap[1]
++   dup return$43
+    let showDictB#9 = self$209.cap[2]
++   dup showDictB#9
+    let value$207 = self$209.cap[3]
++   dup value$207
++   drop self$209
+    let then$115 = closure join$211(b#11, return$43, showDictB#9)
+    return value$207(value$210, then$115)
+  
+  closure fn join$211(self$212, value$213) =
+    let b#11 = self$212.cap[0]
++   dup b#11
+    let return$43 = self$212.cap[1]
++   dup return$43
+    let showDictB#9 = self$212.cap[2]
++   dup showDictB#9
++   drop self$212
+    let return$44 = closure join$214(return$43, value$213)
+    let then$113 = closure join$217(b#11, return$44, showDictB#9)
+    return <>(then$113)
+  
+  closure fn join$214(self$215, value$216) =
+    let return$43 = self$215.cap[0]
++   dup return$43
+    let value$213 = self$215.cap[1]
++   dup value$213
++   drop self$215
+    return value$213(value$216, return$43)
+  
+  closure fn join$217(self$218, value$219) =
+    let b#11 = self$218.cap[0]
++   dup b#11
+    let return$44 = self$218.cap[1]
++   dup return$44
+    let showDictB#9 = self$218.cap[2]
++   dup showDictB#9
++   drop self$218
+    let return$48 = closure join$220(b#11, return$44, showDictB#9, value$219)
+    let apply$102 = closure join$251(return$48)
+    return String#(apply$102)
+  
+  closure fn join$220(self$221, value$222) =
+    let b#11 = self$221.cap[0]
++   dup b#11
+    let return$44 = self$221.cap[1]
++   dup return$44
+    let showDictB#9 = self$221.cap[2]
++   dup showDictB#9
+    let value$219 = self$221.cap[3]
++   dup value$219
++   drop self$221
+    let then$111 = closure join$223(b#11, return$44, showDictB#9)
+    return value$219(value$222, then$111)
+  
+  closure fn join$223(self$224, value$225) =
+    let b#11 = self$224.cap[0]
++   dup b#11
+    let return$44 = self$224.cap[1]
++   dup return$44
+    let showDictB#9 = self$224.cap[2]
++   dup showDictB#9
++   drop self$224
+    let return$45 = closure join$226(return$44, value$225)
+    let then$109 = closure join$229(b#11, return$45, showDictB#9)
+    return <>(then$109)
+  
+  closure fn join$226(self$227, value$228) =
+    let return$44 = self$227.cap[0]
++   dup return$44
+    let value$225 = self$227.cap[1]
++   dup value$225
++   drop self$227
+    return value$225(value$228, return$44)
+  
+  closure fn join$229(self$230, value$231) =
+    let b#11 = self$230.cap[0]
++   dup b#11
+    let return$45 = self$230.cap[1]
++   dup return$45
+    let showDictB#9 = self$230.cap[2]
++   dup showDictB#9
++   drop self$230
+    let return$47 = closure join$232(return$45, value$231)
+    let apply$103 = closure join$245(b#11, return$47)
+    let apply$104 = closure join$248(apply$103, showDictB#9)
+    return show(apply$104)
+  
+  closure fn join$232(self$233, value$234) =
+    let return$45 = self$233.cap[0]
++   dup return$45
+    let value$231 = self$233.cap[1]
++   dup value$231
++   drop self$233
+    let then$107 = closure join$235(return$45)
+    return value$231(value$234, then$107)
+  
+  closure fn join$235(self$236, value$237) =
+    let return$45 = self$236.cap[0]
++   dup return$45
++   drop self$236
+    let return$46 = closure join$238(return$45, value$237)
+    let apply$105 = closure join$241(return$46)
+    return String#(apply$105)
+  
+  closure fn join$238(self$239, value$240) =
+    let return$45 = self$239.cap[0]
++   dup return$45
+    let value$237 = self$239.cap[1]
++   dup value$237
++   drop self$239
+    return value$237(value$240, return$45)
+  
+  closure fn join$241(self$242, value$243) =
+    let return$46 = self$242.cap[0]
++   dup return$46
++   drop self$242
+    let lit$244 = ")"
+    return value$243(lit$244, return$46)
+  
+  closure fn join$245(self$246, value$247) =
+    let b#11 = self$246.cap[0]
++   dup b#11
+    let return$47 = self$246.cap[1]
++   dup return$47
++   drop self$246
+    return value$247(b#11, return$47)
+  
+  closure fn join$248(self$249, value$250) =
+    let apply$103 = self$249.cap[0]
++   dup apply$103
+    let showDictB#9 = self$249.cap[1]
++   dup showDictB#9
++   drop self$249
+    return value$250(showDictB#9, apply$103)
+  
+  closure fn join$251(self$252, value$253) =
+    let return$48 = self$252.cap[0]
++   dup return$48
++   drop self$252
+    let lit$254 = ", "
+    return value$253(lit$254, return$48)
+  
+  closure fn join$255(self$256, value$257) =
+    let a#10 = self$256.cap[0]
++   dup a#10
+    let return$49 = self$256.cap[1]
++   dup return$49
++   drop self$256
+    return value$257(a#10, return$49)
+  
+  closure fn join$258(self$259, value$260) =
+    let apply$100 = self$259.cap[0]
++   dup apply$100
+    let showDictA#8 = self$259.cap[1]
++   dup showDictA#8
++   drop self$259
+    return value$260(showDictA#8, apply$100)
+  
+  closure fn join$261(self$262, value$263) =
+    let return$50 = self$262.cap[0]
++   dup return$50
++   drop self$262
+    let lit$264 = "("
+    return value$263(lit$264, return$50)
+  
+  toplevel fn main(return$51) =
+    let closure$311 = closure lambda$270()
+    return return$51(closure$311)
+  
+  closure fn lambda$270(self$271, param$25, return$52) =
++   drop param$25
++   drop self$271
+    if  then {
+      let then$133 = closure join$272(return$52)
+      return printShow(then$133)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$272(self$273, value$274) =
+    let return$52 = self$273.cap[0]
++   dup return$52
++   drop self$273
+    let return$55 = closure join$275(return$52, value$274)
+    let then$127 = closure join$299(return$55)
+    return showTuple2(then$127)
+  
+  closure fn join$275(self$276, value$277) =
+    let return$52 = self$276.cap[0]
++   dup return$52
+    let value$274 = self$276.cap[1]
++   dup value$274
++   drop self$276
+    let then$131 = closure join$278(return$52)
+    return value$274(value$277, then$131)
+  
+  closure fn join$278(self$279, value$280) =
+    let return$52 = self$279.cap[0]
++   dup return$52
++   drop self$279
+    let label$80 = closure join$281(return$52, value$280)
+    let return$53 = closure join$284(label$80)
+    let apply$128 = closure join$295(return$53)
+    return Int32#(apply$128)
+  
+  closure fn join$281(self$282, value$283) =
+    let return$52 = self$282.cap[0]
++   dup return$52
+    let value$280 = self$282.cap[1]
++   dup value$280
++   drop self$282
+    return value$280(value$283, return$52)
+  
+  closure fn join$284(self$285, value$286) =
+    let label$80 = self$285.cap[0]
++   dup label$80
++   drop self$285
+    let return$54 = closure join$287(label$80, value$286)
+    let apply$129 = closure join$291(return$54)
+    return Int32#(apply$129)
+  
+  closure fn join$287(self$288, value$289) =
+    let label$80 = self$288.cap[0]
++   dup label$80
+    let value$286 = self$288.cap[1]
++   dup value$286
++   drop self$288
+    let struct$290 = Tuple(value$286, value$289)
+    return label$80(struct$290)
+  
+  closure fn join$291(self$292, value$293) =
+    let return$54 = self$292.cap[0]
++   dup return$54
++   drop self$292
+    let lit$294 = 2
+    return value$293(lit$294, return$54)
+  
+  closure fn join$295(self$296, value$297) =
+    let return$53 = self$296.cap[0]
++   dup return$53
++   drop self$296
+    let lit$298 = 1
+    return value$297(lit$298, return$53)
+  
+  closure fn join$299(self$300, value$301) =
+    let return$55 = self$300.cap[0]
++   dup return$55
++   drop self$300
+    let return$57 = closure join$302(return$55, value$301)
+    return showInt32(return$57)
+  
+  closure fn join$302(self$303, value$304) =
+    let return$55 = self$303.cap[0]
++   dup return$55
+    let value$301 = self$303.cap[1]
++   dup value$301
++   drop self$303
+    let then$125 = closure join$305(return$55)
+    return value$301(value$304, then$125)
+  
+  closure fn join$305(self$306, value$307) =
+    let return$55 = self$306.cap[0]
++   dup return$55
++   drop self$306
+    let return$56 = closure join$308(return$55, value$307)
+    return showInt32(return$56)
+  
+  closure fn join$308(self$309, value$310) =
+    let return$55 = self$309.cap[0]
++   dup return$55
+    let value$307 = self$309.cap[1]
++   dup value$307
++   drop self$309
+    return value$307(value$310, return$55)
+  
+  toplevel fn zig_main$314() =
+    let finish$312 = closure join$316()
+    let after_main$313 = closure join$319(finish$312)
+    return main(after_main$313)
+  
+- closure fn join$316(self$317, value$318) = return value$318
++ closure fn join$316(self$317, value$318) =
++   drop self$317
++   return value$318
+  
+  closure fn join$319(self$320, value$321) =
+    let finish$312 = self$320.cap[0]
++   dup finish$312
++   drop self$320
+    let struct$322 = Tuple()
+    return value$321(struct$322, finish$312)
+  
+  entry = zig_main$314
+
+
+=== Perceus -> Reuse ===
+  toplevel fn showInt32(return$26) =
+    let record$144 = record(show = field$136) captures()
+    return return$26(record$144)
+  
+  field fn field$136(self$137, return$27) =
+-   drop self$137
+    let closure$143 = closure lambda$138()
++   drop self$137
+    return return$27(closure$143)
+  
+  closure fn lambda$138(self$139, param$16, return$28) =
+    drop self$139
+    if  then {
+      let apply$88 = closure join$140(return$28, param$16)
+      return toStringInt32(apply$88)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$140(self$141, value$142) =
+    let return$28 = self$141.cap[0]
+    dup return$28
+    let x#3 = self$141.cap[1]
+    dup x#3
+    drop self$141
+    return value$142(x#3, return$28)
+  
+  toplevel fn show(return$29) =
+    let closure$148 = closure lambda$146()
+    return return$29(closure$148)
+  
+  closure fn lambda$146(self$147, param$17, return$30) =
+    drop self$147
+    if param$17.kind == record then {
+      let show#5 = param$17!show
+      return return$30(show#5)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn printShow(return$31) =
+    let closure$168 = closure lambda$150()
+    return return$31(closure$168)
+  
+  closure fn lambda$150(self$151, param$18, return$32) =
+-   drop self$151
+    let closure$167 = closure lambda$152(param$18)
++   drop self$151
+    return return$32(closure$167)
+  
+  closure fn lambda$152(self$153, param$19, return$33) =
+    let param$18 = self$153.cap[0]
+    dup param$18
+    drop self$153
+    if  then {
+      let then$94 = closure join$155(return$33, param$18, param$19)
+      return printString(then$94)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$155(self$156, value$157) =
+    let return$33 = self$156.cap[0]
+    dup return$33
+    let showDict#13 = self$156.cap[1]
+    dup showDict#13
+    let x#14 = self$156.cap[2]
+    dup x#14
+-   drop self$156
+    let return$34 = closure join$158(return$33, value$157)
+    let apply$91 = closure join$161(return$34, x#14)
+    let apply$92 = closure join$164(apply$91, showDict#13)
++   drop self$156
+    return show(apply$92)
+  
+  closure fn join$158(self$159, value$160) =
+    let return$33 = self$159.cap[0]
+    dup return$33
+    let value$157 = self$159.cap[1]
+    dup value$157
+    drop self$159
+    return value$157(value$160, return$33)
+  
+  closure fn join$161(self$162, value$163) =
+    let return$34 = self$162.cap[0]
+    dup return$34
+    let x#14 = self$162.cap[1]
+    dup x#14
+    drop self$162
+    return value$163(x#14, return$34)
+  
+  closure fn join$164(self$165, value$166) =
+    let apply$91 = self$165.cap[0]
+    dup apply$91
+    let showDict#13 = self$165.cap[1]
+    dup showDict#13
+    drop self$165
+    return value$166(showDict#13, apply$91)
+  
+  toplevel fn <>(return$35) =
+    let closure$182 = closure lambda$170()
+    return return$35(closure$182)
+  
+  closure fn lambda$170(self$171, param$20, return$36) =
+-   drop self$171
+    let closure$181 = closure lambda$172(param$20)
++   drop self$171
+    return return$36(closure$181)
+  
+  closure fn lambda$172(self$173, param$21, return$37) =
+    let param$20 = self$173.cap[0]
+    dup param$20
+    drop self$173
+    if  then {
+      let apply$96 = closure join$175(return$37, param$21)
+      let apply$97 = closure join$178(apply$96, param$20)
+      return appendString(apply$97)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$175(self$176, value$177) =
+    let return$37 = self$176.cap[0]
+    dup return$37
+    let y#1 = self$176.cap[1]
+    dup y#1
+    drop self$176
+    return value$177(y#1, return$37)
+  
+  closure fn join$178(self$179, value$180) =
+    let apply$96 = self$179.cap[0]
+    dup apply$96
+    let x#0 = self$179.cap[1]
+    dup x#0
+    drop self$179
+    return value$180(x#0, apply$96)
+  
+  toplevel fn showTuple2(return$38) =
+    let closure$268 = closure lambda$184()
+    return return$38(closure$268)
+  
+  closure fn lambda$184(self$185, param$22, return$39) =
+-   drop self$185
+    let closure$267 = closure lambda$186(param$22)
++   drop self$185
+    return return$39(closure$267)
+  
+  closure fn lambda$186(self$187, param$23, return$40) =
+    let param$22 = self$187.cap[0]
+    dup param$22
+    drop self$187
+    if  then {
+      let record$266 = record(show = field$189) captures(param$22, param$23)
+      return return$40(record$266)
+    } else {
+      panic "no matching branch"
+    }
+  
+  field fn field$189(self$190, return$41) =
+    let showDictA#8 = self$190.cap[0]
+    dup showDictA#8
+    let showDictB#9 = self$190.cap[1]
+    dup showDictB#9
+-   drop self$190
+    let closure$265 = closure lambda$191(showDictA#8, showDictB#9)
++   drop self$190
+    return return$41(closure$265)
+  
+  closure fn lambda$191(self$192, param$24, return$42) =
+    let showDictA#8 = self$192.cap[0]
+    dup showDictA#8
+    let showDictB#9 = self$192.cap[1]
+    dup showDictB#9
+    drop self$192
+    if param$24.tag == Tuple then {
+      let a#10 = param$24.0
+      dup a#10
+      let b#11 = param$24.1
+      dup b#11
+-     drop param$24
+      let then$121 = closure join$193( a#10
+      , b#11
+      , return$42
+      , showDictA#8
+      , showDictB#9 )
++     drop param$24
+      return <>(then$121)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$193(self$194, value$195) =
+    let a#10 = self$194.cap[0]
+    dup a#10
+    let b#11 = self$194.cap[1]
+    dup b#11
+    let return$42 = self$194.cap[2]
+    dup return$42
+    let showDictA#8 = self$194.cap[3]
+    dup showDictA#8
+    let showDictB#9 = self$194.cap[4]
+    dup showDictB#9
+-   drop self$194
+    let return$50 = closure join$196( a#10
+    , b#11
+    , return$42
+    , showDictA#8
+    , showDictB#9
+    , value$195 )
+    let apply$99 = closure join$261(return$50)
++   drop self$194
+    return String#(apply$99)
+  
+  closure fn join$196(self$197, value$198) =
+    let a#10 = self$197.cap[0]
+    dup a#10
+    let b#11 = self$197.cap[1]
+    dup b#11
+    let return$42 = self$197.cap[2]
+    dup return$42
+    let showDictA#8 = self$197.cap[3]
+    dup showDictA#8
+    let showDictB#9 = self$197.cap[4]
+    dup showDictB#9
+    let value$195 = self$197.cap[5]
+    dup value$195
+-   drop self$197
+    let then$119 = closure join$199( a#10
+    , b#11
+    , return$42
+    , showDictA#8
+    , showDictB#9 )
++   drop self$197
+    return value$195(value$198, then$119)
+  
+  closure fn join$199(self$200, value$201) =
+    let a#10 = self$200.cap[0]
+    dup a#10
+    let b#11 = self$200.cap[1]
+    dup b#11
+    let return$42 = self$200.cap[2]
+    dup return$42
+    let showDictA#8 = self$200.cap[3]
+    dup showDictA#8
+    let showDictB#9 = self$200.cap[4]
+    dup showDictB#9
+-   drop self$200
+    let return$43 = closure join$202(return$42, value$201)
+    let then$117 = closure join$205( a#10
+    , b#11
+    , return$43
+    , showDictA#8
+    , showDictB#9 )
++   drop self$200
+    return <>(then$117)
+  
+  closure fn join$202(self$203, value$204) =
+    let return$42 = self$203.cap[0]
+    dup return$42
+    let value$201 = self$203.cap[1]
+    dup value$201
+    drop self$203
+    return value$201(value$204, return$42)
+  
+  closure fn join$205(self$206, value$207) =
+    let a#10 = self$206.cap[0]
+    dup a#10
+    let b#11 = self$206.cap[1]
+    dup b#11
+    let return$43 = self$206.cap[2]
+    dup return$43
+    let showDictA#8 = self$206.cap[3]
+    dup showDictA#8
+    let showDictB#9 = self$206.cap[4]
+    dup showDictB#9
+-   drop self$206
+    let return$49 = closure join$208(b#11, return$43, showDictB#9, value$207)
+    let apply$100 = closure join$255(a#10, return$49)
+    let apply$101 = closure join$258(apply$100, showDictA#8)
++   drop self$206
+    return show(apply$101)
+  
+  closure fn join$208(self$209, value$210) =
+    let b#11 = self$209.cap[0]
+    dup b#11
+    let return$43 = self$209.cap[1]
+    dup return$43
+    let showDictB#9 = self$209.cap[2]
+    dup showDictB#9
+    let value$207 = self$209.cap[3]
+    dup value$207
+-   drop self$209
+    let then$115 = closure join$211(b#11, return$43, showDictB#9)
++   drop self$209
+    return value$207(value$210, then$115)
+  
+  closure fn join$211(self$212, value$213) =
+    let b#11 = self$212.cap[0]
+    dup b#11
+    let return$43 = self$212.cap[1]
+    dup return$43
+    let showDictB#9 = self$212.cap[2]
+    dup showDictB#9
+-   drop self$212
+    let return$44 = closure join$214(return$43, value$213)
+    let then$113 = closure join$217(b#11, return$44, showDictB#9)
++   drop self$212
+    return <>(then$113)
+  
+  closure fn join$214(self$215, value$216) =
+    let return$43 = self$215.cap[0]
+    dup return$43
+    let value$213 = self$215.cap[1]
+    dup value$213
+    drop self$215
+    return value$213(value$216, return$43)
+  
+  closure fn join$217(self$218, value$219) =
+    let b#11 = self$218.cap[0]
+    dup b#11
+    let return$44 = self$218.cap[1]
+    dup return$44
+    let showDictB#9 = self$218.cap[2]
+    dup showDictB#9
+-   drop self$218
+    let return$48 = closure join$220(b#11, return$44, showDictB#9, value$219)
+    let apply$102 = closure join$251(return$48)
++   drop self$218
+    return String#(apply$102)
+  
+  closure fn join$220(self$221, value$222) =
+    let b#11 = self$221.cap[0]
+    dup b#11
+    let return$44 = self$221.cap[1]
+    dup return$44
+    let showDictB#9 = self$221.cap[2]
+    dup showDictB#9
+    let value$219 = self$221.cap[3]
+    dup value$219
+-   drop self$221
+    let then$111 = closure join$223(b#11, return$44, showDictB#9)
++   drop self$221
+    return value$219(value$222, then$111)
+  
+  closure fn join$223(self$224, value$225) =
+    let b#11 = self$224.cap[0]
+    dup b#11
+    let return$44 = self$224.cap[1]
+    dup return$44
+    let showDictB#9 = self$224.cap[2]
+    dup showDictB#9
+-   drop self$224
+    let return$45 = closure join$226(return$44, value$225)
+    let then$109 = closure join$229(b#11, return$45, showDictB#9)
++   drop self$224
+    return <>(then$109)
+  
+  closure fn join$226(self$227, value$228) =
+    let return$44 = self$227.cap[0]
+    dup return$44
+    let value$225 = self$227.cap[1]
+    dup value$225
+    drop self$227
+    return value$225(value$228, return$44)
+  
+  closure fn join$229(self$230, value$231) =
+    let b#11 = self$230.cap[0]
+    dup b#11
+    let return$45 = self$230.cap[1]
+    dup return$45
+    let showDictB#9 = self$230.cap[2]
+    dup showDictB#9
+-   drop self$230
+    let return$47 = closure join$232(return$45, value$231)
+    let apply$103 = closure join$245(b#11, return$47)
+    let apply$104 = closure join$248(apply$103, showDictB#9)
++   drop self$230
+    return show(apply$104)
+  
+  closure fn join$232(self$233, value$234) =
+    let return$45 = self$233.cap[0]
+    dup return$45
+    let value$231 = self$233.cap[1]
+    dup value$231
+-   drop self$233
+    let then$107 = closure join$235(return$45)
++   drop self$233
+    return value$231(value$234, then$107)
+  
+  closure fn join$235(self$236, value$237) =
+    let return$45 = self$236.cap[0]
+    dup return$45
+-   drop self$236
+    let return$46 = closure join$238(return$45, value$237)
+    let apply$105 = closure join$241(return$46)
++   drop self$236
+    return String#(apply$105)
+  
+  closure fn join$238(self$239, value$240) =
+    let return$45 = self$239.cap[0]
+    dup return$45
+    let value$237 = self$239.cap[1]
+    dup value$237
+    drop self$239
+    return value$237(value$240, return$45)
+  
+  closure fn join$241(self$242, value$243) =
+    let return$46 = self$242.cap[0]
+    dup return$46
+-   drop self$242
+    let lit$244 = ")"
++   drop self$242
+    return value$243(lit$244, return$46)
+  
+  closure fn join$245(self$246, value$247) =
+    let b#11 = self$246.cap[0]
+    dup b#11
+    let return$47 = self$246.cap[1]
+    dup return$47
+    drop self$246
+    return value$247(b#11, return$47)
+  
+  closure fn join$248(self$249, value$250) =
+    let apply$103 = self$249.cap[0]
+    dup apply$103
+    let showDictB#9 = self$249.cap[1]
+    dup showDictB#9
+    drop self$249
+    return value$250(showDictB#9, apply$103)
+  
+  closure fn join$251(self$252, value$253) =
+    let return$48 = self$252.cap[0]
+    dup return$48
+-   drop self$252
+    let lit$254 = ", "
++   drop self$252
+    return value$253(lit$254, return$48)
+  
+  closure fn join$255(self$256, value$257) =
+    let a#10 = self$256.cap[0]
+    dup a#10
+    let return$49 = self$256.cap[1]
+    dup return$49
+    drop self$256
+    return value$257(a#10, return$49)
+  
+  closure fn join$258(self$259, value$260) =
+    let apply$100 = self$259.cap[0]
+    dup apply$100
+    let showDictA#8 = self$259.cap[1]
+    dup showDictA#8
+    drop self$259
+    return value$260(showDictA#8, apply$100)
+  
+  closure fn join$261(self$262, value$263) =
+    let return$50 = self$262.cap[0]
+    dup return$50
+-   drop self$262
+    let lit$264 = "("
++   drop self$262
+    return value$263(lit$264, return$50)
+  
+  toplevel fn main(return$51) =
+    let closure$311 = closure lambda$270()
+    return return$51(closure$311)
+  
+  closure fn lambda$270(self$271, param$25, return$52) =
+    drop param$25
+    drop self$271
+    if  then {
+      let then$133 = closure join$272(return$52)
+      return printShow(then$133)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$272(self$273, value$274) =
+    let return$52 = self$273.cap[0]
+    dup return$52
+-   drop self$273
+    let return$55 = closure join$275(return$52, value$274)
+    let then$127 = closure join$299(return$55)
++   drop self$273
+    return showTuple2(then$127)
+  
+  closure fn join$275(self$276, value$277) =
+    let return$52 = self$276.cap[0]
+    dup return$52
+    let value$274 = self$276.cap[1]
+    dup value$274
+-   drop self$276
+    let then$131 = closure join$278(return$52)
++   drop self$276
+    return value$274(value$277, then$131)
+  
+  closure fn join$278(self$279, value$280) =
+    let return$52 = self$279.cap[0]
+    dup return$52
+-   drop self$279
+    let label$80 = closure join$281(return$52, value$280)
+    let return$53 = closure join$284(label$80)
+    let apply$128 = closure join$295(return$53)
++   drop self$279
+    return Int32#(apply$128)
+  
+  closure fn join$281(self$282, value$283) =
+    let return$52 = self$282.cap[0]
+    dup return$52
+    let value$280 = self$282.cap[1]
+    dup value$280
+    drop self$282
+    return value$280(value$283, return$52)
+  
+  closure fn join$284(self$285, value$286) =
+    let label$80 = self$285.cap[0]
+    dup label$80
+-   drop self$285
+    let return$54 = closure join$287(label$80, value$286)
+    let apply$129 = closure join$291(return$54)
++   drop self$285
+    return Int32#(apply$129)
+  
+  closure fn join$287(self$288, value$289) =
+    let label$80 = self$288.cap[0]
+    dup label$80
+    let value$286 = self$288.cap[1]
+    dup value$286
+-   drop self$288
++   dropReuse reuse$323 = self$288 /2
+-   let struct$290 = Tuple(value$286, value$289)
++   let struct$290 = reuse reuse$323 Tuple(value$286, value$289)
+    return label$80(struct$290)
+  
+  closure fn join$291(self$292, value$293) =
+    let return$54 = self$292.cap[0]
+    dup return$54
+-   drop self$292
+    let lit$294 = 2
++   drop self$292
+    return value$293(lit$294, return$54)
+  
+  closure fn join$295(self$296, value$297) =
+    let return$53 = self$296.cap[0]
+    dup return$53
+-   drop self$296
+    let lit$298 = 1
++   drop self$296
+    return value$297(lit$298, return$53)
+  
+  closure fn join$299(self$300, value$301) =
+    let return$55 = self$300.cap[0]
+    dup return$55
+-   drop self$300
+    let return$57 = closure join$302(return$55, value$301)
++   drop self$300
+    return showInt32(return$57)
+  
+  closure fn join$302(self$303, value$304) =
+    let return$55 = self$303.cap[0]
+    dup return$55
+    let value$301 = self$303.cap[1]
+    dup value$301
+-   drop self$303
+    let then$125 = closure join$305(return$55)
++   drop self$303
+    return value$301(value$304, then$125)
+  
+  closure fn join$305(self$306, value$307) =
+    let return$55 = self$306.cap[0]
+    dup return$55
+-   drop self$306
+    let return$56 = closure join$308(return$55, value$307)
++   drop self$306
+    return showInt32(return$56)
+  
+  closure fn join$308(self$309, value$310) =
+    let return$55 = self$309.cap[0]
+    dup return$55
+    let value$307 = self$309.cap[1]
+    dup value$307
+    drop self$309
+    return value$307(value$310, return$55)
+  
+  toplevel fn zig_main$314() =
+    let finish$312 = closure join$316()
+    let after_main$313 = closure join$319(finish$312)
+    return main(after_main$313)
+  
+  closure fn join$316(self$317, value$318) =
+    drop self$317
+    return value$318
+  
+  closure fn join$319(self$320, value$321) =
+    let finish$312 = self$320.cap[0]
+    dup finish$312
+-   drop self$320
++   dropReuse reuse$324 = self$320 /0
+-   let struct$322 = Tuple()
++   let struct$322 = reuse reuse$324 Tuple()
+    return value$321(struct$322, finish$312)
+  
+  entry = zig_main$314

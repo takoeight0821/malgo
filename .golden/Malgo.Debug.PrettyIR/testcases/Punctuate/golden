@@ -1,0 +1,6101 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+infix infixr 6 <>
+
+sig <> : String -> String -> String
+
+def <> = appendString
+
+data SExpr  = Symbol(String) | SInt(Int32) | SList(List(SExpr))
+
+sig show : SExpr -> String
+
+def show =
+  fn {
+    Symbol(str) ->
+      {
+        "Symbol " <> str
+      } |
+    SInt(int) ->
+      {
+        "SInt " <> toStringInt32(int)
+      } |
+    SList(ss) ->
+      {
+        "SList [" <> concatString(punctuate(", ")(mapList(show)(ss))) <> "]"
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        let x = SList([Symbol("x"), SList([Symbol("y"), SList([Symbol("z")])])])
+        putStrLn(show(x))
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data SExpr  = Symbol(String) | SInt(Int32) | SList(List(SExpr))
+
+sig <> : String -> String -> String
+
+sig show : SExpr -> String
+
+def <> = appendString
+
+def show =
+  fn {
+    Symbol(str#0) ->
+      {
+        String#("Symbol ") <> str#0
+      } |
+    SInt(int#1) ->
+      {
+        String#("SInt ") <> toStringInt32(int#1)
+      } |
+    SList(ss#2) ->
+      {
+        String#( "SList [" ) <> concatString( punctuate( String#( ", " ) )( mapList( show )( ss#2 ) ) ) <> String#( "]" )
+      }
+  }
+
+def main =
+  fn {
+    _#3 ->
+      {
+        let x#4 =
+          SList( Cons( Symbol( String#( "x" ) ) )( Cons( SList( Cons( Symbol( String#( "y" ) ) )( Cons( SList( Cons( Symbol( String#( "z" ) ) )( Nil ) ) )( Nil ) ) ) )( Nil ) ) )
+        putStrLn(show(x#4))
+      }
+  }
+
+=== ToFun ===
+def <> = invoke appendString
+
+def show =
+  \param$5 ->
+    case param$5 of {
+      Symbol(str#0) -> invoke <>(invoke String#("Symbol "))(str#0)
+      SInt(int#1) ->
+        invoke <>(invoke String#("SInt "))(invoke toStringInt32(int#1))
+      SList(ss#2) ->
+        invoke <>( invoke String#( "SList [" ) )( invoke <>( invoke concatString( invoke punctuate( invoke String#( ", " ) )( invoke mapList( invoke show )( ss#2 ) ) ) )( invoke String#( "]" ) ) )
+    }
+
+def main =
+  \param$6 ->
+    case param$6 of {
+      _#3 ->
+        let x#4 =
+          invoke SList( invoke Cons( invoke Symbol( invoke String#( "x" ) ) )( invoke Cons( invoke SList( invoke Cons( invoke Symbol( invoke String#( "y" ) ) )( invoke Cons( invoke SList( invoke Cons( invoke Symbol( invoke String#( "z" ) ) )( invoke Nil ) ) )( invoke Nil ) ) ) )( invoke Nil ) ) )
+        in
+          invoke putStrLn(invoke show(x#4))
+    }
+
+def Symbol = \constructor$7 -> Symbol(constructor$7)
+
+def SInt = \constructor$8 -> SInt(constructor$8)
+
+def SList = \constructor$9 -> SList(constructor$9)
+
+=== SaturateCtor ===
+def <> = invoke appendString
+
+def show =
+  \param$5 ->
+    case param$5 of {
+      Symbol(str#0) -> invoke <>(invoke String#("Symbol "))(str#0)
+      SInt(int#1) ->
+        invoke <>(invoke String#("SInt "))(invoke toStringInt32(int#1))
+      SList(ss#2) ->
+        invoke <>( invoke String#( "SList [" ) )( invoke <>( invoke concatString( invoke punctuate( invoke String#( ", " ) )( invoke mapList( invoke show )( ss#2 ) ) ) )( invoke String#( "]" ) ) )
+    }
+
+def main =
+  \param$6 ->
+    case param$6 of {
+      _#3 ->
+        let x#4 =
+          SList( invoke Cons( Symbol( invoke String#( "x" ) ) )( invoke Cons( SList( invoke Cons( Symbol( invoke String#( "y" ) ) )( invoke Cons( SList( invoke Cons( Symbol( invoke String#( "z" ) ) )( invoke Nil ) ) )( invoke Nil ) ) ) )( invoke Nil ) ) )
+        in
+          invoke putStrLn(invoke show(x#4))
+    }
+
+def Symbol = \constructor$7 -> Symbol(constructor$7)
+
+def SInt = \constructor$8 -> SInt(constructor$8)
+
+def SList = \constructor$9 -> SList(constructor$9)
+
+=== ReuseSpecialize ===
+def <> = invoke appendString
+
+def show =
+  \param$5 ->
+    case param$5 of {
+      Symbol(str#0) -> invoke <>(invoke String#("Symbol "))(str#0)
+      SInt(int#1) ->
+        invoke <>(invoke String#("SInt "))(invoke toStringInt32(int#1))
+      SList(ss#2) ->
+        invoke <>( invoke String#( "SList [" ) )( invoke <>( invoke concatString( invoke punctuate( invoke String#( ", " ) )( invoke mapList( invoke show )( ss#2 ) ) ) )( invoke String#( "]" ) ) )
+    }
+
+def main =
+  \param$6 ->
+    case param$6 of {
+      _#3 ->
+        let x#4 =
+          SList( invoke Cons( Symbol( invoke String#( "x" ) ) )( invoke Cons( SList( invoke Cons( Symbol( invoke String#( "y" ) ) )( invoke Cons( SList( invoke Cons( Symbol( invoke String#( "z" ) ) )( invoke Nil ) ) )( invoke Nil ) ) ) )( invoke Nil ) ) )
+        in
+          invoke putStrLn(invoke show(x#4))
+    }
+
+def Symbol = \constructor$7 -> Symbol(constructor$7)
+
+def SInt = \constructor$8 -> SInt(constructor$8)
+
+def SList = \constructor$9 -> SList(constructor$9)
+
+=== ToCore ===
+def <>(return$10) = invoke appendString ~ return$10
+
+def show(return$11) =
+  \param$5 return$12 . {
+    param$5 ~ select {
+      Symbol(str#0) ->
+        invoke <> ~ ( do return$13 . {
+          invoke String# ~ ("Symbol ", return$13)
+        }
+        , (str#0, return$12) )
+      SInt(int#1) ->
+        invoke <> ~ ( do return$15 . {
+          invoke String# ~ ("SInt ", return$15)
+        }
+        , ( do return$14 . {
+          invoke toStringInt32 ~ (int#1, return$14)
+        }
+        , return$12 ) )
+      SList(ss#2) ->
+        invoke <> ~ ( do return$23 . {
+          invoke String# ~ ("SList [", return$23)
+        }
+        , ( do return$16 . {
+          invoke <> ~ ( do return$18 . {
+            invoke concatString ~ ( do return$19 . {
+              invoke punctuate ~ ( do return$22 . {
+                invoke String# ~ (", ", return$22)
+              }
+              , ( do return$20 . {
+                invoke mapList ~ ( do return$21 . {
+                  invoke show ~ return$21
+                }
+                , (ss#2, return$20) )
+              }
+              , return$19 ) )
+            }
+            , return$18 )
+          }
+          , ( do return$17 . {
+            invoke String# ~ ("]", return$17)
+          }
+          , return$16 ) )
+        }
+        , return$12 ) )
+    }
+  } ~ return$11
+
+def main(return$24) =
+  \param$6 return$25 . {
+    param$6 ~ select {
+      _#3 ->
+        SList( do return$27 . {
+          invoke Cons ~ ( Symbol( do return$37 . {
+            invoke String# ~ ("x", return$37)
+          } )
+          , ( do return$28 . {
+            invoke Cons ~ ( SList( do return$30 . {
+              invoke Cons ~ ( Symbol( do return$36 . {
+                invoke String# ~ ("y", return$36)
+              } )
+              , ( do return$31 . {
+                invoke Cons ~ ( SList( do return$33 . {
+                  invoke Cons ~ ( Symbol( do return$35 . {
+                    invoke String# ~ ("z", return$35)
+                  } )
+                  , ( do return$34 . {
+                    invoke Nil ~ return$34
+                  }
+                  , return$33 ) )
+                } )
+                , ( do return$32 . {
+                  invoke Nil ~ return$32
+                }
+                , return$31 ) )
+              }
+              , return$30 ) )
+            } )
+            , ( do return$29 . {
+              invoke Nil ~ return$29
+            }
+            , return$28 ) )
+          }
+          , return$27 ) )
+        } ) ~ then x#4 -> {
+          invoke putStrLn ~ ( do return$26 . {
+            invoke show ~ (x#4, return$26)
+          }
+          , return$25 )
+        }
+    }
+  } ~ return$24
+
+def Symbol(return$38) =
+  \constructor$7 return$39 . {
+    Symbol(constructor$7) ~ return$39
+  } ~ return$38
+
+def SInt(return$40) =
+  \constructor$8 return$41 . {
+    SInt(constructor$8) ~ return$41
+  } ~ return$40
+
+def SList(return$42) =
+  \constructor$9 return$43 . {
+    SList(constructor$9) ~ return$43
+  } ~ return$42
+
+=== Flat ===
+def <>(return$10) = invoke appendString ~ return$10
+
+def show(return$11) =
+  \param$5 return$12 . {
+    param$5 ~ select {
+      Symbol(str#0) ->
+        invoke <> ~ then outer$44 -> {
+          join return$13 = then inner$45 -> {
+            outer$44 ~ (inner$45, (str#0, return$12))
+          }
+          in invoke String# ~ ("Symbol ", return$13)
+        }
+      SInt(int#1) ->
+        invoke <> ~ then outer$46 -> {
+          join return$15 = then inner$47 -> {
+            outer$46 ~ ( inner$47
+            , then outer$48 -> {
+              join return$14 = then inner$49 -> {
+                outer$48 ~ (inner$49, return$12)
+              }
+              in invoke toStringInt32 ~ (int#1, return$14)
+            } )
+          }
+          in invoke String# ~ ("SInt ", return$15)
+        }
+      SList(ss#2) ->
+        invoke <> ~ then outer$50 -> {
+          join return$23 = then inner$51 -> {
+            outer$50 ~ ( inner$51
+            , then outer$52 -> {
+              join return$16 = then inner$53 -> {
+                outer$52 ~ (inner$53, return$12)
+              }
+              in invoke <> ~ then outer$54 -> {
+                join return$18 = then inner$55 -> {
+                  outer$54 ~ ( inner$55
+                  , then outer$56 -> {
+                    join return$17 = then inner$57 -> {
+                      outer$56 ~ (inner$57, return$16)
+                    }
+                    in invoke String# ~ ("]", return$17)
+                  } )
+                }
+                in invoke concatString ~ then outer$58 -> {
+                  join return$19 = then inner$59 -> {
+                    outer$58 ~ (inner$59, return$18)
+                  }
+                  in invoke punctuate ~ then outer$60 -> {
+                    join return$22 = then inner$61 -> {
+                      outer$60 ~ ( inner$61
+                      , then outer$62 -> {
+                        join return$20 = then inner$63 -> {
+                          outer$62 ~ (inner$63, return$19)
+                        }
+                        in invoke mapList ~ then outer$64 -> {
+                          join return$21 = then inner$65 -> {
+                            outer$64 ~ (inner$65, (ss#2, return$20))
+                          }
+                          in invoke show ~ return$21
+                        }
+                      } )
+                    }
+                    in invoke String# ~ (", ", return$22)
+                  }
+                }
+              }
+            } )
+          }
+          in invoke String# ~ ("SList [", return$23)
+        }
+    }
+  } ~ return$11
+
+def main(return$24) =
+  \param$6 return$25 . {
+    param$6 ~ select {
+      _#3 ->
+        join label$66 = then x#4 -> {
+          invoke putStrLn ~ then outer$98 -> {
+            join return$26 = then inner$99 -> {
+              outer$98 ~ (inner$99, return$25)
+            }
+            in invoke show ~ (x#4, return$26)
+          }
+        }
+        in join return$27 = then var$67 -> {
+          SList(var$67) ~ label$66
+        }
+        in invoke Cons ~ then outer$68 -> {
+          join label$96 = then inner$69 -> {
+            outer$68 ~ ( inner$69
+            , then outer$70 -> {
+              join return$28 = then inner$71 -> {
+                outer$70 ~ (inner$71, return$27)
+              }
+              in invoke Cons ~ then outer$72 -> {
+                join label$76 = then inner$73 -> {
+                  outer$72 ~ ( inner$73
+                  , then outer$74 -> {
+                    join return$29 = then inner$75 -> {
+                      outer$74 ~ (inner$75, return$28)
+                    }
+                    in invoke Nil ~ return$29
+                  } )
+                }
+                in join return$30 = then var$77 -> {
+                  SList(var$77) ~ label$76
+                }
+                in invoke Cons ~ then outer$78 -> {
+                  join label$94 = then inner$79 -> {
+                    outer$78 ~ ( inner$79
+                    , then outer$80 -> {
+                      join return$31 = then inner$81 -> {
+                        outer$80 ~ (inner$81, return$30)
+                      }
+                      in invoke Cons ~ then outer$82 -> {
+                        join label$86 = then inner$83 -> {
+                          outer$82 ~ ( inner$83
+                          , then outer$84 -> {
+                            join return$32 = then inner$85 -> {
+                              outer$84 ~ (inner$85, return$31)
+                            }
+                            in invoke Nil ~ return$32
+                          } )
+                        }
+                        in join return$33 = then var$87 -> {
+                          SList(var$87) ~ label$86
+                        }
+                        in invoke Cons ~ then outer$88 -> {
+                          join label$92 = then inner$89 -> {
+                            outer$88 ~ ( inner$89
+                            , then outer$90 -> {
+                              join return$34 = then inner$91 -> {
+                                outer$90 ~ (inner$91, return$33)
+                              }
+                              in invoke Nil ~ return$34
+                            } )
+                          }
+                          in join return$35 = then var$93 -> {
+                            Symbol(var$93) ~ label$92
+                          }
+                          in invoke String# ~ ("z", return$35)
+                        }
+                      }
+                    } )
+                  }
+                  in join return$36 = then var$95 -> {
+                    Symbol(var$95) ~ label$94
+                  }
+                  in invoke String# ~ ("y", return$36)
+                }
+              }
+            } )
+          }
+          in join return$37 = then var$97 -> {
+            Symbol(var$97) ~ label$96
+          }
+          in invoke String# ~ ("x", return$37)
+        }
+    }
+  } ~ return$24
+
+def Symbol(return$38) =
+  \constructor$7 return$39 . {
+    Symbol(constructor$7) ~ return$39
+  } ~ return$38
+
+def SInt(return$40) =
+  \constructor$8 return$41 . {
+    SInt(constructor$8) ~ return$41
+  } ~ return$40
+
+def SList(return$42) =
+  \constructor$9 return$43 . {
+    SList(constructor$9) ~ return$43
+  } ~ return$42
+
+=== Join ===
+def <>(return$10) = invoke appendString ~ return$10
+
+def show(return$11) =
+  \param$5 return$12 . {
+    join select$130 = select {
+      Symbol(str#0) ->
+        join then$103 = then outer$44 -> {
+          join return$13 = then inner$45 -> {
+            join apply$101 = (str#0, return$12)
+            in join apply$102 = (inner$45, apply$101)
+            in outer$44 ~ apply$102
+          }
+          in join apply$100 = ("Symbol ", return$13)
+          in invoke String# ~ apply$100
+        }
+        in invoke <> ~ then$103
+      SInt(int#1) ->
+        join then$109 = then outer$46 -> {
+          join return$15 = then inner$47 -> {
+            join then$107 = then outer$48 -> {
+              join return$14 = then inner$49 -> {
+                join apply$106 = (inner$49, return$12)
+                in outer$48 ~ apply$106
+              }
+              in join apply$105 = (int#1, return$14)
+              in invoke toStringInt32 ~ apply$105
+            }
+            in join apply$108 = (inner$47, then$107)
+            in outer$46 ~ apply$108
+          }
+          in join apply$104 = ("SInt ", return$15)
+          in invoke String# ~ apply$104
+        }
+        in invoke <> ~ then$109
+      SList(ss#2) ->
+        join then$129 = then outer$50 -> {
+          join return$23 = then inner$51 -> {
+            join then$127 = then outer$52 -> {
+              join return$16 = then inner$53 -> {
+                join apply$126 = (inner$53, return$12)
+                in outer$52 ~ apply$126
+              }
+              in join then$125 = then outer$54 -> {
+                join return$18 = then inner$55 -> {
+                  join then$123 = then outer$56 -> {
+                    join return$17 = then inner$57 -> {
+                      join apply$122 = (inner$57, return$16)
+                      in outer$56 ~ apply$122
+                    }
+                    in join apply$121 = ("]", return$17)
+                    in invoke String# ~ apply$121
+                  }
+                  in join apply$124 = (inner$55, then$123)
+                  in outer$54 ~ apply$124
+                }
+                in join then$120 = then outer$58 -> {
+                  join return$19 = then inner$59 -> {
+                    join apply$119 = (inner$59, return$18)
+                    in outer$58 ~ apply$119
+                  }
+                  in join then$118 = then outer$60 -> {
+                    join return$22 = then inner$61 -> {
+                      join then$116 = then outer$62 -> {
+                        join return$20 = then inner$63 -> {
+                          join apply$115 = (inner$63, return$19)
+                          in outer$62 ~ apply$115
+                        }
+                        in join then$114 = then outer$64 -> {
+                          join return$21 = then inner$65 -> {
+                            join apply$112 = (ss#2, return$20)
+                            in join apply$113 = (inner$65, apply$112)
+                            in outer$64 ~ apply$113
+                          }
+                          in invoke show ~ return$21
+                        }
+                        in invoke mapList ~ then$114
+                      }
+                      in join apply$117 = (inner$61, then$116)
+                      in outer$60 ~ apply$117
+                    }
+                    in join apply$111 = (", ", return$22)
+                    in invoke String# ~ apply$111
+                  }
+                  in invoke punctuate ~ then$118
+                }
+                in invoke concatString ~ then$120
+              }
+              in invoke <> ~ then$125
+            }
+            in join apply$128 = (inner$51, then$127)
+            in outer$50 ~ apply$128
+          }
+          in join apply$110 = ("SList [", return$23)
+          in invoke String# ~ apply$110
+        }
+        in invoke <> ~ then$129
+    }
+    in param$5 ~ select$130
+  } ~ return$11
+
+def main(return$24) =
+  \param$6 return$25 . {
+    join select$157 = select {
+      _#3 ->
+        join label$66 = then x#4 -> {
+          join then$156 = then outer$98 -> {
+            join return$26 = then inner$99 -> {
+              join apply$155 = (inner$99, return$25)
+              in outer$98 ~ apply$155
+            }
+            in join apply$154 = (x#4, return$26)
+            in invoke show ~ apply$154
+          }
+          in invoke putStrLn ~ then$156
+        }
+        in join return$27 = then var$67 -> {
+          SList(var$67) ~ label$66
+        }
+        in join then$153 = then outer$68 -> {
+          join label$96 = then inner$69 -> {
+            join then$151 = then outer$70 -> {
+              join return$28 = then inner$71 -> {
+                join apply$150 = (inner$71, return$27)
+                in outer$70 ~ apply$150
+              }
+              in join then$149 = then outer$72 -> {
+                join label$76 = then inner$73 -> {
+                  join then$147 = then outer$74 -> {
+                    join return$29 = then inner$75 -> {
+                      join apply$146 = (inner$75, return$28)
+                      in outer$74 ~ apply$146
+                    }
+                    in invoke Nil ~ return$29
+                  }
+                  in join apply$148 = (inner$73, then$147)
+                  in outer$72 ~ apply$148
+                }
+                in join return$30 = then var$77 -> {
+                  SList(var$77) ~ label$76
+                }
+                in join then$145 = then outer$78 -> {
+                  join label$94 = then inner$79 -> {
+                    join then$143 = then outer$80 -> {
+                      join return$31 = then inner$81 -> {
+                        join apply$142 = (inner$81, return$30)
+                        in outer$80 ~ apply$142
+                      }
+                      in join then$141 = then outer$82 -> {
+                        join label$86 = then inner$83 -> {
+                          join then$139 = then outer$84 -> {
+                            join return$32 = then inner$85 -> {
+                              join apply$138 = (inner$85, return$31)
+                              in outer$84 ~ apply$138
+                            }
+                            in invoke Nil ~ return$32
+                          }
+                          in join apply$140 = (inner$83, then$139)
+                          in outer$82 ~ apply$140
+                        }
+                        in join return$33 = then var$87 -> {
+                          SList(var$87) ~ label$86
+                        }
+                        in join then$137 = then outer$88 -> {
+                          join label$92 = then inner$89 -> {
+                            join then$135 = then outer$90 -> {
+                              join return$34 = then inner$91 -> {
+                                join apply$134 = (inner$91, return$33)
+                                in outer$90 ~ apply$134
+                              }
+                              in invoke Nil ~ return$34
+                            }
+                            in join apply$136 = (inner$89, then$135)
+                            in outer$88 ~ apply$136
+                          }
+                          in join return$35 = then var$93 -> {
+                            Symbol(var$93) ~ label$92
+                          }
+                          in join apply$133 = ("z", return$35)
+                          in invoke String# ~ apply$133
+                        }
+                        in invoke Cons ~ then$137
+                      }
+                      in invoke Cons ~ then$141
+                    }
+                    in join apply$144 = (inner$79, then$143)
+                    in outer$78 ~ apply$144
+                  }
+                  in join return$36 = then var$95 -> {
+                    Symbol(var$95) ~ label$94
+                  }
+                  in join apply$132 = ("y", return$36)
+                  in invoke String# ~ apply$132
+                }
+                in invoke Cons ~ then$145
+              }
+              in invoke Cons ~ then$149
+            }
+            in join apply$152 = (inner$69, then$151)
+            in outer$68 ~ apply$152
+          }
+          in join return$37 = then var$97 -> {
+            Symbol(var$97) ~ label$96
+          }
+          in join apply$131 = ("x", return$37)
+          in invoke String# ~ apply$131
+        }
+        in invoke Cons ~ then$153
+    }
+    in param$6 ~ select$157
+  } ~ return$24
+
+def Symbol(return$38) =
+  \constructor$7 return$39 . {
+    Symbol(constructor$7) ~ return$39
+  } ~ return$38
+
+def SInt(return$40) =
+  \constructor$8 return$41 . {
+    SInt(constructor$8) ~ return$41
+  } ~ return$40
+
+def SList(return$42) =
+  \constructor$9 return$43 . {
+    SList(constructor$9) ~ return$43
+  } ~ return$42
+
+=== ClosureConv ===
+toplevel fn <>(return$10) = return appendString(return$10)
+
+toplevel fn show(return$11) =
+  let closure$257 = closure lambda$160()
+  return return$11(closure$257)
+
+closure fn lambda$160(self$161, param$5, return$12) =
+  if param$5.tag == Symbol then {
+    let str#0 = param$5.0
+    let then$103 = closure join$162(return$12, str#0)
+    return <>(then$103)
+  } else {
+    if param$5.tag == SInt then {
+      let int#1 = param$5.0
+      let then$109 = closure join$175(int#1, return$12)
+      return <>(then$109)
+    } else {
+      if param$5.tag == SList then {
+        let ss#2 = param$5.0
+        let then$129 = closure join$194(return$12, ss#2)
+        return <>(then$129)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  }
+
+closure fn join$162(self$163, value$164) =
+  let return$12 = self$163.cap[0]
+  let str#0 = self$163.cap[1]
+  let return$13 = closure join$165(return$12, str#0, value$164)
+  let apply$100 = closure join$171(return$13)
+  return String#(apply$100)
+
+closure fn join$165(self$166, value$167) =
+  let return$12 = self$166.cap[0]
+  let str#0 = self$166.cap[1]
+  let value$164 = self$166.cap[2]
+  let apply$101 = closure join$168(return$12, str#0)
+  return value$164(value$167, apply$101)
+
+closure fn join$168(self$169, value$170) =
+  let return$12 = self$169.cap[0]
+  let str#0 = self$169.cap[1]
+  return value$170(str#0, return$12)
+
+closure fn join$171(self$172, value$173) =
+  let return$13 = self$172.cap[0]
+  let lit$174 = "Symbol "
+  return value$173(lit$174, return$13)
+
+closure fn join$175(self$176, value$177) =
+  let int#1 = self$176.cap[0]
+  let return$12 = self$176.cap[1]
+  let return$15 = closure join$178(int#1, return$12, value$177)
+  let apply$104 = closure join$190(return$15)
+  return String#(apply$104)
+
+closure fn join$178(self$179, value$180) =
+  let int#1 = self$179.cap[0]
+  let return$12 = self$179.cap[1]
+  let value$177 = self$179.cap[2]
+  let then$107 = closure join$181(int#1, return$12)
+  return value$177(value$180, then$107)
+
+closure fn join$181(self$182, value$183) =
+  let int#1 = self$182.cap[0]
+  let return$12 = self$182.cap[1]
+  let return$14 = closure join$184(return$12, value$183)
+  let apply$105 = closure join$187(int#1, return$14)
+  return toStringInt32(apply$105)
+
+closure fn join$184(self$185, value$186) =
+  let return$12 = self$185.cap[0]
+  let value$183 = self$185.cap[1]
+  return value$183(value$186, return$12)
+
+closure fn join$187(self$188, value$189) =
+  let int#1 = self$188.cap[0]
+  let return$14 = self$188.cap[1]
+  return value$189(int#1, return$14)
+
+closure fn join$190(self$191, value$192) =
+  let return$15 = self$191.cap[0]
+  let lit$193 = "SInt "
+  return value$192(lit$193, return$15)
+
+closure fn join$194(self$195, value$196) =
+  let return$12 = self$195.cap[0]
+  let ss#2 = self$195.cap[1]
+  let return$23 = closure join$197(return$12, ss#2, value$196)
+  let apply$110 = closure join$253(return$23)
+  return String#(apply$110)
+
+closure fn join$197(self$198, value$199) =
+  let return$12 = self$198.cap[0]
+  let ss#2 = self$198.cap[1]
+  let value$196 = self$198.cap[2]
+  let then$127 = closure join$200(return$12, ss#2)
+  return value$196(value$199, then$127)
+
+closure fn join$200(self$201, value$202) =
+  let return$12 = self$201.cap[0]
+  let ss#2 = self$201.cap[1]
+  let return$16 = closure join$203(return$12, value$202)
+  let then$125 = closure join$206(return$16, ss#2)
+  return <>(then$125)
+
+closure fn join$203(self$204, value$205) =
+  let return$12 = self$204.cap[0]
+  let value$202 = self$204.cap[1]
+  return value$202(value$205, return$12)
+
+closure fn join$206(self$207, value$208) =
+  let return$16 = self$207.cap[0]
+  let ss#2 = self$207.cap[1]
+  let return$18 = closure join$209(return$16, value$208)
+  let then$120 = closure join$222(return$18, ss#2)
+  return concatString(then$120)
+
+closure fn join$209(self$210, value$211) =
+  let return$16 = self$210.cap[0]
+  let value$208 = self$210.cap[1]
+  let then$123 = closure join$212(return$16)
+  return value$208(value$211, then$123)
+
+closure fn join$212(self$213, value$214) =
+  let return$16 = self$213.cap[0]
+  let return$17 = closure join$215(return$16, value$214)
+  let apply$121 = closure join$218(return$17)
+  return String#(apply$121)
+
+closure fn join$215(self$216, value$217) =
+  let return$16 = self$216.cap[0]
+  let value$214 = self$216.cap[1]
+  return value$214(value$217, return$16)
+
+closure fn join$218(self$219, value$220) =
+  let return$17 = self$219.cap[0]
+  let lit$221 = "]"
+  return value$220(lit$221, return$17)
+
+closure fn join$222(self$223, value$224) =
+  let return$18 = self$223.cap[0]
+  let ss#2 = self$223.cap[1]
+  let return$19 = closure join$225(return$18, value$224)
+  let then$118 = closure join$228(return$19, ss#2)
+  return punctuate(then$118)
+
+closure fn join$225(self$226, value$227) =
+  let return$18 = self$226.cap[0]
+  let value$224 = self$226.cap[1]
+  return value$224(value$227, return$18)
+
+closure fn join$228(self$229, value$230) =
+  let return$19 = self$229.cap[0]
+  let ss#2 = self$229.cap[1]
+  let return$22 = closure join$231(return$19, ss#2, value$230)
+  let apply$111 = closure join$249(return$22)
+  return String#(apply$111)
+
+closure fn join$231(self$232, value$233) =
+  let return$19 = self$232.cap[0]
+  let ss#2 = self$232.cap[1]
+  let value$230 = self$232.cap[2]
+  let then$116 = closure join$234(return$19, ss#2)
+  return value$230(value$233, then$116)
+
+closure fn join$234(self$235, value$236) =
+  let return$19 = self$235.cap[0]
+  let ss#2 = self$235.cap[1]
+  let return$20 = closure join$237(return$19, value$236)
+  let then$114 = closure join$240(return$20, ss#2)
+  return mapList(then$114)
+
+closure fn join$237(self$238, value$239) =
+  let return$19 = self$238.cap[0]
+  let value$236 = self$238.cap[1]
+  return value$236(value$239, return$19)
+
+closure fn join$240(self$241, value$242) =
+  let return$20 = self$241.cap[0]
+  let ss#2 = self$241.cap[1]
+  let return$21 = closure join$243(return$20, ss#2, value$242)
+  return show(return$21)
+
+closure fn join$243(self$244, value$245) =
+  let return$20 = self$244.cap[0]
+  let ss#2 = self$244.cap[1]
+  let value$242 = self$244.cap[2]
+  let apply$112 = closure join$246(return$20, ss#2)
+  return value$242(value$245, apply$112)
+
+closure fn join$246(self$247, value$248) =
+  let return$20 = self$247.cap[0]
+  let ss#2 = self$247.cap[1]
+  return value$248(ss#2, return$20)
+
+closure fn join$249(self$250, value$251) =
+  let return$22 = self$250.cap[0]
+  let lit$252 = ", "
+  return value$251(lit$252, return$22)
+
+closure fn join$253(self$254, value$255) =
+  let return$23 = self$254.cap[0]
+  let lit$256 = "SList ["
+  return value$255(lit$256, return$23)
+
+toplevel fn main(return$24) =
+  let closure$369 = closure lambda$259()
+  return return$24(closure$369)
+
+closure fn lambda$259(self$260, param$6, return$25) =
+  if  then {
+    let _#3 = param$6
+    let label$66 = closure join$261(return$25)
+    let return$27 = closure join$273(label$66)
+    let then$153 = closure join$277(return$27)
+    return Cons(then$153)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$261(self$262, value$263) =
+  let return$25 = self$262.cap[0]
+  let then$156 = closure join$264(return$25, value$263)
+  return putStrLn(then$156)
+
+closure fn join$264(self$265, value$266) =
+  let return$25 = self$265.cap[0]
+  let value$263 = self$265.cap[1]
+  let return$26 = closure join$267(return$25, value$266)
+  let apply$154 = closure join$270(return$26, value$263)
+  return show(apply$154)
+
+closure fn join$267(self$268, value$269) =
+  let return$25 = self$268.cap[0]
+  let value$266 = self$268.cap[1]
+  return value$266(value$269, return$25)
+
+closure fn join$270(self$271, value$272) =
+  let return$26 = self$271.cap[0]
+  let value$263 = self$271.cap[1]
+  return value$272(value$263, return$26)
+
+closure fn join$273(self$274, value$275) =
+  let label$66 = self$274.cap[0]
+  let struct$276 = SList(value$275)
+  return label$66(struct$276)
+
+closure fn join$277(self$278, value$279) =
+  let return$27 = self$278.cap[0]
+  let label$96 = closure join$280(return$27, value$279)
+  let return$37 = closure join$361(label$96)
+  let apply$131 = closure join$365(return$37)
+  return String#(apply$131)
+
+closure fn join$280(self$281, value$282) =
+  let return$27 = self$281.cap[0]
+  let value$279 = self$281.cap[1]
+  let then$151 = closure join$283(return$27)
+  return value$279(value$282, then$151)
+
+closure fn join$283(self$284, value$285) =
+  let return$27 = self$284.cap[0]
+  let return$28 = closure join$286(return$27, value$285)
+  let then$149 = closure join$289(return$28)
+  return Cons(then$149)
+
+closure fn join$286(self$287, value$288) =
+  let return$27 = self$287.cap[0]
+  let value$285 = self$287.cap[1]
+  return value$285(value$288, return$27)
+
+closure fn join$289(self$290, value$291) =
+  let return$28 = self$290.cap[0]
+  let label$76 = closure join$292(return$28, value$291)
+  let return$30 = closure join$301(label$76)
+  let then$145 = closure join$305(return$30)
+  return Cons(then$145)
+
+closure fn join$292(self$293, value$294) =
+  let return$28 = self$293.cap[0]
+  let value$291 = self$293.cap[1]
+  let then$147 = closure join$295(return$28)
+  return value$291(value$294, then$147)
+
+closure fn join$295(self$296, value$297) =
+  let return$28 = self$296.cap[0]
+  let return$29 = closure join$298(return$28, value$297)
+  return Nil(return$29)
+
+closure fn join$298(self$299, value$300) =
+  let return$28 = self$299.cap[0]
+  let value$297 = self$299.cap[1]
+  return value$297(value$300, return$28)
+
+closure fn join$301(self$302, value$303) =
+  let label$76 = self$302.cap[0]
+  let struct$304 = SList(value$303)
+  return label$76(struct$304)
+
+closure fn join$305(self$306, value$307) =
+  let return$30 = self$306.cap[0]
+  let label$94 = closure join$308(return$30, value$307)
+  let return$36 = closure join$353(label$94)
+  let apply$132 = closure join$357(return$36)
+  return String#(apply$132)
+
+closure fn join$308(self$309, value$310) =
+  let return$30 = self$309.cap[0]
+  let value$307 = self$309.cap[1]
+  let then$143 = closure join$311(return$30)
+  return value$307(value$310, then$143)
+
+closure fn join$311(self$312, value$313) =
+  let return$30 = self$312.cap[0]
+  let return$31 = closure join$314(return$30, value$313)
+  let then$141 = closure join$317(return$31)
+  return Cons(then$141)
+
+closure fn join$314(self$315, value$316) =
+  let return$30 = self$315.cap[0]
+  let value$313 = self$315.cap[1]
+  return value$313(value$316, return$30)
+
+closure fn join$317(self$318, value$319) =
+  let return$31 = self$318.cap[0]
+  let label$86 = closure join$320(return$31, value$319)
+  let return$33 = closure join$329(label$86)
+  let then$137 = closure join$333(return$33)
+  return Cons(then$137)
+
+closure fn join$320(self$321, value$322) =
+  let return$31 = self$321.cap[0]
+  let value$319 = self$321.cap[1]
+  let then$139 = closure join$323(return$31)
+  return value$319(value$322, then$139)
+
+closure fn join$323(self$324, value$325) =
+  let return$31 = self$324.cap[0]
+  let return$32 = closure join$326(return$31, value$325)
+  return Nil(return$32)
+
+closure fn join$326(self$327, value$328) =
+  let return$31 = self$327.cap[0]
+  let value$325 = self$327.cap[1]
+  return value$325(value$328, return$31)
+
+closure fn join$329(self$330, value$331) =
+  let label$86 = self$330.cap[0]
+  let struct$332 = SList(value$331)
+  return label$86(struct$332)
+
+closure fn join$333(self$334, value$335) =
+  let return$33 = self$334.cap[0]
+  let label$92 = closure join$336(return$33, value$335)
+  let return$35 = closure join$345(label$92)
+  let apply$133 = closure join$349(return$35)
+  return String#(apply$133)
+
+closure fn join$336(self$337, value$338) =
+  let return$33 = self$337.cap[0]
+  let value$335 = self$337.cap[1]
+  let then$135 = closure join$339(return$33)
+  return value$335(value$338, then$135)
+
+closure fn join$339(self$340, value$341) =
+  let return$33 = self$340.cap[0]
+  let return$34 = closure join$342(return$33, value$341)
+  return Nil(return$34)
+
+closure fn join$342(self$343, value$344) =
+  let return$33 = self$343.cap[0]
+  let value$341 = self$343.cap[1]
+  return value$341(value$344, return$33)
+
+closure fn join$345(self$346, value$347) =
+  let label$92 = self$346.cap[0]
+  let struct$348 = Symbol(value$347)
+  return label$92(struct$348)
+
+closure fn join$349(self$350, value$351) =
+  let return$35 = self$350.cap[0]
+  let lit$352 = "z"
+  return value$351(lit$352, return$35)
+
+closure fn join$353(self$354, value$355) =
+  let label$94 = self$354.cap[0]
+  let struct$356 = Symbol(value$355)
+  return label$94(struct$356)
+
+closure fn join$357(self$358, value$359) =
+  let return$36 = self$358.cap[0]
+  let lit$360 = "y"
+  return value$359(lit$360, return$36)
+
+closure fn join$361(self$362, value$363) =
+  let label$96 = self$362.cap[0]
+  let struct$364 = Symbol(value$363)
+  return label$96(struct$364)
+
+closure fn join$365(self$366, value$367) =
+  let return$37 = self$366.cap[0]
+  let lit$368 = "x"
+  return value$367(lit$368, return$37)
+
+toplevel fn Symbol(return$38) =
+  let closure$374 = closure lambda$371()
+  return return$38(closure$374)
+
+closure fn lambda$371(self$372, constructor$7, return$39) =
+  let struct$373 = Symbol(constructor$7)
+  return return$39(struct$373)
+
+toplevel fn SInt(return$40) =
+  let closure$379 = closure lambda$376()
+  return return$40(closure$379)
+
+closure fn lambda$376(self$377, constructor$8, return$41) =
+  let struct$378 = SInt(constructor$8)
+  return return$41(struct$378)
+
+toplevel fn SList(return$42) =
+  let closure$384 = closure lambda$381()
+  return return$42(closure$384)
+
+closure fn lambda$381(self$382, constructor$9, return$43) =
+  let struct$383 = SList(constructor$9)
+  return return$43(struct$383)
+
+toplevel fn zig_main$387() =
+  let finish$385 = closure join$389()
+  let after_main$386 = closure join$392(finish$385)
+  return main(after_main$386)
+
+closure fn join$389(self$390, value$391) = return value$391
+
+closure fn join$392(self$393, value$394) =
+  let finish$385 = self$393.cap[0]
+  let struct$395 = Tuple()
+  return value$394(struct$395, finish$385)
+
+entry = zig_main$387
+
+=== Peephole ===
+toplevel fn <>(return$10) = return appendString(return$10)
+
+toplevel fn show(return$11) =
+  let closure$257 = closure lambda$160()
+  return return$11(closure$257)
+
+closure fn lambda$160(self$161, param$5, return$12) =
+  if param$5.tag == Symbol then {
+    let str#0 = param$5.0
+    let then$103 = closure join$162(return$12, str#0)
+    return <>(then$103)
+  } else {
+    if param$5.tag == SInt then {
+      let int#1 = param$5.0
+      let then$109 = closure join$175(int#1, return$12)
+      return <>(then$109)
+    } else {
+      if param$5.tag == SList then {
+        let ss#2 = param$5.0
+        let then$129 = closure join$194(return$12, ss#2)
+        return <>(then$129)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  }
+
+closure fn join$162(self$163, value$164) =
+  let return$12 = self$163.cap[0]
+  let str#0 = self$163.cap[1]
+  let return$13 = closure join$165(return$12, str#0, value$164)
+  let apply$100 = closure join$171(return$13)
+  return String#(apply$100)
+
+closure fn join$165(self$166, value$167) =
+  let return$12 = self$166.cap[0]
+  let str#0 = self$166.cap[1]
+  let value$164 = self$166.cap[2]
+  let apply$101 = closure join$168(return$12, str#0)
+  return value$164(value$167, apply$101)
+
+closure fn join$168(self$169, value$170) =
+  let return$12 = self$169.cap[0]
+  let str#0 = self$169.cap[1]
+  return value$170(str#0, return$12)
+
+closure fn join$171(self$172, value$173) =
+  let return$13 = self$172.cap[0]
+  let lit$174 = "Symbol "
+  return value$173(lit$174, return$13)
+
+closure fn join$175(self$176, value$177) =
+  let int#1 = self$176.cap[0]
+  let return$12 = self$176.cap[1]
+  let return$15 = closure join$178(int#1, return$12, value$177)
+  let apply$104 = closure join$190(return$15)
+  return String#(apply$104)
+
+closure fn join$178(self$179, value$180) =
+  let int#1 = self$179.cap[0]
+  let return$12 = self$179.cap[1]
+  let value$177 = self$179.cap[2]
+  let then$107 = closure join$181(int#1, return$12)
+  return value$177(value$180, then$107)
+
+closure fn join$181(self$182, value$183) =
+  let int#1 = self$182.cap[0]
+  let return$12 = self$182.cap[1]
+  let return$14 = closure join$184(return$12, value$183)
+  let apply$105 = closure join$187(int#1, return$14)
+  return toStringInt32(apply$105)
+
+closure fn join$184(self$185, value$186) =
+  let return$12 = self$185.cap[0]
+  let value$183 = self$185.cap[1]
+  return value$183(value$186, return$12)
+
+closure fn join$187(self$188, value$189) =
+  let int#1 = self$188.cap[0]
+  let return$14 = self$188.cap[1]
+  return value$189(int#1, return$14)
+
+closure fn join$190(self$191, value$192) =
+  let return$15 = self$191.cap[0]
+  let lit$193 = "SInt "
+  return value$192(lit$193, return$15)
+
+closure fn join$194(self$195, value$196) =
+  let return$12 = self$195.cap[0]
+  let ss#2 = self$195.cap[1]
+  let return$23 = closure join$197(return$12, ss#2, value$196)
+  let apply$110 = closure join$253(return$23)
+  return String#(apply$110)
+
+closure fn join$197(self$198, value$199) =
+  let return$12 = self$198.cap[0]
+  let ss#2 = self$198.cap[1]
+  let value$196 = self$198.cap[2]
+  let then$127 = closure join$200(return$12, ss#2)
+  return value$196(value$199, then$127)
+
+closure fn join$200(self$201, value$202) =
+  let return$12 = self$201.cap[0]
+  let ss#2 = self$201.cap[1]
+  let return$16 = closure join$203(return$12, value$202)
+  let then$125 = closure join$206(return$16, ss#2)
+  return <>(then$125)
+
+closure fn join$203(self$204, value$205) =
+  let return$12 = self$204.cap[0]
+  let value$202 = self$204.cap[1]
+  return value$202(value$205, return$12)
+
+closure fn join$206(self$207, value$208) =
+  let return$16 = self$207.cap[0]
+  let ss#2 = self$207.cap[1]
+  let return$18 = closure join$209(return$16, value$208)
+  let then$120 = closure join$222(return$18, ss#2)
+  return concatString(then$120)
+
+closure fn join$209(self$210, value$211) =
+  let return$16 = self$210.cap[0]
+  let value$208 = self$210.cap[1]
+  let then$123 = closure join$212(return$16)
+  return value$208(value$211, then$123)
+
+closure fn join$212(self$213, value$214) =
+  let return$16 = self$213.cap[0]
+  let return$17 = closure join$215(return$16, value$214)
+  let apply$121 = closure join$218(return$17)
+  return String#(apply$121)
+
+closure fn join$215(self$216, value$217) =
+  let return$16 = self$216.cap[0]
+  let value$214 = self$216.cap[1]
+  return value$214(value$217, return$16)
+
+closure fn join$218(self$219, value$220) =
+  let return$17 = self$219.cap[0]
+  let lit$221 = "]"
+  return value$220(lit$221, return$17)
+
+closure fn join$222(self$223, value$224) =
+  let return$18 = self$223.cap[0]
+  let ss#2 = self$223.cap[1]
+  let return$19 = closure join$225(return$18, value$224)
+  let then$118 = closure join$228(return$19, ss#2)
+  return punctuate(then$118)
+
+closure fn join$225(self$226, value$227) =
+  let return$18 = self$226.cap[0]
+  let value$224 = self$226.cap[1]
+  return value$224(value$227, return$18)
+
+closure fn join$228(self$229, value$230) =
+  let return$19 = self$229.cap[0]
+  let ss#2 = self$229.cap[1]
+  let return$22 = closure join$231(return$19, ss#2, value$230)
+  let apply$111 = closure join$249(return$22)
+  return String#(apply$111)
+
+closure fn join$231(self$232, value$233) =
+  let return$19 = self$232.cap[0]
+  let ss#2 = self$232.cap[1]
+  let value$230 = self$232.cap[2]
+  let then$116 = closure join$234(return$19, ss#2)
+  return value$230(value$233, then$116)
+
+closure fn join$234(self$235, value$236) =
+  let return$19 = self$235.cap[0]
+  let ss#2 = self$235.cap[1]
+  let return$20 = closure join$237(return$19, value$236)
+  let then$114 = closure join$240(return$20, ss#2)
+  return mapList(then$114)
+
+closure fn join$237(self$238, value$239) =
+  let return$19 = self$238.cap[0]
+  let value$236 = self$238.cap[1]
+  return value$236(value$239, return$19)
+
+closure fn join$240(self$241, value$242) =
+  let return$20 = self$241.cap[0]
+  let ss#2 = self$241.cap[1]
+  let return$21 = closure join$243(return$20, ss#2, value$242)
+  return show(return$21)
+
+closure fn join$243(self$244, value$245) =
+  let return$20 = self$244.cap[0]
+  let ss#2 = self$244.cap[1]
+  let value$242 = self$244.cap[2]
+  let apply$112 = closure join$246(return$20, ss#2)
+  return value$242(value$245, apply$112)
+
+closure fn join$246(self$247, value$248) =
+  let return$20 = self$247.cap[0]
+  let ss#2 = self$247.cap[1]
+  return value$248(ss#2, return$20)
+
+closure fn join$249(self$250, value$251) =
+  let return$22 = self$250.cap[0]
+  let lit$252 = ", "
+  return value$251(lit$252, return$22)
+
+closure fn join$253(self$254, value$255) =
+  let return$23 = self$254.cap[0]
+  let lit$256 = "SList ["
+  return value$255(lit$256, return$23)
+
+toplevel fn main(return$24) =
+  let closure$369 = closure lambda$259()
+  return return$24(closure$369)
+
+closure fn lambda$259(self$260, param$6, return$25) =
+  if  then {
+    let label$66 = closure join$261(return$25)
+    let return$27 = closure join$273(label$66)
+    let then$153 = closure join$277(return$27)
+    return Cons(then$153)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$261(self$262, value$263) =
+  let return$25 = self$262.cap[0]
+  let then$156 = closure join$264(return$25, value$263)
+  return putStrLn(then$156)
+
+closure fn join$264(self$265, value$266) =
+  let return$25 = self$265.cap[0]
+  let value$263 = self$265.cap[1]
+  let return$26 = closure join$267(return$25, value$266)
+  let apply$154 = closure join$270(return$26, value$263)
+  return show(apply$154)
+
+closure fn join$267(self$268, value$269) =
+  let return$25 = self$268.cap[0]
+  let value$266 = self$268.cap[1]
+  return value$266(value$269, return$25)
+
+closure fn join$270(self$271, value$272) =
+  let return$26 = self$271.cap[0]
+  let value$263 = self$271.cap[1]
+  return value$272(value$263, return$26)
+
+closure fn join$273(self$274, value$275) =
+  let label$66 = self$274.cap[0]
+  let struct$276 = SList(value$275)
+  return label$66(struct$276)
+
+closure fn join$277(self$278, value$279) =
+  let return$27 = self$278.cap[0]
+  let label$96 = closure join$280(return$27, value$279)
+  let return$37 = closure join$361(label$96)
+  let apply$131 = closure join$365(return$37)
+  return String#(apply$131)
+
+closure fn join$280(self$281, value$282) =
+  let return$27 = self$281.cap[0]
+  let value$279 = self$281.cap[1]
+  let then$151 = closure join$283(return$27)
+  return value$279(value$282, then$151)
+
+closure fn join$283(self$284, value$285) =
+  let return$27 = self$284.cap[0]
+  let return$28 = closure join$286(return$27, value$285)
+  let then$149 = closure join$289(return$28)
+  return Cons(then$149)
+
+closure fn join$286(self$287, value$288) =
+  let return$27 = self$287.cap[0]
+  let value$285 = self$287.cap[1]
+  return value$285(value$288, return$27)
+
+closure fn join$289(self$290, value$291) =
+  let return$28 = self$290.cap[0]
+  let label$76 = closure join$292(return$28, value$291)
+  let return$30 = closure join$301(label$76)
+  let then$145 = closure join$305(return$30)
+  return Cons(then$145)
+
+closure fn join$292(self$293, value$294) =
+  let return$28 = self$293.cap[0]
+  let value$291 = self$293.cap[1]
+  let then$147 = closure join$295(return$28)
+  return value$291(value$294, then$147)
+
+closure fn join$295(self$296, value$297) =
+  let return$28 = self$296.cap[0]
+  let return$29 = closure join$298(return$28, value$297)
+  return Nil(return$29)
+
+closure fn join$298(self$299, value$300) =
+  let return$28 = self$299.cap[0]
+  let value$297 = self$299.cap[1]
+  return value$297(value$300, return$28)
+
+closure fn join$301(self$302, value$303) =
+  let label$76 = self$302.cap[0]
+  let struct$304 = SList(value$303)
+  return label$76(struct$304)
+
+closure fn join$305(self$306, value$307) =
+  let return$30 = self$306.cap[0]
+  let label$94 = closure join$308(return$30, value$307)
+  let return$36 = closure join$353(label$94)
+  let apply$132 = closure join$357(return$36)
+  return String#(apply$132)
+
+closure fn join$308(self$309, value$310) =
+  let return$30 = self$309.cap[0]
+  let value$307 = self$309.cap[1]
+  let then$143 = closure join$311(return$30)
+  return value$307(value$310, then$143)
+
+closure fn join$311(self$312, value$313) =
+  let return$30 = self$312.cap[0]
+  let return$31 = closure join$314(return$30, value$313)
+  let then$141 = closure join$317(return$31)
+  return Cons(then$141)
+
+closure fn join$314(self$315, value$316) =
+  let return$30 = self$315.cap[0]
+  let value$313 = self$315.cap[1]
+  return value$313(value$316, return$30)
+
+closure fn join$317(self$318, value$319) =
+  let return$31 = self$318.cap[0]
+  let label$86 = closure join$320(return$31, value$319)
+  let return$33 = closure join$329(label$86)
+  let then$137 = closure join$333(return$33)
+  return Cons(then$137)
+
+closure fn join$320(self$321, value$322) =
+  let return$31 = self$321.cap[0]
+  let value$319 = self$321.cap[1]
+  let then$139 = closure join$323(return$31)
+  return value$319(value$322, then$139)
+
+closure fn join$323(self$324, value$325) =
+  let return$31 = self$324.cap[0]
+  let return$32 = closure join$326(return$31, value$325)
+  return Nil(return$32)
+
+closure fn join$326(self$327, value$328) =
+  let return$31 = self$327.cap[0]
+  let value$325 = self$327.cap[1]
+  return value$325(value$328, return$31)
+
+closure fn join$329(self$330, value$331) =
+  let label$86 = self$330.cap[0]
+  let struct$332 = SList(value$331)
+  return label$86(struct$332)
+
+closure fn join$333(self$334, value$335) =
+  let return$33 = self$334.cap[0]
+  let label$92 = closure join$336(return$33, value$335)
+  let return$35 = closure join$345(label$92)
+  let apply$133 = closure join$349(return$35)
+  return String#(apply$133)
+
+closure fn join$336(self$337, value$338) =
+  let return$33 = self$337.cap[0]
+  let value$335 = self$337.cap[1]
+  let then$135 = closure join$339(return$33)
+  return value$335(value$338, then$135)
+
+closure fn join$339(self$340, value$341) =
+  let return$33 = self$340.cap[0]
+  let return$34 = closure join$342(return$33, value$341)
+  return Nil(return$34)
+
+closure fn join$342(self$343, value$344) =
+  let return$33 = self$343.cap[0]
+  let value$341 = self$343.cap[1]
+  return value$341(value$344, return$33)
+
+closure fn join$345(self$346, value$347) =
+  let label$92 = self$346.cap[0]
+  let struct$348 = Symbol(value$347)
+  return label$92(struct$348)
+
+closure fn join$349(self$350, value$351) =
+  let return$35 = self$350.cap[0]
+  let lit$352 = "z"
+  return value$351(lit$352, return$35)
+
+closure fn join$353(self$354, value$355) =
+  let label$94 = self$354.cap[0]
+  let struct$356 = Symbol(value$355)
+  return label$94(struct$356)
+
+closure fn join$357(self$358, value$359) =
+  let return$36 = self$358.cap[0]
+  let lit$360 = "y"
+  return value$359(lit$360, return$36)
+
+closure fn join$361(self$362, value$363) =
+  let label$96 = self$362.cap[0]
+  let struct$364 = Symbol(value$363)
+  return label$96(struct$364)
+
+closure fn join$365(self$366, value$367) =
+  let return$37 = self$366.cap[0]
+  let lit$368 = "x"
+  return value$367(lit$368, return$37)
+
+toplevel fn Symbol(return$38) =
+  let closure$374 = closure lambda$371()
+  return return$38(closure$374)
+
+closure fn lambda$371(self$372, constructor$7, return$39) =
+  let struct$373 = Symbol(constructor$7)
+  return return$39(struct$373)
+
+toplevel fn SInt(return$40) =
+  let closure$379 = closure lambda$376()
+  return return$40(closure$379)
+
+closure fn lambda$376(self$377, constructor$8, return$41) =
+  let struct$378 = SInt(constructor$8)
+  return return$41(struct$378)
+
+toplevel fn SList(return$42) =
+  let closure$384 = closure lambda$381()
+  return return$42(closure$384)
+
+closure fn lambda$381(self$382, constructor$9, return$43) =
+  let struct$383 = SList(constructor$9)
+  return return$43(struct$383)
+
+toplevel fn zig_main$387() =
+  let finish$385 = closure join$389()
+  let after_main$386 = closure join$392(finish$385)
+  return main(after_main$386)
+
+closure fn join$389(self$390, value$391) = return value$391
+
+closure fn join$392(self$393, value$394) =
+  let finish$385 = self$393.cap[0]
+  let struct$395 = Tuple()
+  return value$394(struct$395, finish$385)
+
+entry = zig_main$387
+
+=== Perceus ===
+toplevel fn <>(return$10) = return appendString(return$10)
+
+toplevel fn show(return$11) =
+  let closure$257 = closure lambda$160()
+  return return$11(closure$257)
+
+closure fn lambda$160(self$161, param$5, return$12) =
+  drop self$161
+  if param$5.tag == Symbol then {
+    let str#0 = param$5.0
+    dup str#0
+    drop param$5
+    let then$103 = closure join$162(return$12, str#0)
+    return <>(then$103)
+  } else {
+    if param$5.tag == SInt then {
+      let int#1 = param$5.0
+      dup int#1
+      drop param$5
+      let then$109 = closure join$175(int#1, return$12)
+      return <>(then$109)
+    } else {
+      if param$5.tag == SList then {
+        let ss#2 = param$5.0
+        dup ss#2
+        drop param$5
+        let then$129 = closure join$194(return$12, ss#2)
+        return <>(then$129)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  }
+
+closure fn join$162(self$163, value$164) =
+  let return$12 = self$163.cap[0]
+  dup return$12
+  let str#0 = self$163.cap[1]
+  dup str#0
+  drop self$163
+  let return$13 = closure join$165(return$12, str#0, value$164)
+  let apply$100 = closure join$171(return$13)
+  return String#(apply$100)
+
+closure fn join$165(self$166, value$167) =
+  let return$12 = self$166.cap[0]
+  dup return$12
+  let str#0 = self$166.cap[1]
+  dup str#0
+  let value$164 = self$166.cap[2]
+  dup value$164
+  drop self$166
+  let apply$101 = closure join$168(return$12, str#0)
+  return value$164(value$167, apply$101)
+
+closure fn join$168(self$169, value$170) =
+  let return$12 = self$169.cap[0]
+  dup return$12
+  let str#0 = self$169.cap[1]
+  dup str#0
+  drop self$169
+  return value$170(str#0, return$12)
+
+closure fn join$171(self$172, value$173) =
+  let return$13 = self$172.cap[0]
+  dup return$13
+  drop self$172
+  let lit$174 = "Symbol "
+  return value$173(lit$174, return$13)
+
+closure fn join$175(self$176, value$177) =
+  let int#1 = self$176.cap[0]
+  dup int#1
+  let return$12 = self$176.cap[1]
+  dup return$12
+  drop self$176
+  let return$15 = closure join$178(int#1, return$12, value$177)
+  let apply$104 = closure join$190(return$15)
+  return String#(apply$104)
+
+closure fn join$178(self$179, value$180) =
+  let int#1 = self$179.cap[0]
+  dup int#1
+  let return$12 = self$179.cap[1]
+  dup return$12
+  let value$177 = self$179.cap[2]
+  dup value$177
+  drop self$179
+  let then$107 = closure join$181(int#1, return$12)
+  return value$177(value$180, then$107)
+
+closure fn join$181(self$182, value$183) =
+  let int#1 = self$182.cap[0]
+  dup int#1
+  let return$12 = self$182.cap[1]
+  dup return$12
+  drop self$182
+  let return$14 = closure join$184(return$12, value$183)
+  let apply$105 = closure join$187(int#1, return$14)
+  return toStringInt32(apply$105)
+
+closure fn join$184(self$185, value$186) =
+  let return$12 = self$185.cap[0]
+  dup return$12
+  let value$183 = self$185.cap[1]
+  dup value$183
+  drop self$185
+  return value$183(value$186, return$12)
+
+closure fn join$187(self$188, value$189) =
+  let int#1 = self$188.cap[0]
+  dup int#1
+  let return$14 = self$188.cap[1]
+  dup return$14
+  drop self$188
+  return value$189(int#1, return$14)
+
+closure fn join$190(self$191, value$192) =
+  let return$15 = self$191.cap[0]
+  dup return$15
+  drop self$191
+  let lit$193 = "SInt "
+  return value$192(lit$193, return$15)
+
+closure fn join$194(self$195, value$196) =
+  let return$12 = self$195.cap[0]
+  dup return$12
+  let ss#2 = self$195.cap[1]
+  dup ss#2
+  drop self$195
+  let return$23 = closure join$197(return$12, ss#2, value$196)
+  let apply$110 = closure join$253(return$23)
+  return String#(apply$110)
+
+closure fn join$197(self$198, value$199) =
+  let return$12 = self$198.cap[0]
+  dup return$12
+  let ss#2 = self$198.cap[1]
+  dup ss#2
+  let value$196 = self$198.cap[2]
+  dup value$196
+  drop self$198
+  let then$127 = closure join$200(return$12, ss#2)
+  return value$196(value$199, then$127)
+
+closure fn join$200(self$201, value$202) =
+  let return$12 = self$201.cap[0]
+  dup return$12
+  let ss#2 = self$201.cap[1]
+  dup ss#2
+  drop self$201
+  let return$16 = closure join$203(return$12, value$202)
+  let then$125 = closure join$206(return$16, ss#2)
+  return <>(then$125)
+
+closure fn join$203(self$204, value$205) =
+  let return$12 = self$204.cap[0]
+  dup return$12
+  let value$202 = self$204.cap[1]
+  dup value$202
+  drop self$204
+  return value$202(value$205, return$12)
+
+closure fn join$206(self$207, value$208) =
+  let return$16 = self$207.cap[0]
+  dup return$16
+  let ss#2 = self$207.cap[1]
+  dup ss#2
+  drop self$207
+  let return$18 = closure join$209(return$16, value$208)
+  let then$120 = closure join$222(return$18, ss#2)
+  return concatString(then$120)
+
+closure fn join$209(self$210, value$211) =
+  let return$16 = self$210.cap[0]
+  dup return$16
+  let value$208 = self$210.cap[1]
+  dup value$208
+  drop self$210
+  let then$123 = closure join$212(return$16)
+  return value$208(value$211, then$123)
+
+closure fn join$212(self$213, value$214) =
+  let return$16 = self$213.cap[0]
+  dup return$16
+  drop self$213
+  let return$17 = closure join$215(return$16, value$214)
+  let apply$121 = closure join$218(return$17)
+  return String#(apply$121)
+
+closure fn join$215(self$216, value$217) =
+  let return$16 = self$216.cap[0]
+  dup return$16
+  let value$214 = self$216.cap[1]
+  dup value$214
+  drop self$216
+  return value$214(value$217, return$16)
+
+closure fn join$218(self$219, value$220) =
+  let return$17 = self$219.cap[0]
+  dup return$17
+  drop self$219
+  let lit$221 = "]"
+  return value$220(lit$221, return$17)
+
+closure fn join$222(self$223, value$224) =
+  let return$18 = self$223.cap[0]
+  dup return$18
+  let ss#2 = self$223.cap[1]
+  dup ss#2
+  drop self$223
+  let return$19 = closure join$225(return$18, value$224)
+  let then$118 = closure join$228(return$19, ss#2)
+  return punctuate(then$118)
+
+closure fn join$225(self$226, value$227) =
+  let return$18 = self$226.cap[0]
+  dup return$18
+  let value$224 = self$226.cap[1]
+  dup value$224
+  drop self$226
+  return value$224(value$227, return$18)
+
+closure fn join$228(self$229, value$230) =
+  let return$19 = self$229.cap[0]
+  dup return$19
+  let ss#2 = self$229.cap[1]
+  dup ss#2
+  drop self$229
+  let return$22 = closure join$231(return$19, ss#2, value$230)
+  let apply$111 = closure join$249(return$22)
+  return String#(apply$111)
+
+closure fn join$231(self$232, value$233) =
+  let return$19 = self$232.cap[0]
+  dup return$19
+  let ss#2 = self$232.cap[1]
+  dup ss#2
+  let value$230 = self$232.cap[2]
+  dup value$230
+  drop self$232
+  let then$116 = closure join$234(return$19, ss#2)
+  return value$230(value$233, then$116)
+
+closure fn join$234(self$235, value$236) =
+  let return$19 = self$235.cap[0]
+  dup return$19
+  let ss#2 = self$235.cap[1]
+  dup ss#2
+  drop self$235
+  let return$20 = closure join$237(return$19, value$236)
+  let then$114 = closure join$240(return$20, ss#2)
+  return mapList(then$114)
+
+closure fn join$237(self$238, value$239) =
+  let return$19 = self$238.cap[0]
+  dup return$19
+  let value$236 = self$238.cap[1]
+  dup value$236
+  drop self$238
+  return value$236(value$239, return$19)
+
+closure fn join$240(self$241, value$242) =
+  let return$20 = self$241.cap[0]
+  dup return$20
+  let ss#2 = self$241.cap[1]
+  dup ss#2
+  drop self$241
+  let return$21 = closure join$243(return$20, ss#2, value$242)
+  return show(return$21)
+
+closure fn join$243(self$244, value$245) =
+  let return$20 = self$244.cap[0]
+  dup return$20
+  let ss#2 = self$244.cap[1]
+  dup ss#2
+  let value$242 = self$244.cap[2]
+  dup value$242
+  drop self$244
+  let apply$112 = closure join$246(return$20, ss#2)
+  return value$242(value$245, apply$112)
+
+closure fn join$246(self$247, value$248) =
+  let return$20 = self$247.cap[0]
+  dup return$20
+  let ss#2 = self$247.cap[1]
+  dup ss#2
+  drop self$247
+  return value$248(ss#2, return$20)
+
+closure fn join$249(self$250, value$251) =
+  let return$22 = self$250.cap[0]
+  dup return$22
+  drop self$250
+  let lit$252 = ", "
+  return value$251(lit$252, return$22)
+
+closure fn join$253(self$254, value$255) =
+  let return$23 = self$254.cap[0]
+  dup return$23
+  drop self$254
+  let lit$256 = "SList ["
+  return value$255(lit$256, return$23)
+
+toplevel fn main(return$24) =
+  let closure$369 = closure lambda$259()
+  return return$24(closure$369)
+
+closure fn lambda$259(self$260, param$6, return$25) =
+  drop param$6
+  drop self$260
+  if  then {
+    let label$66 = closure join$261(return$25)
+    let return$27 = closure join$273(label$66)
+    let then$153 = closure join$277(return$27)
+    return Cons(then$153)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$261(self$262, value$263) =
+  let return$25 = self$262.cap[0]
+  dup return$25
+  drop self$262
+  let then$156 = closure join$264(return$25, value$263)
+  return putStrLn(then$156)
+
+closure fn join$264(self$265, value$266) =
+  let return$25 = self$265.cap[0]
+  dup return$25
+  let value$263 = self$265.cap[1]
+  dup value$263
+  drop self$265
+  let return$26 = closure join$267(return$25, value$266)
+  let apply$154 = closure join$270(return$26, value$263)
+  return show(apply$154)
+
+closure fn join$267(self$268, value$269) =
+  let return$25 = self$268.cap[0]
+  dup return$25
+  let value$266 = self$268.cap[1]
+  dup value$266
+  drop self$268
+  return value$266(value$269, return$25)
+
+closure fn join$270(self$271, value$272) =
+  let return$26 = self$271.cap[0]
+  dup return$26
+  let value$263 = self$271.cap[1]
+  dup value$263
+  drop self$271
+  return value$272(value$263, return$26)
+
+closure fn join$273(self$274, value$275) =
+  let label$66 = self$274.cap[0]
+  dup label$66
+  drop self$274
+  let struct$276 = SList(value$275)
+  return label$66(struct$276)
+
+closure fn join$277(self$278, value$279) =
+  let return$27 = self$278.cap[0]
+  dup return$27
+  drop self$278
+  let label$96 = closure join$280(return$27, value$279)
+  let return$37 = closure join$361(label$96)
+  let apply$131 = closure join$365(return$37)
+  return String#(apply$131)
+
+closure fn join$280(self$281, value$282) =
+  let return$27 = self$281.cap[0]
+  dup return$27
+  let value$279 = self$281.cap[1]
+  dup value$279
+  drop self$281
+  let then$151 = closure join$283(return$27)
+  return value$279(value$282, then$151)
+
+closure fn join$283(self$284, value$285) =
+  let return$27 = self$284.cap[0]
+  dup return$27
+  drop self$284
+  let return$28 = closure join$286(return$27, value$285)
+  let then$149 = closure join$289(return$28)
+  return Cons(then$149)
+
+closure fn join$286(self$287, value$288) =
+  let return$27 = self$287.cap[0]
+  dup return$27
+  let value$285 = self$287.cap[1]
+  dup value$285
+  drop self$287
+  return value$285(value$288, return$27)
+
+closure fn join$289(self$290, value$291) =
+  let return$28 = self$290.cap[0]
+  dup return$28
+  drop self$290
+  let label$76 = closure join$292(return$28, value$291)
+  let return$30 = closure join$301(label$76)
+  let then$145 = closure join$305(return$30)
+  return Cons(then$145)
+
+closure fn join$292(self$293, value$294) =
+  let return$28 = self$293.cap[0]
+  dup return$28
+  let value$291 = self$293.cap[1]
+  dup value$291
+  drop self$293
+  let then$147 = closure join$295(return$28)
+  return value$291(value$294, then$147)
+
+closure fn join$295(self$296, value$297) =
+  let return$28 = self$296.cap[0]
+  dup return$28
+  drop self$296
+  let return$29 = closure join$298(return$28, value$297)
+  return Nil(return$29)
+
+closure fn join$298(self$299, value$300) =
+  let return$28 = self$299.cap[0]
+  dup return$28
+  let value$297 = self$299.cap[1]
+  dup value$297
+  drop self$299
+  return value$297(value$300, return$28)
+
+closure fn join$301(self$302, value$303) =
+  let label$76 = self$302.cap[0]
+  dup label$76
+  drop self$302
+  let struct$304 = SList(value$303)
+  return label$76(struct$304)
+
+closure fn join$305(self$306, value$307) =
+  let return$30 = self$306.cap[0]
+  dup return$30
+  drop self$306
+  let label$94 = closure join$308(return$30, value$307)
+  let return$36 = closure join$353(label$94)
+  let apply$132 = closure join$357(return$36)
+  return String#(apply$132)
+
+closure fn join$308(self$309, value$310) =
+  let return$30 = self$309.cap[0]
+  dup return$30
+  let value$307 = self$309.cap[1]
+  dup value$307
+  drop self$309
+  let then$143 = closure join$311(return$30)
+  return value$307(value$310, then$143)
+
+closure fn join$311(self$312, value$313) =
+  let return$30 = self$312.cap[0]
+  dup return$30
+  drop self$312
+  let return$31 = closure join$314(return$30, value$313)
+  let then$141 = closure join$317(return$31)
+  return Cons(then$141)
+
+closure fn join$314(self$315, value$316) =
+  let return$30 = self$315.cap[0]
+  dup return$30
+  let value$313 = self$315.cap[1]
+  dup value$313
+  drop self$315
+  return value$313(value$316, return$30)
+
+closure fn join$317(self$318, value$319) =
+  let return$31 = self$318.cap[0]
+  dup return$31
+  drop self$318
+  let label$86 = closure join$320(return$31, value$319)
+  let return$33 = closure join$329(label$86)
+  let then$137 = closure join$333(return$33)
+  return Cons(then$137)
+
+closure fn join$320(self$321, value$322) =
+  let return$31 = self$321.cap[0]
+  dup return$31
+  let value$319 = self$321.cap[1]
+  dup value$319
+  drop self$321
+  let then$139 = closure join$323(return$31)
+  return value$319(value$322, then$139)
+
+closure fn join$323(self$324, value$325) =
+  let return$31 = self$324.cap[0]
+  dup return$31
+  drop self$324
+  let return$32 = closure join$326(return$31, value$325)
+  return Nil(return$32)
+
+closure fn join$326(self$327, value$328) =
+  let return$31 = self$327.cap[0]
+  dup return$31
+  let value$325 = self$327.cap[1]
+  dup value$325
+  drop self$327
+  return value$325(value$328, return$31)
+
+closure fn join$329(self$330, value$331) =
+  let label$86 = self$330.cap[0]
+  dup label$86
+  drop self$330
+  let struct$332 = SList(value$331)
+  return label$86(struct$332)
+
+closure fn join$333(self$334, value$335) =
+  let return$33 = self$334.cap[0]
+  dup return$33
+  drop self$334
+  let label$92 = closure join$336(return$33, value$335)
+  let return$35 = closure join$345(label$92)
+  let apply$133 = closure join$349(return$35)
+  return String#(apply$133)
+
+closure fn join$336(self$337, value$338) =
+  let return$33 = self$337.cap[0]
+  dup return$33
+  let value$335 = self$337.cap[1]
+  dup value$335
+  drop self$337
+  let then$135 = closure join$339(return$33)
+  return value$335(value$338, then$135)
+
+closure fn join$339(self$340, value$341) =
+  let return$33 = self$340.cap[0]
+  dup return$33
+  drop self$340
+  let return$34 = closure join$342(return$33, value$341)
+  return Nil(return$34)
+
+closure fn join$342(self$343, value$344) =
+  let return$33 = self$343.cap[0]
+  dup return$33
+  let value$341 = self$343.cap[1]
+  dup value$341
+  drop self$343
+  return value$341(value$344, return$33)
+
+closure fn join$345(self$346, value$347) =
+  let label$92 = self$346.cap[0]
+  dup label$92
+  drop self$346
+  let struct$348 = Symbol(value$347)
+  return label$92(struct$348)
+
+closure fn join$349(self$350, value$351) =
+  let return$35 = self$350.cap[0]
+  dup return$35
+  drop self$350
+  let lit$352 = "z"
+  return value$351(lit$352, return$35)
+
+closure fn join$353(self$354, value$355) =
+  let label$94 = self$354.cap[0]
+  dup label$94
+  drop self$354
+  let struct$356 = Symbol(value$355)
+  return label$94(struct$356)
+
+closure fn join$357(self$358, value$359) =
+  let return$36 = self$358.cap[0]
+  dup return$36
+  drop self$358
+  let lit$360 = "y"
+  return value$359(lit$360, return$36)
+
+closure fn join$361(self$362, value$363) =
+  let label$96 = self$362.cap[0]
+  dup label$96
+  drop self$362
+  let struct$364 = Symbol(value$363)
+  return label$96(struct$364)
+
+closure fn join$365(self$366, value$367) =
+  let return$37 = self$366.cap[0]
+  dup return$37
+  drop self$366
+  let lit$368 = "x"
+  return value$367(lit$368, return$37)
+
+toplevel fn Symbol(return$38) =
+  let closure$374 = closure lambda$371()
+  return return$38(closure$374)
+
+closure fn lambda$371(self$372, constructor$7, return$39) =
+  drop self$372
+  let struct$373 = Symbol(constructor$7)
+  return return$39(struct$373)
+
+toplevel fn SInt(return$40) =
+  let closure$379 = closure lambda$376()
+  return return$40(closure$379)
+
+closure fn lambda$376(self$377, constructor$8, return$41) =
+  drop self$377
+  let struct$378 = SInt(constructor$8)
+  return return$41(struct$378)
+
+toplevel fn SList(return$42) =
+  let closure$384 = closure lambda$381()
+  return return$42(closure$384)
+
+closure fn lambda$381(self$382, constructor$9, return$43) =
+  drop self$382
+  let struct$383 = SList(constructor$9)
+  return return$43(struct$383)
+
+toplevel fn zig_main$387() =
+  let finish$385 = closure join$389()
+  let after_main$386 = closure join$392(finish$385)
+  return main(after_main$386)
+
+closure fn join$389(self$390, value$391) =
+  drop self$390
+  return value$391
+
+closure fn join$392(self$393, value$394) =
+  let finish$385 = self$393.cap[0]
+  dup finish$385
+  drop self$393
+  let struct$395 = Tuple()
+  return value$394(struct$395, finish$385)
+
+entry = zig_main$387
+
+=== Reuse ===
+toplevel fn <>(return$10) = return appendString(return$10)
+
+toplevel fn show(return$11) =
+  let closure$257 = closure lambda$160()
+  return return$11(closure$257)
+
+closure fn lambda$160(self$161, param$5, return$12) =
+  drop self$161
+  if param$5.tag == Symbol then {
+    let str#0 = param$5.0
+    dup str#0
+    let then$103 = closure join$162(return$12, str#0)
+    drop param$5
+    return <>(then$103)
+  } else {
+    if param$5.tag == SInt then {
+      let int#1 = param$5.0
+      dup int#1
+      let then$109 = closure join$175(int#1, return$12)
+      drop param$5
+      return <>(then$109)
+    } else {
+      if param$5.tag == SList then {
+        let ss#2 = param$5.0
+        dup ss#2
+        let then$129 = closure join$194(return$12, ss#2)
+        drop param$5
+        return <>(then$129)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  }
+
+closure fn join$162(self$163, value$164) =
+  let return$12 = self$163.cap[0]
+  dup return$12
+  let str#0 = self$163.cap[1]
+  dup str#0
+  let return$13 = closure join$165(return$12, str#0, value$164)
+  let apply$100 = closure join$171(return$13)
+  drop self$163
+  return String#(apply$100)
+
+closure fn join$165(self$166, value$167) =
+  let return$12 = self$166.cap[0]
+  dup return$12
+  let str#0 = self$166.cap[1]
+  dup str#0
+  let value$164 = self$166.cap[2]
+  dup value$164
+  let apply$101 = closure join$168(return$12, str#0)
+  drop self$166
+  return value$164(value$167, apply$101)
+
+closure fn join$168(self$169, value$170) =
+  let return$12 = self$169.cap[0]
+  dup return$12
+  let str#0 = self$169.cap[1]
+  dup str#0
+  drop self$169
+  return value$170(str#0, return$12)
+
+closure fn join$171(self$172, value$173) =
+  let return$13 = self$172.cap[0]
+  dup return$13
+  let lit$174 = "Symbol "
+  drop self$172
+  return value$173(lit$174, return$13)
+
+closure fn join$175(self$176, value$177) =
+  let int#1 = self$176.cap[0]
+  dup int#1
+  let return$12 = self$176.cap[1]
+  dup return$12
+  let return$15 = closure join$178(int#1, return$12, value$177)
+  let apply$104 = closure join$190(return$15)
+  drop self$176
+  return String#(apply$104)
+
+closure fn join$178(self$179, value$180) =
+  let int#1 = self$179.cap[0]
+  dup int#1
+  let return$12 = self$179.cap[1]
+  dup return$12
+  let value$177 = self$179.cap[2]
+  dup value$177
+  let then$107 = closure join$181(int#1, return$12)
+  drop self$179
+  return value$177(value$180, then$107)
+
+closure fn join$181(self$182, value$183) =
+  let int#1 = self$182.cap[0]
+  dup int#1
+  let return$12 = self$182.cap[1]
+  dup return$12
+  let return$14 = closure join$184(return$12, value$183)
+  let apply$105 = closure join$187(int#1, return$14)
+  drop self$182
+  return toStringInt32(apply$105)
+
+closure fn join$184(self$185, value$186) =
+  let return$12 = self$185.cap[0]
+  dup return$12
+  let value$183 = self$185.cap[1]
+  dup value$183
+  drop self$185
+  return value$183(value$186, return$12)
+
+closure fn join$187(self$188, value$189) =
+  let int#1 = self$188.cap[0]
+  dup int#1
+  let return$14 = self$188.cap[1]
+  dup return$14
+  drop self$188
+  return value$189(int#1, return$14)
+
+closure fn join$190(self$191, value$192) =
+  let return$15 = self$191.cap[0]
+  dup return$15
+  let lit$193 = "SInt "
+  drop self$191
+  return value$192(lit$193, return$15)
+
+closure fn join$194(self$195, value$196) =
+  let return$12 = self$195.cap[0]
+  dup return$12
+  let ss#2 = self$195.cap[1]
+  dup ss#2
+  let return$23 = closure join$197(return$12, ss#2, value$196)
+  let apply$110 = closure join$253(return$23)
+  drop self$195
+  return String#(apply$110)
+
+closure fn join$197(self$198, value$199) =
+  let return$12 = self$198.cap[0]
+  dup return$12
+  let ss#2 = self$198.cap[1]
+  dup ss#2
+  let value$196 = self$198.cap[2]
+  dup value$196
+  let then$127 = closure join$200(return$12, ss#2)
+  drop self$198
+  return value$196(value$199, then$127)
+
+closure fn join$200(self$201, value$202) =
+  let return$12 = self$201.cap[0]
+  dup return$12
+  let ss#2 = self$201.cap[1]
+  dup ss#2
+  let return$16 = closure join$203(return$12, value$202)
+  let then$125 = closure join$206(return$16, ss#2)
+  drop self$201
+  return <>(then$125)
+
+closure fn join$203(self$204, value$205) =
+  let return$12 = self$204.cap[0]
+  dup return$12
+  let value$202 = self$204.cap[1]
+  dup value$202
+  drop self$204
+  return value$202(value$205, return$12)
+
+closure fn join$206(self$207, value$208) =
+  let return$16 = self$207.cap[0]
+  dup return$16
+  let ss#2 = self$207.cap[1]
+  dup ss#2
+  let return$18 = closure join$209(return$16, value$208)
+  let then$120 = closure join$222(return$18, ss#2)
+  drop self$207
+  return concatString(then$120)
+
+closure fn join$209(self$210, value$211) =
+  let return$16 = self$210.cap[0]
+  dup return$16
+  let value$208 = self$210.cap[1]
+  dup value$208
+  let then$123 = closure join$212(return$16)
+  drop self$210
+  return value$208(value$211, then$123)
+
+closure fn join$212(self$213, value$214) =
+  let return$16 = self$213.cap[0]
+  dup return$16
+  let return$17 = closure join$215(return$16, value$214)
+  let apply$121 = closure join$218(return$17)
+  drop self$213
+  return String#(apply$121)
+
+closure fn join$215(self$216, value$217) =
+  let return$16 = self$216.cap[0]
+  dup return$16
+  let value$214 = self$216.cap[1]
+  dup value$214
+  drop self$216
+  return value$214(value$217, return$16)
+
+closure fn join$218(self$219, value$220) =
+  let return$17 = self$219.cap[0]
+  dup return$17
+  let lit$221 = "]"
+  drop self$219
+  return value$220(lit$221, return$17)
+
+closure fn join$222(self$223, value$224) =
+  let return$18 = self$223.cap[0]
+  dup return$18
+  let ss#2 = self$223.cap[1]
+  dup ss#2
+  let return$19 = closure join$225(return$18, value$224)
+  let then$118 = closure join$228(return$19, ss#2)
+  drop self$223
+  return punctuate(then$118)
+
+closure fn join$225(self$226, value$227) =
+  let return$18 = self$226.cap[0]
+  dup return$18
+  let value$224 = self$226.cap[1]
+  dup value$224
+  drop self$226
+  return value$224(value$227, return$18)
+
+closure fn join$228(self$229, value$230) =
+  let return$19 = self$229.cap[0]
+  dup return$19
+  let ss#2 = self$229.cap[1]
+  dup ss#2
+  let return$22 = closure join$231(return$19, ss#2, value$230)
+  let apply$111 = closure join$249(return$22)
+  drop self$229
+  return String#(apply$111)
+
+closure fn join$231(self$232, value$233) =
+  let return$19 = self$232.cap[0]
+  dup return$19
+  let ss#2 = self$232.cap[1]
+  dup ss#2
+  let value$230 = self$232.cap[2]
+  dup value$230
+  let then$116 = closure join$234(return$19, ss#2)
+  drop self$232
+  return value$230(value$233, then$116)
+
+closure fn join$234(self$235, value$236) =
+  let return$19 = self$235.cap[0]
+  dup return$19
+  let ss#2 = self$235.cap[1]
+  dup ss#2
+  let return$20 = closure join$237(return$19, value$236)
+  let then$114 = closure join$240(return$20, ss#2)
+  drop self$235
+  return mapList(then$114)
+
+closure fn join$237(self$238, value$239) =
+  let return$19 = self$238.cap[0]
+  dup return$19
+  let value$236 = self$238.cap[1]
+  dup value$236
+  drop self$238
+  return value$236(value$239, return$19)
+
+closure fn join$240(self$241, value$242) =
+  let return$20 = self$241.cap[0]
+  dup return$20
+  let ss#2 = self$241.cap[1]
+  dup ss#2
+  let return$21 = closure join$243(return$20, ss#2, value$242)
+  drop self$241
+  return show(return$21)
+
+closure fn join$243(self$244, value$245) =
+  let return$20 = self$244.cap[0]
+  dup return$20
+  let ss#2 = self$244.cap[1]
+  dup ss#2
+  let value$242 = self$244.cap[2]
+  dup value$242
+  let apply$112 = closure join$246(return$20, ss#2)
+  drop self$244
+  return value$242(value$245, apply$112)
+
+closure fn join$246(self$247, value$248) =
+  let return$20 = self$247.cap[0]
+  dup return$20
+  let ss#2 = self$247.cap[1]
+  dup ss#2
+  drop self$247
+  return value$248(ss#2, return$20)
+
+closure fn join$249(self$250, value$251) =
+  let return$22 = self$250.cap[0]
+  dup return$22
+  let lit$252 = ", "
+  drop self$250
+  return value$251(lit$252, return$22)
+
+closure fn join$253(self$254, value$255) =
+  let return$23 = self$254.cap[0]
+  dup return$23
+  let lit$256 = "SList ["
+  drop self$254
+  return value$255(lit$256, return$23)
+
+toplevel fn main(return$24) =
+  let closure$369 = closure lambda$259()
+  return return$24(closure$369)
+
+closure fn lambda$259(self$260, param$6, return$25) =
+  drop param$6
+  drop self$260
+  if  then {
+    let label$66 = closure join$261(return$25)
+    let return$27 = closure join$273(label$66)
+    let then$153 = closure join$277(return$27)
+    return Cons(then$153)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$261(self$262, value$263) =
+  let return$25 = self$262.cap[0]
+  dup return$25
+  let then$156 = closure join$264(return$25, value$263)
+  drop self$262
+  return putStrLn(then$156)
+
+closure fn join$264(self$265, value$266) =
+  let return$25 = self$265.cap[0]
+  dup return$25
+  let value$263 = self$265.cap[1]
+  dup value$263
+  let return$26 = closure join$267(return$25, value$266)
+  let apply$154 = closure join$270(return$26, value$263)
+  drop self$265
+  return show(apply$154)
+
+closure fn join$267(self$268, value$269) =
+  let return$25 = self$268.cap[0]
+  dup return$25
+  let value$266 = self$268.cap[1]
+  dup value$266
+  drop self$268
+  return value$266(value$269, return$25)
+
+closure fn join$270(self$271, value$272) =
+  let return$26 = self$271.cap[0]
+  dup return$26
+  let value$263 = self$271.cap[1]
+  dup value$263
+  drop self$271
+  return value$272(value$263, return$26)
+
+closure fn join$273(self$274, value$275) =
+  let label$66 = self$274.cap[0]
+  dup label$66
+  dropReuse reuse$396 = self$274 /1
+  let struct$276 = reuse reuse$396 SList(value$275)
+  return label$66(struct$276)
+
+closure fn join$277(self$278, value$279) =
+  let return$27 = self$278.cap[0]
+  dup return$27
+  let label$96 = closure join$280(return$27, value$279)
+  let return$37 = closure join$361(label$96)
+  let apply$131 = closure join$365(return$37)
+  drop self$278
+  return String#(apply$131)
+
+closure fn join$280(self$281, value$282) =
+  let return$27 = self$281.cap[0]
+  dup return$27
+  let value$279 = self$281.cap[1]
+  dup value$279
+  let then$151 = closure join$283(return$27)
+  drop self$281
+  return value$279(value$282, then$151)
+
+closure fn join$283(self$284, value$285) =
+  let return$27 = self$284.cap[0]
+  dup return$27
+  let return$28 = closure join$286(return$27, value$285)
+  let then$149 = closure join$289(return$28)
+  drop self$284
+  return Cons(then$149)
+
+closure fn join$286(self$287, value$288) =
+  let return$27 = self$287.cap[0]
+  dup return$27
+  let value$285 = self$287.cap[1]
+  dup value$285
+  drop self$287
+  return value$285(value$288, return$27)
+
+closure fn join$289(self$290, value$291) =
+  let return$28 = self$290.cap[0]
+  dup return$28
+  let label$76 = closure join$292(return$28, value$291)
+  let return$30 = closure join$301(label$76)
+  let then$145 = closure join$305(return$30)
+  drop self$290
+  return Cons(then$145)
+
+closure fn join$292(self$293, value$294) =
+  let return$28 = self$293.cap[0]
+  dup return$28
+  let value$291 = self$293.cap[1]
+  dup value$291
+  let then$147 = closure join$295(return$28)
+  drop self$293
+  return value$291(value$294, then$147)
+
+closure fn join$295(self$296, value$297) =
+  let return$28 = self$296.cap[0]
+  dup return$28
+  let return$29 = closure join$298(return$28, value$297)
+  drop self$296
+  return Nil(return$29)
+
+closure fn join$298(self$299, value$300) =
+  let return$28 = self$299.cap[0]
+  dup return$28
+  let value$297 = self$299.cap[1]
+  dup value$297
+  drop self$299
+  return value$297(value$300, return$28)
+
+closure fn join$301(self$302, value$303) =
+  let label$76 = self$302.cap[0]
+  dup label$76
+  dropReuse reuse$397 = self$302 /1
+  let struct$304 = reuse reuse$397 SList(value$303)
+  return label$76(struct$304)
+
+closure fn join$305(self$306, value$307) =
+  let return$30 = self$306.cap[0]
+  dup return$30
+  let label$94 = closure join$308(return$30, value$307)
+  let return$36 = closure join$353(label$94)
+  let apply$132 = closure join$357(return$36)
+  drop self$306
+  return String#(apply$132)
+
+closure fn join$308(self$309, value$310) =
+  let return$30 = self$309.cap[0]
+  dup return$30
+  let value$307 = self$309.cap[1]
+  dup value$307
+  let then$143 = closure join$311(return$30)
+  drop self$309
+  return value$307(value$310, then$143)
+
+closure fn join$311(self$312, value$313) =
+  let return$30 = self$312.cap[0]
+  dup return$30
+  let return$31 = closure join$314(return$30, value$313)
+  let then$141 = closure join$317(return$31)
+  drop self$312
+  return Cons(then$141)
+
+closure fn join$314(self$315, value$316) =
+  let return$30 = self$315.cap[0]
+  dup return$30
+  let value$313 = self$315.cap[1]
+  dup value$313
+  drop self$315
+  return value$313(value$316, return$30)
+
+closure fn join$317(self$318, value$319) =
+  let return$31 = self$318.cap[0]
+  dup return$31
+  let label$86 = closure join$320(return$31, value$319)
+  let return$33 = closure join$329(label$86)
+  let then$137 = closure join$333(return$33)
+  drop self$318
+  return Cons(then$137)
+
+closure fn join$320(self$321, value$322) =
+  let return$31 = self$321.cap[0]
+  dup return$31
+  let value$319 = self$321.cap[1]
+  dup value$319
+  let then$139 = closure join$323(return$31)
+  drop self$321
+  return value$319(value$322, then$139)
+
+closure fn join$323(self$324, value$325) =
+  let return$31 = self$324.cap[0]
+  dup return$31
+  let return$32 = closure join$326(return$31, value$325)
+  drop self$324
+  return Nil(return$32)
+
+closure fn join$326(self$327, value$328) =
+  let return$31 = self$327.cap[0]
+  dup return$31
+  let value$325 = self$327.cap[1]
+  dup value$325
+  drop self$327
+  return value$325(value$328, return$31)
+
+closure fn join$329(self$330, value$331) =
+  let label$86 = self$330.cap[0]
+  dup label$86
+  dropReuse reuse$398 = self$330 /1
+  let struct$332 = reuse reuse$398 SList(value$331)
+  return label$86(struct$332)
+
+closure fn join$333(self$334, value$335) =
+  let return$33 = self$334.cap[0]
+  dup return$33
+  let label$92 = closure join$336(return$33, value$335)
+  let return$35 = closure join$345(label$92)
+  let apply$133 = closure join$349(return$35)
+  drop self$334
+  return String#(apply$133)
+
+closure fn join$336(self$337, value$338) =
+  let return$33 = self$337.cap[0]
+  dup return$33
+  let value$335 = self$337.cap[1]
+  dup value$335
+  let then$135 = closure join$339(return$33)
+  drop self$337
+  return value$335(value$338, then$135)
+
+closure fn join$339(self$340, value$341) =
+  let return$33 = self$340.cap[0]
+  dup return$33
+  let return$34 = closure join$342(return$33, value$341)
+  drop self$340
+  return Nil(return$34)
+
+closure fn join$342(self$343, value$344) =
+  let return$33 = self$343.cap[0]
+  dup return$33
+  let value$341 = self$343.cap[1]
+  dup value$341
+  drop self$343
+  return value$341(value$344, return$33)
+
+closure fn join$345(self$346, value$347) =
+  let label$92 = self$346.cap[0]
+  dup label$92
+  dropReuse reuse$399 = self$346 /1
+  let struct$348 = reuse reuse$399 Symbol(value$347)
+  return label$92(struct$348)
+
+closure fn join$349(self$350, value$351) =
+  let return$35 = self$350.cap[0]
+  dup return$35
+  let lit$352 = "z"
+  drop self$350
+  return value$351(lit$352, return$35)
+
+closure fn join$353(self$354, value$355) =
+  let label$94 = self$354.cap[0]
+  dup label$94
+  dropReuse reuse$400 = self$354 /1
+  let struct$356 = reuse reuse$400 Symbol(value$355)
+  return label$94(struct$356)
+
+closure fn join$357(self$358, value$359) =
+  let return$36 = self$358.cap[0]
+  dup return$36
+  let lit$360 = "y"
+  drop self$358
+  return value$359(lit$360, return$36)
+
+closure fn join$361(self$362, value$363) =
+  let label$96 = self$362.cap[0]
+  dup label$96
+  dropReuse reuse$401 = self$362 /1
+  let struct$364 = reuse reuse$401 Symbol(value$363)
+  return label$96(struct$364)
+
+closure fn join$365(self$366, value$367) =
+  let return$37 = self$366.cap[0]
+  dup return$37
+  let lit$368 = "x"
+  drop self$366
+  return value$367(lit$368, return$37)
+
+toplevel fn Symbol(return$38) =
+  let closure$374 = closure lambda$371()
+  return return$38(closure$374)
+
+closure fn lambda$371(self$372, constructor$7, return$39) =
+  dropReuse reuse$402 = self$372 /1
+  let struct$373 = reuse reuse$402 Symbol(constructor$7)
+  return return$39(struct$373)
+
+toplevel fn SInt(return$40) =
+  let closure$379 = closure lambda$376()
+  return return$40(closure$379)
+
+closure fn lambda$376(self$377, constructor$8, return$41) =
+  dropReuse reuse$403 = self$377 /1
+  let struct$378 = reuse reuse$403 SInt(constructor$8)
+  return return$41(struct$378)
+
+toplevel fn SList(return$42) =
+  let closure$384 = closure lambda$381()
+  return return$42(closure$384)
+
+closure fn lambda$381(self$382, constructor$9, return$43) =
+  dropReuse reuse$404 = self$382 /1
+  let struct$383 = reuse reuse$404 SList(constructor$9)
+  return return$43(struct$383)
+
+toplevel fn zig_main$387() =
+  let finish$385 = closure join$389()
+  let after_main$386 = closure join$392(finish$385)
+  return main(after_main$386)
+
+closure fn join$389(self$390, value$391) =
+  drop self$390
+  return value$391
+
+closure fn join$392(self$393, value$394) =
+  let finish$385 = self$393.cap[0]
+  dup finish$385
+  dropReuse reuse$405 = self$393 /0
+  let struct$395 = reuse reuse$405 Tuple()
+  return value$394(struct$395, finish$385)
+
+entry = zig_main$387
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+- infix infixr 6 <>
++ data SExpr  = Symbol(String) | SInt(Int32) | SList(List(SExpr))
+  
+  sig <> : String -> String -> String
+  
+- def <> = appendString
+- 
+- data SExpr  = Symbol(String) | SInt(Int32) | SList(List(SExpr))
+- 
+  sig show : SExpr -> String
+  
++ def <> = appendString
++ 
+  def show =
+    fn {
+-     Symbol(str) ->
++     Symbol(str#0) ->
+        {
+-         "Symbol " <> str
++         String#("Symbol ") <> str#0
+        } |
+-     SInt(int) ->
++     SInt(int#1) ->
+        {
+-         "SInt " <> toStringInt32(int)
++         String#("SInt ") <> toStringInt32(int#1)
+        } |
+-     SList(ss) ->
++     SList(ss#2) ->
+        {
+-         "SList [" <> concatString(punctuate(", ")(mapList(show)(ss))) <> "]"
++         String#( "SList [" ) <> concatString( punctuate( String#( ", " ) )( mapList( show )( ss#2 ) ) ) <> String#( "]" )
+        }
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#3 ->
+        {
+-         let x = SList([Symbol("x"), SList([Symbol("y"), SList([Symbol("z")])])])
++         let x#4 =
+-         putStrLn(show(x))
++           SList( Cons( Symbol( String#( "x" ) ) )( Cons( SList( Cons( Symbol( String#( "y" ) ) )( Cons( SList( Cons( Symbol( String#( "z" ) ) )( Nil ) ) )( Nil ) ) ) )( Nil ) ) )
++         putStrLn(show(x#4))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
++ def <> = invoke appendString
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- data SExpr  = Symbol(String) | SInt(Int32) | SList(List(SExpr))
+- 
+- sig <> : String -> String -> String
+- 
+- sig show : SExpr -> String
+- 
+- def <> = appendString
+  
+  def show =
+-   fn {
++   \param$5 ->
+-     Symbol(str#0) ->
++     case param$5 of {
+-       {
++       Symbol(str#0) -> invoke <>(invoke String#("Symbol "))(str#0)
+-         String#("Symbol ") <> str#0
++       SInt(int#1) ->
+-       } |
++         invoke <>(invoke String#("SInt "))(invoke toStringInt32(int#1))
+-     SInt(int#1) ->
++       SList(ss#2) ->
+-       {
++         invoke <>( invoke String#( "SList [" ) )( invoke <>( invoke concatString( invoke punctuate( invoke String#( ", " ) )( invoke mapList( invoke show )( ss#2 ) ) ) )( invoke String#( "]" ) ) )
+-         String#("SInt ") <> toStringInt32(int#1)
++     }
+-       } |
+-     SList(ss#2) ->
+-       {
+-         String#( "SList [" ) <> concatString( punctuate( String#( ", " ) )( mapList( show )( ss#2 ) ) ) <> String#( "]" )
+-       }
+-   }
+  
+  def main =
+-   fn {
++   \param$6 ->
+-     _#3 ->
++     case param$6 of {
+-       {
++       _#3 ->
+          let x#4 =
+-           SList( Cons( Symbol( String#( "x" ) ) )( Cons( SList( Cons( Symbol( String#( "y" ) ) )( Cons( SList( Cons( Symbol( String#( "z" ) ) )( Nil ) ) )( Nil ) ) ) )( Nil ) ) )
++           invoke SList( invoke Cons( invoke Symbol( invoke String#( "x" ) ) )( invoke Cons( invoke SList( invoke Cons( invoke Symbol( invoke String#( "y" ) ) )( invoke Cons( invoke SList( invoke Cons( invoke Symbol( invoke String#( "z" ) ) )( invoke Nil ) ) )( invoke Nil ) ) ) )( invoke Nil ) ) )
+-         putStrLn(show(x#4))
++         in
+-       }
++           invoke putStrLn(invoke show(x#4))
+-   }
++     }
++ 
++ def Symbol = \constructor$7 -> Symbol(constructor$7)
++ 
++ def SInt = \constructor$8 -> SInt(constructor$8)
++ 
++ def SList = \constructor$9 -> SList(constructor$9)
+
+
+=== ToFun -> SaturateCtor ===
+  def <> = invoke appendString
+  
+  def show =
+    \param$5 ->
+      case param$5 of {
+        Symbol(str#0) -> invoke <>(invoke String#("Symbol "))(str#0)
+        SInt(int#1) ->
+          invoke <>(invoke String#("SInt "))(invoke toStringInt32(int#1))
+        SList(ss#2) ->
+          invoke <>( invoke String#( "SList [" ) )( invoke <>( invoke concatString( invoke punctuate( invoke String#( ", " ) )( invoke mapList( invoke show )( ss#2 ) ) ) )( invoke String#( "]" ) ) )
+      }
+  
+  def main =
+    \param$6 ->
+      case param$6 of {
+        _#3 ->
+          let x#4 =
+-           invoke SList( invoke Cons( invoke Symbol( invoke String#( "x" ) ) )( invoke Cons( invoke SList( invoke Cons( invoke Symbol( invoke String#( "y" ) ) )( invoke Cons( invoke SList( invoke Cons( invoke Symbol( invoke String#( "z" ) ) )( invoke Nil ) ) )( invoke Nil ) ) ) )( invoke Nil ) ) )
++           SList( invoke Cons( Symbol( invoke String#( "x" ) ) )( invoke Cons( SList( invoke Cons( Symbol( invoke String#( "y" ) ) )( invoke Cons( SList( invoke Cons( Symbol( invoke String#( "z" ) ) )( invoke Nil ) ) )( invoke Nil ) ) ) )( invoke Nil ) ) )
+          in
+            invoke putStrLn(invoke show(x#4))
+      }
+  
+  def Symbol = \constructor$7 -> Symbol(constructor$7)
+  
+  def SInt = \constructor$8 -> SInt(constructor$8)
+  
+  def SList = \constructor$9 -> SList(constructor$9)
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def <> = invoke appendString
+  
+  def show =
+    \param$5 ->
+      case param$5 of {
+        Symbol(str#0) -> invoke <>(invoke String#("Symbol "))(str#0)
+        SInt(int#1) ->
+          invoke <>(invoke String#("SInt "))(invoke toStringInt32(int#1))
+        SList(ss#2) ->
+          invoke <>( invoke String#( "SList [" ) )( invoke <>( invoke concatString( invoke punctuate( invoke String#( ", " ) )( invoke mapList( invoke show )( ss#2 ) ) ) )( invoke String#( "]" ) ) )
+      }
+  
+  def main =
+    \param$6 ->
+      case param$6 of {
+        _#3 ->
+          let x#4 =
+            SList( invoke Cons( Symbol( invoke String#( "x" ) ) )( invoke Cons( SList( invoke Cons( Symbol( invoke String#( "y" ) ) )( invoke Cons( SList( invoke Cons( Symbol( invoke String#( "z" ) ) )( invoke Nil ) ) )( invoke Nil ) ) ) )( invoke Nil ) ) )
+          in
+            invoke putStrLn(invoke show(x#4))
+      }
+  
+  def Symbol = \constructor$7 -> Symbol(constructor$7)
+  
+  def SInt = \constructor$8 -> SInt(constructor$8)
+  
+  def SList = \constructor$9 -> SList(constructor$9)
+
+
+=== ReuseSpecialize -> ToCore ===
+- def <> = invoke appendString
++ def <>(return$10) = invoke appendString ~ return$10
+  
+- def show =
++ def show(return$11) =
+-   \param$5 ->
++   \param$5 return$12 . {
+-     case param$5 of {
++     param$5 ~ select {
+-       Symbol(str#0) -> invoke <>(invoke String#("Symbol "))(str#0)
++       Symbol(str#0) ->
++         invoke <> ~ ( do return$13 . {
++           invoke String# ~ ("Symbol ", return$13)
++         }
++         , (str#0, return$12) )
+        SInt(int#1) ->
+-         invoke <>(invoke String#("SInt "))(invoke toStringInt32(int#1))
++         invoke <> ~ ( do return$15 . {
++           invoke String# ~ ("SInt ", return$15)
++         }
++         , ( do return$14 . {
++           invoke toStringInt32 ~ (int#1, return$14)
++         }
++         , return$12 ) )
+        SList(ss#2) ->
+-         invoke <>( invoke String#( "SList [" ) )( invoke <>( invoke concatString( invoke punctuate( invoke String#( ", " ) )( invoke mapList( invoke show )( ss#2 ) ) ) )( invoke String#( "]" ) ) )
++         invoke <> ~ ( do return$23 . {
++           invoke String# ~ ("SList [", return$23)
++         }
++         , ( do return$16 . {
++           invoke <> ~ ( do return$18 . {
++             invoke concatString ~ ( do return$19 . {
++               invoke punctuate ~ ( do return$22 . {
++                 invoke String# ~ (", ", return$22)
++               }
++               , ( do return$20 . {
++                 invoke mapList ~ ( do return$21 . {
++                   invoke show ~ return$21
++                 }
++                 , (ss#2, return$20) )
++               }
++               , return$19 ) )
++             }
++             , return$18 )
++           }
++           , ( do return$17 . {
++             invoke String# ~ ("]", return$17)
++           }
++           , return$16 ) )
++         }
++         , return$12 ) )
+      }
++   } ~ return$11
+  
+- def main =
++ def main(return$24) =
+-   \param$6 ->
++   \param$6 return$25 . {
+-     case param$6 of {
++     param$6 ~ select {
+        _#3 ->
+-         let x#4 =
++         SList( do return$27 . {
+-           SList( invoke Cons( Symbol( invoke String#( "x" ) ) )( invoke Cons( SList( invoke Cons( Symbol( invoke String#( "y" ) ) )( invoke Cons( SList( invoke Cons( Symbol( invoke String#( "z" ) ) )( invoke Nil ) ) )( invoke Nil ) ) ) )( invoke Nil ) ) )
++           invoke Cons ~ ( Symbol( do return$37 . {
+-         in
++             invoke String# ~ ("x", return$37)
+-           invoke putStrLn(invoke show(x#4))
++           } )
++           , ( do return$28 . {
++             invoke Cons ~ ( SList( do return$30 . {
++               invoke Cons ~ ( Symbol( do return$36 . {
++                 invoke String# ~ ("y", return$36)
++               } )
++               , ( do return$31 . {
++                 invoke Cons ~ ( SList( do return$33 . {
++                   invoke Cons ~ ( Symbol( do return$35 . {
++                     invoke String# ~ ("z", return$35)
++                   } )
++                   , ( do return$34 . {
++                     invoke Nil ~ return$34
++                   }
++                   , return$33 ) )
++                 } )
++                 , ( do return$32 . {
++                   invoke Nil ~ return$32
++                 }
++                 , return$31 ) )
++               }
++               , return$30 ) )
++             } )
++             , ( do return$29 . {
++               invoke Nil ~ return$29
++             }
++             , return$28 ) )
++           }
++           , return$27 ) )
++         } ) ~ then x#4 -> {
++           invoke putStrLn ~ ( do return$26 . {
++             invoke show ~ (x#4, return$26)
++           }
++           , return$25 )
++         }
+      }
++   } ~ return$24
+  
+- def Symbol = \constructor$7 -> Symbol(constructor$7)
++ def Symbol(return$38) =
++   \constructor$7 return$39 . {
++     Symbol(constructor$7) ~ return$39
++   } ~ return$38
+  
+- def SInt = \constructor$8 -> SInt(constructor$8)
++ def SInt(return$40) =
++   \constructor$8 return$41 . {
++     SInt(constructor$8) ~ return$41
++   } ~ return$40
+  
+- def SList = \constructor$9 -> SList(constructor$9)
++ def SList(return$42) =
++   \constructor$9 return$43 . {
++     SList(constructor$9) ~ return$43
++   } ~ return$42
+
+
+=== ToCore -> Flat ===
+  def <>(return$10) = invoke appendString ~ return$10
+  
+  def show(return$11) =
+    \param$5 return$12 . {
+      param$5 ~ select {
+        Symbol(str#0) ->
+-         invoke <> ~ ( do return$13 . {
++         invoke <> ~ then outer$44 -> {
+-           invoke String# ~ ("Symbol ", return$13)
++           join return$13 = then inner$45 -> {
++             outer$44 ~ (inner$45, (str#0, return$12))
++           }
++           in invoke String# ~ ("Symbol ", return$13)
+          }
+-         , (str#0, return$12) )
+        SInt(int#1) ->
+-         invoke <> ~ ( do return$15 . {
++         invoke <> ~ then outer$46 -> {
+-           invoke String# ~ ("SInt ", return$15)
++           join return$15 = then inner$47 -> {
+-         }
++             outer$46 ~ ( inner$47
+-         , ( do return$14 . {
++             , then outer$48 -> {
+-           invoke toStringInt32 ~ (int#1, return$14)
++               join return$14 = then inner$49 -> {
++                 outer$48 ~ (inner$49, return$12)
++               }
++               in invoke toStringInt32 ~ (int#1, return$14)
++             } )
++           }
++           in invoke String# ~ ("SInt ", return$15)
+          }
+-         , return$12 ) )
+        SList(ss#2) ->
+-         invoke <> ~ ( do return$23 . {
++         invoke <> ~ then outer$50 -> {
+-           invoke String# ~ ("SList [", return$23)
++           join return$23 = then inner$51 -> {
+-         }
++             outer$50 ~ ( inner$51
+-         , ( do return$16 . {
++             , then outer$52 -> {
+-           invoke <> ~ ( do return$18 . {
++               join return$16 = then inner$53 -> {
+-             invoke concatString ~ ( do return$19 . {
++                 outer$52 ~ (inner$53, return$12)
+-               invoke punctuate ~ ( do return$22 . {
+-                 invoke String# ~ (", ", return$22)
+                }
+-               , ( do return$20 . {
++               in invoke <> ~ then outer$54 -> {
+-                 invoke mapList ~ ( do return$21 . {
++                 join return$18 = then inner$55 -> {
+-                   invoke show ~ return$21
++                   outer$54 ~ ( inner$55
++                   , then outer$56 -> {
++                     join return$17 = then inner$57 -> {
++                       outer$56 ~ (inner$57, return$16)
++                     }
++                     in invoke String# ~ ("]", return$17)
++                   } )
+                  }
+-                 , (ss#2, return$20) )
++                 in invoke concatString ~ then outer$58 -> {
++                   join return$19 = then inner$59 -> {
++                     outer$58 ~ (inner$59, return$18)
++                   }
++                   in invoke punctuate ~ then outer$60 -> {
++                     join return$22 = then inner$61 -> {
++                       outer$60 ~ ( inner$61
++                       , then outer$62 -> {
++                         join return$20 = then inner$63 -> {
++                           outer$62 ~ (inner$63, return$19)
++                         }
++                         in invoke mapList ~ then outer$64 -> {
++                           join return$21 = then inner$65 -> {
++                             outer$64 ~ (inner$65, (ss#2, return$20))
++                           }
++                           in invoke show ~ return$21
++                         }
++                       } )
++                     }
++                     in invoke String# ~ (", ", return$22)
++                   }
++                 }
+                }
+-               , return$19 ) )
++             } )
+-             }
+-             , return$18 )
+-           }
+-           , ( do return$17 . {
+-             invoke String# ~ ("]", return$17)
+            }
+-           , return$16 ) )
++           in invoke String# ~ ("SList [", return$23)
+          }
+-         , return$12 ) )
+      }
+    } ~ return$11
+  
+  def main(return$24) =
+    \param$6 return$25 . {
+      param$6 ~ select {
+        _#3 ->
+-         SList( do return$27 . {
++         join label$66 = then x#4 -> {
+-           invoke Cons ~ ( Symbol( do return$37 . {
++           invoke putStrLn ~ then outer$98 -> {
+-             invoke String# ~ ("x", return$37)
++             join return$26 = then inner$99 -> {
+-           } )
++               outer$98 ~ (inner$99, return$25)
+-           , ( do return$28 . {
++             }
+-             invoke Cons ~ ( SList( do return$30 . {
++             in invoke show ~ (x#4, return$26)
+-               invoke Cons ~ ( Symbol( do return$36 . {
++           }
+-                 invoke String# ~ ("y", return$36)
++         }
+-               } )
++         in join return$27 = then var$67 -> {
+-               , ( do return$31 . {
++           SList(var$67) ~ label$66
+-                 invoke Cons ~ ( SList( do return$33 . {
++         }
+-                   invoke Cons ~ ( Symbol( do return$35 . {
++         in invoke Cons ~ then outer$68 -> {
+-                     invoke String# ~ ("z", return$35)
++           join label$96 = then inner$69 -> {
++             outer$68 ~ ( inner$69
++             , then outer$70 -> {
++               join return$28 = then inner$71 -> {
++                 outer$70 ~ (inner$71, return$27)
++               }
++               in invoke Cons ~ then outer$72 -> {
++                 join label$76 = then inner$73 -> {
++                   outer$72 ~ ( inner$73
++                   , then outer$74 -> {
++                     join return$29 = then inner$75 -> {
++                       outer$74 ~ (inner$75, return$28)
++                     }
++                     in invoke Nil ~ return$29
+                    } )
+-                   , ( do return$34 . {
++                 }
+-                     invoke Nil ~ return$34
++                 in join return$30 = then var$77 -> {
++                   SList(var$77) ~ label$76
++                 }
++                 in invoke Cons ~ then outer$78 -> {
++                   join label$94 = then inner$79 -> {
++                     outer$78 ~ ( inner$79
++                     , then outer$80 -> {
++                       join return$31 = then inner$81 -> {
++                         outer$80 ~ (inner$81, return$30)
++                       }
++                       in invoke Cons ~ then outer$82 -> {
++                         join label$86 = then inner$83 -> {
++                           outer$82 ~ ( inner$83
++                           , then outer$84 -> {
++                             join return$32 = then inner$85 -> {
++                               outer$84 ~ (inner$85, return$31)
++                             }
++                             in invoke Nil ~ return$32
++                           } )
++                         }
++                         in join return$33 = then var$87 -> {
++                           SList(var$87) ~ label$86
++                         }
++                         in invoke Cons ~ then outer$88 -> {
++                           join label$92 = then inner$89 -> {
++                             outer$88 ~ ( inner$89
++                             , then outer$90 -> {
++                               join return$34 = then inner$91 -> {
++                                 outer$90 ~ (inner$91, return$33)
++                               }
++                               in invoke Nil ~ return$34
++                             } )
++                           }
++                           in join return$35 = then var$93 -> {
++                             Symbol(var$93) ~ label$92
++                           }
++                           in invoke String# ~ ("z", return$35)
++                         }
++                       }
++                     } )
+                    }
+-                   , return$33 ) )
++                   in join return$36 = then var$95 -> {
+-                 } )
++                     Symbol(var$95) ~ label$94
+-                 , ( do return$32 . {
++                   }
+-                   invoke Nil ~ return$32
++                   in invoke String# ~ ("y", return$36)
+                  }
+-                 , return$31 ) )
+                }
+-               , return$30 ) )
+              } )
+-             , ( do return$29 . {
+-               invoke Nil ~ return$29
+-             }
+-             , return$28 ) )
+            }
+-           , return$27 ) )
++           in join return$37 = then var$97 -> {
+-         } ) ~ then x#4 -> {
++             Symbol(var$97) ~ label$96
+-           invoke putStrLn ~ ( do return$26 . {
+-             invoke show ~ (x#4, return$26)
+            }
+-           , return$25 )
++           in invoke String# ~ ("x", return$37)
+          }
+      }
+    } ~ return$24
+  
+  def Symbol(return$38) =
+    \constructor$7 return$39 . {
+      Symbol(constructor$7) ~ return$39
+    } ~ return$38
+  
+  def SInt(return$40) =
+    \constructor$8 return$41 . {
+      SInt(constructor$8) ~ return$41
+    } ~ return$40
+  
+  def SList(return$42) =
+    \constructor$9 return$43 . {
+      SList(constructor$9) ~ return$43
+    } ~ return$42
+
+
+=== Flat -> Join ===
+  def <>(return$10) = invoke appendString ~ return$10
+  
+  def show(return$11) =
+    \param$5 return$12 . {
+-     param$5 ~ select {
++     join select$130 = select {
+        Symbol(str#0) ->
+-         invoke <> ~ then outer$44 -> {
++         join then$103 = then outer$44 -> {
+            join return$13 = then inner$45 -> {
+-             outer$44 ~ (inner$45, (str#0, return$12))
++             join apply$101 = (str#0, return$12)
++             in join apply$102 = (inner$45, apply$101)
++             in outer$44 ~ apply$102
+            }
+-           in invoke String# ~ ("Symbol ", return$13)
++           in join apply$100 = ("Symbol ", return$13)
++           in invoke String# ~ apply$100
+          }
++         in invoke <> ~ then$103
+        SInt(int#1) ->
+-         invoke <> ~ then outer$46 -> {
++         join then$109 = then outer$46 -> {
+            join return$15 = then inner$47 -> {
+-             outer$46 ~ ( inner$47
++             join then$107 = then outer$48 -> {
+-             , then outer$48 -> {
+                join return$14 = then inner$49 -> {
+-                 outer$48 ~ (inner$49, return$12)
++                 join apply$106 = (inner$49, return$12)
++                 in outer$48 ~ apply$106
+                }
+-               in invoke toStringInt32 ~ (int#1, return$14)
++               in join apply$105 = (int#1, return$14)
+-             } )
++               in invoke toStringInt32 ~ apply$105
++             }
++             in join apply$108 = (inner$47, then$107)
++             in outer$46 ~ apply$108
+            }
+-           in invoke String# ~ ("SInt ", return$15)
++           in join apply$104 = ("SInt ", return$15)
++           in invoke String# ~ apply$104
+          }
++         in invoke <> ~ then$109
+        SList(ss#2) ->
+-         invoke <> ~ then outer$50 -> {
++         join then$129 = then outer$50 -> {
+            join return$23 = then inner$51 -> {
+-             outer$50 ~ ( inner$51
++             join then$127 = then outer$52 -> {
+-             , then outer$52 -> {
+                join return$16 = then inner$53 -> {
+-                 outer$52 ~ (inner$53, return$12)
++                 join apply$126 = (inner$53, return$12)
++                 in outer$52 ~ apply$126
+                }
+-               in invoke <> ~ then outer$54 -> {
++               in join then$125 = then outer$54 -> {
+                  join return$18 = then inner$55 -> {
+-                   outer$54 ~ ( inner$55
++                   join then$123 = then outer$56 -> {
+-                   , then outer$56 -> {
+                      join return$17 = then inner$57 -> {
+-                       outer$56 ~ (inner$57, return$16)
++                       join apply$122 = (inner$57, return$16)
++                       in outer$56 ~ apply$122
+                      }
+-                     in invoke String# ~ ("]", return$17)
++                     in join apply$121 = ("]", return$17)
+-                   } )
++                     in invoke String# ~ apply$121
++                   }
++                   in join apply$124 = (inner$55, then$123)
++                   in outer$54 ~ apply$124
+                  }
+-                 in invoke concatString ~ then outer$58 -> {
++                 in join then$120 = then outer$58 -> {
+                    join return$19 = then inner$59 -> {
+-                     outer$58 ~ (inner$59, return$18)
++                     join apply$119 = (inner$59, return$18)
++                     in outer$58 ~ apply$119
+                    }
+-                   in invoke punctuate ~ then outer$60 -> {
++                   in join then$118 = then outer$60 -> {
+                      join return$22 = then inner$61 -> {
+-                       outer$60 ~ ( inner$61
++                       join then$116 = then outer$62 -> {
+-                       , then outer$62 -> {
+                          join return$20 = then inner$63 -> {
+-                           outer$62 ~ (inner$63, return$19)
++                           join apply$115 = (inner$63, return$19)
++                           in outer$62 ~ apply$115
+                          }
+-                         in invoke mapList ~ then outer$64 -> {
++                         in join then$114 = then outer$64 -> {
+                            join return$21 = then inner$65 -> {
+-                             outer$64 ~ (inner$65, (ss#2, return$20))
++                             join apply$112 = (ss#2, return$20)
++                             in join apply$113 = (inner$65, apply$112)
++                             in outer$64 ~ apply$113
+                            }
+                            in invoke show ~ return$21
+                          }
+-                       } )
++                         in invoke mapList ~ then$114
++                       }
++                       in join apply$117 = (inner$61, then$116)
++                       in outer$60 ~ apply$117
+                      }
+-                     in invoke String# ~ (", ", return$22)
++                     in join apply$111 = (", ", return$22)
++                     in invoke String# ~ apply$111
+                    }
++                   in invoke punctuate ~ then$118
+                  }
++                 in invoke concatString ~ then$120
+                }
+-             } )
++               in invoke <> ~ then$125
++             }
++             in join apply$128 = (inner$51, then$127)
++             in outer$50 ~ apply$128
+            }
+-           in invoke String# ~ ("SList [", return$23)
++           in join apply$110 = ("SList [", return$23)
++           in invoke String# ~ apply$110
+          }
++         in invoke <> ~ then$129
+      }
++     in param$5 ~ select$130
+    } ~ return$11
+  
+  def main(return$24) =
+    \param$6 return$25 . {
+-     param$6 ~ select {
++     join select$157 = select {
+        _#3 ->
+          join label$66 = then x#4 -> {
+-           invoke putStrLn ~ then outer$98 -> {
++           join then$156 = then outer$98 -> {
+              join return$26 = then inner$99 -> {
+-               outer$98 ~ (inner$99, return$25)
++               join apply$155 = (inner$99, return$25)
++               in outer$98 ~ apply$155
+              }
+-             in invoke show ~ (x#4, return$26)
++             in join apply$154 = (x#4, return$26)
++             in invoke show ~ apply$154
+            }
++           in invoke putStrLn ~ then$156
+          }
+          in join return$27 = then var$67 -> {
+            SList(var$67) ~ label$66
+          }
+-         in invoke Cons ~ then outer$68 -> {
++         in join then$153 = then outer$68 -> {
+            join label$96 = then inner$69 -> {
+-             outer$68 ~ ( inner$69
++             join then$151 = then outer$70 -> {
+-             , then outer$70 -> {
+                join return$28 = then inner$71 -> {
+-                 outer$70 ~ (inner$71, return$27)
++                 join apply$150 = (inner$71, return$27)
++                 in outer$70 ~ apply$150
+                }
+-               in invoke Cons ~ then outer$72 -> {
++               in join then$149 = then outer$72 -> {
+                  join label$76 = then inner$73 -> {
+-                   outer$72 ~ ( inner$73
++                   join then$147 = then outer$74 -> {
+-                   , then outer$74 -> {
+                      join return$29 = then inner$75 -> {
+-                       outer$74 ~ (inner$75, return$28)
++                       join apply$146 = (inner$75, return$28)
++                       in outer$74 ~ apply$146
+                      }
+                      in invoke Nil ~ return$29
+-                   } )
++                   }
++                   in join apply$148 = (inner$73, then$147)
++                   in outer$72 ~ apply$148
+                  }
+                  in join return$30 = then var$77 -> {
+                    SList(var$77) ~ label$76
+                  }
+-                 in invoke Cons ~ then outer$78 -> {
++                 in join then$145 = then outer$78 -> {
+                    join label$94 = then inner$79 -> {
+-                     outer$78 ~ ( inner$79
++                     join then$143 = then outer$80 -> {
+-                     , then outer$80 -> {
+                        join return$31 = then inner$81 -> {
+-                         outer$80 ~ (inner$81, return$30)
++                         join apply$142 = (inner$81, return$30)
++                         in outer$80 ~ apply$142
+                        }
+-                       in invoke Cons ~ then outer$82 -> {
++                       in join then$141 = then outer$82 -> {
+                          join label$86 = then inner$83 -> {
+-                           outer$82 ~ ( inner$83
++                           join then$139 = then outer$84 -> {
+-                           , then outer$84 -> {
+                              join return$32 = then inner$85 -> {
+-                               outer$84 ~ (inner$85, return$31)
++                               join apply$138 = (inner$85, return$31)
++                               in outer$84 ~ apply$138
+                              }
+                              in invoke Nil ~ return$32
+-                           } )
++                           }
++                           in join apply$140 = (inner$83, then$139)
++                           in outer$82 ~ apply$140
+                          }
+                          in join return$33 = then var$87 -> {
+                            SList(var$87) ~ label$86
+                          }
+-                         in invoke Cons ~ then outer$88 -> {
++                         in join then$137 = then outer$88 -> {
+                            join label$92 = then inner$89 -> {
+-                             outer$88 ~ ( inner$89
++                             join then$135 = then outer$90 -> {
+-                             , then outer$90 -> {
+                                join return$34 = then inner$91 -> {
+-                                 outer$90 ~ (inner$91, return$33)
++                                 join apply$134 = (inner$91, return$33)
++                                 in outer$90 ~ apply$134
+                                }
+                                in invoke Nil ~ return$34
+-                             } )
++                             }
++                             in join apply$136 = (inner$89, then$135)
++                             in outer$88 ~ apply$136
+                            }
+                            in join return$35 = then var$93 -> {
+                              Symbol(var$93) ~ label$92
+                            }
+-                           in invoke String# ~ ("z", return$35)
++                           in join apply$133 = ("z", return$35)
++                           in invoke String# ~ apply$133
+                          }
++                         in invoke Cons ~ then$137
+                        }
+-                     } )
++                       in invoke Cons ~ then$141
++                     }
++                     in join apply$144 = (inner$79, then$143)
++                     in outer$78 ~ apply$144
+                    }
+                    in join return$36 = then var$95 -> {
+                      Symbol(var$95) ~ label$94
+                    }
+-                   in invoke String# ~ ("y", return$36)
++                   in join apply$132 = ("y", return$36)
++                   in invoke String# ~ apply$132
+                  }
++                 in invoke Cons ~ then$145
+                }
+-             } )
++               in invoke Cons ~ then$149
++             }
++             in join apply$152 = (inner$69, then$151)
++             in outer$68 ~ apply$152
+            }
+            in join return$37 = then var$97 -> {
+              Symbol(var$97) ~ label$96
+            }
+-           in invoke String# ~ ("x", return$37)
++           in join apply$131 = ("x", return$37)
++           in invoke String# ~ apply$131
+          }
++         in invoke Cons ~ then$153
+      }
++     in param$6 ~ select$157
+    } ~ return$24
+  
+  def Symbol(return$38) =
+    \constructor$7 return$39 . {
+      Symbol(constructor$7) ~ return$39
+    } ~ return$38
+  
+  def SInt(return$40) =
+    \constructor$8 return$41 . {
+      SInt(constructor$8) ~ return$41
+    } ~ return$40
+  
+  def SList(return$42) =
+    \constructor$9 return$43 . {
+      SList(constructor$9) ~ return$43
+    } ~ return$42
+
+
+=== Join -> ClosureConv ===
+- def <>(return$10) = invoke appendString ~ return$10
++ toplevel fn <>(return$10) = return appendString(return$10)
+  
+- def show(return$11) =
++ toplevel fn show(return$11) =
+-   \param$5 return$12 . {
++   let closure$257 = closure lambda$160()
+-     join select$130 = select {
++   return return$11(closure$257)
+-       Symbol(str#0) ->
+-         join then$103 = then outer$44 -> {
+-           join return$13 = then inner$45 -> {
+-             join apply$101 = (str#0, return$12)
+-             in join apply$102 = (inner$45, apply$101)
+-             in outer$44 ~ apply$102
+-           }
+-           in join apply$100 = ("Symbol ", return$13)
+-           in invoke String# ~ apply$100
+-         }
+-         in invoke <> ~ then$103
+-       SInt(int#1) ->
+-         join then$109 = then outer$46 -> {
+-           join return$15 = then inner$47 -> {
+-             join then$107 = then outer$48 -> {
+-               join return$14 = then inner$49 -> {
+-                 join apply$106 = (inner$49, return$12)
+-                 in outer$48 ~ apply$106
+-               }
+-               in join apply$105 = (int#1, return$14)
+-               in invoke toStringInt32 ~ apply$105
+-             }
+-             in join apply$108 = (inner$47, then$107)
+-             in outer$46 ~ apply$108
+-           }
+-           in join apply$104 = ("SInt ", return$15)
+-           in invoke String# ~ apply$104
+-         }
+-         in invoke <> ~ then$109
+-       SList(ss#2) ->
+-         join then$129 = then outer$50 -> {
+-           join return$23 = then inner$51 -> {
+-             join then$127 = then outer$52 -> {
+-               join return$16 = then inner$53 -> {
+-                 join apply$126 = (inner$53, return$12)
+-                 in outer$52 ~ apply$126
+-               }
+-               in join then$125 = then outer$54 -> {
+-                 join return$18 = then inner$55 -> {
+-                   join then$123 = then outer$56 -> {
+-                     join return$17 = then inner$57 -> {
+-                       join apply$122 = (inner$57, return$16)
+-                       in outer$56 ~ apply$122
+-                     }
+-                     in join apply$121 = ("]", return$17)
+-                     in invoke String# ~ apply$121
+-                   }
+-                   in join apply$124 = (inner$55, then$123)
+-                   in outer$54 ~ apply$124
+-                 }
+-                 in join then$120 = then outer$58 -> {
+-                   join return$19 = then inner$59 -> {
+-                     join apply$119 = (inner$59, return$18)
+-                     in outer$58 ~ apply$119
+-                   }
+-                   in join then$118 = then outer$60 -> {
+-                     join return$22 = then inner$61 -> {
+-                       join then$116 = then outer$62 -> {
+-                         join return$20 = then inner$63 -> {
+-                           join apply$115 = (inner$63, return$19)
+-                           in outer$62 ~ apply$115
+-                         }
+-                         in join then$114 = then outer$64 -> {
+-                           join return$21 = then inner$65 -> {
+-                             join apply$112 = (ss#2, return$20)
+-                             in join apply$113 = (inner$65, apply$112)
+-                             in outer$64 ~ apply$113
+-                           }
+-                           in invoke show ~ return$21
+-                         }
+-                         in invoke mapList ~ then$114
+-                       }
+-                       in join apply$117 = (inner$61, then$116)
+-                       in outer$60 ~ apply$117
+-                     }
+-                     in join apply$111 = (", ", return$22)
+-                     in invoke String# ~ apply$111
+-                   }
+-                   in invoke punctuate ~ then$118
+-                 }
+-                 in invoke concatString ~ then$120
+-               }
+-               in invoke <> ~ then$125
+-             }
+-             in join apply$128 = (inner$51, then$127)
+-             in outer$50 ~ apply$128
+-           }
+-           in join apply$110 = ("SList [", return$23)
+-           in invoke String# ~ apply$110
+-         }
+-         in invoke <> ~ then$129
+-     }
+-     in param$5 ~ select$130
+-   } ~ return$11
+  
+- def main(return$24) =
++ closure fn lambda$160(self$161, param$5, return$12) =
+-   \param$6 return$25 . {
++   if param$5.tag == Symbol then {
+-     join select$157 = select {
++     let str#0 = param$5.0
+-       _#3 ->
++     let then$103 = closure join$162(return$12, str#0)
+-         join label$66 = then x#4 -> {
++     return <>(then$103)
+-           join then$156 = then outer$98 -> {
++   } else {
+-             join return$26 = then inner$99 -> {
++     if param$5.tag == SInt then {
+-               join apply$155 = (inner$99, return$25)
++       let int#1 = param$5.0
+-               in outer$98 ~ apply$155
++       let then$109 = closure join$175(int#1, return$12)
+-             }
++       return <>(then$109)
+-             in join apply$154 = (x#4, return$26)
++     } else {
+-             in invoke show ~ apply$154
++       if param$5.tag == SList then {
+-           }
++         let ss#2 = param$5.0
+-           in invoke putStrLn ~ then$156
++         let then$129 = closure join$194(return$12, ss#2)
+-         }
++         return <>(then$129)
+-         in join return$27 = then var$67 -> {
++       } else {
+-           SList(var$67) ~ label$66
++         panic "no matching branch"
+-         }
++       }
+-         in join then$153 = then outer$68 -> {
+-           join label$96 = then inner$69 -> {
+-             join then$151 = then outer$70 -> {
+-               join return$28 = then inner$71 -> {
+-                 join apply$150 = (inner$71, return$27)
+-                 in outer$70 ~ apply$150
+-               }
+-               in join then$149 = then outer$72 -> {
+-                 join label$76 = then inner$73 -> {
+-                   join then$147 = then outer$74 -> {
+-                     join return$29 = then inner$75 -> {
+-                       join apply$146 = (inner$75, return$28)
+-                       in outer$74 ~ apply$146
+-                     }
+-                     in invoke Nil ~ return$29
+-                   }
+-                   in join apply$148 = (inner$73, then$147)
+-                   in outer$72 ~ apply$148
+-                 }
+-                 in join return$30 = then var$77 -> {
+-                   SList(var$77) ~ label$76
+-                 }
+-                 in join then$145 = then outer$78 -> {
+-                   join label$94 = then inner$79 -> {
+-                     join then$143 = then outer$80 -> {
+-                       join return$31 = then inner$81 -> {
+-                         join apply$142 = (inner$81, return$30)
+-                         in outer$80 ~ apply$142
+-                       }
+-                       in join then$141 = then outer$82 -> {
+-                         join label$86 = then inner$83 -> {
+-                           join then$139 = then outer$84 -> {
+-                             join return$32 = then inner$85 -> {
+-                               join apply$138 = (inner$85, return$31)
+-                               in outer$84 ~ apply$138
+-                             }
+-                             in invoke Nil ~ return$32
+-                           }
+-                           in join apply$140 = (inner$83, then$139)
+-                           in outer$82 ~ apply$140
+-                         }
+-                         in join return$33 = then var$87 -> {
+-                           SList(var$87) ~ label$86
+-                         }
+-                         in join then$137 = then outer$88 -> {
+-                           join label$92 = then inner$89 -> {
+-                             join then$135 = then outer$90 -> {
+-                               join return$34 = then inner$91 -> {
+-                                 join apply$134 = (inner$91, return$33)
+-                                 in outer$90 ~ apply$134
+-                               }
+-                               in invoke Nil ~ return$34
+-                             }
+-                             in join apply$136 = (inner$89, then$135)
+-                             in outer$88 ~ apply$136
+-                           }
+-                           in join return$35 = then var$93 -> {
+-                             Symbol(var$93) ~ label$92
+-                           }
+-                           in join apply$133 = ("z", return$35)
+-                           in invoke String# ~ apply$133
+-                         }
+-                         in invoke Cons ~ then$137
+-                       }
+-                       in invoke Cons ~ then$141
+-                     }
+-                     in join apply$144 = (inner$79, then$143)
+-                     in outer$78 ~ apply$144
+-                   }
+-                   in join return$36 = then var$95 -> {
+-                     Symbol(var$95) ~ label$94
+-                   }
+-                   in join apply$132 = ("y", return$36)
+-                   in invoke String# ~ apply$132
+-                 }
+-                 in invoke Cons ~ then$145
+-               }
+-               in invoke Cons ~ then$149
+-             }
+-             in join apply$152 = (inner$69, then$151)
+-             in outer$68 ~ apply$152
+-           }
+-           in join return$37 = then var$97 -> {
+-             Symbol(var$97) ~ label$96
+-           }
+-           in join apply$131 = ("x", return$37)
+-           in invoke String# ~ apply$131
+-         }
+-         in invoke Cons ~ then$153
+      }
+-     in param$6 ~ select$157
++   }
+-   } ~ return$24
+  
+- def Symbol(return$38) =
++ closure fn join$162(self$163, value$164) =
+-   \constructor$7 return$39 . {
++   let return$12 = self$163.cap[0]
+-     Symbol(constructor$7) ~ return$39
++   let str#0 = self$163.cap[1]
+-   } ~ return$38
++   let return$13 = closure join$165(return$12, str#0, value$164)
++   let apply$100 = closure join$171(return$13)
++   return String#(apply$100)
+  
+- def SInt(return$40) =
++ closure fn join$165(self$166, value$167) =
+-   \constructor$8 return$41 . {
++   let return$12 = self$166.cap[0]
+-     SInt(constructor$8) ~ return$41
++   let str#0 = self$166.cap[1]
+-   } ~ return$40
++   let value$164 = self$166.cap[2]
++   let apply$101 = closure join$168(return$12, str#0)
++   return value$164(value$167, apply$101)
+  
+- def SList(return$42) =
++ closure fn join$168(self$169, value$170) =
+-   \constructor$9 return$43 . {
++   let return$12 = self$169.cap[0]
+-     SList(constructor$9) ~ return$43
++   let str#0 = self$169.cap[1]
+-   } ~ return$42
++   return value$170(str#0, return$12)
++ 
++ closure fn join$171(self$172, value$173) =
++   let return$13 = self$172.cap[0]
++   let lit$174 = "Symbol "
++   return value$173(lit$174, return$13)
++ 
++ closure fn join$175(self$176, value$177) =
++   let int#1 = self$176.cap[0]
++   let return$12 = self$176.cap[1]
++   let return$15 = closure join$178(int#1, return$12, value$177)
++   let apply$104 = closure join$190(return$15)
++   return String#(apply$104)
++ 
++ closure fn join$178(self$179, value$180) =
++   let int#1 = self$179.cap[0]
++   let return$12 = self$179.cap[1]
++   let value$177 = self$179.cap[2]
++   let then$107 = closure join$181(int#1, return$12)
++   return value$177(value$180, then$107)
++ 
++ closure fn join$181(self$182, value$183) =
++   let int#1 = self$182.cap[0]
++   let return$12 = self$182.cap[1]
++   let return$14 = closure join$184(return$12, value$183)
++   let apply$105 = closure join$187(int#1, return$14)
++   return toStringInt32(apply$105)
++ 
++ closure fn join$184(self$185, value$186) =
++   let return$12 = self$185.cap[0]
++   let value$183 = self$185.cap[1]
++   return value$183(value$186, return$12)
++ 
++ closure fn join$187(self$188, value$189) =
++   let int#1 = self$188.cap[0]
++   let return$14 = self$188.cap[1]
++   return value$189(int#1, return$14)
++ 
++ closure fn join$190(self$191, value$192) =
++   let return$15 = self$191.cap[0]
++   let lit$193 = "SInt "
++   return value$192(lit$193, return$15)
++ 
++ closure fn join$194(self$195, value$196) =
++   let return$12 = self$195.cap[0]
++   let ss#2 = self$195.cap[1]
++   let return$23 = closure join$197(return$12, ss#2, value$196)
++   let apply$110 = closure join$253(return$23)
++   return String#(apply$110)
++ 
++ closure fn join$197(self$198, value$199) =
++   let return$12 = self$198.cap[0]
++   let ss#2 = self$198.cap[1]
++   let value$196 = self$198.cap[2]
++   let then$127 = closure join$200(return$12, ss#2)
++   return value$196(value$199, then$127)
++ 
++ closure fn join$200(self$201, value$202) =
++   let return$12 = self$201.cap[0]
++   let ss#2 = self$201.cap[1]
++   let return$16 = closure join$203(return$12, value$202)
++   let then$125 = closure join$206(return$16, ss#2)
++   return <>(then$125)
++ 
++ closure fn join$203(self$204, value$205) =
++   let return$12 = self$204.cap[0]
++   let value$202 = self$204.cap[1]
++   return value$202(value$205, return$12)
++ 
++ closure fn join$206(self$207, value$208) =
++   let return$16 = self$207.cap[0]
++   let ss#2 = self$207.cap[1]
++   let return$18 = closure join$209(return$16, value$208)
++   let then$120 = closure join$222(return$18, ss#2)
++   return concatString(then$120)
++ 
++ closure fn join$209(self$210, value$211) =
++   let return$16 = self$210.cap[0]
++   let value$208 = self$210.cap[1]
++   let then$123 = closure join$212(return$16)
++   return value$208(value$211, then$123)
++ 
++ closure fn join$212(self$213, value$214) =
++   let return$16 = self$213.cap[0]
++   let return$17 = closure join$215(return$16, value$214)
++   let apply$121 = closure join$218(return$17)
++   return String#(apply$121)
++ 
++ closure fn join$215(self$216, value$217) =
++   let return$16 = self$216.cap[0]
++   let value$214 = self$216.cap[1]
++   return value$214(value$217, return$16)
++ 
++ closure fn join$218(self$219, value$220) =
++   let return$17 = self$219.cap[0]
++   let lit$221 = "]"
++   return value$220(lit$221, return$17)
++ 
++ closure fn join$222(self$223, value$224) =
++   let return$18 = self$223.cap[0]
++   let ss#2 = self$223.cap[1]
++   let return$19 = closure join$225(return$18, value$224)
++   let then$118 = closure join$228(return$19, ss#2)
++   return punctuate(then$118)
++ 
++ closure fn join$225(self$226, value$227) =
++   let return$18 = self$226.cap[0]
++   let value$224 = self$226.cap[1]
++   return value$224(value$227, return$18)
++ 
++ closure fn join$228(self$229, value$230) =
++   let return$19 = self$229.cap[0]
++   let ss#2 = self$229.cap[1]
++   let return$22 = closure join$231(return$19, ss#2, value$230)
++   let apply$111 = closure join$249(return$22)
++   return String#(apply$111)
++ 
++ closure fn join$231(self$232, value$233) =
++   let return$19 = self$232.cap[0]
++   let ss#2 = self$232.cap[1]
++   let value$230 = self$232.cap[2]
++   let then$116 = closure join$234(return$19, ss#2)
++   return value$230(value$233, then$116)
++ 
++ closure fn join$234(self$235, value$236) =
++   let return$19 = self$235.cap[0]
++   let ss#2 = self$235.cap[1]
++   let return$20 = closure join$237(return$19, value$236)
++   let then$114 = closure join$240(return$20, ss#2)
++   return mapList(then$114)
++ 
++ closure fn join$237(self$238, value$239) =
++   let return$19 = self$238.cap[0]
++   let value$236 = self$238.cap[1]
++   return value$236(value$239, return$19)
++ 
++ closure fn join$240(self$241, value$242) =
++   let return$20 = self$241.cap[0]
++   let ss#2 = self$241.cap[1]
++   let return$21 = closure join$243(return$20, ss#2, value$242)
++   return show(return$21)
++ 
++ closure fn join$243(self$244, value$245) =
++   let return$20 = self$244.cap[0]
++   let ss#2 = self$244.cap[1]
++   let value$242 = self$244.cap[2]
++   let apply$112 = closure join$246(return$20, ss#2)
++   return value$242(value$245, apply$112)
++ 
++ closure fn join$246(self$247, value$248) =
++   let return$20 = self$247.cap[0]
++   let ss#2 = self$247.cap[1]
++   return value$248(ss#2, return$20)
++ 
++ closure fn join$249(self$250, value$251) =
++   let return$22 = self$250.cap[0]
++   let lit$252 = ", "
++   return value$251(lit$252, return$22)
++ 
++ closure fn join$253(self$254, value$255) =
++   let return$23 = self$254.cap[0]
++   let lit$256 = "SList ["
++   return value$255(lit$256, return$23)
++ 
++ toplevel fn main(return$24) =
++   let closure$369 = closure lambda$259()
++   return return$24(closure$369)
++ 
++ closure fn lambda$259(self$260, param$6, return$25) =
++   if  then {
++     let _#3 = param$6
++     let label$66 = closure join$261(return$25)
++     let return$27 = closure join$273(label$66)
++     let then$153 = closure join$277(return$27)
++     return Cons(then$153)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$261(self$262, value$263) =
++   let return$25 = self$262.cap[0]
++   let then$156 = closure join$264(return$25, value$263)
++   return putStrLn(then$156)
++ 
++ closure fn join$264(self$265, value$266) =
++   let return$25 = self$265.cap[0]
++   let value$263 = self$265.cap[1]
++   let return$26 = closure join$267(return$25, value$266)
++   let apply$154 = closure join$270(return$26, value$263)
++   return show(apply$154)
++ 
++ closure fn join$267(self$268, value$269) =
++   let return$25 = self$268.cap[0]
++   let value$266 = self$268.cap[1]
++   return value$266(value$269, return$25)
++ 
++ closure fn join$270(self$271, value$272) =
++   let return$26 = self$271.cap[0]
++   let value$263 = self$271.cap[1]
++   return value$272(value$263, return$26)
++ 
++ closure fn join$273(self$274, value$275) =
++   let label$66 = self$274.cap[0]
++   let struct$276 = SList(value$275)
++   return label$66(struct$276)
++ 
++ closure fn join$277(self$278, value$279) =
++   let return$27 = self$278.cap[0]
++   let label$96 = closure join$280(return$27, value$279)
++   let return$37 = closure join$361(label$96)
++   let apply$131 = closure join$365(return$37)
++   return String#(apply$131)
++ 
++ closure fn join$280(self$281, value$282) =
++   let return$27 = self$281.cap[0]
++   let value$279 = self$281.cap[1]
++   let then$151 = closure join$283(return$27)
++   return value$279(value$282, then$151)
++ 
++ closure fn join$283(self$284, value$285) =
++   let return$27 = self$284.cap[0]
++   let return$28 = closure join$286(return$27, value$285)
++   let then$149 = closure join$289(return$28)
++   return Cons(then$149)
++ 
++ closure fn join$286(self$287, value$288) =
++   let return$27 = self$287.cap[0]
++   let value$285 = self$287.cap[1]
++   return value$285(value$288, return$27)
++ 
++ closure fn join$289(self$290, value$291) =
++   let return$28 = self$290.cap[0]
++   let label$76 = closure join$292(return$28, value$291)
++   let return$30 = closure join$301(label$76)
++   let then$145 = closure join$305(return$30)
++   return Cons(then$145)
++ 
++ closure fn join$292(self$293, value$294) =
++   let return$28 = self$293.cap[0]
++   let value$291 = self$293.cap[1]
++   let then$147 = closure join$295(return$28)
++   return value$291(value$294, then$147)
++ 
++ closure fn join$295(self$296, value$297) =
++   let return$28 = self$296.cap[0]
++   let return$29 = closure join$298(return$28, value$297)
++   return Nil(return$29)
++ 
++ closure fn join$298(self$299, value$300) =
++   let return$28 = self$299.cap[0]
++   let value$297 = self$299.cap[1]
++   return value$297(value$300, return$28)
++ 
++ closure fn join$301(self$302, value$303) =
++   let label$76 = self$302.cap[0]
++   let struct$304 = SList(value$303)
++   return label$76(struct$304)
++ 
++ closure fn join$305(self$306, value$307) =
++   let return$30 = self$306.cap[0]
++   let label$94 = closure join$308(return$30, value$307)
++   let return$36 = closure join$353(label$94)
++   let apply$132 = closure join$357(return$36)
++   return String#(apply$132)
++ 
++ closure fn join$308(self$309, value$310) =
++   let return$30 = self$309.cap[0]
++   let value$307 = self$309.cap[1]
++   let then$143 = closure join$311(return$30)
++   return value$307(value$310, then$143)
++ 
++ closure fn join$311(self$312, value$313) =
++   let return$30 = self$312.cap[0]
++   let return$31 = closure join$314(return$30, value$313)
++   let then$141 = closure join$317(return$31)
++   return Cons(then$141)
++ 
++ closure fn join$314(self$315, value$316) =
++   let return$30 = self$315.cap[0]
++   let value$313 = self$315.cap[1]
++   return value$313(value$316, return$30)
++ 
++ closure fn join$317(self$318, value$319) =
++   let return$31 = self$318.cap[0]
++   let label$86 = closure join$320(return$31, value$319)
++   let return$33 = closure join$329(label$86)
++   let then$137 = closure join$333(return$33)
++   return Cons(then$137)
++ 
++ closure fn join$320(self$321, value$322) =
++   let return$31 = self$321.cap[0]
++   let value$319 = self$321.cap[1]
++   let then$139 = closure join$323(return$31)
++   return value$319(value$322, then$139)
++ 
++ closure fn join$323(self$324, value$325) =
++   let return$31 = self$324.cap[0]
++   let return$32 = closure join$326(return$31, value$325)
++   return Nil(return$32)
++ 
++ closure fn join$326(self$327, value$328) =
++   let return$31 = self$327.cap[0]
++   let value$325 = self$327.cap[1]
++   return value$325(value$328, return$31)
++ 
++ closure fn join$329(self$330, value$331) =
++   let label$86 = self$330.cap[0]
++   let struct$332 = SList(value$331)
++   return label$86(struct$332)
++ 
++ closure fn join$333(self$334, value$335) =
++   let return$33 = self$334.cap[0]
++   let label$92 = closure join$336(return$33, value$335)
++   let return$35 = closure join$345(label$92)
++   let apply$133 = closure join$349(return$35)
++   return String#(apply$133)
++ 
++ closure fn join$336(self$337, value$338) =
++   let return$33 = self$337.cap[0]
++   let value$335 = self$337.cap[1]
++   let then$135 = closure join$339(return$33)
++   return value$335(value$338, then$135)
++ 
++ closure fn join$339(self$340, value$341) =
++   let return$33 = self$340.cap[0]
++   let return$34 = closure join$342(return$33, value$341)
++   return Nil(return$34)
++ 
++ closure fn join$342(self$343, value$344) =
++   let return$33 = self$343.cap[0]
++   let value$341 = self$343.cap[1]
++   return value$341(value$344, return$33)
++ 
++ closure fn join$345(self$346, value$347) =
++   let label$92 = self$346.cap[0]
++   let struct$348 = Symbol(value$347)
++   return label$92(struct$348)
++ 
++ closure fn join$349(self$350, value$351) =
++   let return$35 = self$350.cap[0]
++   let lit$352 = "z"
++   return value$351(lit$352, return$35)
++ 
++ closure fn join$353(self$354, value$355) =
++   let label$94 = self$354.cap[0]
++   let struct$356 = Symbol(value$355)
++   return label$94(struct$356)
++ 
++ closure fn join$357(self$358, value$359) =
++   let return$36 = self$358.cap[0]
++   let lit$360 = "y"
++   return value$359(lit$360, return$36)
++ 
++ closure fn join$361(self$362, value$363) =
++   let label$96 = self$362.cap[0]
++   let struct$364 = Symbol(value$363)
++   return label$96(struct$364)
++ 
++ closure fn join$365(self$366, value$367) =
++   let return$37 = self$366.cap[0]
++   let lit$368 = "x"
++   return value$367(lit$368, return$37)
++ 
++ toplevel fn Symbol(return$38) =
++   let closure$374 = closure lambda$371()
++   return return$38(closure$374)
++ 
++ closure fn lambda$371(self$372, constructor$7, return$39) =
++   let struct$373 = Symbol(constructor$7)
++   return return$39(struct$373)
++ 
++ toplevel fn SInt(return$40) =
++   let closure$379 = closure lambda$376()
++   return return$40(closure$379)
++ 
++ closure fn lambda$376(self$377, constructor$8, return$41) =
++   let struct$378 = SInt(constructor$8)
++   return return$41(struct$378)
++ 
++ toplevel fn SList(return$42) =
++   let closure$384 = closure lambda$381()
++   return return$42(closure$384)
++ 
++ closure fn lambda$381(self$382, constructor$9, return$43) =
++   let struct$383 = SList(constructor$9)
++   return return$43(struct$383)
++ 
++ toplevel fn zig_main$387() =
++   let finish$385 = closure join$389()
++   let after_main$386 = closure join$392(finish$385)
++   return main(after_main$386)
++ 
++ closure fn join$389(self$390, value$391) = return value$391
++ 
++ closure fn join$392(self$393, value$394) =
++   let finish$385 = self$393.cap[0]
++   let struct$395 = Tuple()
++   return value$394(struct$395, finish$385)
++ 
++ entry = zig_main$387
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn <>(return$10) = return appendString(return$10)
+  
+  toplevel fn show(return$11) =
+    let closure$257 = closure lambda$160()
+    return return$11(closure$257)
+  
+  closure fn lambda$160(self$161, param$5, return$12) =
+    if param$5.tag == Symbol then {
+      let str#0 = param$5.0
+      let then$103 = closure join$162(return$12, str#0)
+      return <>(then$103)
+    } else {
+      if param$5.tag == SInt then {
+        let int#1 = param$5.0
+        let then$109 = closure join$175(int#1, return$12)
+        return <>(then$109)
+      } else {
+        if param$5.tag == SList then {
+          let ss#2 = param$5.0
+          let then$129 = closure join$194(return$12, ss#2)
+          return <>(then$129)
+        } else {
+          panic "no matching branch"
+        }
+      }
+    }
+  
+  closure fn join$162(self$163, value$164) =
+    let return$12 = self$163.cap[0]
+    let str#0 = self$163.cap[1]
+    let return$13 = closure join$165(return$12, str#0, value$164)
+    let apply$100 = closure join$171(return$13)
+    return String#(apply$100)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$12 = self$166.cap[0]
+    let str#0 = self$166.cap[1]
+    let value$164 = self$166.cap[2]
+    let apply$101 = closure join$168(return$12, str#0)
+    return value$164(value$167, apply$101)
+  
+  closure fn join$168(self$169, value$170) =
+    let return$12 = self$169.cap[0]
+    let str#0 = self$169.cap[1]
+    return value$170(str#0, return$12)
+  
+  closure fn join$171(self$172, value$173) =
+    let return$13 = self$172.cap[0]
+    let lit$174 = "Symbol "
+    return value$173(lit$174, return$13)
+  
+  closure fn join$175(self$176, value$177) =
+    let int#1 = self$176.cap[0]
+    let return$12 = self$176.cap[1]
+    let return$15 = closure join$178(int#1, return$12, value$177)
+    let apply$104 = closure join$190(return$15)
+    return String#(apply$104)
+  
+  closure fn join$178(self$179, value$180) =
+    let int#1 = self$179.cap[0]
+    let return$12 = self$179.cap[1]
+    let value$177 = self$179.cap[2]
+    let then$107 = closure join$181(int#1, return$12)
+    return value$177(value$180, then$107)
+  
+  closure fn join$181(self$182, value$183) =
+    let int#1 = self$182.cap[0]
+    let return$12 = self$182.cap[1]
+    let return$14 = closure join$184(return$12, value$183)
+    let apply$105 = closure join$187(int#1, return$14)
+    return toStringInt32(apply$105)
+  
+  closure fn join$184(self$185, value$186) =
+    let return$12 = self$185.cap[0]
+    let value$183 = self$185.cap[1]
+    return value$183(value$186, return$12)
+  
+  closure fn join$187(self$188, value$189) =
+    let int#1 = self$188.cap[0]
+    let return$14 = self$188.cap[1]
+    return value$189(int#1, return$14)
+  
+  closure fn join$190(self$191, value$192) =
+    let return$15 = self$191.cap[0]
+    let lit$193 = "SInt "
+    return value$192(lit$193, return$15)
+  
+  closure fn join$194(self$195, value$196) =
+    let return$12 = self$195.cap[0]
+    let ss#2 = self$195.cap[1]
+    let return$23 = closure join$197(return$12, ss#2, value$196)
+    let apply$110 = closure join$253(return$23)
+    return String#(apply$110)
+  
+  closure fn join$197(self$198, value$199) =
+    let return$12 = self$198.cap[0]
+    let ss#2 = self$198.cap[1]
+    let value$196 = self$198.cap[2]
+    let then$127 = closure join$200(return$12, ss#2)
+    return value$196(value$199, then$127)
+  
+  closure fn join$200(self$201, value$202) =
+    let return$12 = self$201.cap[0]
+    let ss#2 = self$201.cap[1]
+    let return$16 = closure join$203(return$12, value$202)
+    let then$125 = closure join$206(return$16, ss#2)
+    return <>(then$125)
+  
+  closure fn join$203(self$204, value$205) =
+    let return$12 = self$204.cap[0]
+    let value$202 = self$204.cap[1]
+    return value$202(value$205, return$12)
+  
+  closure fn join$206(self$207, value$208) =
+    let return$16 = self$207.cap[0]
+    let ss#2 = self$207.cap[1]
+    let return$18 = closure join$209(return$16, value$208)
+    let then$120 = closure join$222(return$18, ss#2)
+    return concatString(then$120)
+  
+  closure fn join$209(self$210, value$211) =
+    let return$16 = self$210.cap[0]
+    let value$208 = self$210.cap[1]
+    let then$123 = closure join$212(return$16)
+    return value$208(value$211, then$123)
+  
+  closure fn join$212(self$213, value$214) =
+    let return$16 = self$213.cap[0]
+    let return$17 = closure join$215(return$16, value$214)
+    let apply$121 = closure join$218(return$17)
+    return String#(apply$121)
+  
+  closure fn join$215(self$216, value$217) =
+    let return$16 = self$216.cap[0]
+    let value$214 = self$216.cap[1]
+    return value$214(value$217, return$16)
+  
+  closure fn join$218(self$219, value$220) =
+    let return$17 = self$219.cap[0]
+    let lit$221 = "]"
+    return value$220(lit$221, return$17)
+  
+  closure fn join$222(self$223, value$224) =
+    let return$18 = self$223.cap[0]
+    let ss#2 = self$223.cap[1]
+    let return$19 = closure join$225(return$18, value$224)
+    let then$118 = closure join$228(return$19, ss#2)
+    return punctuate(then$118)
+  
+  closure fn join$225(self$226, value$227) =
+    let return$18 = self$226.cap[0]
+    let value$224 = self$226.cap[1]
+    return value$224(value$227, return$18)
+  
+  closure fn join$228(self$229, value$230) =
+    let return$19 = self$229.cap[0]
+    let ss#2 = self$229.cap[1]
+    let return$22 = closure join$231(return$19, ss#2, value$230)
+    let apply$111 = closure join$249(return$22)
+    return String#(apply$111)
+  
+  closure fn join$231(self$232, value$233) =
+    let return$19 = self$232.cap[0]
+    let ss#2 = self$232.cap[1]
+    let value$230 = self$232.cap[2]
+    let then$116 = closure join$234(return$19, ss#2)
+    return value$230(value$233, then$116)
+  
+  closure fn join$234(self$235, value$236) =
+    let return$19 = self$235.cap[0]
+    let ss#2 = self$235.cap[1]
+    let return$20 = closure join$237(return$19, value$236)
+    let then$114 = closure join$240(return$20, ss#2)
+    return mapList(then$114)
+  
+  closure fn join$237(self$238, value$239) =
+    let return$19 = self$238.cap[0]
+    let value$236 = self$238.cap[1]
+    return value$236(value$239, return$19)
+  
+  closure fn join$240(self$241, value$242) =
+    let return$20 = self$241.cap[0]
+    let ss#2 = self$241.cap[1]
+    let return$21 = closure join$243(return$20, ss#2, value$242)
+    return show(return$21)
+  
+  closure fn join$243(self$244, value$245) =
+    let return$20 = self$244.cap[0]
+    let ss#2 = self$244.cap[1]
+    let value$242 = self$244.cap[2]
+    let apply$112 = closure join$246(return$20, ss#2)
+    return value$242(value$245, apply$112)
+  
+  closure fn join$246(self$247, value$248) =
+    let return$20 = self$247.cap[0]
+    let ss#2 = self$247.cap[1]
+    return value$248(ss#2, return$20)
+  
+  closure fn join$249(self$250, value$251) =
+    let return$22 = self$250.cap[0]
+    let lit$252 = ", "
+    return value$251(lit$252, return$22)
+  
+  closure fn join$253(self$254, value$255) =
+    let return$23 = self$254.cap[0]
+    let lit$256 = "SList ["
+    return value$255(lit$256, return$23)
+  
+  toplevel fn main(return$24) =
+    let closure$369 = closure lambda$259()
+    return return$24(closure$369)
+  
+  closure fn lambda$259(self$260, param$6, return$25) =
+    if  then {
+-     let _#3 = param$6
+      let label$66 = closure join$261(return$25)
+      let return$27 = closure join$273(label$66)
+      let then$153 = closure join$277(return$27)
+      return Cons(then$153)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$261(self$262, value$263) =
+    let return$25 = self$262.cap[0]
+    let then$156 = closure join$264(return$25, value$263)
+    return putStrLn(then$156)
+  
+  closure fn join$264(self$265, value$266) =
+    let return$25 = self$265.cap[0]
+    let value$263 = self$265.cap[1]
+    let return$26 = closure join$267(return$25, value$266)
+    let apply$154 = closure join$270(return$26, value$263)
+    return show(apply$154)
+  
+  closure fn join$267(self$268, value$269) =
+    let return$25 = self$268.cap[0]
+    let value$266 = self$268.cap[1]
+    return value$266(value$269, return$25)
+  
+  closure fn join$270(self$271, value$272) =
+    let return$26 = self$271.cap[0]
+    let value$263 = self$271.cap[1]
+    return value$272(value$263, return$26)
+  
+  closure fn join$273(self$274, value$275) =
+    let label$66 = self$274.cap[0]
+    let struct$276 = SList(value$275)
+    return label$66(struct$276)
+  
+  closure fn join$277(self$278, value$279) =
+    let return$27 = self$278.cap[0]
+    let label$96 = closure join$280(return$27, value$279)
+    let return$37 = closure join$361(label$96)
+    let apply$131 = closure join$365(return$37)
+    return String#(apply$131)
+  
+  closure fn join$280(self$281, value$282) =
+    let return$27 = self$281.cap[0]
+    let value$279 = self$281.cap[1]
+    let then$151 = closure join$283(return$27)
+    return value$279(value$282, then$151)
+  
+  closure fn join$283(self$284, value$285) =
+    let return$27 = self$284.cap[0]
+    let return$28 = closure join$286(return$27, value$285)
+    let then$149 = closure join$289(return$28)
+    return Cons(then$149)
+  
+  closure fn join$286(self$287, value$288) =
+    let return$27 = self$287.cap[0]
+    let value$285 = self$287.cap[1]
+    return value$285(value$288, return$27)
+  
+  closure fn join$289(self$290, value$291) =
+    let return$28 = self$290.cap[0]
+    let label$76 = closure join$292(return$28, value$291)
+    let return$30 = closure join$301(label$76)
+    let then$145 = closure join$305(return$30)
+    return Cons(then$145)
+  
+  closure fn join$292(self$293, value$294) =
+    let return$28 = self$293.cap[0]
+    let value$291 = self$293.cap[1]
+    let then$147 = closure join$295(return$28)
+    return value$291(value$294, then$147)
+  
+  closure fn join$295(self$296, value$297) =
+    let return$28 = self$296.cap[0]
+    let return$29 = closure join$298(return$28, value$297)
+    return Nil(return$29)
+  
+  closure fn join$298(self$299, value$300) =
+    let return$28 = self$299.cap[0]
+    let value$297 = self$299.cap[1]
+    return value$297(value$300, return$28)
+  
+  closure fn join$301(self$302, value$303) =
+    let label$76 = self$302.cap[0]
+    let struct$304 = SList(value$303)
+    return label$76(struct$304)
+  
+  closure fn join$305(self$306, value$307) =
+    let return$30 = self$306.cap[0]
+    let label$94 = closure join$308(return$30, value$307)
+    let return$36 = closure join$353(label$94)
+    let apply$132 = closure join$357(return$36)
+    return String#(apply$132)
+  
+  closure fn join$308(self$309, value$310) =
+    let return$30 = self$309.cap[0]
+    let value$307 = self$309.cap[1]
+    let then$143 = closure join$311(return$30)
+    return value$307(value$310, then$143)
+  
+  closure fn join$311(self$312, value$313) =
+    let return$30 = self$312.cap[0]
+    let return$31 = closure join$314(return$30, value$313)
+    let then$141 = closure join$317(return$31)
+    return Cons(then$141)
+  
+  closure fn join$314(self$315, value$316) =
+    let return$30 = self$315.cap[0]
+    let value$313 = self$315.cap[1]
+    return value$313(value$316, return$30)
+  
+  closure fn join$317(self$318, value$319) =
+    let return$31 = self$318.cap[0]
+    let label$86 = closure join$320(return$31, value$319)
+    let return$33 = closure join$329(label$86)
+    let then$137 = closure join$333(return$33)
+    return Cons(then$137)
+  
+  closure fn join$320(self$321, value$322) =
+    let return$31 = self$321.cap[0]
+    let value$319 = self$321.cap[1]
+    let then$139 = closure join$323(return$31)
+    return value$319(value$322, then$139)
+  
+  closure fn join$323(self$324, value$325) =
+    let return$31 = self$324.cap[0]
+    let return$32 = closure join$326(return$31, value$325)
+    return Nil(return$32)
+  
+  closure fn join$326(self$327, value$328) =
+    let return$31 = self$327.cap[0]
+    let value$325 = self$327.cap[1]
+    return value$325(value$328, return$31)
+  
+  closure fn join$329(self$330, value$331) =
+    let label$86 = self$330.cap[0]
+    let struct$332 = SList(value$331)
+    return label$86(struct$332)
+  
+  closure fn join$333(self$334, value$335) =
+    let return$33 = self$334.cap[0]
+    let label$92 = closure join$336(return$33, value$335)
+    let return$35 = closure join$345(label$92)
+    let apply$133 = closure join$349(return$35)
+    return String#(apply$133)
+  
+  closure fn join$336(self$337, value$338) =
+    let return$33 = self$337.cap[0]
+    let value$335 = self$337.cap[1]
+    let then$135 = closure join$339(return$33)
+    return value$335(value$338, then$135)
+  
+  closure fn join$339(self$340, value$341) =
+    let return$33 = self$340.cap[0]
+    let return$34 = closure join$342(return$33, value$341)
+    return Nil(return$34)
+  
+  closure fn join$342(self$343, value$344) =
+    let return$33 = self$343.cap[0]
+    let value$341 = self$343.cap[1]
+    return value$341(value$344, return$33)
+  
+  closure fn join$345(self$346, value$347) =
+    let label$92 = self$346.cap[0]
+    let struct$348 = Symbol(value$347)
+    return label$92(struct$348)
+  
+  closure fn join$349(self$350, value$351) =
+    let return$35 = self$350.cap[0]
+    let lit$352 = "z"
+    return value$351(lit$352, return$35)
+  
+  closure fn join$353(self$354, value$355) =
+    let label$94 = self$354.cap[0]
+    let struct$356 = Symbol(value$355)
+    return label$94(struct$356)
+  
+  closure fn join$357(self$358, value$359) =
+    let return$36 = self$358.cap[0]
+    let lit$360 = "y"
+    return value$359(lit$360, return$36)
+  
+  closure fn join$361(self$362, value$363) =
+    let label$96 = self$362.cap[0]
+    let struct$364 = Symbol(value$363)
+    return label$96(struct$364)
+  
+  closure fn join$365(self$366, value$367) =
+    let return$37 = self$366.cap[0]
+    let lit$368 = "x"
+    return value$367(lit$368, return$37)
+  
+  toplevel fn Symbol(return$38) =
+    let closure$374 = closure lambda$371()
+    return return$38(closure$374)
+  
+  closure fn lambda$371(self$372, constructor$7, return$39) =
+    let struct$373 = Symbol(constructor$7)
+    return return$39(struct$373)
+  
+  toplevel fn SInt(return$40) =
+    let closure$379 = closure lambda$376()
+    return return$40(closure$379)
+  
+  closure fn lambda$376(self$377, constructor$8, return$41) =
+    let struct$378 = SInt(constructor$8)
+    return return$41(struct$378)
+  
+  toplevel fn SList(return$42) =
+    let closure$384 = closure lambda$381()
+    return return$42(closure$384)
+  
+  closure fn lambda$381(self$382, constructor$9, return$43) =
+    let struct$383 = SList(constructor$9)
+    return return$43(struct$383)
+  
+  toplevel fn zig_main$387() =
+    let finish$385 = closure join$389()
+    let after_main$386 = closure join$392(finish$385)
+    return main(after_main$386)
+  
+  closure fn join$389(self$390, value$391) = return value$391
+  
+  closure fn join$392(self$393, value$394) =
+    let finish$385 = self$393.cap[0]
+    let struct$395 = Tuple()
+    return value$394(struct$395, finish$385)
+  
+  entry = zig_main$387
+
+
+=== Peephole -> Perceus ===
+  toplevel fn <>(return$10) = return appendString(return$10)
+  
+  toplevel fn show(return$11) =
+    let closure$257 = closure lambda$160()
+    return return$11(closure$257)
+  
+  closure fn lambda$160(self$161, param$5, return$12) =
++   drop self$161
+    if param$5.tag == Symbol then {
+      let str#0 = param$5.0
++     dup str#0
++     drop param$5
+      let then$103 = closure join$162(return$12, str#0)
+      return <>(then$103)
+    } else {
+      if param$5.tag == SInt then {
+        let int#1 = param$5.0
++       dup int#1
++       drop param$5
+        let then$109 = closure join$175(int#1, return$12)
+        return <>(then$109)
+      } else {
+        if param$5.tag == SList then {
+          let ss#2 = param$5.0
++         dup ss#2
++         drop param$5
+          let then$129 = closure join$194(return$12, ss#2)
+          return <>(then$129)
+        } else {
+          panic "no matching branch"
+        }
+      }
+    }
+  
+  closure fn join$162(self$163, value$164) =
+    let return$12 = self$163.cap[0]
++   dup return$12
+    let str#0 = self$163.cap[1]
++   dup str#0
++   drop self$163
+    let return$13 = closure join$165(return$12, str#0, value$164)
+    let apply$100 = closure join$171(return$13)
+    return String#(apply$100)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$12 = self$166.cap[0]
++   dup return$12
+    let str#0 = self$166.cap[1]
++   dup str#0
+    let value$164 = self$166.cap[2]
++   dup value$164
++   drop self$166
+    let apply$101 = closure join$168(return$12, str#0)
+    return value$164(value$167, apply$101)
+  
+  closure fn join$168(self$169, value$170) =
+    let return$12 = self$169.cap[0]
++   dup return$12
+    let str#0 = self$169.cap[1]
++   dup str#0
++   drop self$169
+    return value$170(str#0, return$12)
+  
+  closure fn join$171(self$172, value$173) =
+    let return$13 = self$172.cap[0]
++   dup return$13
++   drop self$172
+    let lit$174 = "Symbol "
+    return value$173(lit$174, return$13)
+  
+  closure fn join$175(self$176, value$177) =
+    let int#1 = self$176.cap[0]
++   dup int#1
+    let return$12 = self$176.cap[1]
++   dup return$12
++   drop self$176
+    let return$15 = closure join$178(int#1, return$12, value$177)
+    let apply$104 = closure join$190(return$15)
+    return String#(apply$104)
+  
+  closure fn join$178(self$179, value$180) =
+    let int#1 = self$179.cap[0]
++   dup int#1
+    let return$12 = self$179.cap[1]
++   dup return$12
+    let value$177 = self$179.cap[2]
++   dup value$177
++   drop self$179
+    let then$107 = closure join$181(int#1, return$12)
+    return value$177(value$180, then$107)
+  
+  closure fn join$181(self$182, value$183) =
+    let int#1 = self$182.cap[0]
++   dup int#1
+    let return$12 = self$182.cap[1]
++   dup return$12
++   drop self$182
+    let return$14 = closure join$184(return$12, value$183)
+    let apply$105 = closure join$187(int#1, return$14)
+    return toStringInt32(apply$105)
+  
+  closure fn join$184(self$185, value$186) =
+    let return$12 = self$185.cap[0]
++   dup return$12
+    let value$183 = self$185.cap[1]
++   dup value$183
++   drop self$185
+    return value$183(value$186, return$12)
+  
+  closure fn join$187(self$188, value$189) =
+    let int#1 = self$188.cap[0]
++   dup int#1
+    let return$14 = self$188.cap[1]
++   dup return$14
++   drop self$188
+    return value$189(int#1, return$14)
+  
+  closure fn join$190(self$191, value$192) =
+    let return$15 = self$191.cap[0]
++   dup return$15
++   drop self$191
+    let lit$193 = "SInt "
+    return value$192(lit$193, return$15)
+  
+  closure fn join$194(self$195, value$196) =
+    let return$12 = self$195.cap[0]
++   dup return$12
+    let ss#2 = self$195.cap[1]
++   dup ss#2
++   drop self$195
+    let return$23 = closure join$197(return$12, ss#2, value$196)
+    let apply$110 = closure join$253(return$23)
+    return String#(apply$110)
+  
+  closure fn join$197(self$198, value$199) =
+    let return$12 = self$198.cap[0]
++   dup return$12
+    let ss#2 = self$198.cap[1]
++   dup ss#2
+    let value$196 = self$198.cap[2]
++   dup value$196
++   drop self$198
+    let then$127 = closure join$200(return$12, ss#2)
+    return value$196(value$199, then$127)
+  
+  closure fn join$200(self$201, value$202) =
+    let return$12 = self$201.cap[0]
++   dup return$12
+    let ss#2 = self$201.cap[1]
++   dup ss#2
++   drop self$201
+    let return$16 = closure join$203(return$12, value$202)
+    let then$125 = closure join$206(return$16, ss#2)
+    return <>(then$125)
+  
+  closure fn join$203(self$204, value$205) =
+    let return$12 = self$204.cap[0]
++   dup return$12
+    let value$202 = self$204.cap[1]
++   dup value$202
++   drop self$204
+    return value$202(value$205, return$12)
+  
+  closure fn join$206(self$207, value$208) =
+    let return$16 = self$207.cap[0]
++   dup return$16
+    let ss#2 = self$207.cap[1]
++   dup ss#2
++   drop self$207
+    let return$18 = closure join$209(return$16, value$208)
+    let then$120 = closure join$222(return$18, ss#2)
+    return concatString(then$120)
+  
+  closure fn join$209(self$210, value$211) =
+    let return$16 = self$210.cap[0]
++   dup return$16
+    let value$208 = self$210.cap[1]
++   dup value$208
++   drop self$210
+    let then$123 = closure join$212(return$16)
+    return value$208(value$211, then$123)
+  
+  closure fn join$212(self$213, value$214) =
+    let return$16 = self$213.cap[0]
++   dup return$16
++   drop self$213
+    let return$17 = closure join$215(return$16, value$214)
+    let apply$121 = closure join$218(return$17)
+    return String#(apply$121)
+  
+  closure fn join$215(self$216, value$217) =
+    let return$16 = self$216.cap[0]
++   dup return$16
+    let value$214 = self$216.cap[1]
++   dup value$214
++   drop self$216
+    return value$214(value$217, return$16)
+  
+  closure fn join$218(self$219, value$220) =
+    let return$17 = self$219.cap[0]
++   dup return$17
++   drop self$219
+    let lit$221 = "]"
+    return value$220(lit$221, return$17)
+  
+  closure fn join$222(self$223, value$224) =
+    let return$18 = self$223.cap[0]
++   dup return$18
+    let ss#2 = self$223.cap[1]
++   dup ss#2
++   drop self$223
+    let return$19 = closure join$225(return$18, value$224)
+    let then$118 = closure join$228(return$19, ss#2)
+    return punctuate(then$118)
+  
+  closure fn join$225(self$226, value$227) =
+    let return$18 = self$226.cap[0]
++   dup return$18
+    let value$224 = self$226.cap[1]
++   dup value$224
++   drop self$226
+    return value$224(value$227, return$18)
+  
+  closure fn join$228(self$229, value$230) =
+    let return$19 = self$229.cap[0]
++   dup return$19
+    let ss#2 = self$229.cap[1]
++   dup ss#2
++   drop self$229
+    let return$22 = closure join$231(return$19, ss#2, value$230)
+    let apply$111 = closure join$249(return$22)
+    return String#(apply$111)
+  
+  closure fn join$231(self$232, value$233) =
+    let return$19 = self$232.cap[0]
++   dup return$19
+    let ss#2 = self$232.cap[1]
++   dup ss#2
+    let value$230 = self$232.cap[2]
++   dup value$230
++   drop self$232
+    let then$116 = closure join$234(return$19, ss#2)
+    return value$230(value$233, then$116)
+  
+  closure fn join$234(self$235, value$236) =
+    let return$19 = self$235.cap[0]
++   dup return$19
+    let ss#2 = self$235.cap[1]
++   dup ss#2
++   drop self$235
+    let return$20 = closure join$237(return$19, value$236)
+    let then$114 = closure join$240(return$20, ss#2)
+    return mapList(then$114)
+  
+  closure fn join$237(self$238, value$239) =
+    let return$19 = self$238.cap[0]
++   dup return$19
+    let value$236 = self$238.cap[1]
++   dup value$236
++   drop self$238
+    return value$236(value$239, return$19)
+  
+  closure fn join$240(self$241, value$242) =
+    let return$20 = self$241.cap[0]
++   dup return$20
+    let ss#2 = self$241.cap[1]
++   dup ss#2
++   drop self$241
+    let return$21 = closure join$243(return$20, ss#2, value$242)
+    return show(return$21)
+  
+  closure fn join$243(self$244, value$245) =
+    let return$20 = self$244.cap[0]
++   dup return$20
+    let ss#2 = self$244.cap[1]
++   dup ss#2
+    let value$242 = self$244.cap[2]
++   dup value$242
++   drop self$244
+    let apply$112 = closure join$246(return$20, ss#2)
+    return value$242(value$245, apply$112)
+  
+  closure fn join$246(self$247, value$248) =
+    let return$20 = self$247.cap[0]
++   dup return$20
+    let ss#2 = self$247.cap[1]
++   dup ss#2
++   drop self$247
+    return value$248(ss#2, return$20)
+  
+  closure fn join$249(self$250, value$251) =
+    let return$22 = self$250.cap[0]
++   dup return$22
++   drop self$250
+    let lit$252 = ", "
+    return value$251(lit$252, return$22)
+  
+  closure fn join$253(self$254, value$255) =
+    let return$23 = self$254.cap[0]
++   dup return$23
++   drop self$254
+    let lit$256 = "SList ["
+    return value$255(lit$256, return$23)
+  
+  toplevel fn main(return$24) =
+    let closure$369 = closure lambda$259()
+    return return$24(closure$369)
+  
+  closure fn lambda$259(self$260, param$6, return$25) =
++   drop param$6
++   drop self$260
+    if  then {
+      let label$66 = closure join$261(return$25)
+      let return$27 = closure join$273(label$66)
+      let then$153 = closure join$277(return$27)
+      return Cons(then$153)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$261(self$262, value$263) =
+    let return$25 = self$262.cap[0]
++   dup return$25
++   drop self$262
+    let then$156 = closure join$264(return$25, value$263)
+    return putStrLn(then$156)
+  
+  closure fn join$264(self$265, value$266) =
+    let return$25 = self$265.cap[0]
++   dup return$25
+    let value$263 = self$265.cap[1]
++   dup value$263
++   drop self$265
+    let return$26 = closure join$267(return$25, value$266)
+    let apply$154 = closure join$270(return$26, value$263)
+    return show(apply$154)
+  
+  closure fn join$267(self$268, value$269) =
+    let return$25 = self$268.cap[0]
++   dup return$25
+    let value$266 = self$268.cap[1]
++   dup value$266
++   drop self$268
+    return value$266(value$269, return$25)
+  
+  closure fn join$270(self$271, value$272) =
+    let return$26 = self$271.cap[0]
++   dup return$26
+    let value$263 = self$271.cap[1]
++   dup value$263
++   drop self$271
+    return value$272(value$263, return$26)
+  
+  closure fn join$273(self$274, value$275) =
+    let label$66 = self$274.cap[0]
++   dup label$66
++   drop self$274
+    let struct$276 = SList(value$275)
+    return label$66(struct$276)
+  
+  closure fn join$277(self$278, value$279) =
+    let return$27 = self$278.cap[0]
++   dup return$27
++   drop self$278
+    let label$96 = closure join$280(return$27, value$279)
+    let return$37 = closure join$361(label$96)
+    let apply$131 = closure join$365(return$37)
+    return String#(apply$131)
+  
+  closure fn join$280(self$281, value$282) =
+    let return$27 = self$281.cap[0]
++   dup return$27
+    let value$279 = self$281.cap[1]
++   dup value$279
++   drop self$281
+    let then$151 = closure join$283(return$27)
+    return value$279(value$282, then$151)
+  
+  closure fn join$283(self$284, value$285) =
+    let return$27 = self$284.cap[0]
++   dup return$27
++   drop self$284
+    let return$28 = closure join$286(return$27, value$285)
+    let then$149 = closure join$289(return$28)
+    return Cons(then$149)
+  
+  closure fn join$286(self$287, value$288) =
+    let return$27 = self$287.cap[0]
++   dup return$27
+    let value$285 = self$287.cap[1]
++   dup value$285
++   drop self$287
+    return value$285(value$288, return$27)
+  
+  closure fn join$289(self$290, value$291) =
+    let return$28 = self$290.cap[0]
++   dup return$28
++   drop self$290
+    let label$76 = closure join$292(return$28, value$291)
+    let return$30 = closure join$301(label$76)
+    let then$145 = closure join$305(return$30)
+    return Cons(then$145)
+  
+  closure fn join$292(self$293, value$294) =
+    let return$28 = self$293.cap[0]
++   dup return$28
+    let value$291 = self$293.cap[1]
++   dup value$291
++   drop self$293
+    let then$147 = closure join$295(return$28)
+    return value$291(value$294, then$147)
+  
+  closure fn join$295(self$296, value$297) =
+    let return$28 = self$296.cap[0]
++   dup return$28
++   drop self$296
+    let return$29 = closure join$298(return$28, value$297)
+    return Nil(return$29)
+  
+  closure fn join$298(self$299, value$300) =
+    let return$28 = self$299.cap[0]
++   dup return$28
+    let value$297 = self$299.cap[1]
++   dup value$297
++   drop self$299
+    return value$297(value$300, return$28)
+  
+  closure fn join$301(self$302, value$303) =
+    let label$76 = self$302.cap[0]
++   dup label$76
++   drop self$302
+    let struct$304 = SList(value$303)
+    return label$76(struct$304)
+  
+  closure fn join$305(self$306, value$307) =
+    let return$30 = self$306.cap[0]
++   dup return$30
++   drop self$306
+    let label$94 = closure join$308(return$30, value$307)
+    let return$36 = closure join$353(label$94)
+    let apply$132 = closure join$357(return$36)
+    return String#(apply$132)
+  
+  closure fn join$308(self$309, value$310) =
+    let return$30 = self$309.cap[0]
++   dup return$30
+    let value$307 = self$309.cap[1]
++   dup value$307
++   drop self$309
+    let then$143 = closure join$311(return$30)
+    return value$307(value$310, then$143)
+  
+  closure fn join$311(self$312, value$313) =
+    let return$30 = self$312.cap[0]
++   dup return$30
++   drop self$312
+    let return$31 = closure join$314(return$30, value$313)
+    let then$141 = closure join$317(return$31)
+    return Cons(then$141)
+  
+  closure fn join$314(self$315, value$316) =
+    let return$30 = self$315.cap[0]
++   dup return$30
+    let value$313 = self$315.cap[1]
++   dup value$313
++   drop self$315
+    return value$313(value$316, return$30)
+  
+  closure fn join$317(self$318, value$319) =
+    let return$31 = self$318.cap[0]
++   dup return$31
++   drop self$318
+    let label$86 = closure join$320(return$31, value$319)
+    let return$33 = closure join$329(label$86)
+    let then$137 = closure join$333(return$33)
+    return Cons(then$137)
+  
+  closure fn join$320(self$321, value$322) =
+    let return$31 = self$321.cap[0]
++   dup return$31
+    let value$319 = self$321.cap[1]
++   dup value$319
++   drop self$321
+    let then$139 = closure join$323(return$31)
+    return value$319(value$322, then$139)
+  
+  closure fn join$323(self$324, value$325) =
+    let return$31 = self$324.cap[0]
++   dup return$31
++   drop self$324
+    let return$32 = closure join$326(return$31, value$325)
+    return Nil(return$32)
+  
+  closure fn join$326(self$327, value$328) =
+    let return$31 = self$327.cap[0]
++   dup return$31
+    let value$325 = self$327.cap[1]
++   dup value$325
++   drop self$327
+    return value$325(value$328, return$31)
+  
+  closure fn join$329(self$330, value$331) =
+    let label$86 = self$330.cap[0]
++   dup label$86
++   drop self$330
+    let struct$332 = SList(value$331)
+    return label$86(struct$332)
+  
+  closure fn join$333(self$334, value$335) =
+    let return$33 = self$334.cap[0]
++   dup return$33
++   drop self$334
+    let label$92 = closure join$336(return$33, value$335)
+    let return$35 = closure join$345(label$92)
+    let apply$133 = closure join$349(return$35)
+    return String#(apply$133)
+  
+  closure fn join$336(self$337, value$338) =
+    let return$33 = self$337.cap[0]
++   dup return$33
+    let value$335 = self$337.cap[1]
++   dup value$335
++   drop self$337
+    let then$135 = closure join$339(return$33)
+    return value$335(value$338, then$135)
+  
+  closure fn join$339(self$340, value$341) =
+    let return$33 = self$340.cap[0]
++   dup return$33
++   drop self$340
+    let return$34 = closure join$342(return$33, value$341)
+    return Nil(return$34)
+  
+  closure fn join$342(self$343, value$344) =
+    let return$33 = self$343.cap[0]
++   dup return$33
+    let value$341 = self$343.cap[1]
++   dup value$341
++   drop self$343
+    return value$341(value$344, return$33)
+  
+  closure fn join$345(self$346, value$347) =
+    let label$92 = self$346.cap[0]
++   dup label$92
++   drop self$346
+    let struct$348 = Symbol(value$347)
+    return label$92(struct$348)
+  
+  closure fn join$349(self$350, value$351) =
+    let return$35 = self$350.cap[0]
++   dup return$35
++   drop self$350
+    let lit$352 = "z"
+    return value$351(lit$352, return$35)
+  
+  closure fn join$353(self$354, value$355) =
+    let label$94 = self$354.cap[0]
++   dup label$94
++   drop self$354
+    let struct$356 = Symbol(value$355)
+    return label$94(struct$356)
+  
+  closure fn join$357(self$358, value$359) =
+    let return$36 = self$358.cap[0]
++   dup return$36
++   drop self$358
+    let lit$360 = "y"
+    return value$359(lit$360, return$36)
+  
+  closure fn join$361(self$362, value$363) =
+    let label$96 = self$362.cap[0]
++   dup label$96
++   drop self$362
+    let struct$364 = Symbol(value$363)
+    return label$96(struct$364)
+  
+  closure fn join$365(self$366, value$367) =
+    let return$37 = self$366.cap[0]
++   dup return$37
++   drop self$366
+    let lit$368 = "x"
+    return value$367(lit$368, return$37)
+  
+  toplevel fn Symbol(return$38) =
+    let closure$374 = closure lambda$371()
+    return return$38(closure$374)
+  
+  closure fn lambda$371(self$372, constructor$7, return$39) =
++   drop self$372
+    let struct$373 = Symbol(constructor$7)
+    return return$39(struct$373)
+  
+  toplevel fn SInt(return$40) =
+    let closure$379 = closure lambda$376()
+    return return$40(closure$379)
+  
+  closure fn lambda$376(self$377, constructor$8, return$41) =
++   drop self$377
+    let struct$378 = SInt(constructor$8)
+    return return$41(struct$378)
+  
+  toplevel fn SList(return$42) =
+    let closure$384 = closure lambda$381()
+    return return$42(closure$384)
+  
+  closure fn lambda$381(self$382, constructor$9, return$43) =
++   drop self$382
+    let struct$383 = SList(constructor$9)
+    return return$43(struct$383)
+  
+  toplevel fn zig_main$387() =
+    let finish$385 = closure join$389()
+    let after_main$386 = closure join$392(finish$385)
+    return main(after_main$386)
+  
+- closure fn join$389(self$390, value$391) = return value$391
++ closure fn join$389(self$390, value$391) =
++   drop self$390
++   return value$391
+  
+  closure fn join$392(self$393, value$394) =
+    let finish$385 = self$393.cap[0]
++   dup finish$385
++   drop self$393
+    let struct$395 = Tuple()
+    return value$394(struct$395, finish$385)
+  
+  entry = zig_main$387
+
+
+=== Perceus -> Reuse ===
+  toplevel fn <>(return$10) = return appendString(return$10)
+  
+  toplevel fn show(return$11) =
+    let closure$257 = closure lambda$160()
+    return return$11(closure$257)
+  
+  closure fn lambda$160(self$161, param$5, return$12) =
+    drop self$161
+    if param$5.tag == Symbol then {
+      let str#0 = param$5.0
+      dup str#0
+-     drop param$5
+      let then$103 = closure join$162(return$12, str#0)
++     drop param$5
+      return <>(then$103)
+    } else {
+      if param$5.tag == SInt then {
+        let int#1 = param$5.0
+        dup int#1
+-       drop param$5
+        let then$109 = closure join$175(int#1, return$12)
++       drop param$5
+        return <>(then$109)
+      } else {
+        if param$5.tag == SList then {
+          let ss#2 = param$5.0
+          dup ss#2
+-         drop param$5
+          let then$129 = closure join$194(return$12, ss#2)
++         drop param$5
+          return <>(then$129)
+        } else {
+          panic "no matching branch"
+        }
+      }
+    }
+  
+  closure fn join$162(self$163, value$164) =
+    let return$12 = self$163.cap[0]
+    dup return$12
+    let str#0 = self$163.cap[1]
+    dup str#0
+-   drop self$163
+    let return$13 = closure join$165(return$12, str#0, value$164)
+    let apply$100 = closure join$171(return$13)
++   drop self$163
+    return String#(apply$100)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$12 = self$166.cap[0]
+    dup return$12
+    let str#0 = self$166.cap[1]
+    dup str#0
+    let value$164 = self$166.cap[2]
+    dup value$164
+-   drop self$166
+    let apply$101 = closure join$168(return$12, str#0)
++   drop self$166
+    return value$164(value$167, apply$101)
+  
+  closure fn join$168(self$169, value$170) =
+    let return$12 = self$169.cap[0]
+    dup return$12
+    let str#0 = self$169.cap[1]
+    dup str#0
+    drop self$169
+    return value$170(str#0, return$12)
+  
+  closure fn join$171(self$172, value$173) =
+    let return$13 = self$172.cap[0]
+    dup return$13
+-   drop self$172
+    let lit$174 = "Symbol "
++   drop self$172
+    return value$173(lit$174, return$13)
+  
+  closure fn join$175(self$176, value$177) =
+    let int#1 = self$176.cap[0]
+    dup int#1
+    let return$12 = self$176.cap[1]
+    dup return$12
+-   drop self$176
+    let return$15 = closure join$178(int#1, return$12, value$177)
+    let apply$104 = closure join$190(return$15)
++   drop self$176
+    return String#(apply$104)
+  
+  closure fn join$178(self$179, value$180) =
+    let int#1 = self$179.cap[0]
+    dup int#1
+    let return$12 = self$179.cap[1]
+    dup return$12
+    let value$177 = self$179.cap[2]
+    dup value$177
+-   drop self$179
+    let then$107 = closure join$181(int#1, return$12)
++   drop self$179
+    return value$177(value$180, then$107)
+  
+  closure fn join$181(self$182, value$183) =
+    let int#1 = self$182.cap[0]
+    dup int#1
+    let return$12 = self$182.cap[1]
+    dup return$12
+-   drop self$182
+    let return$14 = closure join$184(return$12, value$183)
+    let apply$105 = closure join$187(int#1, return$14)
++   drop self$182
+    return toStringInt32(apply$105)
+  
+  closure fn join$184(self$185, value$186) =
+    let return$12 = self$185.cap[0]
+    dup return$12
+    let value$183 = self$185.cap[1]
+    dup value$183
+    drop self$185
+    return value$183(value$186, return$12)
+  
+  closure fn join$187(self$188, value$189) =
+    let int#1 = self$188.cap[0]
+    dup int#1
+    let return$14 = self$188.cap[1]
+    dup return$14
+    drop self$188
+    return value$189(int#1, return$14)
+  
+  closure fn join$190(self$191, value$192) =
+    let return$15 = self$191.cap[0]
+    dup return$15
+-   drop self$191
+    let lit$193 = "SInt "
++   drop self$191
+    return value$192(lit$193, return$15)
+  
+  closure fn join$194(self$195, value$196) =
+    let return$12 = self$195.cap[0]
+    dup return$12
+    let ss#2 = self$195.cap[1]
+    dup ss#2
+-   drop self$195
+    let return$23 = closure join$197(return$12, ss#2, value$196)
+    let apply$110 = closure join$253(return$23)
++   drop self$195
+    return String#(apply$110)
+  
+  closure fn join$197(self$198, value$199) =
+    let return$12 = self$198.cap[0]
+    dup return$12
+    let ss#2 = self$198.cap[1]
+    dup ss#2
+    let value$196 = self$198.cap[2]
+    dup value$196
+-   drop self$198
+    let then$127 = closure join$200(return$12, ss#2)
++   drop self$198
+    return value$196(value$199, then$127)
+  
+  closure fn join$200(self$201, value$202) =
+    let return$12 = self$201.cap[0]
+    dup return$12
+    let ss#2 = self$201.cap[1]
+    dup ss#2
+-   drop self$201
+    let return$16 = closure join$203(return$12, value$202)
+    let then$125 = closure join$206(return$16, ss#2)
++   drop self$201
+    return <>(then$125)
+  
+  closure fn join$203(self$204, value$205) =
+    let return$12 = self$204.cap[0]
+    dup return$12
+    let value$202 = self$204.cap[1]
+    dup value$202
+    drop self$204
+    return value$202(value$205, return$12)
+  
+  closure fn join$206(self$207, value$208) =
+    let return$16 = self$207.cap[0]
+    dup return$16
+    let ss#2 = self$207.cap[1]
+    dup ss#2
+-   drop self$207
+    let return$18 = closure join$209(return$16, value$208)
+    let then$120 = closure join$222(return$18, ss#2)
++   drop self$207
+    return concatString(then$120)
+  
+  closure fn join$209(self$210, value$211) =
+    let return$16 = self$210.cap[0]
+    dup return$16
+    let value$208 = self$210.cap[1]
+    dup value$208
+-   drop self$210
+    let then$123 = closure join$212(return$16)
++   drop self$210
+    return value$208(value$211, then$123)
+  
+  closure fn join$212(self$213, value$214) =
+    let return$16 = self$213.cap[0]
+    dup return$16
+-   drop self$213
+    let return$17 = closure join$215(return$16, value$214)
+    let apply$121 = closure join$218(return$17)
++   drop self$213
+    return String#(apply$121)
+  
+  closure fn join$215(self$216, value$217) =
+    let return$16 = self$216.cap[0]
+    dup return$16
+    let value$214 = self$216.cap[1]
+    dup value$214
+    drop self$216
+    return value$214(value$217, return$16)
+  
+  closure fn join$218(self$219, value$220) =
+    let return$17 = self$219.cap[0]
+    dup return$17
+-   drop self$219
+    let lit$221 = "]"
++   drop self$219
+    return value$220(lit$221, return$17)
+  
+  closure fn join$222(self$223, value$224) =
+    let return$18 = self$223.cap[0]
+    dup return$18
+    let ss#2 = self$223.cap[1]
+    dup ss#2
+-   drop self$223
+    let return$19 = closure join$225(return$18, value$224)
+    let then$118 = closure join$228(return$19, ss#2)
++   drop self$223
+    return punctuate(then$118)
+  
+  closure fn join$225(self$226, value$227) =
+    let return$18 = self$226.cap[0]
+    dup return$18
+    let value$224 = self$226.cap[1]
+    dup value$224
+    drop self$226
+    return value$224(value$227, return$18)
+  
+  closure fn join$228(self$229, value$230) =
+    let return$19 = self$229.cap[0]
+    dup return$19
+    let ss#2 = self$229.cap[1]
+    dup ss#2
+-   drop self$229
+    let return$22 = closure join$231(return$19, ss#2, value$230)
+    let apply$111 = closure join$249(return$22)
++   drop self$229
+    return String#(apply$111)
+  
+  closure fn join$231(self$232, value$233) =
+    let return$19 = self$232.cap[0]
+    dup return$19
+    let ss#2 = self$232.cap[1]
+    dup ss#2
+    let value$230 = self$232.cap[2]
+    dup value$230
+-   drop self$232
+    let then$116 = closure join$234(return$19, ss#2)
++   drop self$232
+    return value$230(value$233, then$116)
+  
+  closure fn join$234(self$235, value$236) =
+    let return$19 = self$235.cap[0]
+    dup return$19
+    let ss#2 = self$235.cap[1]
+    dup ss#2
+-   drop self$235
+    let return$20 = closure join$237(return$19, value$236)
+    let then$114 = closure join$240(return$20, ss#2)
++   drop self$235
+    return mapList(then$114)
+  
+  closure fn join$237(self$238, value$239) =
+    let return$19 = self$238.cap[0]
+    dup return$19
+    let value$236 = self$238.cap[1]
+    dup value$236
+    drop self$238
+    return value$236(value$239, return$19)
+  
+  closure fn join$240(self$241, value$242) =
+    let return$20 = self$241.cap[0]
+    dup return$20
+    let ss#2 = self$241.cap[1]
+    dup ss#2
+-   drop self$241
+    let return$21 = closure join$243(return$20, ss#2, value$242)
++   drop self$241
+    return show(return$21)
+  
+  closure fn join$243(self$244, value$245) =
+    let return$20 = self$244.cap[0]
+    dup return$20
+    let ss#2 = self$244.cap[1]
+    dup ss#2
+    let value$242 = self$244.cap[2]
+    dup value$242
+-   drop self$244
+    let apply$112 = closure join$246(return$20, ss#2)
++   drop self$244
+    return value$242(value$245, apply$112)
+  
+  closure fn join$246(self$247, value$248) =
+    let return$20 = self$247.cap[0]
+    dup return$20
+    let ss#2 = self$247.cap[1]
+    dup ss#2
+    drop self$247
+    return value$248(ss#2, return$20)
+  
+  closure fn join$249(self$250, value$251) =
+    let return$22 = self$250.cap[0]
+    dup return$22
+-   drop self$250
+    let lit$252 = ", "
++   drop self$250
+    return value$251(lit$252, return$22)
+  
+  closure fn join$253(self$254, value$255) =
+    let return$23 = self$254.cap[0]
+    dup return$23
+-   drop self$254
+    let lit$256 = "SList ["
++   drop self$254
+    return value$255(lit$256, return$23)
+  
+  toplevel fn main(return$24) =
+    let closure$369 = closure lambda$259()
+    return return$24(closure$369)
+  
+  closure fn lambda$259(self$260, param$6, return$25) =
+    drop param$6
+    drop self$260
+    if  then {
+      let label$66 = closure join$261(return$25)
+      let return$27 = closure join$273(label$66)
+      let then$153 = closure join$277(return$27)
+      return Cons(then$153)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$261(self$262, value$263) =
+    let return$25 = self$262.cap[0]
+    dup return$25
+-   drop self$262
+    let then$156 = closure join$264(return$25, value$263)
++   drop self$262
+    return putStrLn(then$156)
+  
+  closure fn join$264(self$265, value$266) =
+    let return$25 = self$265.cap[0]
+    dup return$25
+    let value$263 = self$265.cap[1]
+    dup value$263
+-   drop self$265
+    let return$26 = closure join$267(return$25, value$266)
+    let apply$154 = closure join$270(return$26, value$263)
++   drop self$265
+    return show(apply$154)
+  
+  closure fn join$267(self$268, value$269) =
+    let return$25 = self$268.cap[0]
+    dup return$25
+    let value$266 = self$268.cap[1]
+    dup value$266
+    drop self$268
+    return value$266(value$269, return$25)
+  
+  closure fn join$270(self$271, value$272) =
+    let return$26 = self$271.cap[0]
+    dup return$26
+    let value$263 = self$271.cap[1]
+    dup value$263
+    drop self$271
+    return value$272(value$263, return$26)
+  
+  closure fn join$273(self$274, value$275) =
+    let label$66 = self$274.cap[0]
+    dup label$66
+-   drop self$274
++   dropReuse reuse$396 = self$274 /1
+-   let struct$276 = SList(value$275)
++   let struct$276 = reuse reuse$396 SList(value$275)
+    return label$66(struct$276)
+  
+  closure fn join$277(self$278, value$279) =
+    let return$27 = self$278.cap[0]
+    dup return$27
+-   drop self$278
+    let label$96 = closure join$280(return$27, value$279)
+    let return$37 = closure join$361(label$96)
+    let apply$131 = closure join$365(return$37)
++   drop self$278
+    return String#(apply$131)
+  
+  closure fn join$280(self$281, value$282) =
+    let return$27 = self$281.cap[0]
+    dup return$27
+    let value$279 = self$281.cap[1]
+    dup value$279
+-   drop self$281
+    let then$151 = closure join$283(return$27)
++   drop self$281
+    return value$279(value$282, then$151)
+  
+  closure fn join$283(self$284, value$285) =
+    let return$27 = self$284.cap[0]
+    dup return$27
+-   drop self$284
+    let return$28 = closure join$286(return$27, value$285)
+    let then$149 = closure join$289(return$28)
++   drop self$284
+    return Cons(then$149)
+  
+  closure fn join$286(self$287, value$288) =
+    let return$27 = self$287.cap[0]
+    dup return$27
+    let value$285 = self$287.cap[1]
+    dup value$285
+    drop self$287
+    return value$285(value$288, return$27)
+  
+  closure fn join$289(self$290, value$291) =
+    let return$28 = self$290.cap[0]
+    dup return$28
+-   drop self$290
+    let label$76 = closure join$292(return$28, value$291)
+    let return$30 = closure join$301(label$76)
+    let then$145 = closure join$305(return$30)
++   drop self$290
+    return Cons(then$145)
+  
+  closure fn join$292(self$293, value$294) =
+    let return$28 = self$293.cap[0]
+    dup return$28
+    let value$291 = self$293.cap[1]
+    dup value$291
+-   drop self$293
+    let then$147 = closure join$295(return$28)
++   drop self$293
+    return value$291(value$294, then$147)
+  
+  closure fn join$295(self$296, value$297) =
+    let return$28 = self$296.cap[0]
+    dup return$28
+-   drop self$296
+    let return$29 = closure join$298(return$28, value$297)
++   drop self$296
+    return Nil(return$29)
+  
+  closure fn join$298(self$299, value$300) =
+    let return$28 = self$299.cap[0]
+    dup return$28
+    let value$297 = self$299.cap[1]
+    dup value$297
+    drop self$299
+    return value$297(value$300, return$28)
+  
+  closure fn join$301(self$302, value$303) =
+    let label$76 = self$302.cap[0]
+    dup label$76
+-   drop self$302
++   dropReuse reuse$397 = self$302 /1
+-   let struct$304 = SList(value$303)
++   let struct$304 = reuse reuse$397 SList(value$303)
+    return label$76(struct$304)
+  
+  closure fn join$305(self$306, value$307) =
+    let return$30 = self$306.cap[0]
+    dup return$30
+-   drop self$306
+    let label$94 = closure join$308(return$30, value$307)
+    let return$36 = closure join$353(label$94)
+    let apply$132 = closure join$357(return$36)
++   drop self$306
+    return String#(apply$132)
+  
+  closure fn join$308(self$309, value$310) =
+    let return$30 = self$309.cap[0]
+    dup return$30
+    let value$307 = self$309.cap[1]
+    dup value$307
+-   drop self$309
+    let then$143 = closure join$311(return$30)
++   drop self$309
+    return value$307(value$310, then$143)
+  
+  closure fn join$311(self$312, value$313) =
+    let return$30 = self$312.cap[0]
+    dup return$30
+-   drop self$312
+    let return$31 = closure join$314(return$30, value$313)
+    let then$141 = closure join$317(return$31)
++   drop self$312
+    return Cons(then$141)
+  
+  closure fn join$314(self$315, value$316) =
+    let return$30 = self$315.cap[0]
+    dup return$30
+    let value$313 = self$315.cap[1]
+    dup value$313
+    drop self$315
+    return value$313(value$316, return$30)
+  
+  closure fn join$317(self$318, value$319) =
+    let return$31 = self$318.cap[0]
+    dup return$31
+-   drop self$318
+    let label$86 = closure join$320(return$31, value$319)
+    let return$33 = closure join$329(label$86)
+    let then$137 = closure join$333(return$33)
++   drop self$318
+    return Cons(then$137)
+  
+  closure fn join$320(self$321, value$322) =
+    let return$31 = self$321.cap[0]
+    dup return$31
+    let value$319 = self$321.cap[1]
+    dup value$319
+-   drop self$321
+    let then$139 = closure join$323(return$31)
++   drop self$321
+    return value$319(value$322, then$139)
+  
+  closure fn join$323(self$324, value$325) =
+    let return$31 = self$324.cap[0]
+    dup return$31
+-   drop self$324
+    let return$32 = closure join$326(return$31, value$325)
++   drop self$324
+    return Nil(return$32)
+  
+  closure fn join$326(self$327, value$328) =
+    let return$31 = self$327.cap[0]
+    dup return$31
+    let value$325 = self$327.cap[1]
+    dup value$325
+    drop self$327
+    return value$325(value$328, return$31)
+  
+  closure fn join$329(self$330, value$331) =
+    let label$86 = self$330.cap[0]
+    dup label$86
+-   drop self$330
++   dropReuse reuse$398 = self$330 /1
+-   let struct$332 = SList(value$331)
++   let struct$332 = reuse reuse$398 SList(value$331)
+    return label$86(struct$332)
+  
+  closure fn join$333(self$334, value$335) =
+    let return$33 = self$334.cap[0]
+    dup return$33
+-   drop self$334
+    let label$92 = closure join$336(return$33, value$335)
+    let return$35 = closure join$345(label$92)
+    let apply$133 = closure join$349(return$35)
++   drop self$334
+    return String#(apply$133)
+  
+  closure fn join$336(self$337, value$338) =
+    let return$33 = self$337.cap[0]
+    dup return$33
+    let value$335 = self$337.cap[1]
+    dup value$335
+-   drop self$337
+    let then$135 = closure join$339(return$33)
++   drop self$337
+    return value$335(value$338, then$135)
+  
+  closure fn join$339(self$340, value$341) =
+    let return$33 = self$340.cap[0]
+    dup return$33
+-   drop self$340
+    let return$34 = closure join$342(return$33, value$341)
++   drop self$340
+    return Nil(return$34)
+  
+  closure fn join$342(self$343, value$344) =
+    let return$33 = self$343.cap[0]
+    dup return$33
+    let value$341 = self$343.cap[1]
+    dup value$341
+    drop self$343
+    return value$341(value$344, return$33)
+  
+  closure fn join$345(self$346, value$347) =
+    let label$92 = self$346.cap[0]
+    dup label$92
+-   drop self$346
++   dropReuse reuse$399 = self$346 /1
+-   let struct$348 = Symbol(value$347)
++   let struct$348 = reuse reuse$399 Symbol(value$347)
+    return label$92(struct$348)
+  
+  closure fn join$349(self$350, value$351) =
+    let return$35 = self$350.cap[0]
+    dup return$35
+-   drop self$350
+    let lit$352 = "z"
++   drop self$350
+    return value$351(lit$352, return$35)
+  
+  closure fn join$353(self$354, value$355) =
+    let label$94 = self$354.cap[0]
+    dup label$94
+-   drop self$354
++   dropReuse reuse$400 = self$354 /1
+-   let struct$356 = Symbol(value$355)
++   let struct$356 = reuse reuse$400 Symbol(value$355)
+    return label$94(struct$356)
+  
+  closure fn join$357(self$358, value$359) =
+    let return$36 = self$358.cap[0]
+    dup return$36
+-   drop self$358
+    let lit$360 = "y"
++   drop self$358
+    return value$359(lit$360, return$36)
+  
+  closure fn join$361(self$362, value$363) =
+    let label$96 = self$362.cap[0]
+    dup label$96
+-   drop self$362
++   dropReuse reuse$401 = self$362 /1
+-   let struct$364 = Symbol(value$363)
++   let struct$364 = reuse reuse$401 Symbol(value$363)
+    return label$96(struct$364)
+  
+  closure fn join$365(self$366, value$367) =
+    let return$37 = self$366.cap[0]
+    dup return$37
+-   drop self$366
+    let lit$368 = "x"
++   drop self$366
+    return value$367(lit$368, return$37)
+  
+  toplevel fn Symbol(return$38) =
+    let closure$374 = closure lambda$371()
+    return return$38(closure$374)
+  
+  closure fn lambda$371(self$372, constructor$7, return$39) =
+-   drop self$372
++   dropReuse reuse$402 = self$372 /1
+-   let struct$373 = Symbol(constructor$7)
++   let struct$373 = reuse reuse$402 Symbol(constructor$7)
+    return return$39(struct$373)
+  
+  toplevel fn SInt(return$40) =
+    let closure$379 = closure lambda$376()
+    return return$40(closure$379)
+  
+  closure fn lambda$376(self$377, constructor$8, return$41) =
+-   drop self$377
++   dropReuse reuse$403 = self$377 /1
+-   let struct$378 = SInt(constructor$8)
++   let struct$378 = reuse reuse$403 SInt(constructor$8)
+    return return$41(struct$378)
+  
+  toplevel fn SList(return$42) =
+    let closure$384 = closure lambda$381()
+    return return$42(closure$384)
+  
+  closure fn lambda$381(self$382, constructor$9, return$43) =
+-   drop self$382
++   dropReuse reuse$404 = self$382 /1
+-   let struct$383 = SList(constructor$9)
++   let struct$383 = reuse reuse$404 SList(constructor$9)
+    return return$43(struct$383)
+  
+  toplevel fn zig_main$387() =
+    let finish$385 = closure join$389()
+    let after_main$386 = closure join$392(finish$385)
+    return main(after_main$386)
+  
+  closure fn join$389(self$390, value$391) =
+    drop self$390
+    return value$391
+  
+  closure fn join$392(self$393, value$394) =
+    let finish$385 = self$393.cap[0]
+    dup finish$385
+-   drop self$393
++   dropReuse reuse$405 = self$393 /0
+-   let struct$395 = Tuple()
++   let struct$395 = reuse reuse$405 Tuple()
+    return value$394(struct$395, finish$385)
+  
+  entry = zig_main$387

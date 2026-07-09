@@ -104,6 +104,22 @@ description = "Run the project"
 depends = ["build"]
 run = "cabal exec malgo-exe"
 
+[tasks.met]
+description = "Launch MET (M-exp-Tracer): browse a .mlg file's compilation pipeline in the browser"
+depends = ["build"]
+run = """
+    SOURCE='{{option(name="source")}}'
+    if [ -z "$SOURCE" ]; then
+        echo 'Error: Please provide a source file with --option source="path/to/file.mlg"'
+        exit 1
+    fi
+    PORT='{{option(name="port")}}'
+    if [ -z "$PORT" ]; then
+        PORT=8080
+    fi
+    cabal exec met -- "$SOURCE" --port "$PORT" {{option(name="flags")}}
+"""
+
 [tasks.changelog]
 description = "Generate changelog"
 run = "git-chglog -o CHANGELOG.md"

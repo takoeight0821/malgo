@@ -1,0 +1,1306 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+data List a = Cons(a, List(a)) | Nil()
+
+data Map k v = Entry(k, v) | Empty()
+
+data Tree a = Node(a, Tree(a), Tree(a)) | Leaf()
+
+def main =
+  fn {
+    _ ->
+      {
+        42
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+data List a#0 = Cons(a#0, List(a#0)) | Nil()
+
+data Map k#1 v#2 = Entry(k#1, v#2) | Empty()
+
+data Tree a#3 = Node(a#3, Tree(a#3), Tree(a#3)) | Leaf()
+
+def main =
+  fn {
+    _#4 ->
+      {
+        Int32#(42)
+      }
+  }
+
+=== ToFun ===
+def main =
+  \param$5 ->
+    case param$5 of {
+      _#4 -> invoke Int32#(42)
+    }
+
+def Cons =
+  \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+
+def Nil = Nil()
+
+def Entry =
+  \constructor$8 -> \constructor$9 -> Entry(constructor$8, constructor$9)
+
+def Empty = Empty()
+
+def Node =
+  \constructor$10 ->
+    \constructor$11 ->
+      \constructor$12 -> Node(constructor$10, constructor$11, constructor$12)
+
+def Leaf = Leaf()
+
+=== SaturateCtor ===
+def main =
+  \param$5 ->
+    case param$5 of {
+      _#4 -> invoke Int32#(42)
+    }
+
+def Cons =
+  \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+
+def Nil = Nil()
+
+def Entry =
+  \constructor$8 -> \constructor$9 -> Entry(constructor$8, constructor$9)
+
+def Empty = Empty()
+
+def Node =
+  \constructor$10 ->
+    \constructor$11 ->
+      \constructor$12 -> Node(constructor$10, constructor$11, constructor$12)
+
+def Leaf = Leaf()
+
+=== ReuseSpecialize ===
+def main =
+  \param$5 ->
+    case param$5 of {
+      _#4 -> invoke Int32#(42)
+    }
+
+def Cons =
+  \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+
+def Nil = Nil()
+
+def Entry =
+  \constructor$8 -> \constructor$9 -> Entry(constructor$8, constructor$9)
+
+def Empty = Empty()
+
+def Node =
+  \constructor$10 ->
+    \constructor$11 ->
+      \constructor$12 -> Node(constructor$10, constructor$11, constructor$12)
+
+def Leaf = Leaf()
+
+=== ToCore ===
+def main(return$13) =
+  \param$5 return$14 . {
+    param$5 ~ select {
+      _#4 -> invoke Int32# ~ (42, return$14)
+    }
+  } ~ return$13
+
+def Cons(return$15) =
+  \constructor$6 return$16 . {
+    \constructor$7 return$17 . {
+      Cons(constructor$6, constructor$7) ~ return$17
+    } ~ return$16
+  } ~ return$15
+
+def Nil(return$18) = Nil() ~ return$18
+
+def Entry(return$19) =
+  \constructor$8 return$20 . {
+    \constructor$9 return$21 . {
+      Entry(constructor$8, constructor$9) ~ return$21
+    } ~ return$20
+  } ~ return$19
+
+def Empty(return$22) = Empty() ~ return$22
+
+def Node(return$23) =
+  \constructor$10 return$24 . {
+    \constructor$11 return$25 . {
+      \constructor$12 return$26 . {
+        Node(constructor$10, constructor$11, constructor$12) ~ return$26
+      } ~ return$25
+    } ~ return$24
+  } ~ return$23
+
+def Leaf(return$27) = Leaf() ~ return$27
+
+=== Flat ===
+def main(return$13) =
+  \param$5 return$14 . {
+    param$5 ~ select {
+      _#4 -> invoke Int32# ~ (42, return$14)
+    }
+  } ~ return$13
+
+def Cons(return$15) =
+  \constructor$6 return$16 . {
+    \constructor$7 return$17 . {
+      Cons(constructor$6, constructor$7) ~ return$17
+    } ~ return$16
+  } ~ return$15
+
+def Nil(return$18) = Nil() ~ return$18
+
+def Entry(return$19) =
+  \constructor$8 return$20 . {
+    \constructor$9 return$21 . {
+      Entry(constructor$8, constructor$9) ~ return$21
+    } ~ return$20
+  } ~ return$19
+
+def Empty(return$22) = Empty() ~ return$22
+
+def Node(return$23) =
+  \constructor$10 return$24 . {
+    \constructor$11 return$25 . {
+      \constructor$12 return$26 . {
+        Node(constructor$10, constructor$11, constructor$12) ~ return$26
+      } ~ return$25
+    } ~ return$24
+  } ~ return$23
+
+def Leaf(return$27) = Leaf() ~ return$27
+
+=== Join ===
+def main(return$13) =
+  \param$5 return$14 . {
+    join select$29 = select {
+      _#4 -> join apply$28 = (42, return$14) in invoke Int32# ~ apply$28
+    }
+    in param$5 ~ select$29
+  } ~ return$13
+
+def Cons(return$15) =
+  \constructor$6 return$16 . {
+    \constructor$7 return$17 . {
+      Cons(constructor$6, constructor$7) ~ return$17
+    } ~ return$16
+  } ~ return$15
+
+def Nil(return$18) = Nil() ~ return$18
+
+def Entry(return$19) =
+  \constructor$8 return$20 . {
+    \constructor$9 return$21 . {
+      Entry(constructor$8, constructor$9) ~ return$21
+    } ~ return$20
+  } ~ return$19
+
+def Empty(return$22) = Empty() ~ return$22
+
+def Node(return$23) =
+  \constructor$10 return$24 . {
+    \constructor$11 return$25 . {
+      \constructor$12 return$26 . {
+        Node(constructor$10, constructor$11, constructor$12) ~ return$26
+      } ~ return$25
+    } ~ return$24
+  } ~ return$23
+
+def Leaf(return$27) = Leaf() ~ return$27
+
+=== ClosureConv ===
+toplevel fn main(return$13) =
+  let closure$37 = closure lambda$31()
+  return return$13(closure$37)
+
+closure fn lambda$31(self$32, param$5, return$14) =
+  if  then {
+    let _#4 = param$5
+    let apply$28 = closure join$33(return$14)
+    return Int32#(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$33(self$34, value$35) =
+  let return$14 = self$34.cap[0]
+  let lit$36 = 42
+  return value$35(lit$36, return$14)
+
+toplevel fn Cons(return$15) =
+  let closure$45 = closure lambda$39()
+  return return$15(closure$45)
+
+closure fn lambda$39(self$40, constructor$6, return$16) =
+  let closure$44 = closure lambda$41(constructor$6)
+  return return$16(closure$44)
+
+closure fn lambda$41(self$42, constructor$7, return$17) =
+  let constructor$6 = self$42.cap[0]
+  let struct$43 = Cons(constructor$6, constructor$7)
+  return return$17(struct$43)
+
+toplevel fn Nil(return$18) =
+  let struct$47 = Nil()
+  return return$18(struct$47)
+
+toplevel fn Entry(return$19) =
+  let closure$55 = closure lambda$49()
+  return return$19(closure$55)
+
+closure fn lambda$49(self$50, constructor$8, return$20) =
+  let closure$54 = closure lambda$51(constructor$8)
+  return return$20(closure$54)
+
+closure fn lambda$51(self$52, constructor$9, return$21) =
+  let constructor$8 = self$52.cap[0]
+  let struct$53 = Entry(constructor$8, constructor$9)
+  return return$21(struct$53)
+
+toplevel fn Empty(return$22) =
+  let struct$57 = Empty()
+  return return$22(struct$57)
+
+toplevel fn Node(return$23) =
+  let closure$68 = closure lambda$59()
+  return return$23(closure$68)
+
+closure fn lambda$59(self$60, constructor$10, return$24) =
+  let closure$67 = closure lambda$61(constructor$10)
+  return return$24(closure$67)
+
+closure fn lambda$61(self$62, constructor$11, return$25) =
+  let constructor$10 = self$62.cap[0]
+  let closure$66 = closure lambda$63(constructor$10, constructor$11)
+  return return$25(closure$66)
+
+closure fn lambda$63(self$64, constructor$12, return$26) =
+  let constructor$10 = self$64.cap[0]
+  let constructor$11 = self$64.cap[1]
+  let struct$65 = Node(constructor$10, constructor$11, constructor$12)
+  return return$26(struct$65)
+
+toplevel fn Leaf(return$27) =
+  let struct$70 = Leaf()
+  return return$27(struct$70)
+
+toplevel fn zig_main$73() =
+  let finish$71 = closure join$75()
+  let after_main$72 = closure join$78(finish$71)
+  return main(after_main$72)
+
+closure fn join$75(self$76, value$77) = return value$77
+
+closure fn join$78(self$79, value$80) =
+  let finish$71 = self$79.cap[0]
+  let struct$81 = Tuple()
+  return value$80(struct$81, finish$71)
+
+entry = zig_main$73
+
+=== Peephole ===
+toplevel fn main(return$13) =
+  let closure$37 = closure lambda$31()
+  return return$13(closure$37)
+
+closure fn lambda$31(self$32, param$5, return$14) =
+  if  then {
+    let apply$28 = closure join$33(return$14)
+    return Int32#(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$33(self$34, value$35) =
+  let return$14 = self$34.cap[0]
+  let lit$36 = 42
+  return value$35(lit$36, return$14)
+
+toplevel fn Cons(return$15) =
+  let closure$45 = closure lambda$39()
+  return return$15(closure$45)
+
+closure fn lambda$39(self$40, constructor$6, return$16) =
+  let closure$44 = closure lambda$41(constructor$6)
+  return return$16(closure$44)
+
+closure fn lambda$41(self$42, constructor$7, return$17) =
+  let constructor$6 = self$42.cap[0]
+  let struct$43 = Cons(constructor$6, constructor$7)
+  return return$17(struct$43)
+
+toplevel fn Nil(return$18) =
+  let struct$47 = Nil()
+  return return$18(struct$47)
+
+toplevel fn Entry(return$19) =
+  let closure$55 = closure lambda$49()
+  return return$19(closure$55)
+
+closure fn lambda$49(self$50, constructor$8, return$20) =
+  let closure$54 = closure lambda$51(constructor$8)
+  return return$20(closure$54)
+
+closure fn lambda$51(self$52, constructor$9, return$21) =
+  let constructor$8 = self$52.cap[0]
+  let struct$53 = Entry(constructor$8, constructor$9)
+  return return$21(struct$53)
+
+toplevel fn Empty(return$22) =
+  let struct$57 = Empty()
+  return return$22(struct$57)
+
+toplevel fn Node(return$23) =
+  let closure$68 = closure lambda$59()
+  return return$23(closure$68)
+
+closure fn lambda$59(self$60, constructor$10, return$24) =
+  let closure$67 = closure lambda$61(constructor$10)
+  return return$24(closure$67)
+
+closure fn lambda$61(self$62, constructor$11, return$25) =
+  let constructor$10 = self$62.cap[0]
+  let closure$66 = closure lambda$63(constructor$10, constructor$11)
+  return return$25(closure$66)
+
+closure fn lambda$63(self$64, constructor$12, return$26) =
+  let constructor$10 = self$64.cap[0]
+  let constructor$11 = self$64.cap[1]
+  let struct$65 = Node(constructor$10, constructor$11, constructor$12)
+  return return$26(struct$65)
+
+toplevel fn Leaf(return$27) =
+  let struct$70 = Leaf()
+  return return$27(struct$70)
+
+toplevel fn zig_main$73() =
+  let finish$71 = closure join$75()
+  let after_main$72 = closure join$78(finish$71)
+  return main(after_main$72)
+
+closure fn join$75(self$76, value$77) = return value$77
+
+closure fn join$78(self$79, value$80) =
+  let finish$71 = self$79.cap[0]
+  let struct$81 = Tuple()
+  return value$80(struct$81, finish$71)
+
+entry = zig_main$73
+
+=== Perceus ===
+toplevel fn main(return$13) =
+  let closure$37 = closure lambda$31()
+  return return$13(closure$37)
+
+closure fn lambda$31(self$32, param$5, return$14) =
+  drop param$5
+  drop self$32
+  if  then {
+    let apply$28 = closure join$33(return$14)
+    return Int32#(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$33(self$34, value$35) =
+  let return$14 = self$34.cap[0]
+  dup return$14
+  drop self$34
+  let lit$36 = 42
+  return value$35(lit$36, return$14)
+
+toplevel fn Cons(return$15) =
+  let closure$45 = closure lambda$39()
+  return return$15(closure$45)
+
+closure fn lambda$39(self$40, constructor$6, return$16) =
+  drop self$40
+  let closure$44 = closure lambda$41(constructor$6)
+  return return$16(closure$44)
+
+closure fn lambda$41(self$42, constructor$7, return$17) =
+  let constructor$6 = self$42.cap[0]
+  dup constructor$6
+  drop self$42
+  let struct$43 = Cons(constructor$6, constructor$7)
+  return return$17(struct$43)
+
+toplevel fn Nil(return$18) =
+  let struct$47 = Nil()
+  return return$18(struct$47)
+
+toplevel fn Entry(return$19) =
+  let closure$55 = closure lambda$49()
+  return return$19(closure$55)
+
+closure fn lambda$49(self$50, constructor$8, return$20) =
+  drop self$50
+  let closure$54 = closure lambda$51(constructor$8)
+  return return$20(closure$54)
+
+closure fn lambda$51(self$52, constructor$9, return$21) =
+  let constructor$8 = self$52.cap[0]
+  dup constructor$8
+  drop self$52
+  let struct$53 = Entry(constructor$8, constructor$9)
+  return return$21(struct$53)
+
+toplevel fn Empty(return$22) =
+  let struct$57 = Empty()
+  return return$22(struct$57)
+
+toplevel fn Node(return$23) =
+  let closure$68 = closure lambda$59()
+  return return$23(closure$68)
+
+closure fn lambda$59(self$60, constructor$10, return$24) =
+  drop self$60
+  let closure$67 = closure lambda$61(constructor$10)
+  return return$24(closure$67)
+
+closure fn lambda$61(self$62, constructor$11, return$25) =
+  let constructor$10 = self$62.cap[0]
+  dup constructor$10
+  drop self$62
+  let closure$66 = closure lambda$63(constructor$10, constructor$11)
+  return return$25(closure$66)
+
+closure fn lambda$63(self$64, constructor$12, return$26) =
+  let constructor$10 = self$64.cap[0]
+  dup constructor$10
+  let constructor$11 = self$64.cap[1]
+  dup constructor$11
+  drop self$64
+  let struct$65 = Node(constructor$10, constructor$11, constructor$12)
+  return return$26(struct$65)
+
+toplevel fn Leaf(return$27) =
+  let struct$70 = Leaf()
+  return return$27(struct$70)
+
+toplevel fn zig_main$73() =
+  let finish$71 = closure join$75()
+  let after_main$72 = closure join$78(finish$71)
+  return main(after_main$72)
+
+closure fn join$75(self$76, value$77) =
+  drop self$76
+  return value$77
+
+closure fn join$78(self$79, value$80) =
+  let finish$71 = self$79.cap[0]
+  dup finish$71
+  drop self$79
+  let struct$81 = Tuple()
+  return value$80(struct$81, finish$71)
+
+entry = zig_main$73
+
+=== Reuse ===
+toplevel fn main(return$13) =
+  let closure$37 = closure lambda$31()
+  return return$13(closure$37)
+
+closure fn lambda$31(self$32, param$5, return$14) =
+  drop param$5
+  drop self$32
+  if  then {
+    let apply$28 = closure join$33(return$14)
+    return Int32#(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$33(self$34, value$35) =
+  let return$14 = self$34.cap[0]
+  dup return$14
+  let lit$36 = 42
+  drop self$34
+  return value$35(lit$36, return$14)
+
+toplevel fn Cons(return$15) =
+  let closure$45 = closure lambda$39()
+  return return$15(closure$45)
+
+closure fn lambda$39(self$40, constructor$6, return$16) =
+  let closure$44 = closure lambda$41(constructor$6)
+  drop self$40
+  return return$16(closure$44)
+
+closure fn lambda$41(self$42, constructor$7, return$17) =
+  let constructor$6 = self$42.cap[0]
+  dup constructor$6
+  dropReuse reuse$82 = self$42 /2
+  let struct$43 = reuse reuse$82 Cons(constructor$6, constructor$7)
+  return return$17(struct$43)
+
+toplevel fn Nil(return$18) =
+  let struct$47 = Nil()
+  return return$18(struct$47)
+
+toplevel fn Entry(return$19) =
+  let closure$55 = closure lambda$49()
+  return return$19(closure$55)
+
+closure fn lambda$49(self$50, constructor$8, return$20) =
+  let closure$54 = closure lambda$51(constructor$8)
+  drop self$50
+  return return$20(closure$54)
+
+closure fn lambda$51(self$52, constructor$9, return$21) =
+  let constructor$8 = self$52.cap[0]
+  dup constructor$8
+  dropReuse reuse$83 = self$52 /2
+  let struct$53 = reuse reuse$83 Entry(constructor$8, constructor$9)
+  return return$21(struct$53)
+
+toplevel fn Empty(return$22) =
+  let struct$57 = Empty()
+  return return$22(struct$57)
+
+toplevel fn Node(return$23) =
+  let closure$68 = closure lambda$59()
+  return return$23(closure$68)
+
+closure fn lambda$59(self$60, constructor$10, return$24) =
+  let closure$67 = closure lambda$61(constructor$10)
+  drop self$60
+  return return$24(closure$67)
+
+closure fn lambda$61(self$62, constructor$11, return$25) =
+  let constructor$10 = self$62.cap[0]
+  dup constructor$10
+  let closure$66 = closure lambda$63(constructor$10, constructor$11)
+  drop self$62
+  return return$25(closure$66)
+
+closure fn lambda$63(self$64, constructor$12, return$26) =
+  let constructor$10 = self$64.cap[0]
+  dup constructor$10
+  let constructor$11 = self$64.cap[1]
+  dup constructor$11
+  dropReuse reuse$84 = self$64 /3
+  let struct$65 = reuse reuse$84 Node( constructor$10
+  , constructor$11
+  , constructor$12 )
+  return return$26(struct$65)
+
+toplevel fn Leaf(return$27) =
+  let struct$70 = Leaf()
+  return return$27(struct$70)
+
+toplevel fn zig_main$73() =
+  let finish$71 = closure join$75()
+  let after_main$72 = closure join$78(finish$71)
+  return main(after_main$72)
+
+closure fn join$75(self$76, value$77) =
+  drop self$76
+  return value$77
+
+closure fn join$78(self$79, value$80) =
+  let finish$71 = self$79.cap[0]
+  dup finish$71
+  dropReuse reuse$85 = self$79 /0
+  let struct$81 = reuse reuse$85 Tuple()
+  return value$80(struct$81, finish$71)
+
+entry = zig_main$73
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+- data List a = Cons(a, List(a)) | Nil()
++ data List a#0 = Cons(a#0, List(a#0)) | Nil()
+  
+- data Map k v = Entry(k, v) | Empty()
++ data Map k#1 v#2 = Entry(k#1, v#2) | Empty()
+  
+- data Tree a = Node(a, Tree(a), Tree(a)) | Leaf()
++ data Tree a#3 = Node(a#3, Tree(a#3), Tree(a#3)) | Leaf()
+  
+  def main =
+    fn {
+-     _ ->
++     _#4 ->
+        {
+-         42
++         Int32#(42)
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
++ def main =
++   \param$5 ->
++     case param$5 of {
++       _#4 -> invoke Int32#(42)
++     }
+  
+- data List a#0 = Cons(a#0, List(a#0)) | Nil()
++ def Cons =
++   \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+  
+- data Map k#1 v#2 = Entry(k#1, v#2) | Empty()
++ def Nil = Nil()
+  
+- data Tree a#3 = Node(a#3, Tree(a#3), Tree(a#3)) | Leaf()
++ def Entry =
++   \constructor$8 -> \constructor$9 -> Entry(constructor$8, constructor$9)
+  
+- def main =
++ def Empty = Empty()
+-   fn {
++ 
+-     _#4 ->
++ def Node =
+-       {
++   \constructor$10 ->
+-         Int32#(42)
++     \constructor$11 ->
+-       }
++       \constructor$12 -> Node(constructor$10, constructor$11, constructor$12)
+-   }
++ 
++ def Leaf = Leaf()
+
+
+=== ToFun -> SaturateCtor ===
+  def main =
+    \param$5 ->
+      case param$5 of {
+        _#4 -> invoke Int32#(42)
+      }
+  
+  def Cons =
+    \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+  
+  def Nil = Nil()
+  
+  def Entry =
+    \constructor$8 -> \constructor$9 -> Entry(constructor$8, constructor$9)
+  
+  def Empty = Empty()
+  
+  def Node =
+    \constructor$10 ->
+      \constructor$11 ->
+        \constructor$12 -> Node(constructor$10, constructor$11, constructor$12)
+  
+  def Leaf = Leaf()
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def main =
+    \param$5 ->
+      case param$5 of {
+        _#4 -> invoke Int32#(42)
+      }
+  
+  def Cons =
+    \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
+  
+  def Nil = Nil()
+  
+  def Entry =
+    \constructor$8 -> \constructor$9 -> Entry(constructor$8, constructor$9)
+  
+  def Empty = Empty()
+  
+  def Node =
+    \constructor$10 ->
+      \constructor$11 ->
+        \constructor$12 -> Node(constructor$10, constructor$11, constructor$12)
+  
+  def Leaf = Leaf()
+
+
+=== ReuseSpecialize -> ToCore ===
+- def main =
++ def main(return$13) =
+-   \param$5 ->
++   \param$5 return$14 . {
+-     case param$5 of {
++     param$5 ~ select {
+-       _#4 -> invoke Int32#(42)
++       _#4 -> invoke Int32# ~ (42, return$14)
+      }
++   } ~ return$13
+  
+- def Cons =
++ def Cons(return$15) =
+-   \constructor$6 -> \constructor$7 -> Cons(constructor$6, constructor$7)
++   \constructor$6 return$16 . {
++     \constructor$7 return$17 . {
++       Cons(constructor$6, constructor$7) ~ return$17
++     } ~ return$16
++   } ~ return$15
+  
+- def Nil = Nil()
++ def Nil(return$18) = Nil() ~ return$18
+  
+- def Entry =
++ def Entry(return$19) =
+-   \constructor$8 -> \constructor$9 -> Entry(constructor$8, constructor$9)
++   \constructor$8 return$20 . {
++     \constructor$9 return$21 . {
++       Entry(constructor$8, constructor$9) ~ return$21
++     } ~ return$20
++   } ~ return$19
+  
+- def Empty = Empty()
++ def Empty(return$22) = Empty() ~ return$22
+  
+- def Node =
++ def Node(return$23) =
+-   \constructor$10 ->
++   \constructor$10 return$24 . {
+-     \constructor$11 ->
++     \constructor$11 return$25 . {
+-       \constructor$12 -> Node(constructor$10, constructor$11, constructor$12)
++       \constructor$12 return$26 . {
++         Node(constructor$10, constructor$11, constructor$12) ~ return$26
++       } ~ return$25
++     } ~ return$24
++   } ~ return$23
+  
+- def Leaf = Leaf()
++ def Leaf(return$27) = Leaf() ~ return$27
+
+
+=== ToCore -> Flat ===
+  def main(return$13) =
+    \param$5 return$14 . {
+      param$5 ~ select {
+        _#4 -> invoke Int32# ~ (42, return$14)
+      }
+    } ~ return$13
+  
+  def Cons(return$15) =
+    \constructor$6 return$16 . {
+      \constructor$7 return$17 . {
+        Cons(constructor$6, constructor$7) ~ return$17
+      } ~ return$16
+    } ~ return$15
+  
+  def Nil(return$18) = Nil() ~ return$18
+  
+  def Entry(return$19) =
+    \constructor$8 return$20 . {
+      \constructor$9 return$21 . {
+        Entry(constructor$8, constructor$9) ~ return$21
+      } ~ return$20
+    } ~ return$19
+  
+  def Empty(return$22) = Empty() ~ return$22
+  
+  def Node(return$23) =
+    \constructor$10 return$24 . {
+      \constructor$11 return$25 . {
+        \constructor$12 return$26 . {
+          Node(constructor$10, constructor$11, constructor$12) ~ return$26
+        } ~ return$25
+      } ~ return$24
+    } ~ return$23
+  
+  def Leaf(return$27) = Leaf() ~ return$27
+
+
+=== Flat -> Join ===
+  def main(return$13) =
+    \param$5 return$14 . {
+-     param$5 ~ select {
++     join select$29 = select {
+-       _#4 -> invoke Int32# ~ (42, return$14)
++       _#4 -> join apply$28 = (42, return$14) in invoke Int32# ~ apply$28
+      }
++     in param$5 ~ select$29
+    } ~ return$13
+  
+  def Cons(return$15) =
+    \constructor$6 return$16 . {
+      \constructor$7 return$17 . {
+        Cons(constructor$6, constructor$7) ~ return$17
+      } ~ return$16
+    } ~ return$15
+  
+  def Nil(return$18) = Nil() ~ return$18
+  
+  def Entry(return$19) =
+    \constructor$8 return$20 . {
+      \constructor$9 return$21 . {
+        Entry(constructor$8, constructor$9) ~ return$21
+      } ~ return$20
+    } ~ return$19
+  
+  def Empty(return$22) = Empty() ~ return$22
+  
+  def Node(return$23) =
+    \constructor$10 return$24 . {
+      \constructor$11 return$25 . {
+        \constructor$12 return$26 . {
+          Node(constructor$10, constructor$11, constructor$12) ~ return$26
+        } ~ return$25
+      } ~ return$24
+    } ~ return$23
+  
+  def Leaf(return$27) = Leaf() ~ return$27
+
+
+=== Join -> ClosureConv ===
+- def main(return$13) =
++ toplevel fn main(return$13) =
+-   \param$5 return$14 . {
++   let closure$37 = closure lambda$31()
+-     join select$29 = select {
++   return return$13(closure$37)
+-       _#4 -> join apply$28 = (42, return$14) in invoke Int32# ~ apply$28
+-     }
+-     in param$5 ~ select$29
+-   } ~ return$13
+  
+- def Cons(return$15) =
++ closure fn lambda$31(self$32, param$5, return$14) =
+-   \constructor$6 return$16 . {
++   if  then {
+-     \constructor$7 return$17 . {
++     let _#4 = param$5
+-       Cons(constructor$6, constructor$7) ~ return$17
++     let apply$28 = closure join$33(return$14)
+-     } ~ return$16
++     return Int32#(apply$28)
+-   } ~ return$15
++   } else {
++     panic "no matching branch"
++   }
+  
+- def Nil(return$18) = Nil() ~ return$18
++ closure fn join$33(self$34, value$35) =
++   let return$14 = self$34.cap[0]
++   let lit$36 = 42
++   return value$35(lit$36, return$14)
+  
+- def Entry(return$19) =
++ toplevel fn Cons(return$15) =
+-   \constructor$8 return$20 . {
++   let closure$45 = closure lambda$39()
+-     \constructor$9 return$21 . {
++   return return$15(closure$45)
+-       Entry(constructor$8, constructor$9) ~ return$21
+-     } ~ return$20
+-   } ~ return$19
+  
+- def Empty(return$22) = Empty() ~ return$22
++ closure fn lambda$39(self$40, constructor$6, return$16) =
++   let closure$44 = closure lambda$41(constructor$6)
++   return return$16(closure$44)
+  
+- def Node(return$23) =
++ closure fn lambda$41(self$42, constructor$7, return$17) =
+-   \constructor$10 return$24 . {
++   let constructor$6 = self$42.cap[0]
+-     \constructor$11 return$25 . {
++   let struct$43 = Cons(constructor$6, constructor$7)
+-       \constructor$12 return$26 . {
++   return return$17(struct$43)
+-         Node(constructor$10, constructor$11, constructor$12) ~ return$26
+-       } ~ return$25
+-     } ~ return$24
+-   } ~ return$23
+  
+- def Leaf(return$27) = Leaf() ~ return$27
++ toplevel fn Nil(return$18) =
++   let struct$47 = Nil()
++   return return$18(struct$47)
++ 
++ toplevel fn Entry(return$19) =
++   let closure$55 = closure lambda$49()
++   return return$19(closure$55)
++ 
++ closure fn lambda$49(self$50, constructor$8, return$20) =
++   let closure$54 = closure lambda$51(constructor$8)
++   return return$20(closure$54)
++ 
++ closure fn lambda$51(self$52, constructor$9, return$21) =
++   let constructor$8 = self$52.cap[0]
++   let struct$53 = Entry(constructor$8, constructor$9)
++   return return$21(struct$53)
++ 
++ toplevel fn Empty(return$22) =
++   let struct$57 = Empty()
++   return return$22(struct$57)
++ 
++ toplevel fn Node(return$23) =
++   let closure$68 = closure lambda$59()
++   return return$23(closure$68)
++ 
++ closure fn lambda$59(self$60, constructor$10, return$24) =
++   let closure$67 = closure lambda$61(constructor$10)
++   return return$24(closure$67)
++ 
++ closure fn lambda$61(self$62, constructor$11, return$25) =
++   let constructor$10 = self$62.cap[0]
++   let closure$66 = closure lambda$63(constructor$10, constructor$11)
++   return return$25(closure$66)
++ 
++ closure fn lambda$63(self$64, constructor$12, return$26) =
++   let constructor$10 = self$64.cap[0]
++   let constructor$11 = self$64.cap[1]
++   let struct$65 = Node(constructor$10, constructor$11, constructor$12)
++   return return$26(struct$65)
++ 
++ toplevel fn Leaf(return$27) =
++   let struct$70 = Leaf()
++   return return$27(struct$70)
++ 
++ toplevel fn zig_main$73() =
++   let finish$71 = closure join$75()
++   let after_main$72 = closure join$78(finish$71)
++   return main(after_main$72)
++ 
++ closure fn join$75(self$76, value$77) = return value$77
++ 
++ closure fn join$78(self$79, value$80) =
++   let finish$71 = self$79.cap[0]
++   let struct$81 = Tuple()
++   return value$80(struct$81, finish$71)
++ 
++ entry = zig_main$73
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn main(return$13) =
+    let closure$37 = closure lambda$31()
+    return return$13(closure$37)
+  
+  closure fn lambda$31(self$32, param$5, return$14) =
+    if  then {
+-     let _#4 = param$5
+      let apply$28 = closure join$33(return$14)
+      return Int32#(apply$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$33(self$34, value$35) =
+    let return$14 = self$34.cap[0]
+    let lit$36 = 42
+    return value$35(lit$36, return$14)
+  
+  toplevel fn Cons(return$15) =
+    let closure$45 = closure lambda$39()
+    return return$15(closure$45)
+  
+  closure fn lambda$39(self$40, constructor$6, return$16) =
+    let closure$44 = closure lambda$41(constructor$6)
+    return return$16(closure$44)
+  
+  closure fn lambda$41(self$42, constructor$7, return$17) =
+    let constructor$6 = self$42.cap[0]
+    let struct$43 = Cons(constructor$6, constructor$7)
+    return return$17(struct$43)
+  
+  toplevel fn Nil(return$18) =
+    let struct$47 = Nil()
+    return return$18(struct$47)
+  
+  toplevel fn Entry(return$19) =
+    let closure$55 = closure lambda$49()
+    return return$19(closure$55)
+  
+  closure fn lambda$49(self$50, constructor$8, return$20) =
+    let closure$54 = closure lambda$51(constructor$8)
+    return return$20(closure$54)
+  
+  closure fn lambda$51(self$52, constructor$9, return$21) =
+    let constructor$8 = self$52.cap[0]
+    let struct$53 = Entry(constructor$8, constructor$9)
+    return return$21(struct$53)
+  
+  toplevel fn Empty(return$22) =
+    let struct$57 = Empty()
+    return return$22(struct$57)
+  
+  toplevel fn Node(return$23) =
+    let closure$68 = closure lambda$59()
+    return return$23(closure$68)
+  
+  closure fn lambda$59(self$60, constructor$10, return$24) =
+    let closure$67 = closure lambda$61(constructor$10)
+    return return$24(closure$67)
+  
+  closure fn lambda$61(self$62, constructor$11, return$25) =
+    let constructor$10 = self$62.cap[0]
+    let closure$66 = closure lambda$63(constructor$10, constructor$11)
+    return return$25(closure$66)
+  
+  closure fn lambda$63(self$64, constructor$12, return$26) =
+    let constructor$10 = self$64.cap[0]
+    let constructor$11 = self$64.cap[1]
+    let struct$65 = Node(constructor$10, constructor$11, constructor$12)
+    return return$26(struct$65)
+  
+  toplevel fn Leaf(return$27) =
+    let struct$70 = Leaf()
+    return return$27(struct$70)
+  
+  toplevel fn zig_main$73() =
+    let finish$71 = closure join$75()
+    let after_main$72 = closure join$78(finish$71)
+    return main(after_main$72)
+  
+  closure fn join$75(self$76, value$77) = return value$77
+  
+  closure fn join$78(self$79, value$80) =
+    let finish$71 = self$79.cap[0]
+    let struct$81 = Tuple()
+    return value$80(struct$81, finish$71)
+  
+  entry = zig_main$73
+
+
+=== Peephole -> Perceus ===
+  toplevel fn main(return$13) =
+    let closure$37 = closure lambda$31()
+    return return$13(closure$37)
+  
+  closure fn lambda$31(self$32, param$5, return$14) =
++   drop param$5
++   drop self$32
+    if  then {
+      let apply$28 = closure join$33(return$14)
+      return Int32#(apply$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$33(self$34, value$35) =
+    let return$14 = self$34.cap[0]
++   dup return$14
++   drop self$34
+    let lit$36 = 42
+    return value$35(lit$36, return$14)
+  
+  toplevel fn Cons(return$15) =
+    let closure$45 = closure lambda$39()
+    return return$15(closure$45)
+  
+  closure fn lambda$39(self$40, constructor$6, return$16) =
++   drop self$40
+    let closure$44 = closure lambda$41(constructor$6)
+    return return$16(closure$44)
+  
+  closure fn lambda$41(self$42, constructor$7, return$17) =
+    let constructor$6 = self$42.cap[0]
++   dup constructor$6
++   drop self$42
+    let struct$43 = Cons(constructor$6, constructor$7)
+    return return$17(struct$43)
+  
+  toplevel fn Nil(return$18) =
+    let struct$47 = Nil()
+    return return$18(struct$47)
+  
+  toplevel fn Entry(return$19) =
+    let closure$55 = closure lambda$49()
+    return return$19(closure$55)
+  
+  closure fn lambda$49(self$50, constructor$8, return$20) =
++   drop self$50
+    let closure$54 = closure lambda$51(constructor$8)
+    return return$20(closure$54)
+  
+  closure fn lambda$51(self$52, constructor$9, return$21) =
+    let constructor$8 = self$52.cap[0]
++   dup constructor$8
++   drop self$52
+    let struct$53 = Entry(constructor$8, constructor$9)
+    return return$21(struct$53)
+  
+  toplevel fn Empty(return$22) =
+    let struct$57 = Empty()
+    return return$22(struct$57)
+  
+  toplevel fn Node(return$23) =
+    let closure$68 = closure lambda$59()
+    return return$23(closure$68)
+  
+  closure fn lambda$59(self$60, constructor$10, return$24) =
++   drop self$60
+    let closure$67 = closure lambda$61(constructor$10)
+    return return$24(closure$67)
+  
+  closure fn lambda$61(self$62, constructor$11, return$25) =
+    let constructor$10 = self$62.cap[0]
++   dup constructor$10
++   drop self$62
+    let closure$66 = closure lambda$63(constructor$10, constructor$11)
+    return return$25(closure$66)
+  
+  closure fn lambda$63(self$64, constructor$12, return$26) =
+    let constructor$10 = self$64.cap[0]
++   dup constructor$10
+    let constructor$11 = self$64.cap[1]
++   dup constructor$11
++   drop self$64
+    let struct$65 = Node(constructor$10, constructor$11, constructor$12)
+    return return$26(struct$65)
+  
+  toplevel fn Leaf(return$27) =
+    let struct$70 = Leaf()
+    return return$27(struct$70)
+  
+  toplevel fn zig_main$73() =
+    let finish$71 = closure join$75()
+    let after_main$72 = closure join$78(finish$71)
+    return main(after_main$72)
+  
+- closure fn join$75(self$76, value$77) = return value$77
++ closure fn join$75(self$76, value$77) =
++   drop self$76
++   return value$77
+  
+  closure fn join$78(self$79, value$80) =
+    let finish$71 = self$79.cap[0]
++   dup finish$71
++   drop self$79
+    let struct$81 = Tuple()
+    return value$80(struct$81, finish$71)
+  
+  entry = zig_main$73
+
+
+=== Perceus -> Reuse ===
+  toplevel fn main(return$13) =
+    let closure$37 = closure lambda$31()
+    return return$13(closure$37)
+  
+  closure fn lambda$31(self$32, param$5, return$14) =
+    drop param$5
+    drop self$32
+    if  then {
+      let apply$28 = closure join$33(return$14)
+      return Int32#(apply$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$33(self$34, value$35) =
+    let return$14 = self$34.cap[0]
+    dup return$14
+-   drop self$34
+    let lit$36 = 42
++   drop self$34
+    return value$35(lit$36, return$14)
+  
+  toplevel fn Cons(return$15) =
+    let closure$45 = closure lambda$39()
+    return return$15(closure$45)
+  
+  closure fn lambda$39(self$40, constructor$6, return$16) =
+-   drop self$40
+    let closure$44 = closure lambda$41(constructor$6)
++   drop self$40
+    return return$16(closure$44)
+  
+  closure fn lambda$41(self$42, constructor$7, return$17) =
+    let constructor$6 = self$42.cap[0]
+    dup constructor$6
+-   drop self$42
++   dropReuse reuse$82 = self$42 /2
+-   let struct$43 = Cons(constructor$6, constructor$7)
++   let struct$43 = reuse reuse$82 Cons(constructor$6, constructor$7)
+    return return$17(struct$43)
+  
+  toplevel fn Nil(return$18) =
+    let struct$47 = Nil()
+    return return$18(struct$47)
+  
+  toplevel fn Entry(return$19) =
+    let closure$55 = closure lambda$49()
+    return return$19(closure$55)
+  
+  closure fn lambda$49(self$50, constructor$8, return$20) =
+-   drop self$50
+    let closure$54 = closure lambda$51(constructor$8)
++   drop self$50
+    return return$20(closure$54)
+  
+  closure fn lambda$51(self$52, constructor$9, return$21) =
+    let constructor$8 = self$52.cap[0]
+    dup constructor$8
+-   drop self$52
++   dropReuse reuse$83 = self$52 /2
+-   let struct$53 = Entry(constructor$8, constructor$9)
++   let struct$53 = reuse reuse$83 Entry(constructor$8, constructor$9)
+    return return$21(struct$53)
+  
+  toplevel fn Empty(return$22) =
+    let struct$57 = Empty()
+    return return$22(struct$57)
+  
+  toplevel fn Node(return$23) =
+    let closure$68 = closure lambda$59()
+    return return$23(closure$68)
+  
+  closure fn lambda$59(self$60, constructor$10, return$24) =
+-   drop self$60
+    let closure$67 = closure lambda$61(constructor$10)
++   drop self$60
+    return return$24(closure$67)
+  
+  closure fn lambda$61(self$62, constructor$11, return$25) =
+    let constructor$10 = self$62.cap[0]
+    dup constructor$10
+-   drop self$62
+    let closure$66 = closure lambda$63(constructor$10, constructor$11)
++   drop self$62
+    return return$25(closure$66)
+  
+  closure fn lambda$63(self$64, constructor$12, return$26) =
+    let constructor$10 = self$64.cap[0]
+    dup constructor$10
+    let constructor$11 = self$64.cap[1]
+    dup constructor$11
+-   drop self$64
++   dropReuse reuse$84 = self$64 /3
+-   let struct$65 = Node(constructor$10, constructor$11, constructor$12)
++   let struct$65 = reuse reuse$84 Node( constructor$10
++   , constructor$11
++   , constructor$12 )
+    return return$26(struct$65)
+  
+  toplevel fn Leaf(return$27) =
+    let struct$70 = Leaf()
+    return return$27(struct$70)
+  
+  toplevel fn zig_main$73() =
+    let finish$71 = closure join$75()
+    let after_main$72 = closure join$78(finish$71)
+    return main(after_main$72)
+  
+  closure fn join$75(self$76, value$77) =
+    drop self$76
+    return value$77
+  
+  closure fn join$78(self$79, value$80) =
+    let finish$71 = self$79.cap[0]
+    dup finish$71
+-   drop self$79
++   dropReuse reuse$85 = self$79 /0
+-   let struct$81 = Tuple()
++   let struct$81 = reuse reuse$85 Tuple()
+    return value$80(struct$81, finish$71)
+  
+  entry = zig_main$73

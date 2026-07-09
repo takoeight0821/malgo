@@ -1,0 +1,6122 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+sig getX : {x : Int64#, | r} -> Int64#
+
+def getX =
+  fn {
+    rec ->
+      {
+        rec.x
+      }
+  }
+
+sig sumXY : {x : Int64#, y : Int64#, | r} -> Int64#
+
+def sumXY =
+  fn {
+    rec ->
+      {
+        addInt64#(rec.x)(rec.y)
+      }
+  }
+
+data Option a = Some(a) | None()
+
+sig handleSome : [Some(Int64#), | r] -> Int64#
+
+def handleSome =
+  fn {
+    Some(x) ->
+      {
+        x
+      }
+  }
+
+sig handleOption : Int64# -> [Some(Int64#), None(), | r] -> Int64#
+
+def handleOption =
+  fn {
+    fallback Some(x) ->
+      {
+        x
+      } |
+    fallback None ->
+      {
+        fallback
+      }
+  }
+
+sig wideRecord : {x : Int64#, y : Int64#}
+
+def wideRecord = {x = 20L, y = 99L}
+
+sig someOrNone : [Some(Int64#), None()]
+
+def someOrNone = Some(30L)
+
+def main =
+  fn {
+    _ ->
+      {
+        let fromNarrowRecord = getX({x = 10L})
+        let fromWideRecord = getX(wideRecord)
+        let fromWiderRecord = sumXY({x = 1L, y = 2L, z = 3L})
+        let fromClosedVariant = handleSome(someOrNone)
+        let fromOpenVariant = handleOption(7L)(someOrNone)
+        let fallbackFromNone = handleOption(7L)(None)
+        let total =
+          addInt64#( fromNarrowRecord )( addInt64#( fromWideRecord )( addInt64#( fromWiderRecord )( addInt64#( fromClosedVariant )( addInt64#( fromOpenVariant )( fallbackFromNone ) ) ) ) )
+        printString#(toStringInt64#(total))
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data Option a#4 = Some(a#4) | None()
+
+sig getX : {x : Int64#, | r#0} -> Int64#
+
+sig sumXY : {x : Int64#, y : Int64#, | r#2} -> Int64#
+
+sig handleSome : [Some(Int64#), | r#5] -> Int64#
+
+sig handleOption : Int64# -> [Some(Int64#), None(), | r#7] -> Int64#
+
+sig wideRecord : {x : Int64#, y : Int64#}
+
+sig someOrNone : [Some(Int64#), None()]
+
+def wideRecord = {x = 20L, y = 99L}
+
+def sumXY =
+  fn {
+    rec#3 ->
+      {
+        addInt64#(rec#3.x)(rec#3.y)
+      }
+  }
+
+def someOrNone = Some(30L)
+
+def handleSome =
+  fn {
+    Some(x#6) ->
+      {
+        x#6
+      }
+  }
+
+def handleOption =
+  fn {
+    fallback#8 Some(x#9) ->
+      {
+        x#9
+      } |
+    fallback#10 None() ->
+      {
+        fallback#10
+      }
+  }
+
+def getX =
+  fn {
+    rec#1 ->
+      {
+        rec#1.x
+      }
+  }
+
+def main =
+  fn {
+    _#11 ->
+      {
+        let fromNarrowRecord#12 = getX({x = 10L})
+        let fromWideRecord#13 = getX(wideRecord)
+        let fromWiderRecord#14 = sumXY({x = 1L, y = 2L, z = 3L})
+        let fromClosedVariant#15 = handleSome(someOrNone)
+        let fromOpenVariant#16 = handleOption(7L)(someOrNone)
+        let fallbackFromNone#17 = handleOption(7L)(None)
+        let total#18 =
+          addInt64#( fromNarrowRecord#12 )( addInt64#( fromWideRecord#13 )( addInt64#( fromWiderRecord#14 )( addInt64#( fromClosedVariant#15 )( addInt64#( fromOpenVariant#16 )( fallbackFromNone#17 ) ) ) ) )
+        printString#(toStringInt64#(total#18))
+      }
+  }
+
+=== ToFun ===
+def wideRecord = {x = 20L, y = 99L}
+
+def sumXY =
+  \param$19 ->
+    case param$19 of {
+      rec#3 -> invoke addInt64#(rec#3.x)(rec#3.y)
+    }
+
+def someOrNone = invoke Some(30L)
+
+def handleSome =
+  \param$20 ->
+    case param$20 of {
+      Some(x#6) -> x#6
+    }
+
+def handleOption =
+  \param$21 ->
+    \param$22 ->
+      case Tuple(param$21, param$22) of {
+        Tuple(fallback#8, Some(x#9)) -> x#9
+        Tuple(fallback#10, None()) -> fallback#10
+      }
+
+def getX =
+  \param$23 ->
+    case param$23 of {
+      rec#1 -> rec#1.x
+    }
+
+def main =
+  \param$24 ->
+    case param$24 of {
+      _#11 ->
+        let fromNarrowRecord#12 =
+          invoke getX({x = 10L})
+        in
+          let fromWideRecord#13 =
+            invoke getX(invoke wideRecord)
+          in
+            let fromWiderRecord#14 =
+              invoke sumXY({x = 1L, y = 2L, z = 3L})
+            in
+              let fromClosedVariant#15 =
+                invoke handleSome(invoke someOrNone)
+              in
+                let fromOpenVariant#16 =
+                  invoke handleOption(7L)(invoke someOrNone)
+                in
+                  let fallbackFromNone#17 =
+                    invoke handleOption(7L)(invoke None)
+                  in
+                    let total#18 =
+                      invoke addInt64#( fromNarrowRecord#12 )( invoke addInt64#( fromWideRecord#13 )( invoke addInt64#( fromWiderRecord#14 )( invoke addInt64#( fromClosedVariant#15 )( invoke addInt64#( fromOpenVariant#16 )( fallbackFromNone#17 ) ) ) ) )
+                    in
+                      invoke printString#(invoke toStringInt64#(total#18))
+    }
+
+def Some = \constructor$25 -> Some(constructor$25)
+
+def None = None()
+
+=== SaturateCtor ===
+def wideRecord = {x = 20L, y = 99L}
+
+def sumXY =
+  \param$19 ->
+    case param$19 of {
+      rec#3 -> invoke addInt64#(rec#3.x)(rec#3.y)
+    }
+
+def someOrNone = Some(30L)
+
+def handleSome =
+  \param$20 ->
+    case param$20 of {
+      Some(x#6) -> x#6
+    }
+
+def handleOption =
+  \param$21 ->
+    \param$22 ->
+      case Tuple(param$21, param$22) of {
+        Tuple(fallback#8, Some(x#9)) -> x#9
+        Tuple(fallback#10, None()) -> fallback#10
+      }
+
+def getX =
+  \param$23 ->
+    case param$23 of {
+      rec#1 -> rec#1.x
+    }
+
+def main =
+  \param$24 ->
+    case param$24 of {
+      _#11 ->
+        let fromNarrowRecord#12 =
+          invoke getX({x = 10L})
+        in
+          let fromWideRecord#13 =
+            invoke getX(invoke wideRecord)
+          in
+            let fromWiderRecord#14 =
+              invoke sumXY({x = 1L, y = 2L, z = 3L})
+            in
+              let fromClosedVariant#15 =
+                invoke handleSome(invoke someOrNone)
+              in
+                let fromOpenVariant#16 =
+                  invoke handleOption(7L)(invoke someOrNone)
+                in
+                  let fallbackFromNone#17 =
+                    invoke handleOption(7L)(None())
+                  in
+                    let total#18 =
+                      invoke addInt64#( fromNarrowRecord#12 )( invoke addInt64#( fromWideRecord#13 )( invoke addInt64#( fromWiderRecord#14 )( invoke addInt64#( fromClosedVariant#15 )( invoke addInt64#( fromOpenVariant#16 )( fallbackFromNone#17 ) ) ) ) )
+                    in
+                      invoke printString#(invoke toStringInt64#(total#18))
+    }
+
+def Some = \constructor$25 -> Some(constructor$25)
+
+def None = None()
+
+=== ReuseSpecialize ===
+def wideRecord = {x = 20L, y = 99L}
+
+def sumXY =
+  \param$19 ->
+    case param$19 of {
+      rec#3 -> invoke addInt64#(rec#3.x)(rec#3.y)
+    }
+
+def someOrNone = Some(30L)
+
+def handleSome =
+  \param$20 ->
+    case param$20 of {
+      Some(x#6) -> x#6
+    }
+
+def handleOption =
+  \param$21 ->
+    \param$22 ->
+      case Tuple(param$21, param$22) of {
+        Tuple(fallback#8, Some(x#9)) -> x#9
+        Tuple(fallback#10, None()) -> fallback#10
+      }
+
+def getX =
+  \param$23 ->
+    case param$23 of {
+      rec#1 -> rec#1.x
+    }
+
+def main =
+  \param$24 ->
+    case param$24 of {
+      _#11 ->
+        let fromNarrowRecord#12 =
+          invoke getX({x = 10L})
+        in
+          let fromWideRecord#13 =
+            invoke getX(invoke wideRecord)
+          in
+            let fromWiderRecord#14 =
+              invoke sumXY({x = 1L, y = 2L, z = 3L})
+            in
+              let fromClosedVariant#15 =
+                invoke handleSome(invoke someOrNone)
+              in
+                let fromOpenVariant#16 =
+                  invoke handleOption(7L)(invoke someOrNone)
+                in
+                  let fallbackFromNone#17 =
+                    invoke handleOption(7L)(None())
+                  in
+                    let total#18 =
+                      invoke addInt64#( fromNarrowRecord#12 )( invoke addInt64#( fromWideRecord#13 )( invoke addInt64#( fromWiderRecord#14 )( invoke addInt64#( fromClosedVariant#15 )( invoke addInt64#( fromOpenVariant#16 )( fallbackFromNone#17 ) ) ) ) )
+                    in
+                      invoke printString#(invoke toStringInt64#(total#18))
+    }
+
+def Some = \constructor$25 -> Some(constructor$25)
+
+def None = None()
+
+=== ToCore ===
+def wideRecord(return$26) =
+  { x(return$27) = {
+    20L ~ return$27
+  }
+  , y(return$28) = {
+    99L ~ return$28
+  } } ~ return$26
+
+def sumXY(return$29) =
+  \param$19 return$30 . {
+    param$19 ~ select {
+      rec#3 ->
+        invoke addInt64# ~ ( do return$32 . {
+          rec#3 ~ .x -> return$32
+        }
+        , ( do return$31 . {
+          rec#3 ~ .y -> return$31
+        }
+        , return$30 ) )
+    }
+  } ~ return$29
+
+def someOrNone(return$33) = Some(30L) ~ return$33
+
+def handleSome(return$34) =
+  \param$20 return$35 . {
+    param$20 ~ select {
+      Some(x#6) -> x#6 ~ return$35
+    }
+  } ~ return$34
+
+def handleOption(return$36) =
+  \param$21 return$37 . {
+    \param$22 return$38 . {
+      Tuple(param$21, param$22) ~ select {
+        Tuple(fallback#8, Some(x#9)) -> x#9 ~ return$38
+        Tuple(fallback#10, None()) -> fallback#10 ~ return$38
+      }
+    } ~ return$37
+  } ~ return$36
+
+def getX(return$39) =
+  \param$23 return$40 . {
+    param$23 ~ select {
+      rec#1 -> rec#1 ~ .x -> return$40
+    }
+  } ~ return$39
+
+def main(return$41) =
+  \param$24 return$42 . {
+    param$24 ~ select {
+      _#11 ->
+        invoke getX ~ ( { x(return$54) = {
+          10L ~ return$54
+        } }
+        , then fromNarrowRecord#12 -> {
+          invoke getX ~ ( do return$53 . {
+            invoke wideRecord ~ return$53
+          }
+          , then fromWideRecord#13 -> {
+            invoke sumXY ~ ( { x(return$50) = {
+              1L ~ return$50
+            }
+            , y(return$51) = {
+              2L ~ return$51
+            }
+            , z(return$52) = {
+              3L ~ return$52
+            } }
+            , then fromWiderRecord#14 -> {
+              invoke handleSome ~ ( do return$49 . {
+                invoke someOrNone ~ return$49
+              }
+              , then fromClosedVariant#15 -> {
+                invoke handleOption ~ ( 7L
+                , ( do return$48 . {
+                  invoke someOrNone ~ return$48
+                }
+                , then fromOpenVariant#16 -> {
+                  invoke handleOption ~ ( 7L
+                  , ( None()
+                  , then fallbackFromNone#17 -> {
+                    invoke addInt64# ~ ( fromNarrowRecord#12
+                    , ( do return$44 . {
+                      invoke addInt64# ~ ( fromWideRecord#13
+                      , ( do return$45 . {
+                        invoke addInt64# ~ ( fromWiderRecord#14
+                        , ( do return$46 . {
+                          invoke addInt64# ~ ( fromClosedVariant#15
+                          , ( do return$47 . {
+                            invoke addInt64# ~ ( fromOpenVariant#16
+                            , (fallbackFromNone#17, return$47) )
+                          }
+                          , return$46 ) )
+                        }
+                        , return$45 ) )
+                      }
+                      , return$44 ) )
+                    }
+                    , then total#18 -> {
+                      invoke printString# ~ ( do return$43 . {
+                        invoke toStringInt64# ~ (total#18, return$43)
+                      }
+                      , return$42 )
+                    } ) )
+                  } ) )
+                } ) )
+              } )
+            } )
+          } )
+        } )
+    }
+  } ~ return$41
+
+def Some(return$55) =
+  \constructor$25 return$56 . {
+    Some(constructor$25) ~ return$56
+  } ~ return$55
+
+def None(return$57) = None() ~ return$57
+
+=== Flat ===
+def wideRecord(return$26) =
+  { x(return$27) = {
+    20L ~ return$27
+  }
+  , y(return$28) = {
+    99L ~ return$28
+  } } ~ return$26
+
+def sumXY(return$29) =
+  \param$19 return$30 . {
+    param$19 ~ select {
+      rec#3 ->
+        invoke addInt64# ~ then outer$58 -> {
+          join return$32 = then inner$59 -> {
+            outer$58 ~ ( inner$59
+            , then outer$60 -> {
+              join return$31 = then inner$61 -> {
+                outer$60 ~ (inner$61, return$30)
+              }
+              in rec#3 ~ .y -> return$31
+            } )
+          }
+          in rec#3 ~ .x -> return$32
+        }
+    }
+  } ~ return$29
+
+def someOrNone(return$33) = Some(30L) ~ return$33
+
+def handleSome(return$34) =
+  \param$20 return$35 . {
+    param$20 ~ select {
+      Some(x#6) -> x#6 ~ return$35
+    }
+  } ~ return$34
+
+def handleOption(return$36) =
+  \param$21 return$37 . {
+    \param$22 return$38 . {
+      Tuple(param$21, param$22) ~ select {
+        Tuple(fallback#8, Some(x#9)) -> x#9 ~ return$38
+        Tuple(fallback#10, None()) -> fallback#10 ~ return$38
+      }
+    } ~ return$37
+  } ~ return$36
+
+def getX(return$39) =
+  \param$23 return$40 . {
+    param$23 ~ select {
+      rec#1 -> rec#1 ~ .x -> return$40
+    }
+  } ~ return$39
+
+def main(return$41) =
+  \param$24 return$42 . {
+    param$24 ~ select {
+      _#11 ->
+        invoke getX ~ ( { x(return$54) = {
+          10L ~ return$54
+        } }
+        , then fromNarrowRecord#12 -> {
+          invoke getX ~ then outer$62 -> {
+            join return$53 = then inner$63 -> {
+              outer$62 ~ ( inner$63
+              , then fromWideRecord#13 -> {
+                invoke sumXY ~ ( { x(return$50) = {
+                  1L ~ return$50
+                }
+                , y(return$51) = {
+                  2L ~ return$51
+                }
+                , z(return$52) = {
+                  3L ~ return$52
+                } }
+                , then fromWiderRecord#14 -> {
+                  invoke handleSome ~ then outer$64 -> {
+                    join return$49 = then inner$65 -> {
+                      outer$64 ~ ( inner$65
+                      , then fromClosedVariant#15 -> {
+                        invoke handleOption ~ ( 7L
+                        , then outer$66 -> {
+                          join return$48 = then inner$67 -> {
+                            outer$66 ~ ( inner$67
+                            , then fromOpenVariant#16 -> {
+                              invoke handleOption ~ ( 7L
+                              , ( None()
+                              , then fallbackFromNone#17 -> {
+                                invoke addInt64# ~ ( fromNarrowRecord#12
+                                , then outer$68 -> {
+                                  join return$44 = then inner$69 -> {
+                                    outer$68 ~ ( inner$69
+                                    , then total#18 -> {
+                                      invoke printString# ~ then outer$70 -> {
+                                        join return$43 = then inner$71 -> {
+                                          outer$70 ~ (inner$71, return$42)
+                                        }
+                                        in invoke toStringInt64# ~ ( total#18
+                                        , return$43 )
+                                      }
+                                    } )
+                                  }
+                                  in invoke addInt64# ~ ( fromWideRecord#13
+                                  , then outer$72 -> {
+                                    join return$45 = then inner$73 -> {
+                                      outer$72 ~ (inner$73, return$44)
+                                    }
+                                    in invoke addInt64# ~ ( fromWiderRecord#14
+                                    , then outer$74 -> {
+                                      join return$46 = then inner$75 -> {
+                                        outer$74 ~ (inner$75, return$45)
+                                      }
+                                      in invoke addInt64# ~ ( fromClosedVariant#15
+                                      , then outer$76 -> {
+                                        join return$47 = then inner$77 -> {
+                                          outer$76 ~ (inner$77, return$46)
+                                        }
+                                        in invoke addInt64# ~ ( fromOpenVariant#16
+                                        , (fallbackFromNone#17, return$47) )
+                                      } )
+                                    } )
+                                  } )
+                                } )
+                              } ) )
+                            } )
+                          }
+                          in invoke someOrNone ~ return$48
+                        } )
+                      } )
+                    }
+                    in invoke someOrNone ~ return$49
+                  }
+                } )
+              } )
+            }
+            in invoke wideRecord ~ return$53
+          }
+        } )
+    }
+  } ~ return$41
+
+def Some(return$55) =
+  \constructor$25 return$56 . {
+    Some(constructor$25) ~ return$56
+  } ~ return$55
+
+def None(return$57) = None() ~ return$57
+
+=== Join ===
+def wideRecord(return$26) =
+  { x(return$27) = {
+    20L ~ return$27
+  }
+  , y(return$28) = {
+    99L ~ return$28
+  } } ~ return$26
+
+def sumXY(return$29) =
+  \param$19 return$30 . {
+    join select$84 = select {
+      rec#3 ->
+        join then$83 = then outer$58 -> {
+          join return$32 = then inner$59 -> {
+            join then$81 = then outer$60 -> {
+              join return$31 = then inner$61 -> {
+                join apply$80 = (inner$61, return$30)
+                in outer$60 ~ apply$80
+              }
+              in join project$79 = .y -> return$31
+              in rec#3 ~ project$79
+            }
+            in join apply$82 = (inner$59, then$81)
+            in outer$58 ~ apply$82
+          }
+          in join project$78 = .x -> return$32
+          in rec#3 ~ project$78
+        }
+        in invoke addInt64# ~ then$83
+    }
+    in param$19 ~ select$84
+  } ~ return$29
+
+def someOrNone(return$33) = Some(30L) ~ return$33
+
+def handleSome(return$34) =
+  \param$20 return$35 . {
+    join select$85 = select {
+      Some(x#6) -> x#6 ~ return$35
+    }
+    in param$20 ~ select$85
+  } ~ return$34
+
+def handleOption(return$36) =
+  \param$21 return$37 . {
+    \param$22 return$38 . {
+      join select$86 = select {
+        Tuple(fallback#8, Some(x#9)) -> x#9 ~ return$38
+        Tuple(fallback#10, None()) -> fallback#10 ~ return$38
+      }
+      in Tuple(param$21, param$22) ~ select$86
+    } ~ return$37
+  } ~ return$36
+
+def getX(return$39) =
+  \param$23 return$40 . {
+    join select$88 = select {
+      rec#1 -> join project$87 = .x -> return$40 in rec#1 ~ project$87
+    }
+    in param$23 ~ select$88
+  } ~ return$39
+
+def main(return$41) =
+  \param$24 return$42 . {
+    join select$124 = select {
+      _#11 ->
+        join then$122 = then fromNarrowRecord#12 -> {
+          join then$121 = then outer$62 -> {
+            join return$53 = then inner$63 -> {
+              join then$119 = then fromWideRecord#13 -> {
+                join then$117 = then fromWiderRecord#14 -> {
+                  join then$116 = then outer$64 -> {
+                    join return$49 = then inner$65 -> {
+                      join then$114 = then fromClosedVariant#15 -> {
+                        join then$112 = then outer$66 -> {
+                          join return$48 = then inner$67 -> {
+                            join then$110 = then fromOpenVariant#16 -> {
+                              join then$107 = then fallbackFromNone#17 -> {
+                                join then$105 = then outer$68 -> {
+                                  join return$44 = then inner$69 -> {
+                                    join then$103 = then total#18 -> {
+                                      join then$102 = then outer$70 -> {
+                                        join return$43 = then inner$71 -> {
+                                          join apply$101 = (inner$71, return$42)
+                                          in outer$70 ~ apply$101
+                                        }
+                                        in join apply$100 = ( total#18
+                                        , return$43 )
+                                        in invoke toStringInt64# ~ apply$100
+                                      }
+                                      in invoke printString# ~ then$102
+                                    }
+                                    in join apply$104 = (inner$69, then$103)
+                                    in outer$68 ~ apply$104
+                                  }
+                                  in join then$98 = then outer$72 -> {
+                                    join return$45 = then inner$73 -> {
+                                      join apply$97 = (inner$73, return$44)
+                                      in outer$72 ~ apply$97
+                                    }
+                                    in join then$95 = then outer$74 -> {
+                                      join return$46 = then inner$75 -> {
+                                        join apply$94 = (inner$75, return$45)
+                                        in outer$74 ~ apply$94
+                                      }
+                                      in join then$92 = then outer$76 -> {
+                                        join return$47 = then inner$77 -> {
+                                          join apply$91 = (inner$77, return$46)
+                                          in outer$76 ~ apply$91
+                                        }
+                                        in join apply$89 = ( fallbackFromNone#17
+                                        , return$47 )
+                                        in join apply$90 = ( fromOpenVariant#16
+                                        , apply$89 )
+                                        in invoke addInt64# ~ apply$90
+                                      }
+                                      in join apply$93 = ( fromClosedVariant#15
+                                      , then$92 )
+                                      in invoke addInt64# ~ apply$93
+                                    }
+                                    in join apply$96 = ( fromWiderRecord#14
+                                    , then$95 )
+                                    in invoke addInt64# ~ apply$96
+                                  }
+                                  in join apply$99 = ( fromWideRecord#13
+                                  , then$98 )
+                                  in invoke addInt64# ~ apply$99
+                                }
+                                in join apply$106 = ( fromNarrowRecord#12
+                                , then$105 )
+                                in invoke addInt64# ~ apply$106
+                              }
+                              in join apply$108 = (None(), then$107)
+                              in join apply$109 = (7L, apply$108)
+                              in invoke handleOption ~ apply$109
+                            }
+                            in join apply$111 = (inner$67, then$110)
+                            in outer$66 ~ apply$111
+                          }
+                          in invoke someOrNone ~ return$48
+                        }
+                        in join apply$113 = (7L, then$112)
+                        in invoke handleOption ~ apply$113
+                      }
+                      in join apply$115 = (inner$65, then$114)
+                      in outer$64 ~ apply$115
+                    }
+                    in invoke someOrNone ~ return$49
+                  }
+                  in invoke handleSome ~ then$116
+                }
+                in join apply$118 = ( { x(return$50) = {
+                  1L ~ return$50
+                }
+                , y(return$51) = {
+                  2L ~ return$51
+                }
+                , z(return$52) = {
+                  3L ~ return$52
+                } }
+                , then$117 )
+                in invoke sumXY ~ apply$118
+              }
+              in join apply$120 = (inner$63, then$119)
+              in outer$62 ~ apply$120
+            }
+            in invoke wideRecord ~ return$53
+          }
+          in invoke getX ~ then$121
+        }
+        in join apply$123 = ( { x(return$54) = {
+          10L ~ return$54
+        } }
+        , then$122 )
+        in invoke getX ~ apply$123
+    }
+    in param$24 ~ select$124
+  } ~ return$41
+
+def Some(return$55) =
+  \constructor$25 return$56 . {
+    Some(constructor$25) ~ return$56
+  } ~ return$55
+
+def None(return$57) = None() ~ return$57
+
+=== ClosureConv ===
+toplevel fn wideRecord(return$26) =
+  let record$132 = record(x = field$126, y = field$129) captures()
+  return return$26(record$132)
+
+field fn field$126(self$127, return$27) =
+  let lit$128 = 20L
+  return return$27(lit$128)
+
+field fn field$129(self$130, return$28) =
+  let lit$131 = 99L
+  return return$28(lit$131)
+
+toplevel fn sumXY(return$29) =
+  let closure$148 = closure lambda$134()
+  return return$29(closure$148)
+
+closure fn lambda$134(self$135, param$19, return$30) =
+  if  then {
+    let rec#3 = param$19
+    let then$83 = closure join$136(rec#3, return$30)
+    return addInt64#(then$83)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$136(self$137, value$138) =
+  let rec#3 = self$137.cap[0]
+  let return$30 = self$137.cap[1]
+  let return$32 = closure join$139(rec#3, return$30, value$138)
+  return rec#3.x(return$32)
+
+closure fn join$139(self$140, value$141) =
+  let rec#3 = self$140.cap[0]
+  let return$30 = self$140.cap[1]
+  let value$138 = self$140.cap[2]
+  let then$81 = closure join$142(rec#3, return$30)
+  return value$138(value$141, then$81)
+
+closure fn join$142(self$143, value$144) =
+  let rec#3 = self$143.cap[0]
+  let return$30 = self$143.cap[1]
+  let return$31 = closure join$145(return$30, value$144)
+  return rec#3.y(return$31)
+
+closure fn join$145(self$146, value$147) =
+  let return$30 = self$146.cap[0]
+  let value$144 = self$146.cap[1]
+  return value$144(value$147, return$30)
+
+toplevel fn someOrNone(return$33) =
+  let lit$150 = 30L
+  let struct$151 = Some(lit$150)
+  return return$33(struct$151)
+
+toplevel fn handleSome(return$34) =
+  let closure$155 = closure lambda$153()
+  return return$34(closure$155)
+
+closure fn lambda$153(self$154, param$20, return$35) =
+  if param$20.tag == Some then {
+    let x#6 = param$20.0
+    return return$35(x#6)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn handleOption(return$36) =
+  let closure$163 = closure lambda$157()
+  return return$36(closure$163)
+
+closure fn lambda$157(self$158, param$21, return$37) =
+  let closure$162 = closure lambda$159(param$21)
+  return return$37(closure$162)
+
+closure fn lambda$159(self$160, param$22, return$38) =
+  let param$21 = self$160.cap[0]
+  let struct$161 = Tuple(param$21, param$22)
+  if struct$161.tag == Tuple && struct$161.1.tag == Some then {
+    let fallback#8 = struct$161.0
+    let x#9 = struct$161.1.0
+    return return$38(x#9)
+  } else {
+    if struct$161.tag == Tuple && struct$161.1.tag == None then {
+      let fallback#10 = struct$161.0
+      return return$38(fallback#10)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn getX(return$39) =
+  let closure$167 = closure lambda$165()
+  return return$39(closure$167)
+
+closure fn lambda$165(self$166, param$23, return$40) =
+  if  then {
+    let rec#1 = param$23
+    return rec#1.x(return$40)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$41) =
+  let closure$293 = closure lambda$169()
+  return return$41(closure$293)
+
+closure fn lambda$169(self$170, param$24, return$42) =
+  if  then {
+    let _#11 = param$24
+    let then$122 = closure join$171(return$42)
+    let apply$123 = closure join$286(then$122)
+    return getX(apply$123)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$171(self$172, value$173) =
+  let return$42 = self$172.cap[0]
+  let then$121 = closure join$174(return$42, value$173)
+  return getX(then$121)
+
+closure fn join$174(self$175, value$176) =
+  let return$42 = self$175.cap[0]
+  let value$173 = self$175.cap[1]
+  let return$53 = closure join$177(return$42, value$173, value$176)
+  return wideRecord(return$53)
+
+closure fn join$177(self$178, value$179) =
+  let return$42 = self$178.cap[0]
+  let value$173 = self$178.cap[1]
+  let value$176 = self$178.cap[2]
+  let then$119 = closure join$180(return$42, value$173)
+  return value$176(value$179, then$119)
+
+closure fn join$180(self$181, value$182) =
+  let return$42 = self$181.cap[0]
+  let value$173 = self$181.cap[1]
+  let then$117 = closure join$183(return$42, value$173, value$182)
+  let apply$118 = closure join$273(then$117)
+  return sumXY(apply$118)
+
+closure fn join$183(self$184, value$185) =
+  let return$42 = self$184.cap[0]
+  let value$173 = self$184.cap[1]
+  let value$182 = self$184.cap[2]
+  let then$116 = closure join$186(return$42, value$173, value$182, value$185)
+  return handleSome(then$116)
+
+closure fn join$186(self$187, value$188) =
+  let return$42 = self$187.cap[0]
+  let value$173 = self$187.cap[1]
+  let value$182 = self$187.cap[2]
+  let value$185 = self$187.cap[3]
+  let return$49 = closure join$189( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$188 )
+  return someOrNone(return$49)
+
+closure fn join$189(self$190, value$191) =
+  let return$42 = self$190.cap[0]
+  let value$173 = self$190.cap[1]
+  let value$182 = self$190.cap[2]
+  let value$185 = self$190.cap[3]
+  let value$188 = self$190.cap[4]
+  let then$114 = closure join$192(return$42, value$173, value$182, value$185)
+  return value$188(value$191, then$114)
+
+closure fn join$192(self$193, value$194) =
+  let return$42 = self$193.cap[0]
+  let value$173 = self$193.cap[1]
+  let value$182 = self$193.cap[2]
+  let value$185 = self$193.cap[3]
+  let then$112 = closure join$195( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194 )
+  let apply$113 = closure join$269(then$112)
+  return handleOption(apply$113)
+
+closure fn join$195(self$196, value$197) =
+  let return$42 = self$196.cap[0]
+  let value$173 = self$196.cap[1]
+  let value$182 = self$196.cap[2]
+  let value$185 = self$196.cap[3]
+  let value$194 = self$196.cap[4]
+  let return$48 = closure join$198( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194
+  , value$197 )
+  return someOrNone(return$48)
+
+closure fn join$198(self$199, value$200) =
+  let return$42 = self$199.cap[0]
+  let value$173 = self$199.cap[1]
+  let value$182 = self$199.cap[2]
+  let value$185 = self$199.cap[3]
+  let value$194 = self$199.cap[4]
+  let value$197 = self$199.cap[5]
+  let then$110 = closure join$201( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194 )
+  return value$197(value$200, then$110)
+
+closure fn join$201(self$202, value$203) =
+  let return$42 = self$202.cap[0]
+  let value$173 = self$202.cap[1]
+  let value$182 = self$202.cap[2]
+  let value$185 = self$202.cap[3]
+  let value$194 = self$202.cap[4]
+  let then$107 = closure join$204( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194
+  , value$203 )
+  let apply$108 = closure join$261(then$107)
+  let apply$109 = closure join$265(apply$108)
+  return handleOption(apply$109)
+
+closure fn join$204(self$205, value$206) =
+  let return$42 = self$205.cap[0]
+  let value$173 = self$205.cap[1]
+  let value$182 = self$205.cap[2]
+  let value$185 = self$205.cap[3]
+  let value$194 = self$205.cap[4]
+  let value$203 = self$205.cap[5]
+  let then$105 = closure join$207( return$42
+  , value$182
+  , value$185
+  , value$194
+  , value$203
+  , value$206 )
+  let apply$106 = closure join$258(then$105, value$173)
+  return addInt64#(apply$106)
+
+closure fn join$207(self$208, value$209) =
+  let return$42 = self$208.cap[0]
+  let value$182 = self$208.cap[1]
+  let value$185 = self$208.cap[2]
+  let value$194 = self$208.cap[3]
+  let value$203 = self$208.cap[4]
+  let value$206 = self$208.cap[5]
+  let return$44 = closure join$210(return$42, value$209)
+  let then$98 = closure join$225( return$44
+  , value$185
+  , value$194
+  , value$203
+  , value$206 )
+  let apply$99 = closure join$255(then$98, value$182)
+  return addInt64#(apply$99)
+
+closure fn join$210(self$211, value$212) =
+  let return$42 = self$211.cap[0]
+  let value$209 = self$211.cap[1]
+  let then$103 = closure join$213(return$42)
+  return value$209(value$212, then$103)
+
+closure fn join$213(self$214, value$215) =
+  let return$42 = self$214.cap[0]
+  let then$102 = closure join$216(return$42, value$215)
+  return printString#(then$102)
+
+closure fn join$216(self$217, value$218) =
+  let return$42 = self$217.cap[0]
+  let value$215 = self$217.cap[1]
+  let return$43 = closure join$219(return$42, value$218)
+  let apply$100 = closure join$222(return$43, value$215)
+  return toStringInt64#(apply$100)
+
+closure fn join$219(self$220, value$221) =
+  let return$42 = self$220.cap[0]
+  let value$218 = self$220.cap[1]
+  return value$218(value$221, return$42)
+
+closure fn join$222(self$223, value$224) =
+  let return$43 = self$223.cap[0]
+  let value$215 = self$223.cap[1]
+  return value$224(value$215, return$43)
+
+closure fn join$225(self$226, value$227) =
+  let return$44 = self$226.cap[0]
+  let value$185 = self$226.cap[1]
+  let value$194 = self$226.cap[2]
+  let value$203 = self$226.cap[3]
+  let value$206 = self$226.cap[4]
+  let return$45 = closure join$228(return$44, value$227)
+  let then$95 = closure join$231(return$45, value$194, value$203, value$206)
+  let apply$96 = closure join$252(then$95, value$185)
+  return addInt64#(apply$96)
+
+closure fn join$228(self$229, value$230) =
+  let return$44 = self$229.cap[0]
+  let value$227 = self$229.cap[1]
+  return value$227(value$230, return$44)
+
+closure fn join$231(self$232, value$233) =
+  let return$45 = self$232.cap[0]
+  let value$194 = self$232.cap[1]
+  let value$203 = self$232.cap[2]
+  let value$206 = self$232.cap[3]
+  let return$46 = closure join$234(return$45, value$233)
+  let then$92 = closure join$237(return$46, value$203, value$206)
+  let apply$93 = closure join$249(then$92, value$194)
+  return addInt64#(apply$93)
+
+closure fn join$234(self$235, value$236) =
+  let return$45 = self$235.cap[0]
+  let value$233 = self$235.cap[1]
+  return value$233(value$236, return$45)
+
+closure fn join$237(self$238, value$239) =
+  let return$46 = self$238.cap[0]
+  let value$203 = self$238.cap[1]
+  let value$206 = self$238.cap[2]
+  let return$47 = closure join$240(return$46, value$239)
+  let apply$89 = closure join$243(return$47, value$206)
+  let apply$90 = closure join$246(apply$89, value$203)
+  return addInt64#(apply$90)
+
+closure fn join$240(self$241, value$242) =
+  let return$46 = self$241.cap[0]
+  let value$239 = self$241.cap[1]
+  return value$239(value$242, return$46)
+
+closure fn join$243(self$244, value$245) =
+  let return$47 = self$244.cap[0]
+  let value$206 = self$244.cap[1]
+  return value$245(value$206, return$47)
+
+closure fn join$246(self$247, value$248) =
+  let apply$89 = self$247.cap[0]
+  let value$203 = self$247.cap[1]
+  return value$248(value$203, apply$89)
+
+closure fn join$249(self$250, value$251) =
+  let then$92 = self$250.cap[0]
+  let value$194 = self$250.cap[1]
+  return value$251(value$194, then$92)
+
+closure fn join$252(self$253, value$254) =
+  let then$95 = self$253.cap[0]
+  let value$185 = self$253.cap[1]
+  return value$254(value$185, then$95)
+
+closure fn join$255(self$256, value$257) =
+  let then$98 = self$256.cap[0]
+  let value$182 = self$256.cap[1]
+  return value$257(value$182, then$98)
+
+closure fn join$258(self$259, value$260) =
+  let then$105 = self$259.cap[0]
+  let value$173 = self$259.cap[1]
+  return value$260(value$173, then$105)
+
+closure fn join$261(self$262, value$263) =
+  let then$107 = self$262.cap[0]
+  let struct$264 = None()
+  return value$263(struct$264, then$107)
+
+closure fn join$265(self$266, value$267) =
+  let apply$108 = self$266.cap[0]
+  let lit$268 = 7L
+  return value$267(lit$268, apply$108)
+
+closure fn join$269(self$270, value$271) =
+  let then$112 = self$270.cap[0]
+  let lit$272 = 7L
+  return value$271(lit$272, then$112)
+
+closure fn join$273(self$274, value$275) =
+  let then$117 = self$274.cap[0]
+  let record$285 = record( x = field$276
+  , y = field$279
+  , z = field$282 ) captures()
+  return value$275(record$285, then$117)
+
+field fn field$276(self$277, return$50) =
+  let lit$278 = 1L
+  return return$50(lit$278)
+
+field fn field$279(self$280, return$51) =
+  let lit$281 = 2L
+  return return$51(lit$281)
+
+field fn field$282(self$283, return$52) =
+  let lit$284 = 3L
+  return return$52(lit$284)
+
+closure fn join$286(self$287, value$288) =
+  let then$122 = self$287.cap[0]
+  let record$292 = record(x = field$289) captures()
+  return value$288(record$292, then$122)
+
+field fn field$289(self$290, return$54) =
+  let lit$291 = 10L
+  return return$54(lit$291)
+
+toplevel fn Some(return$55) =
+  let closure$298 = closure lambda$295()
+  return return$55(closure$298)
+
+closure fn lambda$295(self$296, constructor$25, return$56) =
+  let struct$297 = Some(constructor$25)
+  return return$56(struct$297)
+
+toplevel fn None(return$57) =
+  let struct$300 = None()
+  return return$57(struct$300)
+
+toplevel fn zig_main$303() =
+  let finish$301 = closure join$305()
+  let after_main$302 = closure join$308(finish$301)
+  return main(after_main$302)
+
+closure fn join$305(self$306, value$307) = return value$307
+
+closure fn join$308(self$309, value$310) =
+  let finish$301 = self$309.cap[0]
+  let struct$311 = Tuple()
+  return value$310(struct$311, finish$301)
+
+entry = zig_main$303
+
+=== Peephole ===
+toplevel fn wideRecord(return$26) =
+  let record$132 = record(x = field$126, y = field$129) captures()
+  return return$26(record$132)
+
+field fn field$126(self$127, return$27) =
+  let lit$128 = 20L
+  return return$27(lit$128)
+
+field fn field$129(self$130, return$28) =
+  let lit$131 = 99L
+  return return$28(lit$131)
+
+toplevel fn sumXY(return$29) =
+  let closure$148 = closure lambda$134()
+  return return$29(closure$148)
+
+closure fn lambda$134(self$135, param$19, return$30) =
+  if  then {
+    let then$83 = closure join$136(param$19, return$30)
+    return addInt64#(then$83)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$136(self$137, value$138) =
+  let rec#3 = self$137.cap[0]
+  let return$30 = self$137.cap[1]
+  let return$32 = closure join$139(rec#3, return$30, value$138)
+  return rec#3.x(return$32)
+
+closure fn join$139(self$140, value$141) =
+  let rec#3 = self$140.cap[0]
+  let return$30 = self$140.cap[1]
+  let value$138 = self$140.cap[2]
+  let then$81 = closure join$142(rec#3, return$30)
+  return value$138(value$141, then$81)
+
+closure fn join$142(self$143, value$144) =
+  let rec#3 = self$143.cap[0]
+  let return$30 = self$143.cap[1]
+  let return$31 = closure join$145(return$30, value$144)
+  return rec#3.y(return$31)
+
+closure fn join$145(self$146, value$147) =
+  let return$30 = self$146.cap[0]
+  let value$144 = self$146.cap[1]
+  return value$144(value$147, return$30)
+
+toplevel fn someOrNone(return$33) =
+  let lit$150 = 30L
+  let struct$151 = Some(lit$150)
+  return return$33(struct$151)
+
+toplevel fn handleSome(return$34) =
+  let closure$155 = closure lambda$153()
+  return return$34(closure$155)
+
+closure fn lambda$153(self$154, param$20, return$35) =
+  if param$20.tag == Some then {
+    let x#6 = param$20.0
+    return return$35(x#6)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn handleOption(return$36) =
+  let closure$163 = closure lambda$157()
+  return return$36(closure$163)
+
+closure fn lambda$157(self$158, param$21, return$37) =
+  let closure$162 = closure lambda$159(param$21)
+  return return$37(closure$162)
+
+closure fn lambda$159(self$160, param$22, return$38) =
+  let param$21 = self$160.cap[0]
+  if param$22.tag == Some then {
+    let x#9 = param$22.0
+    return return$38(x#9)
+  } else {
+    if param$22.tag == None then {
+      return return$38(param$21)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn getX(return$39) =
+  let closure$167 = closure lambda$165()
+  return return$39(closure$167)
+
+closure fn lambda$165(self$166, param$23, return$40) =
+  if  then {
+    return param$23.x(return$40)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$41) =
+  let closure$293 = closure lambda$169()
+  return return$41(closure$293)
+
+closure fn lambda$169(self$170, param$24, return$42) =
+  if  then {
+    let then$122 = closure join$171(return$42)
+    let apply$123 = closure join$286(then$122)
+    return getX(apply$123)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$171(self$172, value$173) =
+  let return$42 = self$172.cap[0]
+  let then$121 = closure join$174(return$42, value$173)
+  return getX(then$121)
+
+closure fn join$174(self$175, value$176) =
+  let return$42 = self$175.cap[0]
+  let value$173 = self$175.cap[1]
+  let return$53 = closure join$177(return$42, value$173, value$176)
+  return wideRecord(return$53)
+
+closure fn join$177(self$178, value$179) =
+  let return$42 = self$178.cap[0]
+  let value$173 = self$178.cap[1]
+  let value$176 = self$178.cap[2]
+  let then$119 = closure join$180(return$42, value$173)
+  return value$176(value$179, then$119)
+
+closure fn join$180(self$181, value$182) =
+  let return$42 = self$181.cap[0]
+  let value$173 = self$181.cap[1]
+  let then$117 = closure join$183(return$42, value$173, value$182)
+  let apply$118 = closure join$273(then$117)
+  return sumXY(apply$118)
+
+closure fn join$183(self$184, value$185) =
+  let return$42 = self$184.cap[0]
+  let value$173 = self$184.cap[1]
+  let value$182 = self$184.cap[2]
+  let then$116 = closure join$186(return$42, value$173, value$182, value$185)
+  return handleSome(then$116)
+
+closure fn join$186(self$187, value$188) =
+  let return$42 = self$187.cap[0]
+  let value$173 = self$187.cap[1]
+  let value$182 = self$187.cap[2]
+  let value$185 = self$187.cap[3]
+  let return$49 = closure join$189( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$188 )
+  return someOrNone(return$49)
+
+closure fn join$189(self$190, value$191) =
+  let return$42 = self$190.cap[0]
+  let value$173 = self$190.cap[1]
+  let value$182 = self$190.cap[2]
+  let value$185 = self$190.cap[3]
+  let value$188 = self$190.cap[4]
+  let then$114 = closure join$192(return$42, value$173, value$182, value$185)
+  return value$188(value$191, then$114)
+
+closure fn join$192(self$193, value$194) =
+  let return$42 = self$193.cap[0]
+  let value$173 = self$193.cap[1]
+  let value$182 = self$193.cap[2]
+  let value$185 = self$193.cap[3]
+  let then$112 = closure join$195( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194 )
+  let apply$113 = closure join$269(then$112)
+  return handleOption(apply$113)
+
+closure fn join$195(self$196, value$197) =
+  let return$42 = self$196.cap[0]
+  let value$173 = self$196.cap[1]
+  let value$182 = self$196.cap[2]
+  let value$185 = self$196.cap[3]
+  let value$194 = self$196.cap[4]
+  let return$48 = closure join$198( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194
+  , value$197 )
+  return someOrNone(return$48)
+
+closure fn join$198(self$199, value$200) =
+  let return$42 = self$199.cap[0]
+  let value$173 = self$199.cap[1]
+  let value$182 = self$199.cap[2]
+  let value$185 = self$199.cap[3]
+  let value$194 = self$199.cap[4]
+  let value$197 = self$199.cap[5]
+  let then$110 = closure join$201( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194 )
+  return value$197(value$200, then$110)
+
+closure fn join$201(self$202, value$203) =
+  let return$42 = self$202.cap[0]
+  let value$173 = self$202.cap[1]
+  let value$182 = self$202.cap[2]
+  let value$185 = self$202.cap[3]
+  let value$194 = self$202.cap[4]
+  let then$107 = closure join$204( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194
+  , value$203 )
+  let apply$108 = closure join$261(then$107)
+  let apply$109 = closure join$265(apply$108)
+  return handleOption(apply$109)
+
+closure fn join$204(self$205, value$206) =
+  let return$42 = self$205.cap[0]
+  let value$173 = self$205.cap[1]
+  let value$182 = self$205.cap[2]
+  let value$185 = self$205.cap[3]
+  let value$194 = self$205.cap[4]
+  let value$203 = self$205.cap[5]
+  let then$105 = closure join$207( return$42
+  , value$182
+  , value$185
+  , value$194
+  , value$203
+  , value$206 )
+  let apply$106 = closure join$258(then$105, value$173)
+  return addInt64#(apply$106)
+
+closure fn join$207(self$208, value$209) =
+  let return$42 = self$208.cap[0]
+  let value$182 = self$208.cap[1]
+  let value$185 = self$208.cap[2]
+  let value$194 = self$208.cap[3]
+  let value$203 = self$208.cap[4]
+  let value$206 = self$208.cap[5]
+  let return$44 = closure join$210(return$42, value$209)
+  let then$98 = closure join$225( return$44
+  , value$185
+  , value$194
+  , value$203
+  , value$206 )
+  let apply$99 = closure join$255(then$98, value$182)
+  return addInt64#(apply$99)
+
+closure fn join$210(self$211, value$212) =
+  let return$42 = self$211.cap[0]
+  let value$209 = self$211.cap[1]
+  let then$103 = closure join$213(return$42)
+  return value$209(value$212, then$103)
+
+closure fn join$213(self$214, value$215) =
+  let return$42 = self$214.cap[0]
+  let then$102 = closure join$216(return$42, value$215)
+  return printString#(then$102)
+
+closure fn join$216(self$217, value$218) =
+  let return$42 = self$217.cap[0]
+  let value$215 = self$217.cap[1]
+  let return$43 = closure join$219(return$42, value$218)
+  let apply$100 = closure join$222(return$43, value$215)
+  return toStringInt64#(apply$100)
+
+closure fn join$219(self$220, value$221) =
+  let return$42 = self$220.cap[0]
+  let value$218 = self$220.cap[1]
+  return value$218(value$221, return$42)
+
+closure fn join$222(self$223, value$224) =
+  let return$43 = self$223.cap[0]
+  let value$215 = self$223.cap[1]
+  return value$224(value$215, return$43)
+
+closure fn join$225(self$226, value$227) =
+  let return$44 = self$226.cap[0]
+  let value$185 = self$226.cap[1]
+  let value$194 = self$226.cap[2]
+  let value$203 = self$226.cap[3]
+  let value$206 = self$226.cap[4]
+  let return$45 = closure join$228(return$44, value$227)
+  let then$95 = closure join$231(return$45, value$194, value$203, value$206)
+  let apply$96 = closure join$252(then$95, value$185)
+  return addInt64#(apply$96)
+
+closure fn join$228(self$229, value$230) =
+  let return$44 = self$229.cap[0]
+  let value$227 = self$229.cap[1]
+  return value$227(value$230, return$44)
+
+closure fn join$231(self$232, value$233) =
+  let return$45 = self$232.cap[0]
+  let value$194 = self$232.cap[1]
+  let value$203 = self$232.cap[2]
+  let value$206 = self$232.cap[3]
+  let return$46 = closure join$234(return$45, value$233)
+  let then$92 = closure join$237(return$46, value$203, value$206)
+  let apply$93 = closure join$249(then$92, value$194)
+  return addInt64#(apply$93)
+
+closure fn join$234(self$235, value$236) =
+  let return$45 = self$235.cap[0]
+  let value$233 = self$235.cap[1]
+  return value$233(value$236, return$45)
+
+closure fn join$237(self$238, value$239) =
+  let return$46 = self$238.cap[0]
+  let value$203 = self$238.cap[1]
+  let value$206 = self$238.cap[2]
+  let return$47 = closure join$240(return$46, value$239)
+  let apply$89 = closure join$243(return$47, value$206)
+  let apply$90 = closure join$246(apply$89, value$203)
+  return addInt64#(apply$90)
+
+closure fn join$240(self$241, value$242) =
+  let return$46 = self$241.cap[0]
+  let value$239 = self$241.cap[1]
+  return value$239(value$242, return$46)
+
+closure fn join$243(self$244, value$245) =
+  let return$47 = self$244.cap[0]
+  let value$206 = self$244.cap[1]
+  return value$245(value$206, return$47)
+
+closure fn join$246(self$247, value$248) =
+  let apply$89 = self$247.cap[0]
+  let value$203 = self$247.cap[1]
+  return value$248(value$203, apply$89)
+
+closure fn join$249(self$250, value$251) =
+  let then$92 = self$250.cap[0]
+  let value$194 = self$250.cap[1]
+  return value$251(value$194, then$92)
+
+closure fn join$252(self$253, value$254) =
+  let then$95 = self$253.cap[0]
+  let value$185 = self$253.cap[1]
+  return value$254(value$185, then$95)
+
+closure fn join$255(self$256, value$257) =
+  let then$98 = self$256.cap[0]
+  let value$182 = self$256.cap[1]
+  return value$257(value$182, then$98)
+
+closure fn join$258(self$259, value$260) =
+  let then$105 = self$259.cap[0]
+  let value$173 = self$259.cap[1]
+  return value$260(value$173, then$105)
+
+closure fn join$261(self$262, value$263) =
+  let then$107 = self$262.cap[0]
+  let struct$264 = None()
+  return value$263(struct$264, then$107)
+
+closure fn join$265(self$266, value$267) =
+  let apply$108 = self$266.cap[0]
+  let lit$268 = 7L
+  return value$267(lit$268, apply$108)
+
+closure fn join$269(self$270, value$271) =
+  let then$112 = self$270.cap[0]
+  let lit$272 = 7L
+  return value$271(lit$272, then$112)
+
+closure fn join$273(self$274, value$275) =
+  let then$117 = self$274.cap[0]
+  let record$285 = record( x = field$276
+  , y = field$279
+  , z = field$282 ) captures()
+  return value$275(record$285, then$117)
+
+field fn field$276(self$277, return$50) =
+  let lit$278 = 1L
+  return return$50(lit$278)
+
+field fn field$279(self$280, return$51) =
+  let lit$281 = 2L
+  return return$51(lit$281)
+
+field fn field$282(self$283, return$52) =
+  let lit$284 = 3L
+  return return$52(lit$284)
+
+closure fn join$286(self$287, value$288) =
+  let then$122 = self$287.cap[0]
+  let record$292 = record(x = field$289) captures()
+  return value$288(record$292, then$122)
+
+field fn field$289(self$290, return$54) =
+  let lit$291 = 10L
+  return return$54(lit$291)
+
+toplevel fn Some(return$55) =
+  let closure$298 = closure lambda$295()
+  return return$55(closure$298)
+
+closure fn lambda$295(self$296, constructor$25, return$56) =
+  let struct$297 = Some(constructor$25)
+  return return$56(struct$297)
+
+toplevel fn None(return$57) =
+  let struct$300 = None()
+  return return$57(struct$300)
+
+toplevel fn zig_main$303() =
+  let finish$301 = closure join$305()
+  let after_main$302 = closure join$308(finish$301)
+  return main(after_main$302)
+
+closure fn join$305(self$306, value$307) = return value$307
+
+closure fn join$308(self$309, value$310) =
+  let finish$301 = self$309.cap[0]
+  let struct$311 = Tuple()
+  return value$310(struct$311, finish$301)
+
+entry = zig_main$303
+
+=== Perceus ===
+toplevel fn wideRecord(return$26) =
+  let record$132 = record(x = field$126, y = field$129) captures()
+  return return$26(record$132)
+
+field fn field$126(self$127, return$27) =
+  drop self$127
+  let lit$128 = 20L
+  return return$27(lit$128)
+
+field fn field$129(self$130, return$28) =
+  drop self$130
+  let lit$131 = 99L
+  return return$28(lit$131)
+
+toplevel fn sumXY(return$29) =
+  let closure$148 = closure lambda$134()
+  return return$29(closure$148)
+
+closure fn lambda$134(self$135, param$19, return$30) =
+  drop self$135
+  if  then {
+    let then$83 = closure join$136(param$19, return$30)
+    return addInt64#(then$83)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$136(self$137, value$138) =
+  let rec#3 = self$137.cap[0]
+  dup rec#3
+  let return$30 = self$137.cap[1]
+  dup return$30
+  drop self$137
+  dup rec#3
+  let return$32 = closure join$139(rec#3, return$30, value$138)
+  return rec#3.x(return$32)
+
+closure fn join$139(self$140, value$141) =
+  let rec#3 = self$140.cap[0]
+  dup rec#3
+  let return$30 = self$140.cap[1]
+  dup return$30
+  let value$138 = self$140.cap[2]
+  dup value$138
+  drop self$140
+  let then$81 = closure join$142(rec#3, return$30)
+  return value$138(value$141, then$81)
+
+closure fn join$142(self$143, value$144) =
+  let rec#3 = self$143.cap[0]
+  dup rec#3
+  let return$30 = self$143.cap[1]
+  dup return$30
+  drop self$143
+  let return$31 = closure join$145(return$30, value$144)
+  return rec#3.y(return$31)
+
+closure fn join$145(self$146, value$147) =
+  let return$30 = self$146.cap[0]
+  dup return$30
+  let value$144 = self$146.cap[1]
+  dup value$144
+  drop self$146
+  return value$144(value$147, return$30)
+
+toplevel fn someOrNone(return$33) =
+  let lit$150 = 30L
+  let struct$151 = Some(lit$150)
+  return return$33(struct$151)
+
+toplevel fn handleSome(return$34) =
+  let closure$155 = closure lambda$153()
+  return return$34(closure$155)
+
+closure fn lambda$153(self$154, param$20, return$35) =
+  drop self$154
+  if param$20.tag == Some then {
+    let x#6 = param$20.0
+    dup x#6
+    drop param$20
+    return return$35(x#6)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn handleOption(return$36) =
+  let closure$163 = closure lambda$157()
+  return return$36(closure$163)
+
+closure fn lambda$157(self$158, param$21, return$37) =
+  drop self$158
+  let closure$162 = closure lambda$159(param$21)
+  return return$37(closure$162)
+
+closure fn lambda$159(self$160, param$22, return$38) =
+  let param$21 = self$160.cap[0]
+  dup param$21
+  drop self$160
+  if param$22.tag == Some then {
+    drop param$21
+    let x#9 = param$22.0
+    dup x#9
+    drop param$22
+    return return$38(x#9)
+  } else {
+    if param$22.tag == None then {
+      drop param$22
+      return return$38(param$21)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn getX(return$39) =
+  let closure$167 = closure lambda$165()
+  return return$39(closure$167)
+
+closure fn lambda$165(self$166, param$23, return$40) =
+  drop self$166
+  if  then {
+    return param$23.x(return$40)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$41) =
+  let closure$293 = closure lambda$169()
+  return return$41(closure$293)
+
+closure fn lambda$169(self$170, param$24, return$42) =
+  drop param$24
+  drop self$170
+  if  then {
+    let then$122 = closure join$171(return$42)
+    let apply$123 = closure join$286(then$122)
+    return getX(apply$123)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$171(self$172, value$173) =
+  let return$42 = self$172.cap[0]
+  dup return$42
+  drop self$172
+  let then$121 = closure join$174(return$42, value$173)
+  return getX(then$121)
+
+closure fn join$174(self$175, value$176) =
+  let return$42 = self$175.cap[0]
+  dup return$42
+  let value$173 = self$175.cap[1]
+  dup value$173
+  drop self$175
+  let return$53 = closure join$177(return$42, value$173, value$176)
+  return wideRecord(return$53)
+
+closure fn join$177(self$178, value$179) =
+  let return$42 = self$178.cap[0]
+  dup return$42
+  let value$173 = self$178.cap[1]
+  dup value$173
+  let value$176 = self$178.cap[2]
+  dup value$176
+  drop self$178
+  let then$119 = closure join$180(return$42, value$173)
+  return value$176(value$179, then$119)
+
+closure fn join$180(self$181, value$182) =
+  let return$42 = self$181.cap[0]
+  dup return$42
+  let value$173 = self$181.cap[1]
+  dup value$173
+  drop self$181
+  let then$117 = closure join$183(return$42, value$173, value$182)
+  let apply$118 = closure join$273(then$117)
+  return sumXY(apply$118)
+
+closure fn join$183(self$184, value$185) =
+  let return$42 = self$184.cap[0]
+  dup return$42
+  let value$173 = self$184.cap[1]
+  dup value$173
+  let value$182 = self$184.cap[2]
+  dup value$182
+  drop self$184
+  let then$116 = closure join$186(return$42, value$173, value$182, value$185)
+  return handleSome(then$116)
+
+closure fn join$186(self$187, value$188) =
+  let return$42 = self$187.cap[0]
+  dup return$42
+  let value$173 = self$187.cap[1]
+  dup value$173
+  let value$182 = self$187.cap[2]
+  dup value$182
+  let value$185 = self$187.cap[3]
+  dup value$185
+  drop self$187
+  let return$49 = closure join$189( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$188 )
+  return someOrNone(return$49)
+
+closure fn join$189(self$190, value$191) =
+  let return$42 = self$190.cap[0]
+  dup return$42
+  let value$173 = self$190.cap[1]
+  dup value$173
+  let value$182 = self$190.cap[2]
+  dup value$182
+  let value$185 = self$190.cap[3]
+  dup value$185
+  let value$188 = self$190.cap[4]
+  dup value$188
+  drop self$190
+  let then$114 = closure join$192(return$42, value$173, value$182, value$185)
+  return value$188(value$191, then$114)
+
+closure fn join$192(self$193, value$194) =
+  let return$42 = self$193.cap[0]
+  dup return$42
+  let value$173 = self$193.cap[1]
+  dup value$173
+  let value$182 = self$193.cap[2]
+  dup value$182
+  let value$185 = self$193.cap[3]
+  dup value$185
+  drop self$193
+  let then$112 = closure join$195( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194 )
+  let apply$113 = closure join$269(then$112)
+  return handleOption(apply$113)
+
+closure fn join$195(self$196, value$197) =
+  let return$42 = self$196.cap[0]
+  dup return$42
+  let value$173 = self$196.cap[1]
+  dup value$173
+  let value$182 = self$196.cap[2]
+  dup value$182
+  let value$185 = self$196.cap[3]
+  dup value$185
+  let value$194 = self$196.cap[4]
+  dup value$194
+  drop self$196
+  let return$48 = closure join$198( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194
+  , value$197 )
+  return someOrNone(return$48)
+
+closure fn join$198(self$199, value$200) =
+  let return$42 = self$199.cap[0]
+  dup return$42
+  let value$173 = self$199.cap[1]
+  dup value$173
+  let value$182 = self$199.cap[2]
+  dup value$182
+  let value$185 = self$199.cap[3]
+  dup value$185
+  let value$194 = self$199.cap[4]
+  dup value$194
+  let value$197 = self$199.cap[5]
+  dup value$197
+  drop self$199
+  let then$110 = closure join$201( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194 )
+  return value$197(value$200, then$110)
+
+closure fn join$201(self$202, value$203) =
+  let return$42 = self$202.cap[0]
+  dup return$42
+  let value$173 = self$202.cap[1]
+  dup value$173
+  let value$182 = self$202.cap[2]
+  dup value$182
+  let value$185 = self$202.cap[3]
+  dup value$185
+  let value$194 = self$202.cap[4]
+  dup value$194
+  drop self$202
+  let then$107 = closure join$204( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194
+  , value$203 )
+  let apply$108 = closure join$261(then$107)
+  let apply$109 = closure join$265(apply$108)
+  return handleOption(apply$109)
+
+closure fn join$204(self$205, value$206) =
+  let return$42 = self$205.cap[0]
+  dup return$42
+  let value$173 = self$205.cap[1]
+  dup value$173
+  let value$182 = self$205.cap[2]
+  dup value$182
+  let value$185 = self$205.cap[3]
+  dup value$185
+  let value$194 = self$205.cap[4]
+  dup value$194
+  let value$203 = self$205.cap[5]
+  dup value$203
+  drop self$205
+  let then$105 = closure join$207( return$42
+  , value$182
+  , value$185
+  , value$194
+  , value$203
+  , value$206 )
+  let apply$106 = closure join$258(then$105, value$173)
+  return addInt64#(apply$106)
+
+closure fn join$207(self$208, value$209) =
+  let return$42 = self$208.cap[0]
+  dup return$42
+  let value$182 = self$208.cap[1]
+  dup value$182
+  let value$185 = self$208.cap[2]
+  dup value$185
+  let value$194 = self$208.cap[3]
+  dup value$194
+  let value$203 = self$208.cap[4]
+  dup value$203
+  let value$206 = self$208.cap[5]
+  dup value$206
+  drop self$208
+  let return$44 = closure join$210(return$42, value$209)
+  let then$98 = closure join$225( return$44
+  , value$185
+  , value$194
+  , value$203
+  , value$206 )
+  let apply$99 = closure join$255(then$98, value$182)
+  return addInt64#(apply$99)
+
+closure fn join$210(self$211, value$212) =
+  let return$42 = self$211.cap[0]
+  dup return$42
+  let value$209 = self$211.cap[1]
+  dup value$209
+  drop self$211
+  let then$103 = closure join$213(return$42)
+  return value$209(value$212, then$103)
+
+closure fn join$213(self$214, value$215) =
+  let return$42 = self$214.cap[0]
+  dup return$42
+  drop self$214
+  let then$102 = closure join$216(return$42, value$215)
+  return printString#(then$102)
+
+closure fn join$216(self$217, value$218) =
+  let return$42 = self$217.cap[0]
+  dup return$42
+  let value$215 = self$217.cap[1]
+  dup value$215
+  drop self$217
+  let return$43 = closure join$219(return$42, value$218)
+  let apply$100 = closure join$222(return$43, value$215)
+  return toStringInt64#(apply$100)
+
+closure fn join$219(self$220, value$221) =
+  let return$42 = self$220.cap[0]
+  dup return$42
+  let value$218 = self$220.cap[1]
+  dup value$218
+  drop self$220
+  return value$218(value$221, return$42)
+
+closure fn join$222(self$223, value$224) =
+  let return$43 = self$223.cap[0]
+  dup return$43
+  let value$215 = self$223.cap[1]
+  dup value$215
+  drop self$223
+  return value$224(value$215, return$43)
+
+closure fn join$225(self$226, value$227) =
+  let return$44 = self$226.cap[0]
+  dup return$44
+  let value$185 = self$226.cap[1]
+  dup value$185
+  let value$194 = self$226.cap[2]
+  dup value$194
+  let value$203 = self$226.cap[3]
+  dup value$203
+  let value$206 = self$226.cap[4]
+  dup value$206
+  drop self$226
+  let return$45 = closure join$228(return$44, value$227)
+  let then$95 = closure join$231(return$45, value$194, value$203, value$206)
+  let apply$96 = closure join$252(then$95, value$185)
+  return addInt64#(apply$96)
+
+closure fn join$228(self$229, value$230) =
+  let return$44 = self$229.cap[0]
+  dup return$44
+  let value$227 = self$229.cap[1]
+  dup value$227
+  drop self$229
+  return value$227(value$230, return$44)
+
+closure fn join$231(self$232, value$233) =
+  let return$45 = self$232.cap[0]
+  dup return$45
+  let value$194 = self$232.cap[1]
+  dup value$194
+  let value$203 = self$232.cap[2]
+  dup value$203
+  let value$206 = self$232.cap[3]
+  dup value$206
+  drop self$232
+  let return$46 = closure join$234(return$45, value$233)
+  let then$92 = closure join$237(return$46, value$203, value$206)
+  let apply$93 = closure join$249(then$92, value$194)
+  return addInt64#(apply$93)
+
+closure fn join$234(self$235, value$236) =
+  let return$45 = self$235.cap[0]
+  dup return$45
+  let value$233 = self$235.cap[1]
+  dup value$233
+  drop self$235
+  return value$233(value$236, return$45)
+
+closure fn join$237(self$238, value$239) =
+  let return$46 = self$238.cap[0]
+  dup return$46
+  let value$203 = self$238.cap[1]
+  dup value$203
+  let value$206 = self$238.cap[2]
+  dup value$206
+  drop self$238
+  let return$47 = closure join$240(return$46, value$239)
+  let apply$89 = closure join$243(return$47, value$206)
+  let apply$90 = closure join$246(apply$89, value$203)
+  return addInt64#(apply$90)
+
+closure fn join$240(self$241, value$242) =
+  let return$46 = self$241.cap[0]
+  dup return$46
+  let value$239 = self$241.cap[1]
+  dup value$239
+  drop self$241
+  return value$239(value$242, return$46)
+
+closure fn join$243(self$244, value$245) =
+  let return$47 = self$244.cap[0]
+  dup return$47
+  let value$206 = self$244.cap[1]
+  dup value$206
+  drop self$244
+  return value$245(value$206, return$47)
+
+closure fn join$246(self$247, value$248) =
+  let apply$89 = self$247.cap[0]
+  dup apply$89
+  let value$203 = self$247.cap[1]
+  dup value$203
+  drop self$247
+  return value$248(value$203, apply$89)
+
+closure fn join$249(self$250, value$251) =
+  let then$92 = self$250.cap[0]
+  dup then$92
+  let value$194 = self$250.cap[1]
+  dup value$194
+  drop self$250
+  return value$251(value$194, then$92)
+
+closure fn join$252(self$253, value$254) =
+  let then$95 = self$253.cap[0]
+  dup then$95
+  let value$185 = self$253.cap[1]
+  dup value$185
+  drop self$253
+  return value$254(value$185, then$95)
+
+closure fn join$255(self$256, value$257) =
+  let then$98 = self$256.cap[0]
+  dup then$98
+  let value$182 = self$256.cap[1]
+  dup value$182
+  drop self$256
+  return value$257(value$182, then$98)
+
+closure fn join$258(self$259, value$260) =
+  let then$105 = self$259.cap[0]
+  dup then$105
+  let value$173 = self$259.cap[1]
+  dup value$173
+  drop self$259
+  return value$260(value$173, then$105)
+
+closure fn join$261(self$262, value$263) =
+  let then$107 = self$262.cap[0]
+  dup then$107
+  drop self$262
+  let struct$264 = None()
+  return value$263(struct$264, then$107)
+
+closure fn join$265(self$266, value$267) =
+  let apply$108 = self$266.cap[0]
+  dup apply$108
+  drop self$266
+  let lit$268 = 7L
+  return value$267(lit$268, apply$108)
+
+closure fn join$269(self$270, value$271) =
+  let then$112 = self$270.cap[0]
+  dup then$112
+  drop self$270
+  let lit$272 = 7L
+  return value$271(lit$272, then$112)
+
+closure fn join$273(self$274, value$275) =
+  let then$117 = self$274.cap[0]
+  dup then$117
+  drop self$274
+  let record$285 = record( x = field$276
+  , y = field$279
+  , z = field$282 ) captures()
+  return value$275(record$285, then$117)
+
+field fn field$276(self$277, return$50) =
+  drop self$277
+  let lit$278 = 1L
+  return return$50(lit$278)
+
+field fn field$279(self$280, return$51) =
+  drop self$280
+  let lit$281 = 2L
+  return return$51(lit$281)
+
+field fn field$282(self$283, return$52) =
+  drop self$283
+  let lit$284 = 3L
+  return return$52(lit$284)
+
+closure fn join$286(self$287, value$288) =
+  let then$122 = self$287.cap[0]
+  dup then$122
+  drop self$287
+  let record$292 = record(x = field$289) captures()
+  return value$288(record$292, then$122)
+
+field fn field$289(self$290, return$54) =
+  drop self$290
+  let lit$291 = 10L
+  return return$54(lit$291)
+
+toplevel fn Some(return$55) =
+  let closure$298 = closure lambda$295()
+  return return$55(closure$298)
+
+closure fn lambda$295(self$296, constructor$25, return$56) =
+  drop self$296
+  let struct$297 = Some(constructor$25)
+  return return$56(struct$297)
+
+toplevel fn None(return$57) =
+  let struct$300 = None()
+  return return$57(struct$300)
+
+toplevel fn zig_main$303() =
+  let finish$301 = closure join$305()
+  let after_main$302 = closure join$308(finish$301)
+  return main(after_main$302)
+
+closure fn join$305(self$306, value$307) =
+  drop self$306
+  return value$307
+
+closure fn join$308(self$309, value$310) =
+  let finish$301 = self$309.cap[0]
+  dup finish$301
+  drop self$309
+  let struct$311 = Tuple()
+  return value$310(struct$311, finish$301)
+
+entry = zig_main$303
+
+=== Reuse ===
+toplevel fn wideRecord(return$26) =
+  let record$132 = record(x = field$126, y = field$129) captures()
+  return return$26(record$132)
+
+field fn field$126(self$127, return$27) =
+  let lit$128 = 20L
+  drop self$127
+  return return$27(lit$128)
+
+field fn field$129(self$130, return$28) =
+  let lit$131 = 99L
+  drop self$130
+  return return$28(lit$131)
+
+toplevel fn sumXY(return$29) =
+  let closure$148 = closure lambda$134()
+  return return$29(closure$148)
+
+closure fn lambda$134(self$135, param$19, return$30) =
+  drop self$135
+  if  then {
+    let then$83 = closure join$136(param$19, return$30)
+    return addInt64#(then$83)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$136(self$137, value$138) =
+  let rec#3 = self$137.cap[0]
+  dup rec#3
+  let return$30 = self$137.cap[1]
+  dup return$30
+  dup rec#3
+  let return$32 = closure join$139(rec#3, return$30, value$138)
+  drop self$137
+  return rec#3.x(return$32)
+
+closure fn join$139(self$140, value$141) =
+  let rec#3 = self$140.cap[0]
+  dup rec#3
+  let return$30 = self$140.cap[1]
+  dup return$30
+  let value$138 = self$140.cap[2]
+  dup value$138
+  let then$81 = closure join$142(rec#3, return$30)
+  drop self$140
+  return value$138(value$141, then$81)
+
+closure fn join$142(self$143, value$144) =
+  let rec#3 = self$143.cap[0]
+  dup rec#3
+  let return$30 = self$143.cap[1]
+  dup return$30
+  let return$31 = closure join$145(return$30, value$144)
+  drop self$143
+  return rec#3.y(return$31)
+
+closure fn join$145(self$146, value$147) =
+  let return$30 = self$146.cap[0]
+  dup return$30
+  let value$144 = self$146.cap[1]
+  dup value$144
+  drop self$146
+  return value$144(value$147, return$30)
+
+toplevel fn someOrNone(return$33) =
+  let lit$150 = 30L
+  let struct$151 = Some(lit$150)
+  return return$33(struct$151)
+
+toplevel fn handleSome(return$34) =
+  let closure$155 = closure lambda$153()
+  return return$34(closure$155)
+
+closure fn lambda$153(self$154, param$20, return$35) =
+  drop self$154
+  if param$20.tag == Some then {
+    let x#6 = param$20.0
+    dup x#6
+    drop param$20
+    return return$35(x#6)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn handleOption(return$36) =
+  let closure$163 = closure lambda$157()
+  return return$36(closure$163)
+
+closure fn lambda$157(self$158, param$21, return$37) =
+  let closure$162 = closure lambda$159(param$21)
+  drop self$158
+  return return$37(closure$162)
+
+closure fn lambda$159(self$160, param$22, return$38) =
+  let param$21 = self$160.cap[0]
+  dup param$21
+  drop self$160
+  if param$22.tag == Some then {
+    let x#9 = param$22.0
+    dup x#9
+    drop param$21
+    drop param$22
+    return return$38(x#9)
+  } else {
+    if param$22.tag == None then {
+      drop param$22
+      return return$38(param$21)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn getX(return$39) =
+  let closure$167 = closure lambda$165()
+  return return$39(closure$167)
+
+closure fn lambda$165(self$166, param$23, return$40) =
+  drop self$166
+  if  then {
+    return param$23.x(return$40)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$41) =
+  let closure$293 = closure lambda$169()
+  return return$41(closure$293)
+
+closure fn lambda$169(self$170, param$24, return$42) =
+  drop param$24
+  drop self$170
+  if  then {
+    let then$122 = closure join$171(return$42)
+    let apply$123 = closure join$286(then$122)
+    return getX(apply$123)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$171(self$172, value$173) =
+  let return$42 = self$172.cap[0]
+  dup return$42
+  let then$121 = closure join$174(return$42, value$173)
+  drop self$172
+  return getX(then$121)
+
+closure fn join$174(self$175, value$176) =
+  let return$42 = self$175.cap[0]
+  dup return$42
+  let value$173 = self$175.cap[1]
+  dup value$173
+  let return$53 = closure join$177(return$42, value$173, value$176)
+  drop self$175
+  return wideRecord(return$53)
+
+closure fn join$177(self$178, value$179) =
+  let return$42 = self$178.cap[0]
+  dup return$42
+  let value$173 = self$178.cap[1]
+  dup value$173
+  let value$176 = self$178.cap[2]
+  dup value$176
+  let then$119 = closure join$180(return$42, value$173)
+  drop self$178
+  return value$176(value$179, then$119)
+
+closure fn join$180(self$181, value$182) =
+  let return$42 = self$181.cap[0]
+  dup return$42
+  let value$173 = self$181.cap[1]
+  dup value$173
+  let then$117 = closure join$183(return$42, value$173, value$182)
+  let apply$118 = closure join$273(then$117)
+  drop self$181
+  return sumXY(apply$118)
+
+closure fn join$183(self$184, value$185) =
+  let return$42 = self$184.cap[0]
+  dup return$42
+  let value$173 = self$184.cap[1]
+  dup value$173
+  let value$182 = self$184.cap[2]
+  dup value$182
+  let then$116 = closure join$186(return$42, value$173, value$182, value$185)
+  drop self$184
+  return handleSome(then$116)
+
+closure fn join$186(self$187, value$188) =
+  let return$42 = self$187.cap[0]
+  dup return$42
+  let value$173 = self$187.cap[1]
+  dup value$173
+  let value$182 = self$187.cap[2]
+  dup value$182
+  let value$185 = self$187.cap[3]
+  dup value$185
+  let return$49 = closure join$189( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$188 )
+  drop self$187
+  return someOrNone(return$49)
+
+closure fn join$189(self$190, value$191) =
+  let return$42 = self$190.cap[0]
+  dup return$42
+  let value$173 = self$190.cap[1]
+  dup value$173
+  let value$182 = self$190.cap[2]
+  dup value$182
+  let value$185 = self$190.cap[3]
+  dup value$185
+  let value$188 = self$190.cap[4]
+  dup value$188
+  let then$114 = closure join$192(return$42, value$173, value$182, value$185)
+  drop self$190
+  return value$188(value$191, then$114)
+
+closure fn join$192(self$193, value$194) =
+  let return$42 = self$193.cap[0]
+  dup return$42
+  let value$173 = self$193.cap[1]
+  dup value$173
+  let value$182 = self$193.cap[2]
+  dup value$182
+  let value$185 = self$193.cap[3]
+  dup value$185
+  let then$112 = closure join$195( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194 )
+  let apply$113 = closure join$269(then$112)
+  drop self$193
+  return handleOption(apply$113)
+
+closure fn join$195(self$196, value$197) =
+  let return$42 = self$196.cap[0]
+  dup return$42
+  let value$173 = self$196.cap[1]
+  dup value$173
+  let value$182 = self$196.cap[2]
+  dup value$182
+  let value$185 = self$196.cap[3]
+  dup value$185
+  let value$194 = self$196.cap[4]
+  dup value$194
+  let return$48 = closure join$198( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194
+  , value$197 )
+  drop self$196
+  return someOrNone(return$48)
+
+closure fn join$198(self$199, value$200) =
+  let return$42 = self$199.cap[0]
+  dup return$42
+  let value$173 = self$199.cap[1]
+  dup value$173
+  let value$182 = self$199.cap[2]
+  dup value$182
+  let value$185 = self$199.cap[3]
+  dup value$185
+  let value$194 = self$199.cap[4]
+  dup value$194
+  let value$197 = self$199.cap[5]
+  dup value$197
+  let then$110 = closure join$201( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194 )
+  drop self$199
+  return value$197(value$200, then$110)
+
+closure fn join$201(self$202, value$203) =
+  let return$42 = self$202.cap[0]
+  dup return$42
+  let value$173 = self$202.cap[1]
+  dup value$173
+  let value$182 = self$202.cap[2]
+  dup value$182
+  let value$185 = self$202.cap[3]
+  dup value$185
+  let value$194 = self$202.cap[4]
+  dup value$194
+  let then$107 = closure join$204( return$42
+  , value$173
+  , value$182
+  , value$185
+  , value$194
+  , value$203 )
+  let apply$108 = closure join$261(then$107)
+  let apply$109 = closure join$265(apply$108)
+  drop self$202
+  return handleOption(apply$109)
+
+closure fn join$204(self$205, value$206) =
+  let return$42 = self$205.cap[0]
+  dup return$42
+  let value$173 = self$205.cap[1]
+  dup value$173
+  let value$182 = self$205.cap[2]
+  dup value$182
+  let value$185 = self$205.cap[3]
+  dup value$185
+  let value$194 = self$205.cap[4]
+  dup value$194
+  let value$203 = self$205.cap[5]
+  dup value$203
+  let then$105 = closure join$207( return$42
+  , value$182
+  , value$185
+  , value$194
+  , value$203
+  , value$206 )
+  let apply$106 = closure join$258(then$105, value$173)
+  drop self$205
+  return addInt64#(apply$106)
+
+closure fn join$207(self$208, value$209) =
+  let return$42 = self$208.cap[0]
+  dup return$42
+  let value$182 = self$208.cap[1]
+  dup value$182
+  let value$185 = self$208.cap[2]
+  dup value$185
+  let value$194 = self$208.cap[3]
+  dup value$194
+  let value$203 = self$208.cap[4]
+  dup value$203
+  let value$206 = self$208.cap[5]
+  dup value$206
+  let return$44 = closure join$210(return$42, value$209)
+  let then$98 = closure join$225( return$44
+  , value$185
+  , value$194
+  , value$203
+  , value$206 )
+  let apply$99 = closure join$255(then$98, value$182)
+  drop self$208
+  return addInt64#(apply$99)
+
+closure fn join$210(self$211, value$212) =
+  let return$42 = self$211.cap[0]
+  dup return$42
+  let value$209 = self$211.cap[1]
+  dup value$209
+  let then$103 = closure join$213(return$42)
+  drop self$211
+  return value$209(value$212, then$103)
+
+closure fn join$213(self$214, value$215) =
+  let return$42 = self$214.cap[0]
+  dup return$42
+  let then$102 = closure join$216(return$42, value$215)
+  drop self$214
+  return printString#(then$102)
+
+closure fn join$216(self$217, value$218) =
+  let return$42 = self$217.cap[0]
+  dup return$42
+  let value$215 = self$217.cap[1]
+  dup value$215
+  let return$43 = closure join$219(return$42, value$218)
+  let apply$100 = closure join$222(return$43, value$215)
+  drop self$217
+  return toStringInt64#(apply$100)
+
+closure fn join$219(self$220, value$221) =
+  let return$42 = self$220.cap[0]
+  dup return$42
+  let value$218 = self$220.cap[1]
+  dup value$218
+  drop self$220
+  return value$218(value$221, return$42)
+
+closure fn join$222(self$223, value$224) =
+  let return$43 = self$223.cap[0]
+  dup return$43
+  let value$215 = self$223.cap[1]
+  dup value$215
+  drop self$223
+  return value$224(value$215, return$43)
+
+closure fn join$225(self$226, value$227) =
+  let return$44 = self$226.cap[0]
+  dup return$44
+  let value$185 = self$226.cap[1]
+  dup value$185
+  let value$194 = self$226.cap[2]
+  dup value$194
+  let value$203 = self$226.cap[3]
+  dup value$203
+  let value$206 = self$226.cap[4]
+  dup value$206
+  let return$45 = closure join$228(return$44, value$227)
+  let then$95 = closure join$231(return$45, value$194, value$203, value$206)
+  let apply$96 = closure join$252(then$95, value$185)
+  drop self$226
+  return addInt64#(apply$96)
+
+closure fn join$228(self$229, value$230) =
+  let return$44 = self$229.cap[0]
+  dup return$44
+  let value$227 = self$229.cap[1]
+  dup value$227
+  drop self$229
+  return value$227(value$230, return$44)
+
+closure fn join$231(self$232, value$233) =
+  let return$45 = self$232.cap[0]
+  dup return$45
+  let value$194 = self$232.cap[1]
+  dup value$194
+  let value$203 = self$232.cap[2]
+  dup value$203
+  let value$206 = self$232.cap[3]
+  dup value$206
+  let return$46 = closure join$234(return$45, value$233)
+  let then$92 = closure join$237(return$46, value$203, value$206)
+  let apply$93 = closure join$249(then$92, value$194)
+  drop self$232
+  return addInt64#(apply$93)
+
+closure fn join$234(self$235, value$236) =
+  let return$45 = self$235.cap[0]
+  dup return$45
+  let value$233 = self$235.cap[1]
+  dup value$233
+  drop self$235
+  return value$233(value$236, return$45)
+
+closure fn join$237(self$238, value$239) =
+  let return$46 = self$238.cap[0]
+  dup return$46
+  let value$203 = self$238.cap[1]
+  dup value$203
+  let value$206 = self$238.cap[2]
+  dup value$206
+  let return$47 = closure join$240(return$46, value$239)
+  let apply$89 = closure join$243(return$47, value$206)
+  let apply$90 = closure join$246(apply$89, value$203)
+  drop self$238
+  return addInt64#(apply$90)
+
+closure fn join$240(self$241, value$242) =
+  let return$46 = self$241.cap[0]
+  dup return$46
+  let value$239 = self$241.cap[1]
+  dup value$239
+  drop self$241
+  return value$239(value$242, return$46)
+
+closure fn join$243(self$244, value$245) =
+  let return$47 = self$244.cap[0]
+  dup return$47
+  let value$206 = self$244.cap[1]
+  dup value$206
+  drop self$244
+  return value$245(value$206, return$47)
+
+closure fn join$246(self$247, value$248) =
+  let apply$89 = self$247.cap[0]
+  dup apply$89
+  let value$203 = self$247.cap[1]
+  dup value$203
+  drop self$247
+  return value$248(value$203, apply$89)
+
+closure fn join$249(self$250, value$251) =
+  let then$92 = self$250.cap[0]
+  dup then$92
+  let value$194 = self$250.cap[1]
+  dup value$194
+  drop self$250
+  return value$251(value$194, then$92)
+
+closure fn join$252(self$253, value$254) =
+  let then$95 = self$253.cap[0]
+  dup then$95
+  let value$185 = self$253.cap[1]
+  dup value$185
+  drop self$253
+  return value$254(value$185, then$95)
+
+closure fn join$255(self$256, value$257) =
+  let then$98 = self$256.cap[0]
+  dup then$98
+  let value$182 = self$256.cap[1]
+  dup value$182
+  drop self$256
+  return value$257(value$182, then$98)
+
+closure fn join$258(self$259, value$260) =
+  let then$105 = self$259.cap[0]
+  dup then$105
+  let value$173 = self$259.cap[1]
+  dup value$173
+  drop self$259
+  return value$260(value$173, then$105)
+
+closure fn join$261(self$262, value$263) =
+  let then$107 = self$262.cap[0]
+  dup then$107
+  dropReuse reuse$312 = self$262 /0
+  let struct$264 = reuse reuse$312 None()
+  return value$263(struct$264, then$107)
+
+closure fn join$265(self$266, value$267) =
+  let apply$108 = self$266.cap[0]
+  dup apply$108
+  let lit$268 = 7L
+  drop self$266
+  return value$267(lit$268, apply$108)
+
+closure fn join$269(self$270, value$271) =
+  let then$112 = self$270.cap[0]
+  dup then$112
+  let lit$272 = 7L
+  drop self$270
+  return value$271(lit$272, then$112)
+
+closure fn join$273(self$274, value$275) =
+  let then$117 = self$274.cap[0]
+  dup then$117
+  let record$285 = record( x = field$276
+  , y = field$279
+  , z = field$282 ) captures()
+  drop self$274
+  return value$275(record$285, then$117)
+
+field fn field$276(self$277, return$50) =
+  let lit$278 = 1L
+  drop self$277
+  return return$50(lit$278)
+
+field fn field$279(self$280, return$51) =
+  let lit$281 = 2L
+  drop self$280
+  return return$51(lit$281)
+
+field fn field$282(self$283, return$52) =
+  let lit$284 = 3L
+  drop self$283
+  return return$52(lit$284)
+
+closure fn join$286(self$287, value$288) =
+  let then$122 = self$287.cap[0]
+  dup then$122
+  let record$292 = record(x = field$289) captures()
+  drop self$287
+  return value$288(record$292, then$122)
+
+field fn field$289(self$290, return$54) =
+  let lit$291 = 10L
+  drop self$290
+  return return$54(lit$291)
+
+toplevel fn Some(return$55) =
+  let closure$298 = closure lambda$295()
+  return return$55(closure$298)
+
+closure fn lambda$295(self$296, constructor$25, return$56) =
+  dropReuse reuse$313 = self$296 /1
+  let struct$297 = reuse reuse$313 Some(constructor$25)
+  return return$56(struct$297)
+
+toplevel fn None(return$57) =
+  let struct$300 = None()
+  return return$57(struct$300)
+
+toplevel fn zig_main$303() =
+  let finish$301 = closure join$305()
+  let after_main$302 = closure join$308(finish$301)
+  return main(after_main$302)
+
+closure fn join$305(self$306, value$307) =
+  drop self$306
+  return value$307
+
+closure fn join$308(self$309, value$310) =
+  let finish$301 = self$309.cap[0]
+  dup finish$301
+  dropReuse reuse$314 = self$309 /0
+  let struct$311 = reuse reuse$314 Tuple()
+  return value$310(struct$311, finish$301)
+
+entry = zig_main$303
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+- sig getX : {x : Int64#, | r} -> Int64#
++ data Option a#4 = Some(a#4) | None()
+  
+- def getX =
++ sig getX : {x : Int64#, | r#0} -> Int64#
+-   fn {
+-     rec ->
+-       {
+-         rec.x
+-       }
+-   }
+  
+- sig sumXY : {x : Int64#, y : Int64#, | r} -> Int64#
++ sig sumXY : {x : Int64#, y : Int64#, | r#2} -> Int64#
+  
++ sig handleSome : [Some(Int64#), | r#5] -> Int64#
++ 
++ sig handleOption : Int64# -> [Some(Int64#), None(), | r#7] -> Int64#
++ 
++ sig wideRecord : {x : Int64#, y : Int64#}
++ 
++ sig someOrNone : [Some(Int64#), None()]
++ 
++ def wideRecord = {x = 20L, y = 99L}
++ 
+  def sumXY =
+    fn {
+-     rec ->
++     rec#3 ->
+        {
+-         addInt64#(rec.x)(rec.y)
++         addInt64#(rec#3.x)(rec#3.y)
+        }
+    }
+  
+- data Option a = Some(a) | None()
++ def someOrNone = Some(30L)
+- 
+- sig handleSome : [Some(Int64#), | r] -> Int64#
+  
+  def handleSome =
+    fn {
+-     Some(x) ->
++     Some(x#6) ->
+        {
+-         x
++         x#6
+        }
+    }
+  
+- sig handleOption : Int64# -> [Some(Int64#), None(), | r] -> Int64#
+- 
+  def handleOption =
+    fn {
+-     fallback Some(x) ->
++     fallback#8 Some(x#9) ->
+        {
+-         x
++         x#9
+        } |
+-     fallback None ->
++     fallback#10 None() ->
+        {
+-         fallback
++         fallback#10
+        }
+    }
+  
+- sig wideRecord : {x : Int64#, y : Int64#}
++ def getX =
+- 
++   fn {
+- def wideRecord = {x = 20L, y = 99L}
++     rec#1 ->
+- 
++       {
+- sig someOrNone : [Some(Int64#), None()]
++         rec#1.x
+- 
++       }
+- def someOrNone = Some(30L)
++   }
+  
+  def main =
+    fn {
+-     _ ->
++     _#11 ->
+        {
+-         let fromNarrowRecord = getX({x = 10L})
++         let fromNarrowRecord#12 = getX({x = 10L})
+-         let fromWideRecord = getX(wideRecord)
++         let fromWideRecord#13 = getX(wideRecord)
+-         let fromWiderRecord = sumXY({x = 1L, y = 2L, z = 3L})
++         let fromWiderRecord#14 = sumXY({x = 1L, y = 2L, z = 3L})
+-         let fromClosedVariant = handleSome(someOrNone)
++         let fromClosedVariant#15 = handleSome(someOrNone)
+-         let fromOpenVariant = handleOption(7L)(someOrNone)
++         let fromOpenVariant#16 = handleOption(7L)(someOrNone)
+-         let fallbackFromNone = handleOption(7L)(None)
++         let fallbackFromNone#17 = handleOption(7L)(None)
+-         let total =
++         let total#18 =
+-           addInt64#( fromNarrowRecord )( addInt64#( fromWideRecord )( addInt64#( fromWiderRecord )( addInt64#( fromClosedVariant )( addInt64#( fromOpenVariant )( fallbackFromNone ) ) ) ) )
++           addInt64#( fromNarrowRecord#12 )( addInt64#( fromWideRecord#13 )( addInt64#( fromWiderRecord#14 )( addInt64#( fromClosedVariant#15 )( addInt64#( fromOpenVariant#16 )( fallbackFromNone#17 ) ) ) ) )
+-         printString#(toStringInt64#(total))
++         printString#(toStringInt64#(total#18))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- data Option a#4 = Some(a#4) | None()
+- 
+- sig getX : {x : Int64#, | r#0} -> Int64#
+- 
+- sig sumXY : {x : Int64#, y : Int64#, | r#2} -> Int64#
+- 
+- sig handleSome : [Some(Int64#), | r#5] -> Int64#
+- 
+- sig handleOption : Int64# -> [Some(Int64#), None(), | r#7] -> Int64#
+- 
+- sig wideRecord : {x : Int64#, y : Int64#}
+- 
+- sig someOrNone : [Some(Int64#), None()]
+- 
+  def wideRecord = {x = 20L, y = 99L}
+  
+  def sumXY =
+-   fn {
++   \param$19 ->
+-     rec#3 ->
++     case param$19 of {
+-       {
++       rec#3 -> invoke addInt64#(rec#3.x)(rec#3.y)
+-         addInt64#(rec#3.x)(rec#3.y)
++     }
+-       }
+-   }
+  
+- def someOrNone = Some(30L)
++ def someOrNone = invoke Some(30L)
+  
+  def handleSome =
+-   fn {
++   \param$20 ->
+-     Some(x#6) ->
++     case param$20 of {
+-       {
++       Some(x#6) -> x#6
+-         x#6
++     }
+-       }
+-   }
+  
+  def handleOption =
+-   fn {
++   \param$21 ->
+-     fallback#8 Some(x#9) ->
++     \param$22 ->
+-       {
++       case Tuple(param$21, param$22) of {
+-         x#9
++         Tuple(fallback#8, Some(x#9)) -> x#9
+-       } |
++         Tuple(fallback#10, None()) -> fallback#10
+-     fallback#10 None() ->
+-       {
+-         fallback#10
+        }
+-   }
+  
+  def getX =
+-   fn {
++   \param$23 ->
+-     rec#1 ->
++     case param$23 of {
+-       {
++       rec#1 -> rec#1.x
+-         rec#1.x
++     }
+-       }
+-   }
+  
+  def main =
+-   fn {
++   \param$24 ->
+-     _#11 ->
++     case param$24 of {
+-       {
++       _#11 ->
+-         let fromNarrowRecord#12 = getX({x = 10L})
++         let fromNarrowRecord#12 =
+-         let fromWideRecord#13 = getX(wideRecord)
++           invoke getX({x = 10L})
+-         let fromWiderRecord#14 = sumXY({x = 1L, y = 2L, z = 3L})
++         in
+-         let fromClosedVariant#15 = handleSome(someOrNone)
++           let fromWideRecord#13 =
+-         let fromOpenVariant#16 = handleOption(7L)(someOrNone)
++             invoke getX(invoke wideRecord)
+-         let fallbackFromNone#17 = handleOption(7L)(None)
++           in
+-         let total#18 =
++             let fromWiderRecord#14 =
+-           addInt64#( fromNarrowRecord#12 )( addInt64#( fromWideRecord#13 )( addInt64#( fromWiderRecord#14 )( addInt64#( fromClosedVariant#15 )( addInt64#( fromOpenVariant#16 )( fallbackFromNone#17 ) ) ) ) )
++               invoke sumXY({x = 1L, y = 2L, z = 3L})
+-         printString#(toStringInt64#(total#18))
++             in
+-       }
++               let fromClosedVariant#15 =
+-   }
++                 invoke handleSome(invoke someOrNone)
++               in
++                 let fromOpenVariant#16 =
++                   invoke handleOption(7L)(invoke someOrNone)
++                 in
++                   let fallbackFromNone#17 =
++                     invoke handleOption(7L)(invoke None)
++                   in
++                     let total#18 =
++                       invoke addInt64#( fromNarrowRecord#12 )( invoke addInt64#( fromWideRecord#13 )( invoke addInt64#( fromWiderRecord#14 )( invoke addInt64#( fromClosedVariant#15 )( invoke addInt64#( fromOpenVariant#16 )( fallbackFromNone#17 ) ) ) ) )
++                     in
++                       invoke printString#(invoke toStringInt64#(total#18))
++     }
++ 
++ def Some = \constructor$25 -> Some(constructor$25)
++ 
++ def None = None()
+
+
+=== ToFun -> SaturateCtor ===
+  def wideRecord = {x = 20L, y = 99L}
+  
+  def sumXY =
+    \param$19 ->
+      case param$19 of {
+        rec#3 -> invoke addInt64#(rec#3.x)(rec#3.y)
+      }
+  
+- def someOrNone = invoke Some(30L)
++ def someOrNone = Some(30L)
+  
+  def handleSome =
+    \param$20 ->
+      case param$20 of {
+        Some(x#6) -> x#6
+      }
+  
+  def handleOption =
+    \param$21 ->
+      \param$22 ->
+        case Tuple(param$21, param$22) of {
+          Tuple(fallback#8, Some(x#9)) -> x#9
+          Tuple(fallback#10, None()) -> fallback#10
+        }
+  
+  def getX =
+    \param$23 ->
+      case param$23 of {
+        rec#1 -> rec#1.x
+      }
+  
+  def main =
+    \param$24 ->
+      case param$24 of {
+        _#11 ->
+          let fromNarrowRecord#12 =
+            invoke getX({x = 10L})
+          in
+            let fromWideRecord#13 =
+              invoke getX(invoke wideRecord)
+            in
+              let fromWiderRecord#14 =
+                invoke sumXY({x = 1L, y = 2L, z = 3L})
+              in
+                let fromClosedVariant#15 =
+                  invoke handleSome(invoke someOrNone)
+                in
+                  let fromOpenVariant#16 =
+                    invoke handleOption(7L)(invoke someOrNone)
+                  in
+                    let fallbackFromNone#17 =
+-                     invoke handleOption(7L)(invoke None)
++                     invoke handleOption(7L)(None())
+                    in
+                      let total#18 =
+                        invoke addInt64#( fromNarrowRecord#12 )( invoke addInt64#( fromWideRecord#13 )( invoke addInt64#( fromWiderRecord#14 )( invoke addInt64#( fromClosedVariant#15 )( invoke addInt64#( fromOpenVariant#16 )( fallbackFromNone#17 ) ) ) ) )
+                      in
+                        invoke printString#(invoke toStringInt64#(total#18))
+      }
+  
+  def Some = \constructor$25 -> Some(constructor$25)
+  
+  def None = None()
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def wideRecord = {x = 20L, y = 99L}
+  
+  def sumXY =
+    \param$19 ->
+      case param$19 of {
+        rec#3 -> invoke addInt64#(rec#3.x)(rec#3.y)
+      }
+  
+  def someOrNone = Some(30L)
+  
+  def handleSome =
+    \param$20 ->
+      case param$20 of {
+        Some(x#6) -> x#6
+      }
+  
+  def handleOption =
+    \param$21 ->
+      \param$22 ->
+        case Tuple(param$21, param$22) of {
+          Tuple(fallback#8, Some(x#9)) -> x#9
+          Tuple(fallback#10, None()) -> fallback#10
+        }
+  
+  def getX =
+    \param$23 ->
+      case param$23 of {
+        rec#1 -> rec#1.x
+      }
+  
+  def main =
+    \param$24 ->
+      case param$24 of {
+        _#11 ->
+          let fromNarrowRecord#12 =
+            invoke getX({x = 10L})
+          in
+            let fromWideRecord#13 =
+              invoke getX(invoke wideRecord)
+            in
+              let fromWiderRecord#14 =
+                invoke sumXY({x = 1L, y = 2L, z = 3L})
+              in
+                let fromClosedVariant#15 =
+                  invoke handleSome(invoke someOrNone)
+                in
+                  let fromOpenVariant#16 =
+                    invoke handleOption(7L)(invoke someOrNone)
+                  in
+                    let fallbackFromNone#17 =
+                      invoke handleOption(7L)(None())
+                    in
+                      let total#18 =
+                        invoke addInt64#( fromNarrowRecord#12 )( invoke addInt64#( fromWideRecord#13 )( invoke addInt64#( fromWiderRecord#14 )( invoke addInt64#( fromClosedVariant#15 )( invoke addInt64#( fromOpenVariant#16 )( fallbackFromNone#17 ) ) ) ) )
+                      in
+                        invoke printString#(invoke toStringInt64#(total#18))
+      }
+  
+  def Some = \constructor$25 -> Some(constructor$25)
+  
+  def None = None()
+
+
+=== ReuseSpecialize -> ToCore ===
+- def wideRecord = {x = 20L, y = 99L}
++ def wideRecord(return$26) =
++   { x(return$27) = {
++     20L ~ return$27
++   }
++   , y(return$28) = {
++     99L ~ return$28
++   } } ~ return$26
+  
+- def sumXY =
++ def sumXY(return$29) =
+-   \param$19 ->
++   \param$19 return$30 . {
+-     case param$19 of {
++     param$19 ~ select {
+-       rec#3 -> invoke addInt64#(rec#3.x)(rec#3.y)
++       rec#3 ->
++         invoke addInt64# ~ ( do return$32 . {
++           rec#3 ~ .x -> return$32
++         }
++         , ( do return$31 . {
++           rec#3 ~ .y -> return$31
++         }
++         , return$30 ) )
+      }
++   } ~ return$29
+  
+- def someOrNone = Some(30L)
++ def someOrNone(return$33) = Some(30L) ~ return$33
+  
+- def handleSome =
++ def handleSome(return$34) =
+-   \param$20 ->
++   \param$20 return$35 . {
+-     case param$20 of {
++     param$20 ~ select {
+-       Some(x#6) -> x#6
++       Some(x#6) -> x#6 ~ return$35
+      }
++   } ~ return$34
+  
+- def handleOption =
++ def handleOption(return$36) =
+-   \param$21 ->
++   \param$21 return$37 . {
+-     \param$22 ->
++     \param$22 return$38 . {
+-       case Tuple(param$21, param$22) of {
++       Tuple(param$21, param$22) ~ select {
+-         Tuple(fallback#8, Some(x#9)) -> x#9
++         Tuple(fallback#8, Some(x#9)) -> x#9 ~ return$38
+-         Tuple(fallback#10, None()) -> fallback#10
++         Tuple(fallback#10, None()) -> fallback#10 ~ return$38
+        }
++     } ~ return$37
++   } ~ return$36
+  
+- def getX =
++ def getX(return$39) =
+-   \param$23 ->
++   \param$23 return$40 . {
+-     case param$23 of {
++     param$23 ~ select {
+-       rec#1 -> rec#1.x
++       rec#1 -> rec#1 ~ .x -> return$40
+      }
++   } ~ return$39
+  
+- def main =
++ def main(return$41) =
+-   \param$24 ->
++   \param$24 return$42 . {
+-     case param$24 of {
++     param$24 ~ select {
+        _#11 ->
+-         let fromNarrowRecord#12 =
++         invoke getX ~ ( { x(return$54) = {
+-           invoke getX({x = 10L})
++           10L ~ return$54
+-         in
++         } }
+-           let fromWideRecord#13 =
++         , then fromNarrowRecord#12 -> {
+-             invoke getX(invoke wideRecord)
++           invoke getX ~ ( do return$53 . {
+-           in
++             invoke wideRecord ~ return$53
+-             let fromWiderRecord#14 =
++           }
+-               invoke sumXY({x = 1L, y = 2L, z = 3L})
++           , then fromWideRecord#13 -> {
+-             in
++             invoke sumXY ~ ( { x(return$50) = {
+-               let fromClosedVariant#15 =
++               1L ~ return$50
+-                 invoke handleSome(invoke someOrNone)
++             }
+-               in
++             , y(return$51) = {
+-                 let fromOpenVariant#16 =
++               2L ~ return$51
+-                   invoke handleOption(7L)(invoke someOrNone)
++             }
+-                 in
++             , z(return$52) = {
+-                   let fallbackFromNone#17 =
++               3L ~ return$52
+-                     invoke handleOption(7L)(None())
++             } }
+-                   in
++             , then fromWiderRecord#14 -> {
+-                     let total#18 =
++               invoke handleSome ~ ( do return$49 . {
+-                       invoke addInt64#( fromNarrowRecord#12 )( invoke addInt64#( fromWideRecord#13 )( invoke addInt64#( fromWiderRecord#14 )( invoke addInt64#( fromClosedVariant#15 )( invoke addInt64#( fromOpenVariant#16 )( fallbackFromNone#17 ) ) ) ) )
++                 invoke someOrNone ~ return$49
+-                     in
++               }
+-                       invoke printString#(invoke toStringInt64#(total#18))
++               , then fromClosedVariant#15 -> {
++                 invoke handleOption ~ ( 7L
++                 , ( do return$48 . {
++                   invoke someOrNone ~ return$48
++                 }
++                 , then fromOpenVariant#16 -> {
++                   invoke handleOption ~ ( 7L
++                   , ( None()
++                   , then fallbackFromNone#17 -> {
++                     invoke addInt64# ~ ( fromNarrowRecord#12
++                     , ( do return$44 . {
++                       invoke addInt64# ~ ( fromWideRecord#13
++                       , ( do return$45 . {
++                         invoke addInt64# ~ ( fromWiderRecord#14
++                         , ( do return$46 . {
++                           invoke addInt64# ~ ( fromClosedVariant#15
++                           , ( do return$47 . {
++                             invoke addInt64# ~ ( fromOpenVariant#16
++                             , (fallbackFromNone#17, return$47) )
++                           }
++                           , return$46 ) )
++                         }
++                         , return$45 ) )
++                       }
++                       , return$44 ) )
++                     }
++                     , then total#18 -> {
++                       invoke printString# ~ ( do return$43 . {
++                         invoke toStringInt64# ~ (total#18, return$43)
++                       }
++                       , return$42 )
++                     } ) )
++                   } ) )
++                 } ) )
++               } )
++             } )
++           } )
++         } )
+      }
++   } ~ return$41
+  
+- def Some = \constructor$25 -> Some(constructor$25)
++ def Some(return$55) =
++   \constructor$25 return$56 . {
++     Some(constructor$25) ~ return$56
++   } ~ return$55
+  
+- def None = None()
++ def None(return$57) = None() ~ return$57
+
+
+=== ToCore -> Flat ===
+  def wideRecord(return$26) =
+    { x(return$27) = {
+      20L ~ return$27
+    }
+    , y(return$28) = {
+      99L ~ return$28
+    } } ~ return$26
+  
+  def sumXY(return$29) =
+    \param$19 return$30 . {
+      param$19 ~ select {
+        rec#3 ->
+-         invoke addInt64# ~ ( do return$32 . {
++         invoke addInt64# ~ then outer$58 -> {
+-           rec#3 ~ .x -> return$32
++           join return$32 = then inner$59 -> {
+-         }
++             outer$58 ~ ( inner$59
+-         , ( do return$31 . {
++             , then outer$60 -> {
+-           rec#3 ~ .y -> return$31
++               join return$31 = then inner$61 -> {
++                 outer$60 ~ (inner$61, return$30)
++               }
++               in rec#3 ~ .y -> return$31
++             } )
++           }
++           in rec#3 ~ .x -> return$32
+          }
+-         , return$30 ) )
+      }
+    } ~ return$29
+  
+  def someOrNone(return$33) = Some(30L) ~ return$33
+  
+  def handleSome(return$34) =
+    \param$20 return$35 . {
+      param$20 ~ select {
+        Some(x#6) -> x#6 ~ return$35
+      }
+    } ~ return$34
+  
+  def handleOption(return$36) =
+    \param$21 return$37 . {
+      \param$22 return$38 . {
+        Tuple(param$21, param$22) ~ select {
+          Tuple(fallback#8, Some(x#9)) -> x#9 ~ return$38
+          Tuple(fallback#10, None()) -> fallback#10 ~ return$38
+        }
+      } ~ return$37
+    } ~ return$36
+  
+  def getX(return$39) =
+    \param$23 return$40 . {
+      param$23 ~ select {
+        rec#1 -> rec#1 ~ .x -> return$40
+      }
+    } ~ return$39
+  
+  def main(return$41) =
+    \param$24 return$42 . {
+      param$24 ~ select {
+        _#11 ->
+          invoke getX ~ ( { x(return$54) = {
+            10L ~ return$54
+          } }
+          , then fromNarrowRecord#12 -> {
+-           invoke getX ~ ( do return$53 . {
++           invoke getX ~ then outer$62 -> {
+-             invoke wideRecord ~ return$53
++             join return$53 = then inner$63 -> {
+-           }
++               outer$62 ~ ( inner$63
+-           , then fromWideRecord#13 -> {
++               , then fromWideRecord#13 -> {
+-             invoke sumXY ~ ( { x(return$50) = {
++                 invoke sumXY ~ ( { x(return$50) = {
+-               1L ~ return$50
++                   1L ~ return$50
+-             }
+-             , y(return$51) = {
+-               2L ~ return$51
+-             }
+-             , z(return$52) = {
+-               3L ~ return$52
+-             } }
+-             , then fromWiderRecord#14 -> {
+-               invoke handleSome ~ ( do return$49 . {
+-                 invoke someOrNone ~ return$49
+-               }
+-               , then fromClosedVariant#15 -> {
+-                 invoke handleOption ~ ( 7L
+-                 , ( do return$48 . {
+-                   invoke someOrNone ~ return$48
+                  }
+-                 , then fromOpenVariant#16 -> {
++                 , y(return$51) = {
+-                   invoke handleOption ~ ( 7L
++                   2L ~ return$51
+-                   , ( None()
++                 }
+-                   , then fallbackFromNone#17 -> {
++                 , z(return$52) = {
+-                     invoke addInt64# ~ ( fromNarrowRecord#12
++                   3L ~ return$52
+-                     , ( do return$44 . {
++                 } }
+-                       invoke addInt64# ~ ( fromWideRecord#13
++                 , then fromWiderRecord#14 -> {
+-                       , ( do return$45 . {
++                   invoke handleSome ~ then outer$64 -> {
+-                         invoke addInt64# ~ ( fromWiderRecord#14
++                     join return$49 = then inner$65 -> {
+-                         , ( do return$46 . {
++                       outer$64 ~ ( inner$65
+-                           invoke addInt64# ~ ( fromClosedVariant#15
++                       , then fromClosedVariant#15 -> {
+-                           , ( do return$47 . {
++                         invoke handleOption ~ ( 7L
+-                             invoke addInt64# ~ ( fromOpenVariant#16
++                         , then outer$66 -> {
+-                             , (fallbackFromNone#17, return$47) )
++                           join return$48 = then inner$67 -> {
++                             outer$66 ~ ( inner$67
++                             , then fromOpenVariant#16 -> {
++                               invoke handleOption ~ ( 7L
++                               , ( None()
++                               , then fallbackFromNone#17 -> {
++                                 invoke addInt64# ~ ( fromNarrowRecord#12
++                                 , then outer$68 -> {
++                                   join return$44 = then inner$69 -> {
++                                     outer$68 ~ ( inner$69
++                                     , then total#18 -> {
++                                       invoke printString# ~ then outer$70 -> {
++                                         join return$43 = then inner$71 -> {
++                                           outer$70 ~ (inner$71, return$42)
++                                         }
++                                         in invoke toStringInt64# ~ ( total#18
++                                         , return$43 )
++                                       }
++                                     } )
++                                   }
++                                   in invoke addInt64# ~ ( fromWideRecord#13
++                                   , then outer$72 -> {
++                                     join return$45 = then inner$73 -> {
++                                       outer$72 ~ (inner$73, return$44)
++                                     }
++                                     in invoke addInt64# ~ ( fromWiderRecord#14
++                                     , then outer$74 -> {
++                                       join return$46 = then inner$75 -> {
++                                         outer$74 ~ (inner$75, return$45)
++                                       }
++                                       in invoke addInt64# ~ ( fromClosedVariant#15
++                                       , then outer$76 -> {
++                                         join return$47 = then inner$77 -> {
++                                           outer$76 ~ (inner$77, return$46)
++                                         }
++                                         in invoke addInt64# ~ ( fromOpenVariant#16
++                                         , (fallbackFromNone#17, return$47) )
++                                       } )
++                                     } )
++                                   } )
++                                 } )
++                               } ) )
++                             } )
+                            }
+-                           , return$46 ) )
++                           in invoke someOrNone ~ return$48
+-                         }
++                         } )
+-                         , return$45 ) )
++                       } )
+-                       }
+-                       , return$44 ) )
+                      }
+-                     , then total#18 -> {
++                     in invoke someOrNone ~ return$49
+-                       invoke printString# ~ ( do return$43 . {
++                   }
+-                         invoke toStringInt64# ~ (total#18, return$43)
++                 } )
+-                       }
+-                       , return$42 )
+-                     } ) )
+-                   } ) )
+-                 } ) )
+                } )
+-             } )
++             }
+-           } )
++             in invoke wideRecord ~ return$53
++           }
+          } )
+      }
+    } ~ return$41
+  
+  def Some(return$55) =
+    \constructor$25 return$56 . {
+      Some(constructor$25) ~ return$56
+    } ~ return$55
+  
+  def None(return$57) = None() ~ return$57
+
+
+=== Flat -> Join ===
+  def wideRecord(return$26) =
+    { x(return$27) = {
+      20L ~ return$27
+    }
+    , y(return$28) = {
+      99L ~ return$28
+    } } ~ return$26
+  
+  def sumXY(return$29) =
+    \param$19 return$30 . {
+-     param$19 ~ select {
++     join select$84 = select {
+        rec#3 ->
+-         invoke addInt64# ~ then outer$58 -> {
++         join then$83 = then outer$58 -> {
+            join return$32 = then inner$59 -> {
+-             outer$58 ~ ( inner$59
++             join then$81 = then outer$60 -> {
+-             , then outer$60 -> {
+                join return$31 = then inner$61 -> {
+-                 outer$60 ~ (inner$61, return$30)
++                 join apply$80 = (inner$61, return$30)
++                 in outer$60 ~ apply$80
+                }
+-               in rec#3 ~ .y -> return$31
++               in join project$79 = .y -> return$31
+-             } )
++               in rec#3 ~ project$79
++             }
++             in join apply$82 = (inner$59, then$81)
++             in outer$58 ~ apply$82
+            }
+-           in rec#3 ~ .x -> return$32
++           in join project$78 = .x -> return$32
++           in rec#3 ~ project$78
+          }
++         in invoke addInt64# ~ then$83
+      }
++     in param$19 ~ select$84
+    } ~ return$29
+  
+  def someOrNone(return$33) = Some(30L) ~ return$33
+  
+  def handleSome(return$34) =
+    \param$20 return$35 . {
+-     param$20 ~ select {
++     join select$85 = select {
+        Some(x#6) -> x#6 ~ return$35
+      }
++     in param$20 ~ select$85
+    } ~ return$34
+  
+  def handleOption(return$36) =
+    \param$21 return$37 . {
+      \param$22 return$38 . {
+-       Tuple(param$21, param$22) ~ select {
++       join select$86 = select {
+          Tuple(fallback#8, Some(x#9)) -> x#9 ~ return$38
+          Tuple(fallback#10, None()) -> fallback#10 ~ return$38
+        }
++       in Tuple(param$21, param$22) ~ select$86
+      } ~ return$37
+    } ~ return$36
+  
+  def getX(return$39) =
+    \param$23 return$40 . {
+-     param$23 ~ select {
++     join select$88 = select {
+-       rec#1 -> rec#1 ~ .x -> return$40
++       rec#1 -> join project$87 = .x -> return$40 in rec#1 ~ project$87
+      }
++     in param$23 ~ select$88
+    } ~ return$39
+  
+  def main(return$41) =
+    \param$24 return$42 . {
+-     param$24 ~ select {
++     join select$124 = select {
+        _#11 ->
+-         invoke getX ~ ( { x(return$54) = {
++         join then$122 = then fromNarrowRecord#12 -> {
+-           10L ~ return$54
++           join then$121 = then outer$62 -> {
+-         } }
+-         , then fromNarrowRecord#12 -> {
+-           invoke getX ~ then outer$62 -> {
+              join return$53 = then inner$63 -> {
+-               outer$62 ~ ( inner$63
++               join then$119 = then fromWideRecord#13 -> {
+-               , then fromWideRecord#13 -> {
++                 join then$117 = then fromWiderRecord#14 -> {
+-                 invoke sumXY ~ ( { x(return$50) = {
++                   join then$116 = then outer$64 -> {
+-                   1L ~ return$50
+-                 }
+-                 , y(return$51) = {
+-                   2L ~ return$51
+-                 }
+-                 , z(return$52) = {
+-                   3L ~ return$52
+-                 } }
+-                 , then fromWiderRecord#14 -> {
+-                   invoke handleSome ~ then outer$64 -> {
+                      join return$49 = then inner$65 -> {
+-                       outer$64 ~ ( inner$65
++                       join then$114 = then fromClosedVariant#15 -> {
+-                       , then fromClosedVariant#15 -> {
++                         join then$112 = then outer$66 -> {
+-                         invoke handleOption ~ ( 7L
+-                         , then outer$66 -> {
+                            join return$48 = then inner$67 -> {
+-                             outer$66 ~ ( inner$67
++                             join then$110 = then fromOpenVariant#16 -> {
+-                             , then fromOpenVariant#16 -> {
++                               join then$107 = then fallbackFromNone#17 -> {
+-                               invoke handleOption ~ ( 7L
++                                 join then$105 = then outer$68 -> {
+-                               , ( None()
+-                               , then fallbackFromNone#17 -> {
+-                                 invoke addInt64# ~ ( fromNarrowRecord#12
+-                                 , then outer$68 -> {
+                                    join return$44 = then inner$69 -> {
+-                                     outer$68 ~ ( inner$69
++                                     join then$103 = then total#18 -> {
+-                                     , then total#18 -> {
++                                       join then$102 = then outer$70 -> {
+-                                       invoke printString# ~ then outer$70 -> {
+                                          join return$43 = then inner$71 -> {
+-                                           outer$70 ~ (inner$71, return$42)
++                                           join apply$101 = (inner$71, return$42)
++                                           in outer$70 ~ apply$101
+                                          }
+-                                         in invoke toStringInt64# ~ ( total#18
++                                         in join apply$100 = ( total#18
+                                          , return$43 )
++                                         in invoke toStringInt64# ~ apply$100
+                                        }
+-                                     } )
++                                       in invoke printString# ~ then$102
++                                     }
++                                     in join apply$104 = (inner$69, then$103)
++                                     in outer$68 ~ apply$104
+                                    }
+-                                   in invoke addInt64# ~ ( fromWideRecord#13
++                                   in join then$98 = then outer$72 -> {
+-                                   , then outer$72 -> {
+                                      join return$45 = then inner$73 -> {
+-                                       outer$72 ~ (inner$73, return$44)
++                                       join apply$97 = (inner$73, return$44)
++                                       in outer$72 ~ apply$97
+                                      }
+-                                     in invoke addInt64# ~ ( fromWiderRecord#14
++                                     in join then$95 = then outer$74 -> {
+-                                     , then outer$74 -> {
+                                        join return$46 = then inner$75 -> {
+-                                         outer$74 ~ (inner$75, return$45)
++                                         join apply$94 = (inner$75, return$45)
++                                         in outer$74 ~ apply$94
+                                        }
+-                                       in invoke addInt64# ~ ( fromClosedVariant#15
++                                       in join then$92 = then outer$76 -> {
+-                                       , then outer$76 -> {
+                                          join return$47 = then inner$77 -> {
+-                                           outer$76 ~ (inner$77, return$46)
++                                           join apply$91 = (inner$77, return$46)
++                                           in outer$76 ~ apply$91
+                                          }
+-                                         in invoke addInt64# ~ ( fromOpenVariant#16
++                                         in join apply$89 = ( fallbackFromNone#17
+-                                         , (fallbackFromNone#17, return$47) )
++                                         , return$47 )
+-                                       } )
++                                         in join apply$90 = ( fromOpenVariant#16
+-                                     } )
++                                         , apply$89 )
+-                                   } )
++                                         in invoke addInt64# ~ apply$90
+-                                 } )
++                                       }
+-                               } ) )
++                                       in join apply$93 = ( fromClosedVariant#15
+-                             } )
++                                       , then$92 )
++                                       in invoke addInt64# ~ apply$93
++                                     }
++                                     in join apply$96 = ( fromWiderRecord#14
++                                     , then$95 )
++                                     in invoke addInt64# ~ apply$96
++                                   }
++                                   in join apply$99 = ( fromWideRecord#13
++                                   , then$98 )
++                                   in invoke addInt64# ~ apply$99
++                                 }
++                                 in join apply$106 = ( fromNarrowRecord#12
++                                 , then$105 )
++                                 in invoke addInt64# ~ apply$106
++                               }
++                               in join apply$108 = (None(), then$107)
++                               in join apply$109 = (7L, apply$108)
++                               in invoke handleOption ~ apply$109
++                             }
++                             in join apply$111 = (inner$67, then$110)
++                             in outer$66 ~ apply$111
+                            }
+                            in invoke someOrNone ~ return$48
+-                         } )
++                         }
+-                       } )
++                         in join apply$113 = (7L, then$112)
++                         in invoke handleOption ~ apply$113
++                       }
++                       in join apply$115 = (inner$65, then$114)
++                       in outer$64 ~ apply$115
+                      }
+                      in invoke someOrNone ~ return$49
+                    }
+-                 } )
++                   in invoke handleSome ~ then$116
+-               } )
++                 }
++                 in join apply$118 = ( { x(return$50) = {
++                   1L ~ return$50
++                 }
++                 , y(return$51) = {
++                   2L ~ return$51
++                 }
++                 , z(return$52) = {
++                   3L ~ return$52
++                 } }
++                 , then$117 )
++                 in invoke sumXY ~ apply$118
++               }
++               in join apply$120 = (inner$63, then$119)
++               in outer$62 ~ apply$120
+              }
+              in invoke wideRecord ~ return$53
+            }
+-         } )
++           in invoke getX ~ then$121
++         }
++         in join apply$123 = ( { x(return$54) = {
++           10L ~ return$54
++         } }
++         , then$122 )
++         in invoke getX ~ apply$123
+      }
++     in param$24 ~ select$124
+    } ~ return$41
+  
+  def Some(return$55) =
+    \constructor$25 return$56 . {
+      Some(constructor$25) ~ return$56
+    } ~ return$55
+  
+  def None(return$57) = None() ~ return$57
+
+
+=== Join -> ClosureConv ===
+- def wideRecord(return$26) =
++ toplevel fn wideRecord(return$26) =
+-   { x(return$27) = {
++   let record$132 = record(x = field$126, y = field$129) captures()
+-     20L ~ return$27
++   return return$26(record$132)
++ 
++ field fn field$126(self$127, return$27) =
++   let lit$128 = 20L
++   return return$27(lit$128)
++ 
++ field fn field$129(self$130, return$28) =
++   let lit$131 = 99L
++   return return$28(lit$131)
++ 
++ toplevel fn sumXY(return$29) =
++   let closure$148 = closure lambda$134()
++   return return$29(closure$148)
++ 
++ closure fn lambda$134(self$135, param$19, return$30) =
++   if  then {
++     let rec#3 = param$19
++     let then$83 = closure join$136(rec#3, return$30)
++     return addInt64#(then$83)
++   } else {
++     panic "no matching branch"
+    }
+-   , y(return$28) = {
+-     99L ~ return$28
+-   } } ~ return$26
+  
+- def sumXY(return$29) =
++ closure fn join$136(self$137, value$138) =
+-   \param$19 return$30 . {
++   let rec#3 = self$137.cap[0]
+-     join select$84 = select {
++   let return$30 = self$137.cap[1]
+-       rec#3 ->
++   let return$32 = closure join$139(rec#3, return$30, value$138)
+-         join then$83 = then outer$58 -> {
++   return rec#3.x(return$32)
+-           join return$32 = then inner$59 -> {
+-             join then$81 = then outer$60 -> {
+-               join return$31 = then inner$61 -> {
+-                 join apply$80 = (inner$61, return$30)
+-                 in outer$60 ~ apply$80
+-               }
+-               in join project$79 = .y -> return$31
+-               in rec#3 ~ project$79
+-             }
+-             in join apply$82 = (inner$59, then$81)
+-             in outer$58 ~ apply$82
+-           }
+-           in join project$78 = .x -> return$32
+-           in rec#3 ~ project$78
+-         }
+-         in invoke addInt64# ~ then$83
+-     }
+-     in param$19 ~ select$84
+-   } ~ return$29
+  
+- def someOrNone(return$33) = Some(30L) ~ return$33
++ closure fn join$139(self$140, value$141) =
++   let rec#3 = self$140.cap[0]
++   let return$30 = self$140.cap[1]
++   let value$138 = self$140.cap[2]
++   let then$81 = closure join$142(rec#3, return$30)
++   return value$138(value$141, then$81)
+  
+- def handleSome(return$34) =
++ closure fn join$142(self$143, value$144) =
+-   \param$20 return$35 . {
++   let rec#3 = self$143.cap[0]
+-     join select$85 = select {
++   let return$30 = self$143.cap[1]
+-       Some(x#6) -> x#6 ~ return$35
++   let return$31 = closure join$145(return$30, value$144)
+-     }
++   return rec#3.y(return$31)
+-     in param$20 ~ select$85
+-   } ~ return$34
+  
+- def handleOption(return$36) =
++ closure fn join$145(self$146, value$147) =
+-   \param$21 return$37 . {
++   let return$30 = self$146.cap[0]
+-     \param$22 return$38 . {
++   let value$144 = self$146.cap[1]
+-       join select$86 = select {
++   return value$144(value$147, return$30)
+-         Tuple(fallback#8, Some(x#9)) -> x#9 ~ return$38
+-         Tuple(fallback#10, None()) -> fallback#10 ~ return$38
+-       }
+-       in Tuple(param$21, param$22) ~ select$86
+-     } ~ return$37
+-   } ~ return$36
+  
+- def getX(return$39) =
++ toplevel fn someOrNone(return$33) =
+-   \param$23 return$40 . {
++   let lit$150 = 30L
+-     join select$88 = select {
++   let struct$151 = Some(lit$150)
+-       rec#1 -> join project$87 = .x -> return$40 in rec#1 ~ project$87
++   return return$33(struct$151)
+-     }
+-     in param$23 ~ select$88
+-   } ~ return$39
+  
+- def main(return$41) =
++ toplevel fn handleSome(return$34) =
+-   \param$24 return$42 . {
++   let closure$155 = closure lambda$153()
+-     join select$124 = select {
++   return return$34(closure$155)
+-       _#11 ->
++ 
+-         join then$122 = then fromNarrowRecord#12 -> {
++ closure fn lambda$153(self$154, param$20, return$35) =
+-           join then$121 = then outer$62 -> {
++   if param$20.tag == Some then {
+-             join return$53 = then inner$63 -> {
++     let x#6 = param$20.0
+-               join then$119 = then fromWideRecord#13 -> {
++     return return$35(x#6)
+-                 join then$117 = then fromWiderRecord#14 -> {
++   } else {
+-                   join then$116 = then outer$64 -> {
++     panic "no matching branch"
+-                     join return$49 = then inner$65 -> {
++   }
+-                       join then$114 = then fromClosedVariant#15 -> {
++ 
+-                         join then$112 = then outer$66 -> {
++ toplevel fn handleOption(return$36) =
+-                           join return$48 = then inner$67 -> {
++   let closure$163 = closure lambda$157()
+-                             join then$110 = then fromOpenVariant#16 -> {
++   return return$36(closure$163)
+-                               join then$107 = then fallbackFromNone#17 -> {
++ 
+-                                 join then$105 = then outer$68 -> {
++ closure fn lambda$157(self$158, param$21, return$37) =
+-                                   join return$44 = then inner$69 -> {
++   let closure$162 = closure lambda$159(param$21)
+-                                     join then$103 = then total#18 -> {
++   return return$37(closure$162)
+-                                       join then$102 = then outer$70 -> {
++ 
+-                                         join return$43 = then inner$71 -> {
++ closure fn lambda$159(self$160, param$22, return$38) =
+-                                           join apply$101 = (inner$71, return$42)
++   let param$21 = self$160.cap[0]
+-                                           in outer$70 ~ apply$101
++   let struct$161 = Tuple(param$21, param$22)
+-                                         }
++   if struct$161.tag == Tuple && struct$161.1.tag == Some then {
+-                                         in join apply$100 = ( total#18
++     let fallback#8 = struct$161.0
+-                                         , return$43 )
++     let x#9 = struct$161.1.0
+-                                         in invoke toStringInt64# ~ apply$100
++     return return$38(x#9)
+-                                       }
++   } else {
+-                                       in invoke printString# ~ then$102
++     if struct$161.tag == Tuple && struct$161.1.tag == None then {
+-                                     }
++       let fallback#10 = struct$161.0
+-                                     in join apply$104 = (inner$69, then$103)
++       return return$38(fallback#10)
+-                                     in outer$68 ~ apply$104
++     } else {
+-                                   }
++       panic "no matching branch"
+-                                   in join then$98 = then outer$72 -> {
+-                                     join return$45 = then inner$73 -> {
+-                                       join apply$97 = (inner$73, return$44)
+-                                       in outer$72 ~ apply$97
+-                                     }
+-                                     in join then$95 = then outer$74 -> {
+-                                       join return$46 = then inner$75 -> {
+-                                         join apply$94 = (inner$75, return$45)
+-                                         in outer$74 ~ apply$94
+-                                       }
+-                                       in join then$92 = then outer$76 -> {
+-                                         join return$47 = then inner$77 -> {
+-                                           join apply$91 = (inner$77, return$46)
+-                                           in outer$76 ~ apply$91
+-                                         }
+-                                         in join apply$89 = ( fallbackFromNone#17
+-                                         , return$47 )
+-                                         in join apply$90 = ( fromOpenVariant#16
+-                                         , apply$89 )
+-                                         in invoke addInt64# ~ apply$90
+-                                       }
+-                                       in join apply$93 = ( fromClosedVariant#15
+-                                       , then$92 )
+-                                       in invoke addInt64# ~ apply$93
+-                                     }
+-                                     in join apply$96 = ( fromWiderRecord#14
+-                                     , then$95 )
+-                                     in invoke addInt64# ~ apply$96
+-                                   }
+-                                   in join apply$99 = ( fromWideRecord#13
+-                                   , then$98 )
+-                                   in invoke addInt64# ~ apply$99
+-                                 }
+-                                 in join apply$106 = ( fromNarrowRecord#12
+-                                 , then$105 )
+-                                 in invoke addInt64# ~ apply$106
+-                               }
+-                               in join apply$108 = (None(), then$107)
+-                               in join apply$109 = (7L, apply$108)
+-                               in invoke handleOption ~ apply$109
+-                             }
+-                             in join apply$111 = (inner$67, then$110)
+-                             in outer$66 ~ apply$111
+-                           }
+-                           in invoke someOrNone ~ return$48
+-                         }
+-                         in join apply$113 = (7L, then$112)
+-                         in invoke handleOption ~ apply$113
+-                       }
+-                       in join apply$115 = (inner$65, then$114)
+-                       in outer$64 ~ apply$115
+-                     }
+-                     in invoke someOrNone ~ return$49
+-                   }
+-                   in invoke handleSome ~ then$116
+-                 }
+-                 in join apply$118 = ( { x(return$50) = {
+-                   1L ~ return$50
+-                 }
+-                 , y(return$51) = {
+-                   2L ~ return$51
+-                 }
+-                 , z(return$52) = {
+-                   3L ~ return$52
+-                 } }
+-                 , then$117 )
+-                 in invoke sumXY ~ apply$118
+-               }
+-               in join apply$120 = (inner$63, then$119)
+-               in outer$62 ~ apply$120
+-             }
+-             in invoke wideRecord ~ return$53
+-           }
+-           in invoke getX ~ then$121
+-         }
+-         in join apply$123 = ( { x(return$54) = {
+-           10L ~ return$54
+-         } }
+-         , then$122 )
+-         in invoke getX ~ apply$123
+      }
+-     in param$24 ~ select$124
++   }
+-   } ~ return$41
+  
+- def Some(return$55) =
++ toplevel fn getX(return$39) =
+-   \constructor$25 return$56 . {
++   let closure$167 = closure lambda$165()
+-     Some(constructor$25) ~ return$56
++   return return$39(closure$167)
+-   } ~ return$55
+  
+- def None(return$57) = None() ~ return$57
++ closure fn lambda$165(self$166, param$23, return$40) =
++   if  then {
++     let rec#1 = param$23
++     return rec#1.x(return$40)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ toplevel fn main(return$41) =
++   let closure$293 = closure lambda$169()
++   return return$41(closure$293)
++ 
++ closure fn lambda$169(self$170, param$24, return$42) =
++   if  then {
++     let _#11 = param$24
++     let then$122 = closure join$171(return$42)
++     let apply$123 = closure join$286(then$122)
++     return getX(apply$123)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$171(self$172, value$173) =
++   let return$42 = self$172.cap[0]
++   let then$121 = closure join$174(return$42, value$173)
++   return getX(then$121)
++ 
++ closure fn join$174(self$175, value$176) =
++   let return$42 = self$175.cap[0]
++   let value$173 = self$175.cap[1]
++   let return$53 = closure join$177(return$42, value$173, value$176)
++   return wideRecord(return$53)
++ 
++ closure fn join$177(self$178, value$179) =
++   let return$42 = self$178.cap[0]
++   let value$173 = self$178.cap[1]
++   let value$176 = self$178.cap[2]
++   let then$119 = closure join$180(return$42, value$173)
++   return value$176(value$179, then$119)
++ 
++ closure fn join$180(self$181, value$182) =
++   let return$42 = self$181.cap[0]
++   let value$173 = self$181.cap[1]
++   let then$117 = closure join$183(return$42, value$173, value$182)
++   let apply$118 = closure join$273(then$117)
++   return sumXY(apply$118)
++ 
++ closure fn join$183(self$184, value$185) =
++   let return$42 = self$184.cap[0]
++   let value$173 = self$184.cap[1]
++   let value$182 = self$184.cap[2]
++   let then$116 = closure join$186(return$42, value$173, value$182, value$185)
++   return handleSome(then$116)
++ 
++ closure fn join$186(self$187, value$188) =
++   let return$42 = self$187.cap[0]
++   let value$173 = self$187.cap[1]
++   let value$182 = self$187.cap[2]
++   let value$185 = self$187.cap[3]
++   let return$49 = closure join$189( return$42
++   , value$173
++   , value$182
++   , value$185
++   , value$188 )
++   return someOrNone(return$49)
++ 
++ closure fn join$189(self$190, value$191) =
++   let return$42 = self$190.cap[0]
++   let value$173 = self$190.cap[1]
++   let value$182 = self$190.cap[2]
++   let value$185 = self$190.cap[3]
++   let value$188 = self$190.cap[4]
++   let then$114 = closure join$192(return$42, value$173, value$182, value$185)
++   return value$188(value$191, then$114)
++ 
++ closure fn join$192(self$193, value$194) =
++   let return$42 = self$193.cap[0]
++   let value$173 = self$193.cap[1]
++   let value$182 = self$193.cap[2]
++   let value$185 = self$193.cap[3]
++   let then$112 = closure join$195( return$42
++   , value$173
++   , value$182
++   , value$185
++   , value$194 )
++   let apply$113 = closure join$269(then$112)
++   return handleOption(apply$113)
++ 
++ closure fn join$195(self$196, value$197) =
++   let return$42 = self$196.cap[0]
++   let value$173 = self$196.cap[1]
++   let value$182 = self$196.cap[2]
++   let value$185 = self$196.cap[3]
++   let value$194 = self$196.cap[4]
++   let return$48 = closure join$198( return$42
++   , value$173
++   , value$182
++   , value$185
++   , value$194
++   , value$197 )
++   return someOrNone(return$48)
++ 
++ closure fn join$198(self$199, value$200) =
++   let return$42 = self$199.cap[0]
++   let value$173 = self$199.cap[1]
++   let value$182 = self$199.cap[2]
++   let value$185 = self$199.cap[3]
++   let value$194 = self$199.cap[4]
++   let value$197 = self$199.cap[5]
++   let then$110 = closure join$201( return$42
++   , value$173
++   , value$182
++   , value$185
++   , value$194 )
++   return value$197(value$200, then$110)
++ 
++ closure fn join$201(self$202, value$203) =
++   let return$42 = self$202.cap[0]
++   let value$173 = self$202.cap[1]
++   let value$182 = self$202.cap[2]
++   let value$185 = self$202.cap[3]
++   let value$194 = self$202.cap[4]
++   let then$107 = closure join$204( return$42
++   , value$173
++   , value$182
++   , value$185
++   , value$194
++   , value$203 )
++   let apply$108 = closure join$261(then$107)
++   let apply$109 = closure join$265(apply$108)
++   return handleOption(apply$109)
++ 
++ closure fn join$204(self$205, value$206) =
++   let return$42 = self$205.cap[0]
++   let value$173 = self$205.cap[1]
++   let value$182 = self$205.cap[2]
++   let value$185 = self$205.cap[3]
++   let value$194 = self$205.cap[4]
++   let value$203 = self$205.cap[5]
++   let then$105 = closure join$207( return$42
++   , value$182
++   , value$185
++   , value$194
++   , value$203
++   , value$206 )
++   let apply$106 = closure join$258(then$105, value$173)
++   return addInt64#(apply$106)
++ 
++ closure fn join$207(self$208, value$209) =
++   let return$42 = self$208.cap[0]
++   let value$182 = self$208.cap[1]
++   let value$185 = self$208.cap[2]
++   let value$194 = self$208.cap[3]
++   let value$203 = self$208.cap[4]
++   let value$206 = self$208.cap[5]
++   let return$44 = closure join$210(return$42, value$209)
++   let then$98 = closure join$225( return$44
++   , value$185
++   , value$194
++   , value$203
++   , value$206 )
++   let apply$99 = closure join$255(then$98, value$182)
++   return addInt64#(apply$99)
++ 
++ closure fn join$210(self$211, value$212) =
++   let return$42 = self$211.cap[0]
++   let value$209 = self$211.cap[1]
++   let then$103 = closure join$213(return$42)
++   return value$209(value$212, then$103)
++ 
++ closure fn join$213(self$214, value$215) =
++   let return$42 = self$214.cap[0]
++   let then$102 = closure join$216(return$42, value$215)
++   return printString#(then$102)
++ 
++ closure fn join$216(self$217, value$218) =
++   let return$42 = self$217.cap[0]
++   let value$215 = self$217.cap[1]
++   let return$43 = closure join$219(return$42, value$218)
++   let apply$100 = closure join$222(return$43, value$215)
++   return toStringInt64#(apply$100)
++ 
++ closure fn join$219(self$220, value$221) =
++   let return$42 = self$220.cap[0]
++   let value$218 = self$220.cap[1]
++   return value$218(value$221, return$42)
++ 
++ closure fn join$222(self$223, value$224) =
++   let return$43 = self$223.cap[0]
++   let value$215 = self$223.cap[1]
++   return value$224(value$215, return$43)
++ 
++ closure fn join$225(self$226, value$227) =
++   let return$44 = self$226.cap[0]
++   let value$185 = self$226.cap[1]
++   let value$194 = self$226.cap[2]
++   let value$203 = self$226.cap[3]
++   let value$206 = self$226.cap[4]
++   let return$45 = closure join$228(return$44, value$227)
++   let then$95 = closure join$231(return$45, value$194, value$203, value$206)
++   let apply$96 = closure join$252(then$95, value$185)
++   return addInt64#(apply$96)
++ 
++ closure fn join$228(self$229, value$230) =
++   let return$44 = self$229.cap[0]
++   let value$227 = self$229.cap[1]
++   return value$227(value$230, return$44)
++ 
++ closure fn join$231(self$232, value$233) =
++   let return$45 = self$232.cap[0]
++   let value$194 = self$232.cap[1]
++   let value$203 = self$232.cap[2]
++   let value$206 = self$232.cap[3]
++   let return$46 = closure join$234(return$45, value$233)
++   let then$92 = closure join$237(return$46, value$203, value$206)
++   let apply$93 = closure join$249(then$92, value$194)
++   return addInt64#(apply$93)
++ 
++ closure fn join$234(self$235, value$236) =
++   let return$45 = self$235.cap[0]
++   let value$233 = self$235.cap[1]
++   return value$233(value$236, return$45)
++ 
++ closure fn join$237(self$238, value$239) =
++   let return$46 = self$238.cap[0]
++   let value$203 = self$238.cap[1]
++   let value$206 = self$238.cap[2]
++   let return$47 = closure join$240(return$46, value$239)
++   let apply$89 = closure join$243(return$47, value$206)
++   let apply$90 = closure join$246(apply$89, value$203)
++   return addInt64#(apply$90)
++ 
++ closure fn join$240(self$241, value$242) =
++   let return$46 = self$241.cap[0]
++   let value$239 = self$241.cap[1]
++   return value$239(value$242, return$46)
++ 
++ closure fn join$243(self$244, value$245) =
++   let return$47 = self$244.cap[0]
++   let value$206 = self$244.cap[1]
++   return value$245(value$206, return$47)
++ 
++ closure fn join$246(self$247, value$248) =
++   let apply$89 = self$247.cap[0]
++   let value$203 = self$247.cap[1]
++   return value$248(value$203, apply$89)
++ 
++ closure fn join$249(self$250, value$251) =
++   let then$92 = self$250.cap[0]
++   let value$194 = self$250.cap[1]
++   return value$251(value$194, then$92)
++ 
++ closure fn join$252(self$253, value$254) =
++   let then$95 = self$253.cap[0]
++   let value$185 = self$253.cap[1]
++   return value$254(value$185, then$95)
++ 
++ closure fn join$255(self$256, value$257) =
++   let then$98 = self$256.cap[0]
++   let value$182 = self$256.cap[1]
++   return value$257(value$182, then$98)
++ 
++ closure fn join$258(self$259, value$260) =
++   let then$105 = self$259.cap[0]
++   let value$173 = self$259.cap[1]
++   return value$260(value$173, then$105)
++ 
++ closure fn join$261(self$262, value$263) =
++   let then$107 = self$262.cap[0]
++   let struct$264 = None()
++   return value$263(struct$264, then$107)
++ 
++ closure fn join$265(self$266, value$267) =
++   let apply$108 = self$266.cap[0]
++   let lit$268 = 7L
++   return value$267(lit$268, apply$108)
++ 
++ closure fn join$269(self$270, value$271) =
++   let then$112 = self$270.cap[0]
++   let lit$272 = 7L
++   return value$271(lit$272, then$112)
++ 
++ closure fn join$273(self$274, value$275) =
++   let then$117 = self$274.cap[0]
++   let record$285 = record( x = field$276
++   , y = field$279
++   , z = field$282 ) captures()
++   return value$275(record$285, then$117)
++ 
++ field fn field$276(self$277, return$50) =
++   let lit$278 = 1L
++   return return$50(lit$278)
++ 
++ field fn field$279(self$280, return$51) =
++   let lit$281 = 2L
++   return return$51(lit$281)
++ 
++ field fn field$282(self$283, return$52) =
++   let lit$284 = 3L
++   return return$52(lit$284)
++ 
++ closure fn join$286(self$287, value$288) =
++   let then$122 = self$287.cap[0]
++   let record$292 = record(x = field$289) captures()
++   return value$288(record$292, then$122)
++ 
++ field fn field$289(self$290, return$54) =
++   let lit$291 = 10L
++   return return$54(lit$291)
++ 
++ toplevel fn Some(return$55) =
++   let closure$298 = closure lambda$295()
++   return return$55(closure$298)
++ 
++ closure fn lambda$295(self$296, constructor$25, return$56) =
++   let struct$297 = Some(constructor$25)
++   return return$56(struct$297)
++ 
++ toplevel fn None(return$57) =
++   let struct$300 = None()
++   return return$57(struct$300)
++ 
++ toplevel fn zig_main$303() =
++   let finish$301 = closure join$305()
++   let after_main$302 = closure join$308(finish$301)
++   return main(after_main$302)
++ 
++ closure fn join$305(self$306, value$307) = return value$307
++ 
++ closure fn join$308(self$309, value$310) =
++   let finish$301 = self$309.cap[0]
++   let struct$311 = Tuple()
++   return value$310(struct$311, finish$301)
++ 
++ entry = zig_main$303
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn wideRecord(return$26) =
+    let record$132 = record(x = field$126, y = field$129) captures()
+    return return$26(record$132)
+  
+  field fn field$126(self$127, return$27) =
+    let lit$128 = 20L
+    return return$27(lit$128)
+  
+  field fn field$129(self$130, return$28) =
+    let lit$131 = 99L
+    return return$28(lit$131)
+  
+  toplevel fn sumXY(return$29) =
+    let closure$148 = closure lambda$134()
+    return return$29(closure$148)
+  
+  closure fn lambda$134(self$135, param$19, return$30) =
+    if  then {
+-     let rec#3 = param$19
++     let then$83 = closure join$136(param$19, return$30)
+-     let then$83 = closure join$136(rec#3, return$30)
+      return addInt64#(then$83)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$136(self$137, value$138) =
+    let rec#3 = self$137.cap[0]
+    let return$30 = self$137.cap[1]
+    let return$32 = closure join$139(rec#3, return$30, value$138)
+    return rec#3.x(return$32)
+  
+  closure fn join$139(self$140, value$141) =
+    let rec#3 = self$140.cap[0]
+    let return$30 = self$140.cap[1]
+    let value$138 = self$140.cap[2]
+    let then$81 = closure join$142(rec#3, return$30)
+    return value$138(value$141, then$81)
+  
+  closure fn join$142(self$143, value$144) =
+    let rec#3 = self$143.cap[0]
+    let return$30 = self$143.cap[1]
+    let return$31 = closure join$145(return$30, value$144)
+    return rec#3.y(return$31)
+  
+  closure fn join$145(self$146, value$147) =
+    let return$30 = self$146.cap[0]
+    let value$144 = self$146.cap[1]
+    return value$144(value$147, return$30)
+  
+  toplevel fn someOrNone(return$33) =
+    let lit$150 = 30L
+    let struct$151 = Some(lit$150)
+    return return$33(struct$151)
+  
+  toplevel fn handleSome(return$34) =
+    let closure$155 = closure lambda$153()
+    return return$34(closure$155)
+  
+  closure fn lambda$153(self$154, param$20, return$35) =
+    if param$20.tag == Some then {
+      let x#6 = param$20.0
+      return return$35(x#6)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn handleOption(return$36) =
+    let closure$163 = closure lambda$157()
+    return return$36(closure$163)
+  
+  closure fn lambda$157(self$158, param$21, return$37) =
+    let closure$162 = closure lambda$159(param$21)
+    return return$37(closure$162)
+  
+  closure fn lambda$159(self$160, param$22, return$38) =
+    let param$21 = self$160.cap[0]
+-   let struct$161 = Tuple(param$21, param$22)
++   if param$22.tag == Some then {
+-   if struct$161.tag == Tuple && struct$161.1.tag == Some then {
++     let x#9 = param$22.0
+-     let fallback#8 = struct$161.0
+-     let x#9 = struct$161.1.0
+      return return$38(x#9)
+    } else {
+-     if struct$161.tag == Tuple && struct$161.1.tag == None then {
++     if param$22.tag == None then {
+-       let fallback#10 = struct$161.0
++       return return$38(param$21)
+-       return return$38(fallback#10)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn getX(return$39) =
+    let closure$167 = closure lambda$165()
+    return return$39(closure$167)
+  
+  closure fn lambda$165(self$166, param$23, return$40) =
+    if  then {
+-     let rec#1 = param$23
++     return param$23.x(return$40)
+-     return rec#1.x(return$40)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn main(return$41) =
+    let closure$293 = closure lambda$169()
+    return return$41(closure$293)
+  
+  closure fn lambda$169(self$170, param$24, return$42) =
+    if  then {
+-     let _#11 = param$24
+      let then$122 = closure join$171(return$42)
+      let apply$123 = closure join$286(then$122)
+      return getX(apply$123)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$171(self$172, value$173) =
+    let return$42 = self$172.cap[0]
+    let then$121 = closure join$174(return$42, value$173)
+    return getX(then$121)
+  
+  closure fn join$174(self$175, value$176) =
+    let return$42 = self$175.cap[0]
+    let value$173 = self$175.cap[1]
+    let return$53 = closure join$177(return$42, value$173, value$176)
+    return wideRecord(return$53)
+  
+  closure fn join$177(self$178, value$179) =
+    let return$42 = self$178.cap[0]
+    let value$173 = self$178.cap[1]
+    let value$176 = self$178.cap[2]
+    let then$119 = closure join$180(return$42, value$173)
+    return value$176(value$179, then$119)
+  
+  closure fn join$180(self$181, value$182) =
+    let return$42 = self$181.cap[0]
+    let value$173 = self$181.cap[1]
+    let then$117 = closure join$183(return$42, value$173, value$182)
+    let apply$118 = closure join$273(then$117)
+    return sumXY(apply$118)
+  
+  closure fn join$183(self$184, value$185) =
+    let return$42 = self$184.cap[0]
+    let value$173 = self$184.cap[1]
+    let value$182 = self$184.cap[2]
+    let then$116 = closure join$186(return$42, value$173, value$182, value$185)
+    return handleSome(then$116)
+  
+  closure fn join$186(self$187, value$188) =
+    let return$42 = self$187.cap[0]
+    let value$173 = self$187.cap[1]
+    let value$182 = self$187.cap[2]
+    let value$185 = self$187.cap[3]
+    let return$49 = closure join$189( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$188 )
+    return someOrNone(return$49)
+  
+  closure fn join$189(self$190, value$191) =
+    let return$42 = self$190.cap[0]
+    let value$173 = self$190.cap[1]
+    let value$182 = self$190.cap[2]
+    let value$185 = self$190.cap[3]
+    let value$188 = self$190.cap[4]
+    let then$114 = closure join$192(return$42, value$173, value$182, value$185)
+    return value$188(value$191, then$114)
+  
+  closure fn join$192(self$193, value$194) =
+    let return$42 = self$193.cap[0]
+    let value$173 = self$193.cap[1]
+    let value$182 = self$193.cap[2]
+    let value$185 = self$193.cap[3]
+    let then$112 = closure join$195( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194 )
+    let apply$113 = closure join$269(then$112)
+    return handleOption(apply$113)
+  
+  closure fn join$195(self$196, value$197) =
+    let return$42 = self$196.cap[0]
+    let value$173 = self$196.cap[1]
+    let value$182 = self$196.cap[2]
+    let value$185 = self$196.cap[3]
+    let value$194 = self$196.cap[4]
+    let return$48 = closure join$198( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194
+    , value$197 )
+    return someOrNone(return$48)
+  
+  closure fn join$198(self$199, value$200) =
+    let return$42 = self$199.cap[0]
+    let value$173 = self$199.cap[1]
+    let value$182 = self$199.cap[2]
+    let value$185 = self$199.cap[3]
+    let value$194 = self$199.cap[4]
+    let value$197 = self$199.cap[5]
+    let then$110 = closure join$201( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194 )
+    return value$197(value$200, then$110)
+  
+  closure fn join$201(self$202, value$203) =
+    let return$42 = self$202.cap[0]
+    let value$173 = self$202.cap[1]
+    let value$182 = self$202.cap[2]
+    let value$185 = self$202.cap[3]
+    let value$194 = self$202.cap[4]
+    let then$107 = closure join$204( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194
+    , value$203 )
+    let apply$108 = closure join$261(then$107)
+    let apply$109 = closure join$265(apply$108)
+    return handleOption(apply$109)
+  
+  closure fn join$204(self$205, value$206) =
+    let return$42 = self$205.cap[0]
+    let value$173 = self$205.cap[1]
+    let value$182 = self$205.cap[2]
+    let value$185 = self$205.cap[3]
+    let value$194 = self$205.cap[4]
+    let value$203 = self$205.cap[5]
+    let then$105 = closure join$207( return$42
+    , value$182
+    , value$185
+    , value$194
+    , value$203
+    , value$206 )
+    let apply$106 = closure join$258(then$105, value$173)
+    return addInt64#(apply$106)
+  
+  closure fn join$207(self$208, value$209) =
+    let return$42 = self$208.cap[0]
+    let value$182 = self$208.cap[1]
+    let value$185 = self$208.cap[2]
+    let value$194 = self$208.cap[3]
+    let value$203 = self$208.cap[4]
+    let value$206 = self$208.cap[5]
+    let return$44 = closure join$210(return$42, value$209)
+    let then$98 = closure join$225( return$44
+    , value$185
+    , value$194
+    , value$203
+    , value$206 )
+    let apply$99 = closure join$255(then$98, value$182)
+    return addInt64#(apply$99)
+  
+  closure fn join$210(self$211, value$212) =
+    let return$42 = self$211.cap[0]
+    let value$209 = self$211.cap[1]
+    let then$103 = closure join$213(return$42)
+    return value$209(value$212, then$103)
+  
+  closure fn join$213(self$214, value$215) =
+    let return$42 = self$214.cap[0]
+    let then$102 = closure join$216(return$42, value$215)
+    return printString#(then$102)
+  
+  closure fn join$216(self$217, value$218) =
+    let return$42 = self$217.cap[0]
+    let value$215 = self$217.cap[1]
+    let return$43 = closure join$219(return$42, value$218)
+    let apply$100 = closure join$222(return$43, value$215)
+    return toStringInt64#(apply$100)
+  
+  closure fn join$219(self$220, value$221) =
+    let return$42 = self$220.cap[0]
+    let value$218 = self$220.cap[1]
+    return value$218(value$221, return$42)
+  
+  closure fn join$222(self$223, value$224) =
+    let return$43 = self$223.cap[0]
+    let value$215 = self$223.cap[1]
+    return value$224(value$215, return$43)
+  
+  closure fn join$225(self$226, value$227) =
+    let return$44 = self$226.cap[0]
+    let value$185 = self$226.cap[1]
+    let value$194 = self$226.cap[2]
+    let value$203 = self$226.cap[3]
+    let value$206 = self$226.cap[4]
+    let return$45 = closure join$228(return$44, value$227)
+    let then$95 = closure join$231(return$45, value$194, value$203, value$206)
+    let apply$96 = closure join$252(then$95, value$185)
+    return addInt64#(apply$96)
+  
+  closure fn join$228(self$229, value$230) =
+    let return$44 = self$229.cap[0]
+    let value$227 = self$229.cap[1]
+    return value$227(value$230, return$44)
+  
+  closure fn join$231(self$232, value$233) =
+    let return$45 = self$232.cap[0]
+    let value$194 = self$232.cap[1]
+    let value$203 = self$232.cap[2]
+    let value$206 = self$232.cap[3]
+    let return$46 = closure join$234(return$45, value$233)
+    let then$92 = closure join$237(return$46, value$203, value$206)
+    let apply$93 = closure join$249(then$92, value$194)
+    return addInt64#(apply$93)
+  
+  closure fn join$234(self$235, value$236) =
+    let return$45 = self$235.cap[0]
+    let value$233 = self$235.cap[1]
+    return value$233(value$236, return$45)
+  
+  closure fn join$237(self$238, value$239) =
+    let return$46 = self$238.cap[0]
+    let value$203 = self$238.cap[1]
+    let value$206 = self$238.cap[2]
+    let return$47 = closure join$240(return$46, value$239)
+    let apply$89 = closure join$243(return$47, value$206)
+    let apply$90 = closure join$246(apply$89, value$203)
+    return addInt64#(apply$90)
+  
+  closure fn join$240(self$241, value$242) =
+    let return$46 = self$241.cap[0]
+    let value$239 = self$241.cap[1]
+    return value$239(value$242, return$46)
+  
+  closure fn join$243(self$244, value$245) =
+    let return$47 = self$244.cap[0]
+    let value$206 = self$244.cap[1]
+    return value$245(value$206, return$47)
+  
+  closure fn join$246(self$247, value$248) =
+    let apply$89 = self$247.cap[0]
+    let value$203 = self$247.cap[1]
+    return value$248(value$203, apply$89)
+  
+  closure fn join$249(self$250, value$251) =
+    let then$92 = self$250.cap[0]
+    let value$194 = self$250.cap[1]
+    return value$251(value$194, then$92)
+  
+  closure fn join$252(self$253, value$254) =
+    let then$95 = self$253.cap[0]
+    let value$185 = self$253.cap[1]
+    return value$254(value$185, then$95)
+  
+  closure fn join$255(self$256, value$257) =
+    let then$98 = self$256.cap[0]
+    let value$182 = self$256.cap[1]
+    return value$257(value$182, then$98)
+  
+  closure fn join$258(self$259, value$260) =
+    let then$105 = self$259.cap[0]
+    let value$173 = self$259.cap[1]
+    return value$260(value$173, then$105)
+  
+  closure fn join$261(self$262, value$263) =
+    let then$107 = self$262.cap[0]
+    let struct$264 = None()
+    return value$263(struct$264, then$107)
+  
+  closure fn join$265(self$266, value$267) =
+    let apply$108 = self$266.cap[0]
+    let lit$268 = 7L
+    return value$267(lit$268, apply$108)
+  
+  closure fn join$269(self$270, value$271) =
+    let then$112 = self$270.cap[0]
+    let lit$272 = 7L
+    return value$271(lit$272, then$112)
+  
+  closure fn join$273(self$274, value$275) =
+    let then$117 = self$274.cap[0]
+    let record$285 = record( x = field$276
+    , y = field$279
+    , z = field$282 ) captures()
+    return value$275(record$285, then$117)
+  
+  field fn field$276(self$277, return$50) =
+    let lit$278 = 1L
+    return return$50(lit$278)
+  
+  field fn field$279(self$280, return$51) =
+    let lit$281 = 2L
+    return return$51(lit$281)
+  
+  field fn field$282(self$283, return$52) =
+    let lit$284 = 3L
+    return return$52(lit$284)
+  
+  closure fn join$286(self$287, value$288) =
+    let then$122 = self$287.cap[0]
+    let record$292 = record(x = field$289) captures()
+    return value$288(record$292, then$122)
+  
+  field fn field$289(self$290, return$54) =
+    let lit$291 = 10L
+    return return$54(lit$291)
+  
+  toplevel fn Some(return$55) =
+    let closure$298 = closure lambda$295()
+    return return$55(closure$298)
+  
+  closure fn lambda$295(self$296, constructor$25, return$56) =
+    let struct$297 = Some(constructor$25)
+    return return$56(struct$297)
+  
+  toplevel fn None(return$57) =
+    let struct$300 = None()
+    return return$57(struct$300)
+  
+  toplevel fn zig_main$303() =
+    let finish$301 = closure join$305()
+    let after_main$302 = closure join$308(finish$301)
+    return main(after_main$302)
+  
+  closure fn join$305(self$306, value$307) = return value$307
+  
+  closure fn join$308(self$309, value$310) =
+    let finish$301 = self$309.cap[0]
+    let struct$311 = Tuple()
+    return value$310(struct$311, finish$301)
+  
+  entry = zig_main$303
+
+
+=== Peephole -> Perceus ===
+  toplevel fn wideRecord(return$26) =
+    let record$132 = record(x = field$126, y = field$129) captures()
+    return return$26(record$132)
+  
+  field fn field$126(self$127, return$27) =
++   drop self$127
+    let lit$128 = 20L
+    return return$27(lit$128)
+  
+  field fn field$129(self$130, return$28) =
++   drop self$130
+    let lit$131 = 99L
+    return return$28(lit$131)
+  
+  toplevel fn sumXY(return$29) =
+    let closure$148 = closure lambda$134()
+    return return$29(closure$148)
+  
+  closure fn lambda$134(self$135, param$19, return$30) =
++   drop self$135
+    if  then {
+      let then$83 = closure join$136(param$19, return$30)
+      return addInt64#(then$83)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$136(self$137, value$138) =
+    let rec#3 = self$137.cap[0]
++   dup rec#3
+    let return$30 = self$137.cap[1]
++   dup return$30
++   drop self$137
++   dup rec#3
+    let return$32 = closure join$139(rec#3, return$30, value$138)
+    return rec#3.x(return$32)
+  
+  closure fn join$139(self$140, value$141) =
+    let rec#3 = self$140.cap[0]
++   dup rec#3
+    let return$30 = self$140.cap[1]
++   dup return$30
+    let value$138 = self$140.cap[2]
++   dup value$138
++   drop self$140
+    let then$81 = closure join$142(rec#3, return$30)
+    return value$138(value$141, then$81)
+  
+  closure fn join$142(self$143, value$144) =
+    let rec#3 = self$143.cap[0]
++   dup rec#3
+    let return$30 = self$143.cap[1]
++   dup return$30
++   drop self$143
+    let return$31 = closure join$145(return$30, value$144)
+    return rec#3.y(return$31)
+  
+  closure fn join$145(self$146, value$147) =
+    let return$30 = self$146.cap[0]
++   dup return$30
+    let value$144 = self$146.cap[1]
++   dup value$144
++   drop self$146
+    return value$144(value$147, return$30)
+  
+  toplevel fn someOrNone(return$33) =
+    let lit$150 = 30L
+    let struct$151 = Some(lit$150)
+    return return$33(struct$151)
+  
+  toplevel fn handleSome(return$34) =
+    let closure$155 = closure lambda$153()
+    return return$34(closure$155)
+  
+  closure fn lambda$153(self$154, param$20, return$35) =
++   drop self$154
+    if param$20.tag == Some then {
+      let x#6 = param$20.0
++     dup x#6
++     drop param$20
+      return return$35(x#6)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn handleOption(return$36) =
+    let closure$163 = closure lambda$157()
+    return return$36(closure$163)
+  
+  closure fn lambda$157(self$158, param$21, return$37) =
++   drop self$158
+    let closure$162 = closure lambda$159(param$21)
+    return return$37(closure$162)
+  
+  closure fn lambda$159(self$160, param$22, return$38) =
+    let param$21 = self$160.cap[0]
++   dup param$21
++   drop self$160
+    if param$22.tag == Some then {
++     drop param$21
+      let x#9 = param$22.0
++     dup x#9
++     drop param$22
+      return return$38(x#9)
+    } else {
+      if param$22.tag == None then {
++       drop param$22
+        return return$38(param$21)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn getX(return$39) =
+    let closure$167 = closure lambda$165()
+    return return$39(closure$167)
+  
+  closure fn lambda$165(self$166, param$23, return$40) =
++   drop self$166
+    if  then {
+      return param$23.x(return$40)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn main(return$41) =
+    let closure$293 = closure lambda$169()
+    return return$41(closure$293)
+  
+  closure fn lambda$169(self$170, param$24, return$42) =
++   drop param$24
++   drop self$170
+    if  then {
+      let then$122 = closure join$171(return$42)
+      let apply$123 = closure join$286(then$122)
+      return getX(apply$123)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$171(self$172, value$173) =
+    let return$42 = self$172.cap[0]
++   dup return$42
++   drop self$172
+    let then$121 = closure join$174(return$42, value$173)
+    return getX(then$121)
+  
+  closure fn join$174(self$175, value$176) =
+    let return$42 = self$175.cap[0]
++   dup return$42
+    let value$173 = self$175.cap[1]
++   dup value$173
++   drop self$175
+    let return$53 = closure join$177(return$42, value$173, value$176)
+    return wideRecord(return$53)
+  
+  closure fn join$177(self$178, value$179) =
+    let return$42 = self$178.cap[0]
++   dup return$42
+    let value$173 = self$178.cap[1]
++   dup value$173
+    let value$176 = self$178.cap[2]
++   dup value$176
++   drop self$178
+    let then$119 = closure join$180(return$42, value$173)
+    return value$176(value$179, then$119)
+  
+  closure fn join$180(self$181, value$182) =
+    let return$42 = self$181.cap[0]
++   dup return$42
+    let value$173 = self$181.cap[1]
++   dup value$173
++   drop self$181
+    let then$117 = closure join$183(return$42, value$173, value$182)
+    let apply$118 = closure join$273(then$117)
+    return sumXY(apply$118)
+  
+  closure fn join$183(self$184, value$185) =
+    let return$42 = self$184.cap[0]
++   dup return$42
+    let value$173 = self$184.cap[1]
++   dup value$173
+    let value$182 = self$184.cap[2]
++   dup value$182
++   drop self$184
+    let then$116 = closure join$186(return$42, value$173, value$182, value$185)
+    return handleSome(then$116)
+  
+  closure fn join$186(self$187, value$188) =
+    let return$42 = self$187.cap[0]
++   dup return$42
+    let value$173 = self$187.cap[1]
++   dup value$173
+    let value$182 = self$187.cap[2]
++   dup value$182
+    let value$185 = self$187.cap[3]
++   dup value$185
++   drop self$187
+    let return$49 = closure join$189( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$188 )
+    return someOrNone(return$49)
+  
+  closure fn join$189(self$190, value$191) =
+    let return$42 = self$190.cap[0]
++   dup return$42
+    let value$173 = self$190.cap[1]
++   dup value$173
+    let value$182 = self$190.cap[2]
++   dup value$182
+    let value$185 = self$190.cap[3]
++   dup value$185
+    let value$188 = self$190.cap[4]
++   dup value$188
++   drop self$190
+    let then$114 = closure join$192(return$42, value$173, value$182, value$185)
+    return value$188(value$191, then$114)
+  
+  closure fn join$192(self$193, value$194) =
+    let return$42 = self$193.cap[0]
++   dup return$42
+    let value$173 = self$193.cap[1]
++   dup value$173
+    let value$182 = self$193.cap[2]
++   dup value$182
+    let value$185 = self$193.cap[3]
++   dup value$185
++   drop self$193
+    let then$112 = closure join$195( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194 )
+    let apply$113 = closure join$269(then$112)
+    return handleOption(apply$113)
+  
+  closure fn join$195(self$196, value$197) =
+    let return$42 = self$196.cap[0]
++   dup return$42
+    let value$173 = self$196.cap[1]
++   dup value$173
+    let value$182 = self$196.cap[2]
++   dup value$182
+    let value$185 = self$196.cap[3]
++   dup value$185
+    let value$194 = self$196.cap[4]
++   dup value$194
++   drop self$196
+    let return$48 = closure join$198( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194
+    , value$197 )
+    return someOrNone(return$48)
+  
+  closure fn join$198(self$199, value$200) =
+    let return$42 = self$199.cap[0]
++   dup return$42
+    let value$173 = self$199.cap[1]
++   dup value$173
+    let value$182 = self$199.cap[2]
++   dup value$182
+    let value$185 = self$199.cap[3]
++   dup value$185
+    let value$194 = self$199.cap[4]
++   dup value$194
+    let value$197 = self$199.cap[5]
++   dup value$197
++   drop self$199
+    let then$110 = closure join$201( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194 )
+    return value$197(value$200, then$110)
+  
+  closure fn join$201(self$202, value$203) =
+    let return$42 = self$202.cap[0]
++   dup return$42
+    let value$173 = self$202.cap[1]
++   dup value$173
+    let value$182 = self$202.cap[2]
++   dup value$182
+    let value$185 = self$202.cap[3]
++   dup value$185
+    let value$194 = self$202.cap[4]
++   dup value$194
++   drop self$202
+    let then$107 = closure join$204( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194
+    , value$203 )
+    let apply$108 = closure join$261(then$107)
+    let apply$109 = closure join$265(apply$108)
+    return handleOption(apply$109)
+  
+  closure fn join$204(self$205, value$206) =
+    let return$42 = self$205.cap[0]
++   dup return$42
+    let value$173 = self$205.cap[1]
++   dup value$173
+    let value$182 = self$205.cap[2]
++   dup value$182
+    let value$185 = self$205.cap[3]
++   dup value$185
+    let value$194 = self$205.cap[4]
++   dup value$194
+    let value$203 = self$205.cap[5]
++   dup value$203
++   drop self$205
+    let then$105 = closure join$207( return$42
+    , value$182
+    , value$185
+    , value$194
+    , value$203
+    , value$206 )
+    let apply$106 = closure join$258(then$105, value$173)
+    return addInt64#(apply$106)
+  
+  closure fn join$207(self$208, value$209) =
+    let return$42 = self$208.cap[0]
++   dup return$42
+    let value$182 = self$208.cap[1]
++   dup value$182
+    let value$185 = self$208.cap[2]
++   dup value$185
+    let value$194 = self$208.cap[3]
++   dup value$194
+    let value$203 = self$208.cap[4]
++   dup value$203
+    let value$206 = self$208.cap[5]
++   dup value$206
++   drop self$208
+    let return$44 = closure join$210(return$42, value$209)
+    let then$98 = closure join$225( return$44
+    , value$185
+    , value$194
+    , value$203
+    , value$206 )
+    let apply$99 = closure join$255(then$98, value$182)
+    return addInt64#(apply$99)
+  
+  closure fn join$210(self$211, value$212) =
+    let return$42 = self$211.cap[0]
++   dup return$42
+    let value$209 = self$211.cap[1]
++   dup value$209
++   drop self$211
+    let then$103 = closure join$213(return$42)
+    return value$209(value$212, then$103)
+  
+  closure fn join$213(self$214, value$215) =
+    let return$42 = self$214.cap[0]
++   dup return$42
++   drop self$214
+    let then$102 = closure join$216(return$42, value$215)
+    return printString#(then$102)
+  
+  closure fn join$216(self$217, value$218) =
+    let return$42 = self$217.cap[0]
++   dup return$42
+    let value$215 = self$217.cap[1]
++   dup value$215
++   drop self$217
+    let return$43 = closure join$219(return$42, value$218)
+    let apply$100 = closure join$222(return$43, value$215)
+    return toStringInt64#(apply$100)
+  
+  closure fn join$219(self$220, value$221) =
+    let return$42 = self$220.cap[0]
++   dup return$42
+    let value$218 = self$220.cap[1]
++   dup value$218
++   drop self$220
+    return value$218(value$221, return$42)
+  
+  closure fn join$222(self$223, value$224) =
+    let return$43 = self$223.cap[0]
++   dup return$43
+    let value$215 = self$223.cap[1]
++   dup value$215
++   drop self$223
+    return value$224(value$215, return$43)
+  
+  closure fn join$225(self$226, value$227) =
+    let return$44 = self$226.cap[0]
++   dup return$44
+    let value$185 = self$226.cap[1]
++   dup value$185
+    let value$194 = self$226.cap[2]
++   dup value$194
+    let value$203 = self$226.cap[3]
++   dup value$203
+    let value$206 = self$226.cap[4]
++   dup value$206
++   drop self$226
+    let return$45 = closure join$228(return$44, value$227)
+    let then$95 = closure join$231(return$45, value$194, value$203, value$206)
+    let apply$96 = closure join$252(then$95, value$185)
+    return addInt64#(apply$96)
+  
+  closure fn join$228(self$229, value$230) =
+    let return$44 = self$229.cap[0]
++   dup return$44
+    let value$227 = self$229.cap[1]
++   dup value$227
++   drop self$229
+    return value$227(value$230, return$44)
+  
+  closure fn join$231(self$232, value$233) =
+    let return$45 = self$232.cap[0]
++   dup return$45
+    let value$194 = self$232.cap[1]
++   dup value$194
+    let value$203 = self$232.cap[2]
++   dup value$203
+    let value$206 = self$232.cap[3]
++   dup value$206
++   drop self$232
+    let return$46 = closure join$234(return$45, value$233)
+    let then$92 = closure join$237(return$46, value$203, value$206)
+    let apply$93 = closure join$249(then$92, value$194)
+    return addInt64#(apply$93)
+  
+  closure fn join$234(self$235, value$236) =
+    let return$45 = self$235.cap[0]
++   dup return$45
+    let value$233 = self$235.cap[1]
++   dup value$233
++   drop self$235
+    return value$233(value$236, return$45)
+  
+  closure fn join$237(self$238, value$239) =
+    let return$46 = self$238.cap[0]
++   dup return$46
+    let value$203 = self$238.cap[1]
++   dup value$203
+    let value$206 = self$238.cap[2]
++   dup value$206
++   drop self$238
+    let return$47 = closure join$240(return$46, value$239)
+    let apply$89 = closure join$243(return$47, value$206)
+    let apply$90 = closure join$246(apply$89, value$203)
+    return addInt64#(apply$90)
+  
+  closure fn join$240(self$241, value$242) =
+    let return$46 = self$241.cap[0]
++   dup return$46
+    let value$239 = self$241.cap[1]
++   dup value$239
++   drop self$241
+    return value$239(value$242, return$46)
+  
+  closure fn join$243(self$244, value$245) =
+    let return$47 = self$244.cap[0]
++   dup return$47
+    let value$206 = self$244.cap[1]
++   dup value$206
++   drop self$244
+    return value$245(value$206, return$47)
+  
+  closure fn join$246(self$247, value$248) =
+    let apply$89 = self$247.cap[0]
++   dup apply$89
+    let value$203 = self$247.cap[1]
++   dup value$203
++   drop self$247
+    return value$248(value$203, apply$89)
+  
+  closure fn join$249(self$250, value$251) =
+    let then$92 = self$250.cap[0]
++   dup then$92
+    let value$194 = self$250.cap[1]
++   dup value$194
++   drop self$250
+    return value$251(value$194, then$92)
+  
+  closure fn join$252(self$253, value$254) =
+    let then$95 = self$253.cap[0]
++   dup then$95
+    let value$185 = self$253.cap[1]
++   dup value$185
++   drop self$253
+    return value$254(value$185, then$95)
+  
+  closure fn join$255(self$256, value$257) =
+    let then$98 = self$256.cap[0]
++   dup then$98
+    let value$182 = self$256.cap[1]
++   dup value$182
++   drop self$256
+    return value$257(value$182, then$98)
+  
+  closure fn join$258(self$259, value$260) =
+    let then$105 = self$259.cap[0]
++   dup then$105
+    let value$173 = self$259.cap[1]
++   dup value$173
++   drop self$259
+    return value$260(value$173, then$105)
+  
+  closure fn join$261(self$262, value$263) =
+    let then$107 = self$262.cap[0]
++   dup then$107
++   drop self$262
+    let struct$264 = None()
+    return value$263(struct$264, then$107)
+  
+  closure fn join$265(self$266, value$267) =
+    let apply$108 = self$266.cap[0]
++   dup apply$108
++   drop self$266
+    let lit$268 = 7L
+    return value$267(lit$268, apply$108)
+  
+  closure fn join$269(self$270, value$271) =
+    let then$112 = self$270.cap[0]
++   dup then$112
++   drop self$270
+    let lit$272 = 7L
+    return value$271(lit$272, then$112)
+  
+  closure fn join$273(self$274, value$275) =
+    let then$117 = self$274.cap[0]
++   dup then$117
++   drop self$274
+    let record$285 = record( x = field$276
+    , y = field$279
+    , z = field$282 ) captures()
+    return value$275(record$285, then$117)
+  
+  field fn field$276(self$277, return$50) =
++   drop self$277
+    let lit$278 = 1L
+    return return$50(lit$278)
+  
+  field fn field$279(self$280, return$51) =
++   drop self$280
+    let lit$281 = 2L
+    return return$51(lit$281)
+  
+  field fn field$282(self$283, return$52) =
++   drop self$283
+    let lit$284 = 3L
+    return return$52(lit$284)
+  
+  closure fn join$286(self$287, value$288) =
+    let then$122 = self$287.cap[0]
++   dup then$122
++   drop self$287
+    let record$292 = record(x = field$289) captures()
+    return value$288(record$292, then$122)
+  
+  field fn field$289(self$290, return$54) =
++   drop self$290
+    let lit$291 = 10L
+    return return$54(lit$291)
+  
+  toplevel fn Some(return$55) =
+    let closure$298 = closure lambda$295()
+    return return$55(closure$298)
+  
+  closure fn lambda$295(self$296, constructor$25, return$56) =
++   drop self$296
+    let struct$297 = Some(constructor$25)
+    return return$56(struct$297)
+  
+  toplevel fn None(return$57) =
+    let struct$300 = None()
+    return return$57(struct$300)
+  
+  toplevel fn zig_main$303() =
+    let finish$301 = closure join$305()
+    let after_main$302 = closure join$308(finish$301)
+    return main(after_main$302)
+  
+- closure fn join$305(self$306, value$307) = return value$307
++ closure fn join$305(self$306, value$307) =
++   drop self$306
++   return value$307
+  
+  closure fn join$308(self$309, value$310) =
+    let finish$301 = self$309.cap[0]
++   dup finish$301
++   drop self$309
+    let struct$311 = Tuple()
+    return value$310(struct$311, finish$301)
+  
+  entry = zig_main$303
+
+
+=== Perceus -> Reuse ===
+  toplevel fn wideRecord(return$26) =
+    let record$132 = record(x = field$126, y = field$129) captures()
+    return return$26(record$132)
+  
+  field fn field$126(self$127, return$27) =
+-   drop self$127
+    let lit$128 = 20L
++   drop self$127
+    return return$27(lit$128)
+  
+  field fn field$129(self$130, return$28) =
+-   drop self$130
+    let lit$131 = 99L
++   drop self$130
+    return return$28(lit$131)
+  
+  toplevel fn sumXY(return$29) =
+    let closure$148 = closure lambda$134()
+    return return$29(closure$148)
+  
+  closure fn lambda$134(self$135, param$19, return$30) =
+    drop self$135
+    if  then {
+      let then$83 = closure join$136(param$19, return$30)
+      return addInt64#(then$83)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$136(self$137, value$138) =
+    let rec#3 = self$137.cap[0]
+    dup rec#3
+    let return$30 = self$137.cap[1]
+    dup return$30
+-   drop self$137
+    dup rec#3
+    let return$32 = closure join$139(rec#3, return$30, value$138)
++   drop self$137
+    return rec#3.x(return$32)
+  
+  closure fn join$139(self$140, value$141) =
+    let rec#3 = self$140.cap[0]
+    dup rec#3
+    let return$30 = self$140.cap[1]
+    dup return$30
+    let value$138 = self$140.cap[2]
+    dup value$138
+-   drop self$140
+    let then$81 = closure join$142(rec#3, return$30)
++   drop self$140
+    return value$138(value$141, then$81)
+  
+  closure fn join$142(self$143, value$144) =
+    let rec#3 = self$143.cap[0]
+    dup rec#3
+    let return$30 = self$143.cap[1]
+    dup return$30
+-   drop self$143
+    let return$31 = closure join$145(return$30, value$144)
++   drop self$143
+    return rec#3.y(return$31)
+  
+  closure fn join$145(self$146, value$147) =
+    let return$30 = self$146.cap[0]
+    dup return$30
+    let value$144 = self$146.cap[1]
+    dup value$144
+    drop self$146
+    return value$144(value$147, return$30)
+  
+  toplevel fn someOrNone(return$33) =
+    let lit$150 = 30L
+    let struct$151 = Some(lit$150)
+    return return$33(struct$151)
+  
+  toplevel fn handleSome(return$34) =
+    let closure$155 = closure lambda$153()
+    return return$34(closure$155)
+  
+  closure fn lambda$153(self$154, param$20, return$35) =
+    drop self$154
+    if param$20.tag == Some then {
+      let x#6 = param$20.0
+      dup x#6
+      drop param$20
+      return return$35(x#6)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn handleOption(return$36) =
+    let closure$163 = closure lambda$157()
+    return return$36(closure$163)
+  
+  closure fn lambda$157(self$158, param$21, return$37) =
+-   drop self$158
+    let closure$162 = closure lambda$159(param$21)
++   drop self$158
+    return return$37(closure$162)
+  
+  closure fn lambda$159(self$160, param$22, return$38) =
+    let param$21 = self$160.cap[0]
+    dup param$21
+    drop self$160
+    if param$22.tag == Some then {
+-     drop param$21
+      let x#9 = param$22.0
+      dup x#9
++     drop param$21
+      drop param$22
+      return return$38(x#9)
+    } else {
+      if param$22.tag == None then {
+        drop param$22
+        return return$38(param$21)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn getX(return$39) =
+    let closure$167 = closure lambda$165()
+    return return$39(closure$167)
+  
+  closure fn lambda$165(self$166, param$23, return$40) =
+    drop self$166
+    if  then {
+      return param$23.x(return$40)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn main(return$41) =
+    let closure$293 = closure lambda$169()
+    return return$41(closure$293)
+  
+  closure fn lambda$169(self$170, param$24, return$42) =
+    drop param$24
+    drop self$170
+    if  then {
+      let then$122 = closure join$171(return$42)
+      let apply$123 = closure join$286(then$122)
+      return getX(apply$123)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$171(self$172, value$173) =
+    let return$42 = self$172.cap[0]
+    dup return$42
+-   drop self$172
+    let then$121 = closure join$174(return$42, value$173)
++   drop self$172
+    return getX(then$121)
+  
+  closure fn join$174(self$175, value$176) =
+    let return$42 = self$175.cap[0]
+    dup return$42
+    let value$173 = self$175.cap[1]
+    dup value$173
+-   drop self$175
+    let return$53 = closure join$177(return$42, value$173, value$176)
++   drop self$175
+    return wideRecord(return$53)
+  
+  closure fn join$177(self$178, value$179) =
+    let return$42 = self$178.cap[0]
+    dup return$42
+    let value$173 = self$178.cap[1]
+    dup value$173
+    let value$176 = self$178.cap[2]
+    dup value$176
+-   drop self$178
+    let then$119 = closure join$180(return$42, value$173)
++   drop self$178
+    return value$176(value$179, then$119)
+  
+  closure fn join$180(self$181, value$182) =
+    let return$42 = self$181.cap[0]
+    dup return$42
+    let value$173 = self$181.cap[1]
+    dup value$173
+-   drop self$181
+    let then$117 = closure join$183(return$42, value$173, value$182)
+    let apply$118 = closure join$273(then$117)
++   drop self$181
+    return sumXY(apply$118)
+  
+  closure fn join$183(self$184, value$185) =
+    let return$42 = self$184.cap[0]
+    dup return$42
+    let value$173 = self$184.cap[1]
+    dup value$173
+    let value$182 = self$184.cap[2]
+    dup value$182
+-   drop self$184
+    let then$116 = closure join$186(return$42, value$173, value$182, value$185)
++   drop self$184
+    return handleSome(then$116)
+  
+  closure fn join$186(self$187, value$188) =
+    let return$42 = self$187.cap[0]
+    dup return$42
+    let value$173 = self$187.cap[1]
+    dup value$173
+    let value$182 = self$187.cap[2]
+    dup value$182
+    let value$185 = self$187.cap[3]
+    dup value$185
+-   drop self$187
+    let return$49 = closure join$189( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$188 )
++   drop self$187
+    return someOrNone(return$49)
+  
+  closure fn join$189(self$190, value$191) =
+    let return$42 = self$190.cap[0]
+    dup return$42
+    let value$173 = self$190.cap[1]
+    dup value$173
+    let value$182 = self$190.cap[2]
+    dup value$182
+    let value$185 = self$190.cap[3]
+    dup value$185
+    let value$188 = self$190.cap[4]
+    dup value$188
+-   drop self$190
+    let then$114 = closure join$192(return$42, value$173, value$182, value$185)
++   drop self$190
+    return value$188(value$191, then$114)
+  
+  closure fn join$192(self$193, value$194) =
+    let return$42 = self$193.cap[0]
+    dup return$42
+    let value$173 = self$193.cap[1]
+    dup value$173
+    let value$182 = self$193.cap[2]
+    dup value$182
+    let value$185 = self$193.cap[3]
+    dup value$185
+-   drop self$193
+    let then$112 = closure join$195( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194 )
+    let apply$113 = closure join$269(then$112)
++   drop self$193
+    return handleOption(apply$113)
+  
+  closure fn join$195(self$196, value$197) =
+    let return$42 = self$196.cap[0]
+    dup return$42
+    let value$173 = self$196.cap[1]
+    dup value$173
+    let value$182 = self$196.cap[2]
+    dup value$182
+    let value$185 = self$196.cap[3]
+    dup value$185
+    let value$194 = self$196.cap[4]
+    dup value$194
+-   drop self$196
+    let return$48 = closure join$198( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194
+    , value$197 )
++   drop self$196
+    return someOrNone(return$48)
+  
+  closure fn join$198(self$199, value$200) =
+    let return$42 = self$199.cap[0]
+    dup return$42
+    let value$173 = self$199.cap[1]
+    dup value$173
+    let value$182 = self$199.cap[2]
+    dup value$182
+    let value$185 = self$199.cap[3]
+    dup value$185
+    let value$194 = self$199.cap[4]
+    dup value$194
+    let value$197 = self$199.cap[5]
+    dup value$197
+-   drop self$199
+    let then$110 = closure join$201( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194 )
++   drop self$199
+    return value$197(value$200, then$110)
+  
+  closure fn join$201(self$202, value$203) =
+    let return$42 = self$202.cap[0]
+    dup return$42
+    let value$173 = self$202.cap[1]
+    dup value$173
+    let value$182 = self$202.cap[2]
+    dup value$182
+    let value$185 = self$202.cap[3]
+    dup value$185
+    let value$194 = self$202.cap[4]
+    dup value$194
+-   drop self$202
+    let then$107 = closure join$204( return$42
+    , value$173
+    , value$182
+    , value$185
+    , value$194
+    , value$203 )
+    let apply$108 = closure join$261(then$107)
+    let apply$109 = closure join$265(apply$108)
++   drop self$202
+    return handleOption(apply$109)
+  
+  closure fn join$204(self$205, value$206) =
+    let return$42 = self$205.cap[0]
+    dup return$42
+    let value$173 = self$205.cap[1]
+    dup value$173
+    let value$182 = self$205.cap[2]
+    dup value$182
+    let value$185 = self$205.cap[3]
+    dup value$185
+    let value$194 = self$205.cap[4]
+    dup value$194
+    let value$203 = self$205.cap[5]
+    dup value$203
+-   drop self$205
+    let then$105 = closure join$207( return$42
+    , value$182
+    , value$185
+    , value$194
+    , value$203
+    , value$206 )
+    let apply$106 = closure join$258(then$105, value$173)
++   drop self$205
+    return addInt64#(apply$106)
+  
+  closure fn join$207(self$208, value$209) =
+    let return$42 = self$208.cap[0]
+    dup return$42
+    let value$182 = self$208.cap[1]
+    dup value$182
+    let value$185 = self$208.cap[2]
+    dup value$185
+    let value$194 = self$208.cap[3]
+    dup value$194
+    let value$203 = self$208.cap[4]
+    dup value$203
+    let value$206 = self$208.cap[5]
+    dup value$206
+-   drop self$208
+    let return$44 = closure join$210(return$42, value$209)
+    let then$98 = closure join$225( return$44
+    , value$185
+    , value$194
+    , value$203
+    , value$206 )
+    let apply$99 = closure join$255(then$98, value$182)
++   drop self$208
+    return addInt64#(apply$99)
+  
+  closure fn join$210(self$211, value$212) =
+    let return$42 = self$211.cap[0]
+    dup return$42
+    let value$209 = self$211.cap[1]
+    dup value$209
+-   drop self$211
+    let then$103 = closure join$213(return$42)
++   drop self$211
+    return value$209(value$212, then$103)
+  
+  closure fn join$213(self$214, value$215) =
+    let return$42 = self$214.cap[0]
+    dup return$42
+-   drop self$214
+    let then$102 = closure join$216(return$42, value$215)
++   drop self$214
+    return printString#(then$102)
+  
+  closure fn join$216(self$217, value$218) =
+    let return$42 = self$217.cap[0]
+    dup return$42
+    let value$215 = self$217.cap[1]
+    dup value$215
+-   drop self$217
+    let return$43 = closure join$219(return$42, value$218)
+    let apply$100 = closure join$222(return$43, value$215)
++   drop self$217
+    return toStringInt64#(apply$100)
+  
+  closure fn join$219(self$220, value$221) =
+    let return$42 = self$220.cap[0]
+    dup return$42
+    let value$218 = self$220.cap[1]
+    dup value$218
+    drop self$220
+    return value$218(value$221, return$42)
+  
+  closure fn join$222(self$223, value$224) =
+    let return$43 = self$223.cap[0]
+    dup return$43
+    let value$215 = self$223.cap[1]
+    dup value$215
+    drop self$223
+    return value$224(value$215, return$43)
+  
+  closure fn join$225(self$226, value$227) =
+    let return$44 = self$226.cap[0]
+    dup return$44
+    let value$185 = self$226.cap[1]
+    dup value$185
+    let value$194 = self$226.cap[2]
+    dup value$194
+    let value$203 = self$226.cap[3]
+    dup value$203
+    let value$206 = self$226.cap[4]
+    dup value$206
+-   drop self$226
+    let return$45 = closure join$228(return$44, value$227)
+    let then$95 = closure join$231(return$45, value$194, value$203, value$206)
+    let apply$96 = closure join$252(then$95, value$185)
++   drop self$226
+    return addInt64#(apply$96)
+  
+  closure fn join$228(self$229, value$230) =
+    let return$44 = self$229.cap[0]
+    dup return$44
+    let value$227 = self$229.cap[1]
+    dup value$227
+    drop self$229
+    return value$227(value$230, return$44)
+  
+  closure fn join$231(self$232, value$233) =
+    let return$45 = self$232.cap[0]
+    dup return$45
+    let value$194 = self$232.cap[1]
+    dup value$194
+    let value$203 = self$232.cap[2]
+    dup value$203
+    let value$206 = self$232.cap[3]
+    dup value$206
+-   drop self$232
+    let return$46 = closure join$234(return$45, value$233)
+    let then$92 = closure join$237(return$46, value$203, value$206)
+    let apply$93 = closure join$249(then$92, value$194)
++   drop self$232
+    return addInt64#(apply$93)
+  
+  closure fn join$234(self$235, value$236) =
+    let return$45 = self$235.cap[0]
+    dup return$45
+    let value$233 = self$235.cap[1]
+    dup value$233
+    drop self$235
+    return value$233(value$236, return$45)
+  
+  closure fn join$237(self$238, value$239) =
+    let return$46 = self$238.cap[0]
+    dup return$46
+    let value$203 = self$238.cap[1]
+    dup value$203
+    let value$206 = self$238.cap[2]
+    dup value$206
+-   drop self$238
+    let return$47 = closure join$240(return$46, value$239)
+    let apply$89 = closure join$243(return$47, value$206)
+    let apply$90 = closure join$246(apply$89, value$203)
++   drop self$238
+    return addInt64#(apply$90)
+  
+  closure fn join$240(self$241, value$242) =
+    let return$46 = self$241.cap[0]
+    dup return$46
+    let value$239 = self$241.cap[1]
+    dup value$239
+    drop self$241
+    return value$239(value$242, return$46)
+  
+  closure fn join$243(self$244, value$245) =
+    let return$47 = self$244.cap[0]
+    dup return$47
+    let value$206 = self$244.cap[1]
+    dup value$206
+    drop self$244
+    return value$245(value$206, return$47)
+  
+  closure fn join$246(self$247, value$248) =
+    let apply$89 = self$247.cap[0]
+    dup apply$89
+    let value$203 = self$247.cap[1]
+    dup value$203
+    drop self$247
+    return value$248(value$203, apply$89)
+  
+  closure fn join$249(self$250, value$251) =
+    let then$92 = self$250.cap[0]
+    dup then$92
+    let value$194 = self$250.cap[1]
+    dup value$194
+    drop self$250
+    return value$251(value$194, then$92)
+  
+  closure fn join$252(self$253, value$254) =
+    let then$95 = self$253.cap[0]
+    dup then$95
+    let value$185 = self$253.cap[1]
+    dup value$185
+    drop self$253
+    return value$254(value$185, then$95)
+  
+  closure fn join$255(self$256, value$257) =
+    let then$98 = self$256.cap[0]
+    dup then$98
+    let value$182 = self$256.cap[1]
+    dup value$182
+    drop self$256
+    return value$257(value$182, then$98)
+  
+  closure fn join$258(self$259, value$260) =
+    let then$105 = self$259.cap[0]
+    dup then$105
+    let value$173 = self$259.cap[1]
+    dup value$173
+    drop self$259
+    return value$260(value$173, then$105)
+  
+  closure fn join$261(self$262, value$263) =
+    let then$107 = self$262.cap[0]
+    dup then$107
+-   drop self$262
++   dropReuse reuse$312 = self$262 /0
+-   let struct$264 = None()
++   let struct$264 = reuse reuse$312 None()
+    return value$263(struct$264, then$107)
+  
+  closure fn join$265(self$266, value$267) =
+    let apply$108 = self$266.cap[0]
+    dup apply$108
+-   drop self$266
+    let lit$268 = 7L
++   drop self$266
+    return value$267(lit$268, apply$108)
+  
+  closure fn join$269(self$270, value$271) =
+    let then$112 = self$270.cap[0]
+    dup then$112
+-   drop self$270
+    let lit$272 = 7L
++   drop self$270
+    return value$271(lit$272, then$112)
+  
+  closure fn join$273(self$274, value$275) =
+    let then$117 = self$274.cap[0]
+    dup then$117
+-   drop self$274
+    let record$285 = record( x = field$276
+    , y = field$279
+    , z = field$282 ) captures()
++   drop self$274
+    return value$275(record$285, then$117)
+  
+  field fn field$276(self$277, return$50) =
+-   drop self$277
+    let lit$278 = 1L
++   drop self$277
+    return return$50(lit$278)
+  
+  field fn field$279(self$280, return$51) =
+-   drop self$280
+    let lit$281 = 2L
++   drop self$280
+    return return$51(lit$281)
+  
+  field fn field$282(self$283, return$52) =
+-   drop self$283
+    let lit$284 = 3L
++   drop self$283
+    return return$52(lit$284)
+  
+  closure fn join$286(self$287, value$288) =
+    let then$122 = self$287.cap[0]
+    dup then$122
+-   drop self$287
+    let record$292 = record(x = field$289) captures()
++   drop self$287
+    return value$288(record$292, then$122)
+  
+  field fn field$289(self$290, return$54) =
+-   drop self$290
+    let lit$291 = 10L
++   drop self$290
+    return return$54(lit$291)
+  
+  toplevel fn Some(return$55) =
+    let closure$298 = closure lambda$295()
+    return return$55(closure$298)
+  
+  closure fn lambda$295(self$296, constructor$25, return$56) =
+-   drop self$296
++   dropReuse reuse$313 = self$296 /1
+-   let struct$297 = Some(constructor$25)
++   let struct$297 = reuse reuse$313 Some(constructor$25)
+    return return$56(struct$297)
+  
+  toplevel fn None(return$57) =
+    let struct$300 = None()
+    return return$57(struct$300)
+  
+  toplevel fn zig_main$303() =
+    let finish$301 = closure join$305()
+    let after_main$302 = closure join$308(finish$301)
+    return main(after_main$302)
+  
+  closure fn join$305(self$306, value$307) =
+    drop self$306
+    return value$307
+  
+  closure fn join$308(self$309, value$310) =
+    let finish$301 = self$309.cap[0]
+    dup finish$301
+-   drop self$309
++   dropReuse reuse$314 = self$309 /0
+-   let struct$311 = Tuple()
++   let struct$311 = reuse reuse$314 Tuple()
+    return value$310(struct$311, finish$301)
+  
+  entry = zig_main$303

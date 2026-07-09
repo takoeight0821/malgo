@@ -1,0 +1,1186 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+type Inner  = {val : Int32}
+
+type Middle  = {inner : Inner}
+
+type Outer  = {middle : Middle}
+
+def nested =
+  codata {
+    #.middle.inner.val -> 42
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        printString(toStringInt32(nested.middle.inner.val))
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+type Inner  = {val : Int32}
+
+type Middle  = {inner : Inner}
+
+type Outer  = {middle : Middle}
+
+def nested =
+  codata {
+    #.middle.inner.val -> Int32#(42)
+  }
+
+def main =
+  fn {
+    _#0 ->
+      {
+        printString(toStringInt32(nested.middle.inner.val))
+      }
+  }
+
+=== ToFun ===
+def nested = {middle = {inner = {val = invoke Int32#(42)}}}
+
+def main =
+  \param$1 ->
+    case param$1 of {
+      _#0 ->
+        invoke printString(invoke toStringInt32(invoke nested.middle.inner.val))
+    }
+
+=== SaturateCtor ===
+def nested = {middle = {inner = {val = invoke Int32#(42)}}}
+
+def main =
+  \param$1 ->
+    case param$1 of {
+      _#0 ->
+        invoke printString(invoke toStringInt32(invoke nested.middle.inner.val))
+    }
+
+=== ReuseSpecialize ===
+def nested = {middle = {inner = {val = invoke Int32#(42)}}}
+
+def main =
+  \param$1 ->
+    case param$1 of {
+      _#0 ->
+        invoke printString(invoke toStringInt32(invoke nested.middle.inner.val))
+    }
+
+=== ToCore ===
+def nested(return$2) =
+  { middle(return$3) = {
+    { inner(return$4) = {
+      { val(return$5) = {
+        invoke Int32# ~ (42, return$5)
+      } } ~ return$4
+    } } ~ return$3
+  } } ~ return$2
+
+def main(return$6) =
+  \param$1 return$7 . {
+    param$1 ~ select {
+      _#0 ->
+        invoke printString ~ ( do return$8 . {
+          invoke toStringInt32 ~ ( do return$9 . {
+            invoke nested ~ .middle -> .inner -> .val -> return$9
+          }
+          , return$8 )
+        }
+        , return$7 )
+    }
+  } ~ return$6
+
+=== Flat ===
+def nested(return$2) =
+  { middle(return$3) = {
+    { inner(return$4) = {
+      { val(return$5) = {
+        invoke Int32# ~ (42, return$5)
+      } } ~ return$4
+    } } ~ return$3
+  } } ~ return$2
+
+def main(return$6) =
+  \param$1 return$7 . {
+    param$1 ~ select {
+      _#0 ->
+        invoke printString ~ then outer$10 -> {
+          join return$8 = then inner$11 -> {
+            outer$10 ~ (inner$11, return$7)
+          }
+          in invoke toStringInt32 ~ then outer$12 -> {
+            join return$9 = then inner$13 -> {
+              outer$12 ~ (inner$13, return$8)
+            }
+            in invoke nested ~ .middle -> .inner -> .val -> return$9
+          }
+        }
+    }
+  } ~ return$6
+
+=== Join ===
+def nested(return$2) =
+  { middle(return$3) = {
+    { inner(return$4) = {
+      { val(return$5) = {
+        join apply$14 = (42, return$5)
+        in invoke Int32# ~ apply$14
+      } } ~ return$4
+    } } ~ return$3
+  } } ~ return$2
+
+def main(return$6) =
+  \param$1 return$7 . {
+    join select$22 = select {
+      _#0 ->
+        join then$21 = then outer$10 -> {
+          join return$8 = then inner$11 -> {
+            join apply$20 = (inner$11, return$7)
+            in outer$10 ~ apply$20
+          }
+          in join then$19 = then outer$12 -> {
+            join return$9 = then inner$13 -> {
+              join apply$18 = (inner$13, return$8)
+              in outer$12 ~ apply$18
+            }
+            in join project$15 = .val -> return$9
+            in join project$16 = .inner -> project$15
+            in join project$17 = .middle -> project$16
+            in invoke nested ~ project$17
+          }
+          in invoke toStringInt32 ~ then$19
+        }
+        in invoke printString ~ then$21
+    }
+    in param$1 ~ select$22
+  } ~ return$6
+
+=== ClosureConv ===
+toplevel fn nested(return$2) =
+  let record$36 = record(middle = field$24) captures()
+  return return$2(record$36)
+
+field fn field$24(self$25, return$3) =
+  let record$35 = record(inner = field$26) captures()
+  return return$3(record$35)
+
+field fn field$26(self$27, return$4) =
+  let record$34 = record(val = field$28) captures()
+  return return$4(record$34)
+
+field fn field$28(self$29, return$5) =
+  let apply$14 = closure join$30(return$5)
+  return Int32#(apply$14)
+
+closure fn join$30(self$31, value$32) =
+  let return$5 = self$31.cap[0]
+  let lit$33 = 42
+  return value$32(lit$33, return$5)
+
+toplevel fn main(return$6) =
+  let closure$61 = closure lambda$38()
+  return return$6(closure$61)
+
+closure fn lambda$38(self$39, param$1, return$7) =
+  if  then {
+    let _#0 = param$1
+    let then$21 = closure join$40(return$7)
+    return printString(then$21)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$40(self$41, value$42) =
+  let return$7 = self$41.cap[0]
+  let return$8 = closure join$43(return$7, value$42)
+  let then$19 = closure join$46(return$8)
+  return toStringInt32(then$19)
+
+closure fn join$43(self$44, value$45) =
+  let return$7 = self$44.cap[0]
+  let value$42 = self$44.cap[1]
+  return value$42(value$45, return$7)
+
+closure fn join$46(self$47, value$48) =
+  let return$8 = self$47.cap[0]
+  let return$9 = closure join$49(return$8, value$48)
+  let project$15 = closure join$52(return$9)
+  let project$16 = closure join$55(project$15)
+  let project$17 = closure join$58(project$16)
+  return nested(project$17)
+
+closure fn join$49(self$50, value$51) =
+  let return$8 = self$50.cap[0]
+  let value$48 = self$50.cap[1]
+  return value$48(value$51, return$8)
+
+closure fn join$52(self$53, value$54) =
+  let return$9 = self$53.cap[0]
+  return value$54.val(return$9)
+
+closure fn join$55(self$56, value$57) =
+  let project$15 = self$56.cap[0]
+  return value$57.inner(project$15)
+
+closure fn join$58(self$59, value$60) =
+  let project$16 = self$59.cap[0]
+  return value$60.middle(project$16)
+
+toplevel fn zig_main$64() =
+  let finish$62 = closure join$66()
+  let after_main$63 = closure join$69(finish$62)
+  return main(after_main$63)
+
+closure fn join$66(self$67, value$68) = return value$68
+
+closure fn join$69(self$70, value$71) =
+  let finish$62 = self$70.cap[0]
+  let struct$72 = Tuple()
+  return value$71(struct$72, finish$62)
+
+entry = zig_main$64
+
+=== Peephole ===
+toplevel fn nested(return$2) =
+  let record$36 = record(middle = field$24) captures()
+  return return$2(record$36)
+
+field fn field$24(self$25, return$3) =
+  let record$35 = record(inner = field$26) captures()
+  return return$3(record$35)
+
+field fn field$26(self$27, return$4) =
+  let record$34 = record(val = field$28) captures()
+  return return$4(record$34)
+
+field fn field$28(self$29, return$5) =
+  let apply$14 = closure join$30(return$5)
+  return Int32#(apply$14)
+
+closure fn join$30(self$31, value$32) =
+  let return$5 = self$31.cap[0]
+  let lit$33 = 42
+  return value$32(lit$33, return$5)
+
+toplevel fn main(return$6) =
+  let closure$61 = closure lambda$38()
+  return return$6(closure$61)
+
+closure fn lambda$38(self$39, param$1, return$7) =
+  if  then {
+    let then$21 = closure join$40(return$7)
+    return printString(then$21)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$40(self$41, value$42) =
+  let return$7 = self$41.cap[0]
+  let return$8 = closure join$43(return$7, value$42)
+  let then$19 = closure join$46(return$8)
+  return toStringInt32(then$19)
+
+closure fn join$43(self$44, value$45) =
+  let return$7 = self$44.cap[0]
+  let value$42 = self$44.cap[1]
+  return value$42(value$45, return$7)
+
+closure fn join$46(self$47, value$48) =
+  let return$8 = self$47.cap[0]
+  let return$9 = closure join$49(return$8, value$48)
+  let project$15 = closure join$52(return$9)
+  let project$16 = closure join$55(project$15)
+  let project$17 = closure join$58(project$16)
+  return nested(project$17)
+
+closure fn join$49(self$50, value$51) =
+  let return$8 = self$50.cap[0]
+  let value$48 = self$50.cap[1]
+  return value$48(value$51, return$8)
+
+closure fn join$52(self$53, value$54) =
+  let return$9 = self$53.cap[0]
+  return value$54.val(return$9)
+
+closure fn join$55(self$56, value$57) =
+  let project$15 = self$56.cap[0]
+  return value$57.inner(project$15)
+
+closure fn join$58(self$59, value$60) =
+  let project$16 = self$59.cap[0]
+  return value$60.middle(project$16)
+
+toplevel fn zig_main$64() =
+  let finish$62 = closure join$66()
+  let after_main$63 = closure join$69(finish$62)
+  return main(after_main$63)
+
+closure fn join$66(self$67, value$68) = return value$68
+
+closure fn join$69(self$70, value$71) =
+  let finish$62 = self$70.cap[0]
+  let struct$72 = Tuple()
+  return value$71(struct$72, finish$62)
+
+entry = zig_main$64
+
+=== Perceus ===
+toplevel fn nested(return$2) =
+  let record$36 = record(middle = field$24) captures()
+  return return$2(record$36)
+
+field fn field$24(self$25, return$3) =
+  drop self$25
+  let record$35 = record(inner = field$26) captures()
+  return return$3(record$35)
+
+field fn field$26(self$27, return$4) =
+  drop self$27
+  let record$34 = record(val = field$28) captures()
+  return return$4(record$34)
+
+field fn field$28(self$29, return$5) =
+  drop self$29
+  let apply$14 = closure join$30(return$5)
+  return Int32#(apply$14)
+
+closure fn join$30(self$31, value$32) =
+  let return$5 = self$31.cap[0]
+  dup return$5
+  drop self$31
+  let lit$33 = 42
+  return value$32(lit$33, return$5)
+
+toplevel fn main(return$6) =
+  let closure$61 = closure lambda$38()
+  return return$6(closure$61)
+
+closure fn lambda$38(self$39, param$1, return$7) =
+  drop param$1
+  drop self$39
+  if  then {
+    let then$21 = closure join$40(return$7)
+    return printString(then$21)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$40(self$41, value$42) =
+  let return$7 = self$41.cap[0]
+  dup return$7
+  drop self$41
+  let return$8 = closure join$43(return$7, value$42)
+  let then$19 = closure join$46(return$8)
+  return toStringInt32(then$19)
+
+closure fn join$43(self$44, value$45) =
+  let return$7 = self$44.cap[0]
+  dup return$7
+  let value$42 = self$44.cap[1]
+  dup value$42
+  drop self$44
+  return value$42(value$45, return$7)
+
+closure fn join$46(self$47, value$48) =
+  let return$8 = self$47.cap[0]
+  dup return$8
+  drop self$47
+  let return$9 = closure join$49(return$8, value$48)
+  let project$15 = closure join$52(return$9)
+  let project$16 = closure join$55(project$15)
+  let project$17 = closure join$58(project$16)
+  return nested(project$17)
+
+closure fn join$49(self$50, value$51) =
+  let return$8 = self$50.cap[0]
+  dup return$8
+  let value$48 = self$50.cap[1]
+  dup value$48
+  drop self$50
+  return value$48(value$51, return$8)
+
+closure fn join$52(self$53, value$54) =
+  let return$9 = self$53.cap[0]
+  dup return$9
+  drop self$53
+  return value$54.val(return$9)
+
+closure fn join$55(self$56, value$57) =
+  let project$15 = self$56.cap[0]
+  dup project$15
+  drop self$56
+  return value$57.inner(project$15)
+
+closure fn join$58(self$59, value$60) =
+  let project$16 = self$59.cap[0]
+  dup project$16
+  drop self$59
+  return value$60.middle(project$16)
+
+toplevel fn zig_main$64() =
+  let finish$62 = closure join$66()
+  let after_main$63 = closure join$69(finish$62)
+  return main(after_main$63)
+
+closure fn join$66(self$67, value$68) =
+  drop self$67
+  return value$68
+
+closure fn join$69(self$70, value$71) =
+  let finish$62 = self$70.cap[0]
+  dup finish$62
+  drop self$70
+  let struct$72 = Tuple()
+  return value$71(struct$72, finish$62)
+
+entry = zig_main$64
+
+=== Reuse ===
+toplevel fn nested(return$2) =
+  let record$36 = record(middle = field$24) captures()
+  return return$2(record$36)
+
+field fn field$24(self$25, return$3) =
+  let record$35 = record(inner = field$26) captures()
+  drop self$25
+  return return$3(record$35)
+
+field fn field$26(self$27, return$4) =
+  let record$34 = record(val = field$28) captures()
+  drop self$27
+  return return$4(record$34)
+
+field fn field$28(self$29, return$5) =
+  let apply$14 = closure join$30(return$5)
+  drop self$29
+  return Int32#(apply$14)
+
+closure fn join$30(self$31, value$32) =
+  let return$5 = self$31.cap[0]
+  dup return$5
+  let lit$33 = 42
+  drop self$31
+  return value$32(lit$33, return$5)
+
+toplevel fn main(return$6) =
+  let closure$61 = closure lambda$38()
+  return return$6(closure$61)
+
+closure fn lambda$38(self$39, param$1, return$7) =
+  drop param$1
+  drop self$39
+  if  then {
+    let then$21 = closure join$40(return$7)
+    return printString(then$21)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$40(self$41, value$42) =
+  let return$7 = self$41.cap[0]
+  dup return$7
+  let return$8 = closure join$43(return$7, value$42)
+  let then$19 = closure join$46(return$8)
+  drop self$41
+  return toStringInt32(then$19)
+
+closure fn join$43(self$44, value$45) =
+  let return$7 = self$44.cap[0]
+  dup return$7
+  let value$42 = self$44.cap[1]
+  dup value$42
+  drop self$44
+  return value$42(value$45, return$7)
+
+closure fn join$46(self$47, value$48) =
+  let return$8 = self$47.cap[0]
+  dup return$8
+  let return$9 = closure join$49(return$8, value$48)
+  let project$15 = closure join$52(return$9)
+  let project$16 = closure join$55(project$15)
+  let project$17 = closure join$58(project$16)
+  drop self$47
+  return nested(project$17)
+
+closure fn join$49(self$50, value$51) =
+  let return$8 = self$50.cap[0]
+  dup return$8
+  let value$48 = self$50.cap[1]
+  dup value$48
+  drop self$50
+  return value$48(value$51, return$8)
+
+closure fn join$52(self$53, value$54) =
+  let return$9 = self$53.cap[0]
+  dup return$9
+  drop self$53
+  return value$54.val(return$9)
+
+closure fn join$55(self$56, value$57) =
+  let project$15 = self$56.cap[0]
+  dup project$15
+  drop self$56
+  return value$57.inner(project$15)
+
+closure fn join$58(self$59, value$60) =
+  let project$16 = self$59.cap[0]
+  dup project$16
+  drop self$59
+  return value$60.middle(project$16)
+
+toplevel fn zig_main$64() =
+  let finish$62 = closure join$66()
+  let after_main$63 = closure join$69(finish$62)
+  return main(after_main$63)
+
+closure fn join$66(self$67, value$68) =
+  drop self$67
+  return value$68
+
+closure fn join$69(self$70, value$71) =
+  let finish$62 = self$70.cap[0]
+  dup finish$62
+  dropReuse reuse$73 = self$70 /0
+  let struct$72 = reuse reuse$73 Tuple()
+  return value$71(struct$72, finish$62)
+
+entry = zig_main$64
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  type Inner  = {val : Int32}
+  
+  type Middle  = {inner : Inner}
+  
+  type Outer  = {middle : Middle}
+  
+  def nested =
+    codata {
+-     #.middle.inner.val -> 42
++     #.middle.inner.val -> Int32#(42)
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#0 ->
+        {
+          printString(toStringInt32(nested.middle.inner.val))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
++ def nested = {middle = {inner = {val = invoke Int32#(42)}}}
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- type Inner  = {val : Int32}
+- 
+- type Middle  = {inner : Inner}
+- 
+- type Outer  = {middle : Middle}
+- 
+- def nested =
+-   codata {
+-     #.middle.inner.val -> Int32#(42)
+-   }
+  
+  def main =
+-   fn {
++   \param$1 ->
+-     _#0 ->
++     case param$1 of {
+-       {
++       _#0 ->
+-         printString(toStringInt32(nested.middle.inner.val))
++         invoke printString(invoke toStringInt32(invoke nested.middle.inner.val))
+-       }
++     }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def nested = {middle = {inner = {val = invoke Int32#(42)}}}
+  
+  def main =
+    \param$1 ->
+      case param$1 of {
+        _#0 ->
+          invoke printString(invoke toStringInt32(invoke nested.middle.inner.val))
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def nested = {middle = {inner = {val = invoke Int32#(42)}}}
+  
+  def main =
+    \param$1 ->
+      case param$1 of {
+        _#0 ->
+          invoke printString(invoke toStringInt32(invoke nested.middle.inner.val))
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def nested = {middle = {inner = {val = invoke Int32#(42)}}}
++ def nested(return$2) =
++   { middle(return$3) = {
++     { inner(return$4) = {
++       { val(return$5) = {
++         invoke Int32# ~ (42, return$5)
++       } } ~ return$4
++     } } ~ return$3
++   } } ~ return$2
+  
+- def main =
++ def main(return$6) =
+-   \param$1 ->
++   \param$1 return$7 . {
+-     case param$1 of {
++     param$1 ~ select {
+        _#0 ->
+-         invoke printString(invoke toStringInt32(invoke nested.middle.inner.val))
++         invoke printString ~ ( do return$8 . {
++           invoke toStringInt32 ~ ( do return$9 . {
++             invoke nested ~ .middle -> .inner -> .val -> return$9
++           }
++           , return$8 )
++         }
++         , return$7 )
+      }
++   } ~ return$6
+
+
+=== ToCore -> Flat ===
+  def nested(return$2) =
+    { middle(return$3) = {
+      { inner(return$4) = {
+        { val(return$5) = {
+          invoke Int32# ~ (42, return$5)
+        } } ~ return$4
+      } } ~ return$3
+    } } ~ return$2
+  
+  def main(return$6) =
+    \param$1 return$7 . {
+      param$1 ~ select {
+        _#0 ->
+-         invoke printString ~ ( do return$8 . {
++         invoke printString ~ then outer$10 -> {
+-           invoke toStringInt32 ~ ( do return$9 . {
++           join return$8 = then inner$11 -> {
+-             invoke nested ~ .middle -> .inner -> .val -> return$9
++             outer$10 ~ (inner$11, return$7)
+            }
+-           , return$8 )
++           in invoke toStringInt32 ~ then outer$12 -> {
++             join return$9 = then inner$13 -> {
++               outer$12 ~ (inner$13, return$8)
++             }
++             in invoke nested ~ .middle -> .inner -> .val -> return$9
++           }
+          }
+-         , return$7 )
+      }
+    } ~ return$6
+
+
+=== Flat -> Join ===
+  def nested(return$2) =
+    { middle(return$3) = {
+      { inner(return$4) = {
+        { val(return$5) = {
+-         invoke Int32# ~ (42, return$5)
++         join apply$14 = (42, return$5)
++         in invoke Int32# ~ apply$14
+        } } ~ return$4
+      } } ~ return$3
+    } } ~ return$2
+  
+  def main(return$6) =
+    \param$1 return$7 . {
+-     param$1 ~ select {
++     join select$22 = select {
+        _#0 ->
+-         invoke printString ~ then outer$10 -> {
++         join then$21 = then outer$10 -> {
+            join return$8 = then inner$11 -> {
+-             outer$10 ~ (inner$11, return$7)
++             join apply$20 = (inner$11, return$7)
++             in outer$10 ~ apply$20
+            }
+-           in invoke toStringInt32 ~ then outer$12 -> {
++           in join then$19 = then outer$12 -> {
+              join return$9 = then inner$13 -> {
+-               outer$12 ~ (inner$13, return$8)
++               join apply$18 = (inner$13, return$8)
++               in outer$12 ~ apply$18
+              }
+-             in invoke nested ~ .middle -> .inner -> .val -> return$9
++             in join project$15 = .val -> return$9
++             in join project$16 = .inner -> project$15
++             in join project$17 = .middle -> project$16
++             in invoke nested ~ project$17
+            }
++           in invoke toStringInt32 ~ then$19
+          }
++         in invoke printString ~ then$21
+      }
++     in param$1 ~ select$22
+    } ~ return$6
+
+
+=== Join -> ClosureConv ===
+- def nested(return$2) =
++ toplevel fn nested(return$2) =
+-   { middle(return$3) = {
++   let record$36 = record(middle = field$24) captures()
+-     { inner(return$4) = {
++   return return$2(record$36)
+-       { val(return$5) = {
+-         join apply$14 = (42, return$5)
+-         in invoke Int32# ~ apply$14
+-       } } ~ return$4
+-     } } ~ return$3
+-   } } ~ return$2
+  
+- def main(return$6) =
++ field fn field$24(self$25, return$3) =
+-   \param$1 return$7 . {
++   let record$35 = record(inner = field$26) captures()
+-     join select$22 = select {
++   return return$3(record$35)
+-       _#0 ->
++ 
+-         join then$21 = then outer$10 -> {
++ field fn field$26(self$27, return$4) =
+-           join return$8 = then inner$11 -> {
++   let record$34 = record(val = field$28) captures()
+-             join apply$20 = (inner$11, return$7)
++   return return$4(record$34)
+-             in outer$10 ~ apply$20
++ 
+-           }
++ field fn field$28(self$29, return$5) =
+-           in join then$19 = then outer$12 -> {
++   let apply$14 = closure join$30(return$5)
+-             join return$9 = then inner$13 -> {
++   return Int32#(apply$14)
+-               join apply$18 = (inner$13, return$8)
++ 
+-               in outer$12 ~ apply$18
++ closure fn join$30(self$31, value$32) =
+-             }
++   let return$5 = self$31.cap[0]
+-             in join project$15 = .val -> return$9
++   let lit$33 = 42
+-             in join project$16 = .inner -> project$15
++   return value$32(lit$33, return$5)
+-             in join project$17 = .middle -> project$16
++ 
+-             in invoke nested ~ project$17
++ toplevel fn main(return$6) =
+-           }
++   let closure$61 = closure lambda$38()
+-           in invoke toStringInt32 ~ then$19
++   return return$6(closure$61)
+-         }
++ 
+-         in invoke printString ~ then$21
++ closure fn lambda$38(self$39, param$1, return$7) =
+-     }
++   if  then {
+-     in param$1 ~ select$22
++     let _#0 = param$1
+-   } ~ return$6
++     let then$21 = closure join$40(return$7)
++     return printString(then$21)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$40(self$41, value$42) =
++   let return$7 = self$41.cap[0]
++   let return$8 = closure join$43(return$7, value$42)
++   let then$19 = closure join$46(return$8)
++   return toStringInt32(then$19)
++ 
++ closure fn join$43(self$44, value$45) =
++   let return$7 = self$44.cap[0]
++   let value$42 = self$44.cap[1]
++   return value$42(value$45, return$7)
++ 
++ closure fn join$46(self$47, value$48) =
++   let return$8 = self$47.cap[0]
++   let return$9 = closure join$49(return$8, value$48)
++   let project$15 = closure join$52(return$9)
++   let project$16 = closure join$55(project$15)
++   let project$17 = closure join$58(project$16)
++   return nested(project$17)
++ 
++ closure fn join$49(self$50, value$51) =
++   let return$8 = self$50.cap[0]
++   let value$48 = self$50.cap[1]
++   return value$48(value$51, return$8)
++ 
++ closure fn join$52(self$53, value$54) =
++   let return$9 = self$53.cap[0]
++   return value$54.val(return$9)
++ 
++ closure fn join$55(self$56, value$57) =
++   let project$15 = self$56.cap[0]
++   return value$57.inner(project$15)
++ 
++ closure fn join$58(self$59, value$60) =
++   let project$16 = self$59.cap[0]
++   return value$60.middle(project$16)
++ 
++ toplevel fn zig_main$64() =
++   let finish$62 = closure join$66()
++   let after_main$63 = closure join$69(finish$62)
++   return main(after_main$63)
++ 
++ closure fn join$66(self$67, value$68) = return value$68
++ 
++ closure fn join$69(self$70, value$71) =
++   let finish$62 = self$70.cap[0]
++   let struct$72 = Tuple()
++   return value$71(struct$72, finish$62)
++ 
++ entry = zig_main$64
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn nested(return$2) =
+    let record$36 = record(middle = field$24) captures()
+    return return$2(record$36)
+  
+  field fn field$24(self$25, return$3) =
+    let record$35 = record(inner = field$26) captures()
+    return return$3(record$35)
+  
+  field fn field$26(self$27, return$4) =
+    let record$34 = record(val = field$28) captures()
+    return return$4(record$34)
+  
+  field fn field$28(self$29, return$5) =
+    let apply$14 = closure join$30(return$5)
+    return Int32#(apply$14)
+  
+  closure fn join$30(self$31, value$32) =
+    let return$5 = self$31.cap[0]
+    let lit$33 = 42
+    return value$32(lit$33, return$5)
+  
+  toplevel fn main(return$6) =
+    let closure$61 = closure lambda$38()
+    return return$6(closure$61)
+  
+  closure fn lambda$38(self$39, param$1, return$7) =
+    if  then {
+-     let _#0 = param$1
+      let then$21 = closure join$40(return$7)
+      return printString(then$21)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$40(self$41, value$42) =
+    let return$7 = self$41.cap[0]
+    let return$8 = closure join$43(return$7, value$42)
+    let then$19 = closure join$46(return$8)
+    return toStringInt32(then$19)
+  
+  closure fn join$43(self$44, value$45) =
+    let return$7 = self$44.cap[0]
+    let value$42 = self$44.cap[1]
+    return value$42(value$45, return$7)
+  
+  closure fn join$46(self$47, value$48) =
+    let return$8 = self$47.cap[0]
+    let return$9 = closure join$49(return$8, value$48)
+    let project$15 = closure join$52(return$9)
+    let project$16 = closure join$55(project$15)
+    let project$17 = closure join$58(project$16)
+    return nested(project$17)
+  
+  closure fn join$49(self$50, value$51) =
+    let return$8 = self$50.cap[0]
+    let value$48 = self$50.cap[1]
+    return value$48(value$51, return$8)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$9 = self$53.cap[0]
+    return value$54.val(return$9)
+  
+  closure fn join$55(self$56, value$57) =
+    let project$15 = self$56.cap[0]
+    return value$57.inner(project$15)
+  
+  closure fn join$58(self$59, value$60) =
+    let project$16 = self$59.cap[0]
+    return value$60.middle(project$16)
+  
+  toplevel fn zig_main$64() =
+    let finish$62 = closure join$66()
+    let after_main$63 = closure join$69(finish$62)
+    return main(after_main$63)
+  
+  closure fn join$66(self$67, value$68) = return value$68
+  
+  closure fn join$69(self$70, value$71) =
+    let finish$62 = self$70.cap[0]
+    let struct$72 = Tuple()
+    return value$71(struct$72, finish$62)
+  
+  entry = zig_main$64
+
+
+=== Peephole -> Perceus ===
+  toplevel fn nested(return$2) =
+    let record$36 = record(middle = field$24) captures()
+    return return$2(record$36)
+  
+  field fn field$24(self$25, return$3) =
++   drop self$25
+    let record$35 = record(inner = field$26) captures()
+    return return$3(record$35)
+  
+  field fn field$26(self$27, return$4) =
++   drop self$27
+    let record$34 = record(val = field$28) captures()
+    return return$4(record$34)
+  
+  field fn field$28(self$29, return$5) =
++   drop self$29
+    let apply$14 = closure join$30(return$5)
+    return Int32#(apply$14)
+  
+  closure fn join$30(self$31, value$32) =
+    let return$5 = self$31.cap[0]
++   dup return$5
++   drop self$31
+    let lit$33 = 42
+    return value$32(lit$33, return$5)
+  
+  toplevel fn main(return$6) =
+    let closure$61 = closure lambda$38()
+    return return$6(closure$61)
+  
+  closure fn lambda$38(self$39, param$1, return$7) =
++   drop param$1
++   drop self$39
+    if  then {
+      let then$21 = closure join$40(return$7)
+      return printString(then$21)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$40(self$41, value$42) =
+    let return$7 = self$41.cap[0]
++   dup return$7
++   drop self$41
+    let return$8 = closure join$43(return$7, value$42)
+    let then$19 = closure join$46(return$8)
+    return toStringInt32(then$19)
+  
+  closure fn join$43(self$44, value$45) =
+    let return$7 = self$44.cap[0]
++   dup return$7
+    let value$42 = self$44.cap[1]
++   dup value$42
++   drop self$44
+    return value$42(value$45, return$7)
+  
+  closure fn join$46(self$47, value$48) =
+    let return$8 = self$47.cap[0]
++   dup return$8
++   drop self$47
+    let return$9 = closure join$49(return$8, value$48)
+    let project$15 = closure join$52(return$9)
+    let project$16 = closure join$55(project$15)
+    let project$17 = closure join$58(project$16)
+    return nested(project$17)
+  
+  closure fn join$49(self$50, value$51) =
+    let return$8 = self$50.cap[0]
++   dup return$8
+    let value$48 = self$50.cap[1]
++   dup value$48
++   drop self$50
+    return value$48(value$51, return$8)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$9 = self$53.cap[0]
++   dup return$9
++   drop self$53
+    return value$54.val(return$9)
+  
+  closure fn join$55(self$56, value$57) =
+    let project$15 = self$56.cap[0]
++   dup project$15
++   drop self$56
+    return value$57.inner(project$15)
+  
+  closure fn join$58(self$59, value$60) =
+    let project$16 = self$59.cap[0]
++   dup project$16
++   drop self$59
+    return value$60.middle(project$16)
+  
+  toplevel fn zig_main$64() =
+    let finish$62 = closure join$66()
+    let after_main$63 = closure join$69(finish$62)
+    return main(after_main$63)
+  
+- closure fn join$66(self$67, value$68) = return value$68
++ closure fn join$66(self$67, value$68) =
++   drop self$67
++   return value$68
+  
+  closure fn join$69(self$70, value$71) =
+    let finish$62 = self$70.cap[0]
++   dup finish$62
++   drop self$70
+    let struct$72 = Tuple()
+    return value$71(struct$72, finish$62)
+  
+  entry = zig_main$64
+
+
+=== Perceus -> Reuse ===
+  toplevel fn nested(return$2) =
+    let record$36 = record(middle = field$24) captures()
+    return return$2(record$36)
+  
+  field fn field$24(self$25, return$3) =
+-   drop self$25
+    let record$35 = record(inner = field$26) captures()
++   drop self$25
+    return return$3(record$35)
+  
+  field fn field$26(self$27, return$4) =
+-   drop self$27
+    let record$34 = record(val = field$28) captures()
++   drop self$27
+    return return$4(record$34)
+  
+  field fn field$28(self$29, return$5) =
+-   drop self$29
+    let apply$14 = closure join$30(return$5)
++   drop self$29
+    return Int32#(apply$14)
+  
+  closure fn join$30(self$31, value$32) =
+    let return$5 = self$31.cap[0]
+    dup return$5
+-   drop self$31
+    let lit$33 = 42
++   drop self$31
+    return value$32(lit$33, return$5)
+  
+  toplevel fn main(return$6) =
+    let closure$61 = closure lambda$38()
+    return return$6(closure$61)
+  
+  closure fn lambda$38(self$39, param$1, return$7) =
+    drop param$1
+    drop self$39
+    if  then {
+      let then$21 = closure join$40(return$7)
+      return printString(then$21)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$40(self$41, value$42) =
+    let return$7 = self$41.cap[0]
+    dup return$7
+-   drop self$41
+    let return$8 = closure join$43(return$7, value$42)
+    let then$19 = closure join$46(return$8)
++   drop self$41
+    return toStringInt32(then$19)
+  
+  closure fn join$43(self$44, value$45) =
+    let return$7 = self$44.cap[0]
+    dup return$7
+    let value$42 = self$44.cap[1]
+    dup value$42
+    drop self$44
+    return value$42(value$45, return$7)
+  
+  closure fn join$46(self$47, value$48) =
+    let return$8 = self$47.cap[0]
+    dup return$8
+-   drop self$47
+    let return$9 = closure join$49(return$8, value$48)
+    let project$15 = closure join$52(return$9)
+    let project$16 = closure join$55(project$15)
+    let project$17 = closure join$58(project$16)
++   drop self$47
+    return nested(project$17)
+  
+  closure fn join$49(self$50, value$51) =
+    let return$8 = self$50.cap[0]
+    dup return$8
+    let value$48 = self$50.cap[1]
+    dup value$48
+    drop self$50
+    return value$48(value$51, return$8)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$9 = self$53.cap[0]
+    dup return$9
+    drop self$53
+    return value$54.val(return$9)
+  
+  closure fn join$55(self$56, value$57) =
+    let project$15 = self$56.cap[0]
+    dup project$15
+    drop self$56
+    return value$57.inner(project$15)
+  
+  closure fn join$58(self$59, value$60) =
+    let project$16 = self$59.cap[0]
+    dup project$16
+    drop self$59
+    return value$60.middle(project$16)
+  
+  toplevel fn zig_main$64() =
+    let finish$62 = closure join$66()
+    let after_main$63 = closure join$69(finish$62)
+    return main(after_main$63)
+  
+  closure fn join$66(self$67, value$68) =
+    drop self$67
+    return value$68
+  
+  closure fn join$69(self$70, value$71) =
+    let finish$62 = self$70.cap[0]
+    dup finish$62
+-   drop self$70
++   dropReuse reuse$73 = self$70 /0
+-   let struct$72 = Tuple()
++   let struct$72 = reuse reuse$73 Tuple()
+    return value$71(struct$72, finish$62)
+  
+  entry = zig_main$64

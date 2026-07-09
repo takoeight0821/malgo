@@ -1,0 +1,3517 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+type Stream a = {head : a, tail : Stream(a)}
+
+def streamZipWith =
+  codata {
+    #(f)(xs)(ys).head -> f(xs.head)(ys.head)
+    #(f)(xs)(ys).tail -> streamZipWith(f)(xs.tail)(ys.tail)
+  }
+
+def fib =
+  codata {
+    #.head -> 1L
+    #.tail.head -> 1L
+    #.tail.tail -> streamZipWith(addInt64)(fib)(fib.tail)
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        printString(toStringInt64(fib.tail.tail.tail.tail.tail.head))
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+type Stream a#0 = {head : a#0, tail : Stream(a#0)}
+
+def streamZipWith =
+  codata {
+    #(f#1)(xs#2)(ys#3).head -> f#1(xs#2.head)(ys#3.head)
+    #(f#4)(xs#5)(ys#6).tail -> streamZipWith(f#4)(xs#5.tail)(ys#6.tail)
+  }
+
+def fib =
+  codata {
+    #.head -> Int64#(1L)
+    #.tail.head -> Int64#(1L)
+    #.tail.tail -> streamZipWith(addInt64)(fib)(fib.tail)
+  }
+
+def main =
+  fn {
+    _#7 ->
+      {
+        printString(toStringInt64(fib.tail.tail.tail.tail.tail.head))
+      }
+  }
+
+=== ToFun ===
+def streamZipWith =
+  \param$8 ->
+    \param$9 ->
+      \param$10 ->
+        { head = case Tuple(param$8, param$9, param$10) of {
+          Tuple(f#1, xs#2, ys#3) -> f#1(xs#2.head)(ys#3.head)
+          Tuple(_$11, _$12, _$13) -> {}
+        }
+        , tail = case Tuple(param$8, param$9, param$10) of {
+          Tuple(f#4, xs#5, ys#6) ->
+            invoke streamZipWith(f#4)(xs#5.tail)(ys#6.tail)
+          Tuple(_$14, _$15, _$16) -> {}
+        } }
+
+def fib =
+  { head = invoke Int64#(1L)
+  , tail = { head = invoke Int64#(1L)
+  , tail = invoke streamZipWith( invoke addInt64 )( invoke fib )( invoke fib.tail ) } }
+
+def main =
+  \param$17 ->
+    case param$17 of {
+      _#7 ->
+        invoke printString( invoke toStringInt64( invoke fib.tail.tail.tail.tail.tail.head ) )
+    }
+
+=== SaturateCtor ===
+def streamZipWith =
+  \param$8 ->
+    \param$9 ->
+      \param$10 ->
+        { head = case Tuple(param$8, param$9, param$10) of {
+          Tuple(f#1, xs#2, ys#3) -> f#1(xs#2.head)(ys#3.head)
+          Tuple(_$11, _$12, _$13) -> {}
+        }
+        , tail = case Tuple(param$8, param$9, param$10) of {
+          Tuple(f#4, xs#5, ys#6) ->
+            invoke streamZipWith(f#4)(xs#5.tail)(ys#6.tail)
+          Tuple(_$14, _$15, _$16) -> {}
+        } }
+
+def fib =
+  { head = invoke Int64#(1L)
+  , tail = { head = invoke Int64#(1L)
+  , tail = invoke streamZipWith( invoke addInt64 )( invoke fib )( invoke fib.tail ) } }
+
+def main =
+  \param$17 ->
+    case param$17 of {
+      _#7 ->
+        invoke printString( invoke toStringInt64( invoke fib.tail.tail.tail.tail.tail.head ) )
+    }
+
+=== ReuseSpecialize ===
+def streamZipWith =
+  \param$8 ->
+    \param$9 ->
+      \param$10 ->
+        { head = case Tuple(param$8, param$9, param$10) of {
+          Tuple(f#1, xs#2, ys#3) -> f#1(xs#2.head)(ys#3.head)
+          Tuple(_$11, _$12, _$13) -> {}
+        }
+        , tail = case Tuple(param$8, param$9, param$10) of {
+          Tuple(f#4, xs#5, ys#6) ->
+            invoke streamZipWith(f#4)(xs#5.tail)(ys#6.tail)
+          Tuple(_$14, _$15, _$16) -> {}
+        } }
+
+def fib =
+  { head = invoke Int64#(1L)
+  , tail = { head = invoke Int64#(1L)
+  , tail = invoke streamZipWith( invoke addInt64 )( invoke fib )( invoke fib.tail ) } }
+
+def main =
+  \param$17 ->
+    case param$17 of {
+      _#7 ->
+        invoke printString( invoke toStringInt64( invoke fib.tail.tail.tail.tail.tail.head ) )
+    }
+
+=== ToCore ===
+def streamZipWith(return$18) =
+  \param$8 return$19 . {
+    \param$9 return$20 . {
+      \param$10 return$21 . {
+        { head(return$22) = {
+          Tuple(param$8, param$9, param$10) ~ select {
+            Tuple(f#1, xs#2, ys#3) ->
+              f#1 ~ ( do return$24 . {
+                xs#2 ~ .head -> return$24
+              }
+              , ( do return$23 . {
+                ys#3 ~ .head -> return$23
+              }
+              , return$22 ) )
+            Tuple(_$11, _$12, _$13) -> {} ~ return$22
+          }
+        }
+        , tail(return$25) = {
+          Tuple(param$8, param$9, param$10) ~ select {
+            Tuple(f#4, xs#5, ys#6) ->
+              invoke streamZipWith ~ ( f#4
+              , ( do return$27 . {
+                xs#5 ~ .tail -> return$27
+              }
+              , ( do return$26 . {
+                ys#6 ~ .tail -> return$26
+              }
+              , return$25 ) ) )
+            Tuple(_$14, _$15, _$16) -> {} ~ return$25
+          }
+        } } ~ return$21
+      } ~ return$20
+    } ~ return$19
+  } ~ return$18
+
+def fib(return$28) =
+  { head(return$29) = {
+    invoke Int64# ~ (1L, return$29)
+  }
+  , tail(return$30) = {
+    { head(return$31) = {
+      invoke Int64# ~ (1L, return$31)
+    }
+    , tail(return$32) = {
+      invoke streamZipWith ~ ( do return$35 . {
+        invoke addInt64 ~ return$35
+      }
+      , ( do return$34 . {
+        invoke fib ~ return$34
+      }
+      , ( do return$33 . {
+        invoke fib ~ .tail -> return$33
+      }
+      , return$32 ) ) )
+    } } ~ return$30
+  } } ~ return$28
+
+def main(return$36) =
+  \param$17 return$37 . {
+    param$17 ~ select {
+      _#7 ->
+        invoke printString ~ ( do return$38 . {
+          invoke toStringInt64 ~ ( do return$39 . {
+            invoke fib ~ .tail -> .tail -> .tail -> .tail -> .tail -> .head -> return$39
+          }
+          , return$38 )
+        }
+        , return$37 )
+    }
+  } ~ return$36
+
+=== Flat ===
+def streamZipWith(return$18) =
+  \param$8 return$19 . {
+    \param$9 return$20 . {
+      \param$10 return$21 . {
+        { head(return$22) = {
+          Tuple(param$8, param$9, param$10) ~ select {
+            Tuple(f#1, xs#2, ys#3) ->
+              f#1 ~ then outer$40 -> {
+                join return$24 = then inner$41 -> {
+                  outer$40 ~ ( inner$41
+                  , then outer$42 -> {
+                    join return$23 = then inner$43 -> {
+                      outer$42 ~ (inner$43, return$22)
+                    }
+                    in ys#3 ~ .head -> return$23
+                  } )
+                }
+                in xs#2 ~ .head -> return$24
+              }
+            Tuple(_$11, _$12, _$13) -> {} ~ return$22
+          }
+        }
+        , tail(return$25) = {
+          Tuple(param$8, param$9, param$10) ~ select {
+            Tuple(f#4, xs#5, ys#6) ->
+              invoke streamZipWith ~ ( f#4
+              , then outer$44 -> {
+                join return$27 = then inner$45 -> {
+                  outer$44 ~ ( inner$45
+                  , then outer$46 -> {
+                    join return$26 = then inner$47 -> {
+                      outer$46 ~ (inner$47, return$25)
+                    }
+                    in ys#6 ~ .tail -> return$26
+                  } )
+                }
+                in xs#5 ~ .tail -> return$27
+              } )
+            Tuple(_$14, _$15, _$16) -> {} ~ return$25
+          }
+        } } ~ return$21
+      } ~ return$20
+    } ~ return$19
+  } ~ return$18
+
+def fib(return$28) =
+  { head(return$29) = {
+    invoke Int64# ~ (1L, return$29)
+  }
+  , tail(return$30) = {
+    { head(return$31) = {
+      invoke Int64# ~ (1L, return$31)
+    }
+    , tail(return$32) = {
+      invoke streamZipWith ~ then outer$48 -> {
+        join return$35 = then inner$49 -> {
+          outer$48 ~ ( inner$49
+          , then outer$50 -> {
+            join return$34 = then inner$51 -> {
+              outer$50 ~ ( inner$51
+              , then outer$52 -> {
+                join return$33 = then inner$53 -> {
+                  outer$52 ~ (inner$53, return$32)
+                }
+                in invoke fib ~ .tail -> return$33
+              } )
+            }
+            in invoke fib ~ return$34
+          } )
+        }
+        in invoke addInt64 ~ return$35
+      }
+    } } ~ return$30
+  } } ~ return$28
+
+def main(return$36) =
+  \param$17 return$37 . {
+    param$17 ~ select {
+      _#7 ->
+        invoke printString ~ then outer$54 -> {
+          join return$38 = then inner$55 -> {
+            outer$54 ~ (inner$55, return$37)
+          }
+          in invoke toStringInt64 ~ then outer$56 -> {
+            join return$39 = then inner$57 -> {
+              outer$56 ~ (inner$57, return$38)
+            }
+            in invoke fib ~ .tail -> .tail -> .tail -> .tail -> .tail -> .head -> return$39
+          }
+        }
+    }
+  } ~ return$36
+
+=== Join ===
+def streamZipWith(return$18) =
+  \param$8 return$19 . {
+    \param$9 return$20 . {
+      \param$10 return$21 . {
+        { head(return$22) = {
+          join select$64 = select {
+            Tuple(f#1, xs#2, ys#3) ->
+              join then$63 = then outer$40 -> {
+                join return$24 = then inner$41 -> {
+                  join then$61 = then outer$42 -> {
+                    join return$23 = then inner$43 -> {
+                      join apply$60 = (inner$43, return$22)
+                      in outer$42 ~ apply$60
+                    }
+                    in join project$59 = .head -> return$23
+                    in ys#3 ~ project$59
+                  }
+                  in join apply$62 = (inner$41, then$61)
+                  in outer$40 ~ apply$62
+                }
+                in join project$58 = .head -> return$24
+                in xs#2 ~ project$58
+              }
+              in f#1 ~ then$63
+            Tuple(_$11, _$12, _$13) -> {} ~ return$22
+          }
+          in Tuple(param$8, param$9, param$10) ~ select$64
+        }
+        , tail(return$25) = {
+          join select$72 = select {
+            Tuple(f#4, xs#5, ys#6) ->
+              join then$70 = then outer$44 -> {
+                join return$27 = then inner$45 -> {
+                  join then$68 = then outer$46 -> {
+                    join return$26 = then inner$47 -> {
+                      join apply$67 = (inner$47, return$25)
+                      in outer$46 ~ apply$67
+                    }
+                    in join project$66 = .tail -> return$26
+                    in ys#6 ~ project$66
+                  }
+                  in join apply$69 = (inner$45, then$68)
+                  in outer$44 ~ apply$69
+                }
+                in join project$65 = .tail -> return$27
+                in xs#5 ~ project$65
+              }
+              in join apply$71 = (f#4, then$70)
+              in invoke streamZipWith ~ apply$71
+            Tuple(_$14, _$15, _$16) -> {} ~ return$25
+          }
+          in Tuple(param$8, param$9, param$10) ~ select$72
+        } } ~ return$21
+      } ~ return$20
+    } ~ return$19
+  } ~ return$18
+
+def fib(return$28) =
+  { head(return$29) = {
+    join apply$73 = (1L, return$29)
+    in invoke Int64# ~ apply$73
+  }
+  , tail(return$30) = {
+    { head(return$31) = {
+      join apply$74 = (1L, return$31)
+      in invoke Int64# ~ apply$74
+    }
+    , tail(return$32) = {
+      join then$81 = then outer$48 -> {
+        join return$35 = then inner$49 -> {
+          join then$79 = then outer$50 -> {
+            join return$34 = then inner$51 -> {
+              join then$77 = then outer$52 -> {
+                join return$33 = then inner$53 -> {
+                  join apply$76 = (inner$53, return$32)
+                  in outer$52 ~ apply$76
+                }
+                in join project$75 = .tail -> return$33
+                in invoke fib ~ project$75
+              }
+              in join apply$78 = (inner$51, then$77)
+              in outer$50 ~ apply$78
+            }
+            in invoke fib ~ return$34
+          }
+          in join apply$80 = (inner$49, then$79)
+          in outer$48 ~ apply$80
+        }
+        in invoke addInt64 ~ return$35
+      }
+      in invoke streamZipWith ~ then$81
+    } } ~ return$30
+  } } ~ return$28
+
+def main(return$36) =
+  \param$17 return$37 . {
+    join select$92 = select {
+      _#7 ->
+        join then$91 = then outer$54 -> {
+          join return$38 = then inner$55 -> {
+            join apply$90 = (inner$55, return$37)
+            in outer$54 ~ apply$90
+          }
+          in join then$89 = then outer$56 -> {
+            join return$39 = then inner$57 -> {
+              join apply$88 = (inner$57, return$38)
+              in outer$56 ~ apply$88
+            }
+            in join project$82 = .head -> return$39
+            in join project$83 = .tail -> project$82
+            in join project$84 = .tail -> project$83
+            in join project$85 = .tail -> project$84
+            in join project$86 = .tail -> project$85
+            in join project$87 = .tail -> project$86
+            in invoke fib ~ project$87
+          }
+          in invoke toStringInt64 ~ then$89
+        }
+        in invoke printString ~ then$91
+    }
+    in param$17 ~ select$92
+  } ~ return$36
+
+=== ClosureConv ===
+toplevel fn streamZipWith(return$18) =
+  let closure$135 = closure lambda$94()
+  return return$18(closure$135)
+
+closure fn lambda$94(self$95, param$8, return$19) =
+  let closure$134 = closure lambda$96(param$8)
+  return return$19(closure$134)
+
+closure fn lambda$96(self$97, param$9, return$20) =
+  let param$8 = self$97.cap[0]
+  let closure$133 = closure lambda$98(param$8, param$9)
+  return return$20(closure$133)
+
+closure fn lambda$98(self$99, param$10, return$21) =
+  let param$8 = self$99.cap[0]
+  let param$9 = self$99.cap[1]
+  let record$132 = record(head = field$100, tail = field$113) captures( param$8
+  , param$9
+  , param$10 )
+  return return$21(record$132)
+
+field fn field$100(self$101, return$22) =
+  let param$8 = self$101.cap[0]
+  let param$9 = self$101.cap[1]
+  let param$10 = self$101.cap[2]
+  let struct$102 = Tuple(param$8, param$9, param$10)
+  if struct$102.tag == Tuple then {
+    let f#1 = struct$102.0
+    let xs#2 = struct$102.1
+    let ys#3 = struct$102.2
+    let return$24 = closure join$103(f#1, return$22, ys#3)
+    return xs#2.head(return$24)
+  } else {
+    if struct$102.tag == Tuple then {
+      let _$11 = struct$102.0
+      let _$12 = struct$102.1
+      let _$13 = struct$102.2
+      let record$112 = record() captures()
+      return return$22(record$112)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$103(self$104, value$105) =
+  let f#1 = self$104.cap[0]
+  let return$22 = self$104.cap[1]
+  let ys#3 = self$104.cap[2]
+  let then$61 = closure join$106(return$22, ys#3)
+  return f#1(value$105, then$61)
+
+closure fn join$106(self$107, value$108) =
+  let return$22 = self$107.cap[0]
+  let ys#3 = self$107.cap[1]
+  let return$23 = closure join$109(return$22, value$108)
+  return ys#3.head(return$23)
+
+closure fn join$109(self$110, value$111) =
+  let return$22 = self$110.cap[0]
+  let value$108 = self$110.cap[1]
+  return value$108(value$111, return$22)
+
+field fn field$113(self$114, return$25) =
+  let param$8 = self$114.cap[0]
+  let param$9 = self$114.cap[1]
+  let param$10 = self$114.cap[2]
+  let struct$115 = Tuple(param$8, param$9, param$10)
+  if struct$115.tag == Tuple then {
+    let f#4 = struct$115.0
+    let xs#5 = struct$115.1
+    let ys#6 = struct$115.2
+    let then$70 = closure join$116(return$25, xs#5, ys#6)
+    let apply$71 = closure join$128(f#4, then$70)
+    return streamZipWith(apply$71)
+  } else {
+    if struct$115.tag == Tuple then {
+      let _$14 = struct$115.0
+      let _$15 = struct$115.1
+      let _$16 = struct$115.2
+      let record$131 = record() captures()
+      return return$25(record$131)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$116(self$117, value$118) =
+  let return$25 = self$117.cap[0]
+  let xs#5 = self$117.cap[1]
+  let ys#6 = self$117.cap[2]
+  let return$27 = closure join$119(return$25, value$118, ys#6)
+  return xs#5.tail(return$27)
+
+closure fn join$119(self$120, value$121) =
+  let return$25 = self$120.cap[0]
+  let value$118 = self$120.cap[1]
+  let ys#6 = self$120.cap[2]
+  let then$68 = closure join$122(return$25, ys#6)
+  return value$118(value$121, then$68)
+
+closure fn join$122(self$123, value$124) =
+  let return$25 = self$123.cap[0]
+  let ys#6 = self$123.cap[1]
+  let return$26 = closure join$125(return$25, value$124)
+  return ys#6.tail(return$26)
+
+closure fn join$125(self$126, value$127) =
+  let return$25 = self$126.cap[0]
+  let value$124 = self$126.cap[1]
+  return value$124(value$127, return$25)
+
+closure fn join$128(self$129, value$130) =
+  let f#4 = self$129.cap[0]
+  let then$70 = self$129.cap[1]
+  return value$130(f#4, then$70)
+
+toplevel fn fib(return$28) =
+  let record$175 = record(head = field$137, tail = field$143) captures()
+  return return$28(record$175)
+
+field fn field$137(self$138, return$29) =
+  let apply$73 = closure join$139(return$29)
+  return Int64#(apply$73)
+
+closure fn join$139(self$140, value$141) =
+  let return$29 = self$140.cap[0]
+  let lit$142 = 1L
+  return value$141(lit$142, return$29)
+
+field fn field$143(self$144, return$30) =
+  let record$174 = record(head = field$145, tail = field$151) captures()
+  return return$30(record$174)
+
+field fn field$145(self$146, return$31) =
+  let apply$74 = closure join$147(return$31)
+  return Int64#(apply$74)
+
+closure fn join$147(self$148, value$149) =
+  let return$31 = self$148.cap[0]
+  let lit$150 = 1L
+  return value$149(lit$150, return$31)
+
+field fn field$151(self$152, return$32) =
+  let then$81 = closure join$153(return$32)
+  return streamZipWith(then$81)
+
+closure fn join$153(self$154, value$155) =
+  let return$32 = self$154.cap[0]
+  let return$35 = closure join$156(return$32, value$155)
+  return addInt64(return$35)
+
+closure fn join$156(self$157, value$158) =
+  let return$32 = self$157.cap[0]
+  let value$155 = self$157.cap[1]
+  let then$79 = closure join$159(return$32)
+  return value$155(value$158, then$79)
+
+closure fn join$159(self$160, value$161) =
+  let return$32 = self$160.cap[0]
+  let return$34 = closure join$162(return$32, value$161)
+  return fib(return$34)
+
+closure fn join$162(self$163, value$164) =
+  let return$32 = self$163.cap[0]
+  let value$161 = self$163.cap[1]
+  let then$77 = closure join$165(return$32)
+  return value$161(value$164, then$77)
+
+closure fn join$165(self$166, value$167) =
+  let return$32 = self$166.cap[0]
+  let return$33 = closure join$168(return$32, value$167)
+  let project$75 = closure join$171(return$33)
+  return fib(project$75)
+
+closure fn join$168(self$169, value$170) =
+  let return$32 = self$169.cap[0]
+  let value$167 = self$169.cap[1]
+  return value$167(value$170, return$32)
+
+closure fn join$171(self$172, value$173) =
+  let return$33 = self$172.cap[0]
+  return value$173.tail(return$33)
+
+toplevel fn main(return$36) =
+  let closure$209 = closure lambda$177()
+  return return$36(closure$209)
+
+closure fn lambda$177(self$178, param$17, return$37) =
+  if  then {
+    let _#7 = param$17
+    let then$91 = closure join$179(return$37)
+    return printString(then$91)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$179(self$180, value$181) =
+  let return$37 = self$180.cap[0]
+  let return$38 = closure join$182(return$37, value$181)
+  let then$89 = closure join$185(return$38)
+  return toStringInt64(then$89)
+
+closure fn join$182(self$183, value$184) =
+  let return$37 = self$183.cap[0]
+  let value$181 = self$183.cap[1]
+  return value$181(value$184, return$37)
+
+closure fn join$185(self$186, value$187) =
+  let return$38 = self$186.cap[0]
+  let return$39 = closure join$188(return$38, value$187)
+  let project$82 = closure join$191(return$39)
+  let project$83 = closure join$194(project$82)
+  let project$84 = closure join$197(project$83)
+  let project$85 = closure join$200(project$84)
+  let project$86 = closure join$203(project$85)
+  let project$87 = closure join$206(project$86)
+  return fib(project$87)
+
+closure fn join$188(self$189, value$190) =
+  let return$38 = self$189.cap[0]
+  let value$187 = self$189.cap[1]
+  return value$187(value$190, return$38)
+
+closure fn join$191(self$192, value$193) =
+  let return$39 = self$192.cap[0]
+  return value$193.head(return$39)
+
+closure fn join$194(self$195, value$196) =
+  let project$82 = self$195.cap[0]
+  return value$196.tail(project$82)
+
+closure fn join$197(self$198, value$199) =
+  let project$83 = self$198.cap[0]
+  return value$199.tail(project$83)
+
+closure fn join$200(self$201, value$202) =
+  let project$84 = self$201.cap[0]
+  return value$202.tail(project$84)
+
+closure fn join$203(self$204, value$205) =
+  let project$85 = self$204.cap[0]
+  return value$205.tail(project$85)
+
+closure fn join$206(self$207, value$208) =
+  let project$86 = self$207.cap[0]
+  return value$208.tail(project$86)
+
+toplevel fn zig_main$212() =
+  let finish$210 = closure join$214()
+  let after_main$211 = closure join$217(finish$210)
+  return main(after_main$211)
+
+closure fn join$214(self$215, value$216) = return value$216
+
+closure fn join$217(self$218, value$219) =
+  let finish$210 = self$218.cap[0]
+  let struct$220 = Tuple()
+  return value$219(struct$220, finish$210)
+
+entry = zig_main$212
+
+=== Peephole ===
+toplevel fn streamZipWith(return$18) =
+  let closure$135 = closure lambda$94()
+  return return$18(closure$135)
+
+closure fn lambda$94(self$95, param$8, return$19) =
+  let closure$134 = closure lambda$96(param$8)
+  return return$19(closure$134)
+
+closure fn lambda$96(self$97, param$9, return$20) =
+  let param$8 = self$97.cap[0]
+  let closure$133 = closure lambda$98(param$8, param$9)
+  return return$20(closure$133)
+
+closure fn lambda$98(self$99, param$10, return$21) =
+  let param$8 = self$99.cap[0]
+  let param$9 = self$99.cap[1]
+  let record$132 = record(head = field$100, tail = field$113) captures( param$8
+  , param$9
+  , param$10 )
+  return return$21(record$132)
+
+field fn field$100(self$101, return$22) =
+  let param$8 = self$101.cap[0]
+  let param$9 = self$101.cap[1]
+  let param$10 = self$101.cap[2]
+  if  then {
+    let return$24 = closure join$103(param$8, return$22, param$10)
+    return param$9.head(return$24)
+  } else {
+    if  then {
+      let record$112 = record() captures()
+      return return$22(record$112)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$103(self$104, value$105) =
+  let f#1 = self$104.cap[0]
+  let return$22 = self$104.cap[1]
+  let ys#3 = self$104.cap[2]
+  let then$61 = closure join$106(return$22, ys#3)
+  return f#1(value$105, then$61)
+
+closure fn join$106(self$107, value$108) =
+  let return$22 = self$107.cap[0]
+  let ys#3 = self$107.cap[1]
+  let return$23 = closure join$109(return$22, value$108)
+  return ys#3.head(return$23)
+
+closure fn join$109(self$110, value$111) =
+  let return$22 = self$110.cap[0]
+  let value$108 = self$110.cap[1]
+  return value$108(value$111, return$22)
+
+field fn field$113(self$114, return$25) =
+  let param$8 = self$114.cap[0]
+  let param$9 = self$114.cap[1]
+  let param$10 = self$114.cap[2]
+  if  then {
+    let then$70 = closure join$116(return$25, param$9, param$10)
+    let apply$71 = closure join$128(param$8, then$70)
+    return streamZipWith(apply$71)
+  } else {
+    if  then {
+      let record$131 = record() captures()
+      return return$25(record$131)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$116(self$117, value$118) =
+  let return$25 = self$117.cap[0]
+  let xs#5 = self$117.cap[1]
+  let ys#6 = self$117.cap[2]
+  let return$27 = closure join$119(return$25, value$118, ys#6)
+  return xs#5.tail(return$27)
+
+closure fn join$119(self$120, value$121) =
+  let return$25 = self$120.cap[0]
+  let value$118 = self$120.cap[1]
+  let ys#6 = self$120.cap[2]
+  let then$68 = closure join$122(return$25, ys#6)
+  return value$118(value$121, then$68)
+
+closure fn join$122(self$123, value$124) =
+  let return$25 = self$123.cap[0]
+  let ys#6 = self$123.cap[1]
+  let return$26 = closure join$125(return$25, value$124)
+  return ys#6.tail(return$26)
+
+closure fn join$125(self$126, value$127) =
+  let return$25 = self$126.cap[0]
+  let value$124 = self$126.cap[1]
+  return value$124(value$127, return$25)
+
+closure fn join$128(self$129, value$130) =
+  let f#4 = self$129.cap[0]
+  let then$70 = self$129.cap[1]
+  return value$130(f#4, then$70)
+
+toplevel fn fib(return$28) =
+  let record$175 = record(head = field$137, tail = field$143) captures()
+  return return$28(record$175)
+
+field fn field$137(self$138, return$29) =
+  let apply$73 = closure join$139(return$29)
+  return Int64#(apply$73)
+
+closure fn join$139(self$140, value$141) =
+  let return$29 = self$140.cap[0]
+  let lit$142 = 1L
+  return value$141(lit$142, return$29)
+
+field fn field$143(self$144, return$30) =
+  let record$174 = record(head = field$145, tail = field$151) captures()
+  return return$30(record$174)
+
+field fn field$145(self$146, return$31) =
+  let apply$74 = closure join$147(return$31)
+  return Int64#(apply$74)
+
+closure fn join$147(self$148, value$149) =
+  let return$31 = self$148.cap[0]
+  let lit$150 = 1L
+  return value$149(lit$150, return$31)
+
+field fn field$151(self$152, return$32) =
+  let then$81 = closure join$153(return$32)
+  return streamZipWith(then$81)
+
+closure fn join$153(self$154, value$155) =
+  let return$32 = self$154.cap[0]
+  let return$35 = closure join$156(return$32, value$155)
+  return addInt64(return$35)
+
+closure fn join$156(self$157, value$158) =
+  let return$32 = self$157.cap[0]
+  let value$155 = self$157.cap[1]
+  let then$79 = closure join$159(return$32)
+  return value$155(value$158, then$79)
+
+closure fn join$159(self$160, value$161) =
+  let return$32 = self$160.cap[0]
+  let return$34 = closure join$162(return$32, value$161)
+  return fib(return$34)
+
+closure fn join$162(self$163, value$164) =
+  let return$32 = self$163.cap[0]
+  let value$161 = self$163.cap[1]
+  let then$77 = closure join$165(return$32)
+  return value$161(value$164, then$77)
+
+closure fn join$165(self$166, value$167) =
+  let return$32 = self$166.cap[0]
+  let return$33 = closure join$168(return$32, value$167)
+  let project$75 = closure join$171(return$33)
+  return fib(project$75)
+
+closure fn join$168(self$169, value$170) =
+  let return$32 = self$169.cap[0]
+  let value$167 = self$169.cap[1]
+  return value$167(value$170, return$32)
+
+closure fn join$171(self$172, value$173) =
+  let return$33 = self$172.cap[0]
+  return value$173.tail(return$33)
+
+toplevel fn main(return$36) =
+  let closure$209 = closure lambda$177()
+  return return$36(closure$209)
+
+closure fn lambda$177(self$178, param$17, return$37) =
+  if  then {
+    let then$91 = closure join$179(return$37)
+    return printString(then$91)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$179(self$180, value$181) =
+  let return$37 = self$180.cap[0]
+  let return$38 = closure join$182(return$37, value$181)
+  let then$89 = closure join$185(return$38)
+  return toStringInt64(then$89)
+
+closure fn join$182(self$183, value$184) =
+  let return$37 = self$183.cap[0]
+  let value$181 = self$183.cap[1]
+  return value$181(value$184, return$37)
+
+closure fn join$185(self$186, value$187) =
+  let return$38 = self$186.cap[0]
+  let return$39 = closure join$188(return$38, value$187)
+  let project$82 = closure join$191(return$39)
+  let project$83 = closure join$194(project$82)
+  let project$84 = closure join$197(project$83)
+  let project$85 = closure join$200(project$84)
+  let project$86 = closure join$203(project$85)
+  let project$87 = closure join$206(project$86)
+  return fib(project$87)
+
+closure fn join$188(self$189, value$190) =
+  let return$38 = self$189.cap[0]
+  let value$187 = self$189.cap[1]
+  return value$187(value$190, return$38)
+
+closure fn join$191(self$192, value$193) =
+  let return$39 = self$192.cap[0]
+  return value$193.head(return$39)
+
+closure fn join$194(self$195, value$196) =
+  let project$82 = self$195.cap[0]
+  return value$196.tail(project$82)
+
+closure fn join$197(self$198, value$199) =
+  let project$83 = self$198.cap[0]
+  return value$199.tail(project$83)
+
+closure fn join$200(self$201, value$202) =
+  let project$84 = self$201.cap[0]
+  return value$202.tail(project$84)
+
+closure fn join$203(self$204, value$205) =
+  let project$85 = self$204.cap[0]
+  return value$205.tail(project$85)
+
+closure fn join$206(self$207, value$208) =
+  let project$86 = self$207.cap[0]
+  return value$208.tail(project$86)
+
+toplevel fn zig_main$212() =
+  let finish$210 = closure join$214()
+  let after_main$211 = closure join$217(finish$210)
+  return main(after_main$211)
+
+closure fn join$214(self$215, value$216) = return value$216
+
+closure fn join$217(self$218, value$219) =
+  let finish$210 = self$218.cap[0]
+  let struct$220 = Tuple()
+  return value$219(struct$220, finish$210)
+
+entry = zig_main$212
+
+=== Perceus ===
+toplevel fn streamZipWith(return$18) =
+  let closure$135 = closure lambda$94()
+  return return$18(closure$135)
+
+closure fn lambda$94(self$95, param$8, return$19) =
+  drop self$95
+  let closure$134 = closure lambda$96(param$8)
+  return return$19(closure$134)
+
+closure fn lambda$96(self$97, param$9, return$20) =
+  let param$8 = self$97.cap[0]
+  dup param$8
+  drop self$97
+  let closure$133 = closure lambda$98(param$8, param$9)
+  return return$20(closure$133)
+
+closure fn lambda$98(self$99, param$10, return$21) =
+  let param$8 = self$99.cap[0]
+  dup param$8
+  let param$9 = self$99.cap[1]
+  dup param$9
+  drop self$99
+  let record$132 = record(head = field$100, tail = field$113) captures( param$8
+  , param$9
+  , param$10 )
+  return return$21(record$132)
+
+field fn field$100(self$101, return$22) =
+  let param$8 = self$101.cap[0]
+  dup param$8
+  let param$9 = self$101.cap[1]
+  dup param$9
+  let param$10 = self$101.cap[2]
+  dup param$10
+  drop self$101
+  if  then {
+    let return$24 = closure join$103(param$8, return$22, param$10)
+    return param$9.head(return$24)
+  } else {
+    drop param$8
+    drop param$9
+    drop param$10
+    if  then {
+      let record$112 = record() captures()
+      return return$22(record$112)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$103(self$104, value$105) =
+  let f#1 = self$104.cap[0]
+  dup f#1
+  let return$22 = self$104.cap[1]
+  dup return$22
+  let ys#3 = self$104.cap[2]
+  dup ys#3
+  drop self$104
+  let then$61 = closure join$106(return$22, ys#3)
+  return f#1(value$105, then$61)
+
+closure fn join$106(self$107, value$108) =
+  let return$22 = self$107.cap[0]
+  dup return$22
+  let ys#3 = self$107.cap[1]
+  dup ys#3
+  drop self$107
+  let return$23 = closure join$109(return$22, value$108)
+  return ys#3.head(return$23)
+
+closure fn join$109(self$110, value$111) =
+  let return$22 = self$110.cap[0]
+  dup return$22
+  let value$108 = self$110.cap[1]
+  dup value$108
+  drop self$110
+  return value$108(value$111, return$22)
+
+field fn field$113(self$114, return$25) =
+  let param$8 = self$114.cap[0]
+  dup param$8
+  let param$9 = self$114.cap[1]
+  dup param$9
+  let param$10 = self$114.cap[2]
+  dup param$10
+  drop self$114
+  if  then {
+    let then$70 = closure join$116(return$25, param$9, param$10)
+    let apply$71 = closure join$128(param$8, then$70)
+    return streamZipWith(apply$71)
+  } else {
+    drop param$8
+    drop param$9
+    drop param$10
+    if  then {
+      let record$131 = record() captures()
+      return return$25(record$131)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$116(self$117, value$118) =
+  let return$25 = self$117.cap[0]
+  dup return$25
+  let xs#5 = self$117.cap[1]
+  dup xs#5
+  let ys#6 = self$117.cap[2]
+  dup ys#6
+  drop self$117
+  let return$27 = closure join$119(return$25, value$118, ys#6)
+  return xs#5.tail(return$27)
+
+closure fn join$119(self$120, value$121) =
+  let return$25 = self$120.cap[0]
+  dup return$25
+  let value$118 = self$120.cap[1]
+  dup value$118
+  let ys#6 = self$120.cap[2]
+  dup ys#6
+  drop self$120
+  let then$68 = closure join$122(return$25, ys#6)
+  return value$118(value$121, then$68)
+
+closure fn join$122(self$123, value$124) =
+  let return$25 = self$123.cap[0]
+  dup return$25
+  let ys#6 = self$123.cap[1]
+  dup ys#6
+  drop self$123
+  let return$26 = closure join$125(return$25, value$124)
+  return ys#6.tail(return$26)
+
+closure fn join$125(self$126, value$127) =
+  let return$25 = self$126.cap[0]
+  dup return$25
+  let value$124 = self$126.cap[1]
+  dup value$124
+  drop self$126
+  return value$124(value$127, return$25)
+
+closure fn join$128(self$129, value$130) =
+  let f#4 = self$129.cap[0]
+  dup f#4
+  let then$70 = self$129.cap[1]
+  dup then$70
+  drop self$129
+  return value$130(f#4, then$70)
+
+toplevel fn fib(return$28) =
+  let record$175 = record(head = field$137, tail = field$143) captures()
+  return return$28(record$175)
+
+field fn field$137(self$138, return$29) =
+  drop self$138
+  let apply$73 = closure join$139(return$29)
+  return Int64#(apply$73)
+
+closure fn join$139(self$140, value$141) =
+  let return$29 = self$140.cap[0]
+  dup return$29
+  drop self$140
+  let lit$142 = 1L
+  return value$141(lit$142, return$29)
+
+field fn field$143(self$144, return$30) =
+  drop self$144
+  let record$174 = record(head = field$145, tail = field$151) captures()
+  return return$30(record$174)
+
+field fn field$145(self$146, return$31) =
+  drop self$146
+  let apply$74 = closure join$147(return$31)
+  return Int64#(apply$74)
+
+closure fn join$147(self$148, value$149) =
+  let return$31 = self$148.cap[0]
+  dup return$31
+  drop self$148
+  let lit$150 = 1L
+  return value$149(lit$150, return$31)
+
+field fn field$151(self$152, return$32) =
+  drop self$152
+  let then$81 = closure join$153(return$32)
+  return streamZipWith(then$81)
+
+closure fn join$153(self$154, value$155) =
+  let return$32 = self$154.cap[0]
+  dup return$32
+  drop self$154
+  let return$35 = closure join$156(return$32, value$155)
+  return addInt64(return$35)
+
+closure fn join$156(self$157, value$158) =
+  let return$32 = self$157.cap[0]
+  dup return$32
+  let value$155 = self$157.cap[1]
+  dup value$155
+  drop self$157
+  let then$79 = closure join$159(return$32)
+  return value$155(value$158, then$79)
+
+closure fn join$159(self$160, value$161) =
+  let return$32 = self$160.cap[0]
+  dup return$32
+  drop self$160
+  let return$34 = closure join$162(return$32, value$161)
+  return fib(return$34)
+
+closure fn join$162(self$163, value$164) =
+  let return$32 = self$163.cap[0]
+  dup return$32
+  let value$161 = self$163.cap[1]
+  dup value$161
+  drop self$163
+  let then$77 = closure join$165(return$32)
+  return value$161(value$164, then$77)
+
+closure fn join$165(self$166, value$167) =
+  let return$32 = self$166.cap[0]
+  dup return$32
+  drop self$166
+  let return$33 = closure join$168(return$32, value$167)
+  let project$75 = closure join$171(return$33)
+  return fib(project$75)
+
+closure fn join$168(self$169, value$170) =
+  let return$32 = self$169.cap[0]
+  dup return$32
+  let value$167 = self$169.cap[1]
+  dup value$167
+  drop self$169
+  return value$167(value$170, return$32)
+
+closure fn join$171(self$172, value$173) =
+  let return$33 = self$172.cap[0]
+  dup return$33
+  drop self$172
+  return value$173.tail(return$33)
+
+toplevel fn main(return$36) =
+  let closure$209 = closure lambda$177()
+  return return$36(closure$209)
+
+closure fn lambda$177(self$178, param$17, return$37) =
+  drop param$17
+  drop self$178
+  if  then {
+    let then$91 = closure join$179(return$37)
+    return printString(then$91)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$179(self$180, value$181) =
+  let return$37 = self$180.cap[0]
+  dup return$37
+  drop self$180
+  let return$38 = closure join$182(return$37, value$181)
+  let then$89 = closure join$185(return$38)
+  return toStringInt64(then$89)
+
+closure fn join$182(self$183, value$184) =
+  let return$37 = self$183.cap[0]
+  dup return$37
+  let value$181 = self$183.cap[1]
+  dup value$181
+  drop self$183
+  return value$181(value$184, return$37)
+
+closure fn join$185(self$186, value$187) =
+  let return$38 = self$186.cap[0]
+  dup return$38
+  drop self$186
+  let return$39 = closure join$188(return$38, value$187)
+  let project$82 = closure join$191(return$39)
+  let project$83 = closure join$194(project$82)
+  let project$84 = closure join$197(project$83)
+  let project$85 = closure join$200(project$84)
+  let project$86 = closure join$203(project$85)
+  let project$87 = closure join$206(project$86)
+  return fib(project$87)
+
+closure fn join$188(self$189, value$190) =
+  let return$38 = self$189.cap[0]
+  dup return$38
+  let value$187 = self$189.cap[1]
+  dup value$187
+  drop self$189
+  return value$187(value$190, return$38)
+
+closure fn join$191(self$192, value$193) =
+  let return$39 = self$192.cap[0]
+  dup return$39
+  drop self$192
+  return value$193.head(return$39)
+
+closure fn join$194(self$195, value$196) =
+  let project$82 = self$195.cap[0]
+  dup project$82
+  drop self$195
+  return value$196.tail(project$82)
+
+closure fn join$197(self$198, value$199) =
+  let project$83 = self$198.cap[0]
+  dup project$83
+  drop self$198
+  return value$199.tail(project$83)
+
+closure fn join$200(self$201, value$202) =
+  let project$84 = self$201.cap[0]
+  dup project$84
+  drop self$201
+  return value$202.tail(project$84)
+
+closure fn join$203(self$204, value$205) =
+  let project$85 = self$204.cap[0]
+  dup project$85
+  drop self$204
+  return value$205.tail(project$85)
+
+closure fn join$206(self$207, value$208) =
+  let project$86 = self$207.cap[0]
+  dup project$86
+  drop self$207
+  return value$208.tail(project$86)
+
+toplevel fn zig_main$212() =
+  let finish$210 = closure join$214()
+  let after_main$211 = closure join$217(finish$210)
+  return main(after_main$211)
+
+closure fn join$214(self$215, value$216) =
+  drop self$215
+  return value$216
+
+closure fn join$217(self$218, value$219) =
+  let finish$210 = self$218.cap[0]
+  dup finish$210
+  drop self$218
+  let struct$220 = Tuple()
+  return value$219(struct$220, finish$210)
+
+entry = zig_main$212
+
+=== Reuse ===
+toplevel fn streamZipWith(return$18) =
+  let closure$135 = closure lambda$94()
+  return return$18(closure$135)
+
+closure fn lambda$94(self$95, param$8, return$19) =
+  let closure$134 = closure lambda$96(param$8)
+  drop self$95
+  return return$19(closure$134)
+
+closure fn lambda$96(self$97, param$9, return$20) =
+  let param$8 = self$97.cap[0]
+  dup param$8
+  let closure$133 = closure lambda$98(param$8, param$9)
+  drop self$97
+  return return$20(closure$133)
+
+closure fn lambda$98(self$99, param$10, return$21) =
+  let param$8 = self$99.cap[0]
+  dup param$8
+  let param$9 = self$99.cap[1]
+  dup param$9
+  let record$132 = record(head = field$100, tail = field$113) captures( param$8
+  , param$9
+  , param$10 )
+  drop self$99
+  return return$21(record$132)
+
+field fn field$100(self$101, return$22) =
+  let param$8 = self$101.cap[0]
+  dup param$8
+  let param$9 = self$101.cap[1]
+  dup param$9
+  let param$10 = self$101.cap[2]
+  dup param$10
+  drop self$101
+  if  then {
+    let return$24 = closure join$103(param$8, return$22, param$10)
+    return param$9.head(return$24)
+  } else {
+    drop param$8
+    drop param$9
+    drop param$10
+    if  then {
+      let record$112 = record() captures()
+      return return$22(record$112)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$103(self$104, value$105) =
+  let f#1 = self$104.cap[0]
+  dup f#1
+  let return$22 = self$104.cap[1]
+  dup return$22
+  let ys#3 = self$104.cap[2]
+  dup ys#3
+  let then$61 = closure join$106(return$22, ys#3)
+  drop self$104
+  return f#1(value$105, then$61)
+
+closure fn join$106(self$107, value$108) =
+  let return$22 = self$107.cap[0]
+  dup return$22
+  let ys#3 = self$107.cap[1]
+  dup ys#3
+  let return$23 = closure join$109(return$22, value$108)
+  drop self$107
+  return ys#3.head(return$23)
+
+closure fn join$109(self$110, value$111) =
+  let return$22 = self$110.cap[0]
+  dup return$22
+  let value$108 = self$110.cap[1]
+  dup value$108
+  drop self$110
+  return value$108(value$111, return$22)
+
+field fn field$113(self$114, return$25) =
+  let param$8 = self$114.cap[0]
+  dup param$8
+  let param$9 = self$114.cap[1]
+  dup param$9
+  let param$10 = self$114.cap[2]
+  dup param$10
+  drop self$114
+  if  then {
+    let then$70 = closure join$116(return$25, param$9, param$10)
+    let apply$71 = closure join$128(param$8, then$70)
+    return streamZipWith(apply$71)
+  } else {
+    drop param$8
+    drop param$9
+    drop param$10
+    if  then {
+      let record$131 = record() captures()
+      return return$25(record$131)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$116(self$117, value$118) =
+  let return$25 = self$117.cap[0]
+  dup return$25
+  let xs#5 = self$117.cap[1]
+  dup xs#5
+  let ys#6 = self$117.cap[2]
+  dup ys#6
+  let return$27 = closure join$119(return$25, value$118, ys#6)
+  drop self$117
+  return xs#5.tail(return$27)
+
+closure fn join$119(self$120, value$121) =
+  let return$25 = self$120.cap[0]
+  dup return$25
+  let value$118 = self$120.cap[1]
+  dup value$118
+  let ys#6 = self$120.cap[2]
+  dup ys#6
+  let then$68 = closure join$122(return$25, ys#6)
+  drop self$120
+  return value$118(value$121, then$68)
+
+closure fn join$122(self$123, value$124) =
+  let return$25 = self$123.cap[0]
+  dup return$25
+  let ys#6 = self$123.cap[1]
+  dup ys#6
+  let return$26 = closure join$125(return$25, value$124)
+  drop self$123
+  return ys#6.tail(return$26)
+
+closure fn join$125(self$126, value$127) =
+  let return$25 = self$126.cap[0]
+  dup return$25
+  let value$124 = self$126.cap[1]
+  dup value$124
+  drop self$126
+  return value$124(value$127, return$25)
+
+closure fn join$128(self$129, value$130) =
+  let f#4 = self$129.cap[0]
+  dup f#4
+  let then$70 = self$129.cap[1]
+  dup then$70
+  drop self$129
+  return value$130(f#4, then$70)
+
+toplevel fn fib(return$28) =
+  let record$175 = record(head = field$137, tail = field$143) captures()
+  return return$28(record$175)
+
+field fn field$137(self$138, return$29) =
+  let apply$73 = closure join$139(return$29)
+  drop self$138
+  return Int64#(apply$73)
+
+closure fn join$139(self$140, value$141) =
+  let return$29 = self$140.cap[0]
+  dup return$29
+  let lit$142 = 1L
+  drop self$140
+  return value$141(lit$142, return$29)
+
+field fn field$143(self$144, return$30) =
+  let record$174 = record(head = field$145, tail = field$151) captures()
+  drop self$144
+  return return$30(record$174)
+
+field fn field$145(self$146, return$31) =
+  let apply$74 = closure join$147(return$31)
+  drop self$146
+  return Int64#(apply$74)
+
+closure fn join$147(self$148, value$149) =
+  let return$31 = self$148.cap[0]
+  dup return$31
+  let lit$150 = 1L
+  drop self$148
+  return value$149(lit$150, return$31)
+
+field fn field$151(self$152, return$32) =
+  let then$81 = closure join$153(return$32)
+  drop self$152
+  return streamZipWith(then$81)
+
+closure fn join$153(self$154, value$155) =
+  let return$32 = self$154.cap[0]
+  dup return$32
+  let return$35 = closure join$156(return$32, value$155)
+  drop self$154
+  return addInt64(return$35)
+
+closure fn join$156(self$157, value$158) =
+  let return$32 = self$157.cap[0]
+  dup return$32
+  let value$155 = self$157.cap[1]
+  dup value$155
+  let then$79 = closure join$159(return$32)
+  drop self$157
+  return value$155(value$158, then$79)
+
+closure fn join$159(self$160, value$161) =
+  let return$32 = self$160.cap[0]
+  dup return$32
+  let return$34 = closure join$162(return$32, value$161)
+  drop self$160
+  return fib(return$34)
+
+closure fn join$162(self$163, value$164) =
+  let return$32 = self$163.cap[0]
+  dup return$32
+  let value$161 = self$163.cap[1]
+  dup value$161
+  let then$77 = closure join$165(return$32)
+  drop self$163
+  return value$161(value$164, then$77)
+
+closure fn join$165(self$166, value$167) =
+  let return$32 = self$166.cap[0]
+  dup return$32
+  let return$33 = closure join$168(return$32, value$167)
+  let project$75 = closure join$171(return$33)
+  drop self$166
+  return fib(project$75)
+
+closure fn join$168(self$169, value$170) =
+  let return$32 = self$169.cap[0]
+  dup return$32
+  let value$167 = self$169.cap[1]
+  dup value$167
+  drop self$169
+  return value$167(value$170, return$32)
+
+closure fn join$171(self$172, value$173) =
+  let return$33 = self$172.cap[0]
+  dup return$33
+  drop self$172
+  return value$173.tail(return$33)
+
+toplevel fn main(return$36) =
+  let closure$209 = closure lambda$177()
+  return return$36(closure$209)
+
+closure fn lambda$177(self$178, param$17, return$37) =
+  drop param$17
+  drop self$178
+  if  then {
+    let then$91 = closure join$179(return$37)
+    return printString(then$91)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$179(self$180, value$181) =
+  let return$37 = self$180.cap[0]
+  dup return$37
+  let return$38 = closure join$182(return$37, value$181)
+  let then$89 = closure join$185(return$38)
+  drop self$180
+  return toStringInt64(then$89)
+
+closure fn join$182(self$183, value$184) =
+  let return$37 = self$183.cap[0]
+  dup return$37
+  let value$181 = self$183.cap[1]
+  dup value$181
+  drop self$183
+  return value$181(value$184, return$37)
+
+closure fn join$185(self$186, value$187) =
+  let return$38 = self$186.cap[0]
+  dup return$38
+  let return$39 = closure join$188(return$38, value$187)
+  let project$82 = closure join$191(return$39)
+  let project$83 = closure join$194(project$82)
+  let project$84 = closure join$197(project$83)
+  let project$85 = closure join$200(project$84)
+  let project$86 = closure join$203(project$85)
+  let project$87 = closure join$206(project$86)
+  drop self$186
+  return fib(project$87)
+
+closure fn join$188(self$189, value$190) =
+  let return$38 = self$189.cap[0]
+  dup return$38
+  let value$187 = self$189.cap[1]
+  dup value$187
+  drop self$189
+  return value$187(value$190, return$38)
+
+closure fn join$191(self$192, value$193) =
+  let return$39 = self$192.cap[0]
+  dup return$39
+  drop self$192
+  return value$193.head(return$39)
+
+closure fn join$194(self$195, value$196) =
+  let project$82 = self$195.cap[0]
+  dup project$82
+  drop self$195
+  return value$196.tail(project$82)
+
+closure fn join$197(self$198, value$199) =
+  let project$83 = self$198.cap[0]
+  dup project$83
+  drop self$198
+  return value$199.tail(project$83)
+
+closure fn join$200(self$201, value$202) =
+  let project$84 = self$201.cap[0]
+  dup project$84
+  drop self$201
+  return value$202.tail(project$84)
+
+closure fn join$203(self$204, value$205) =
+  let project$85 = self$204.cap[0]
+  dup project$85
+  drop self$204
+  return value$205.tail(project$85)
+
+closure fn join$206(self$207, value$208) =
+  let project$86 = self$207.cap[0]
+  dup project$86
+  drop self$207
+  return value$208.tail(project$86)
+
+toplevel fn zig_main$212() =
+  let finish$210 = closure join$214()
+  let after_main$211 = closure join$217(finish$210)
+  return main(after_main$211)
+
+closure fn join$214(self$215, value$216) =
+  drop self$215
+  return value$216
+
+closure fn join$217(self$218, value$219) =
+  let finish$210 = self$218.cap[0]
+  dup finish$210
+  dropReuse reuse$221 = self$218 /0
+  let struct$220 = reuse reuse$221 Tuple()
+  return value$219(struct$220, finish$210)
+
+entry = zig_main$212
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+- type Stream a = {head : a, tail : Stream(a)}
++ type Stream a#0 = {head : a#0, tail : Stream(a#0)}
+  
+  def streamZipWith =
+    codata {
+-     #(f)(xs)(ys).head -> f(xs.head)(ys.head)
++     #(f#1)(xs#2)(ys#3).head -> f#1(xs#2.head)(ys#3.head)
+-     #(f)(xs)(ys).tail -> streamZipWith(f)(xs.tail)(ys.tail)
++     #(f#4)(xs#5)(ys#6).tail -> streamZipWith(f#4)(xs#5.tail)(ys#6.tail)
+    }
+  
+  def fib =
+    codata {
+-     #.head -> 1L
++     #.head -> Int64#(1L)
+-     #.tail.head -> 1L
++     #.tail.head -> Int64#(1L)
+      #.tail.tail -> streamZipWith(addInt64)(fib)(fib.tail)
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#7 ->
+        {
+          printString(toStringInt64(fib.tail.tail.tail.tail.tail.head))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- type Stream a#0 = {head : a#0, tail : Stream(a#0)}
+- 
+  def streamZipWith =
+-   codata {
++   \param$8 ->
+-     #(f#1)(xs#2)(ys#3).head -> f#1(xs#2.head)(ys#3.head)
++     \param$9 ->
+-     #(f#4)(xs#5)(ys#6).tail -> streamZipWith(f#4)(xs#5.tail)(ys#6.tail)
++       \param$10 ->
+-   }
++         { head = case Tuple(param$8, param$9, param$10) of {
++           Tuple(f#1, xs#2, ys#3) -> f#1(xs#2.head)(ys#3.head)
++           Tuple(_$11, _$12, _$13) -> {}
++         }
++         , tail = case Tuple(param$8, param$9, param$10) of {
++           Tuple(f#4, xs#5, ys#6) ->
++             invoke streamZipWith(f#4)(xs#5.tail)(ys#6.tail)
++           Tuple(_$14, _$15, _$16) -> {}
++         } }
+  
+  def fib =
+-   codata {
++   { head = invoke Int64#(1L)
+-     #.head -> Int64#(1L)
++   , tail = { head = invoke Int64#(1L)
+-     #.tail.head -> Int64#(1L)
++   , tail = invoke streamZipWith( invoke addInt64 )( invoke fib )( invoke fib.tail ) } }
+-     #.tail.tail -> streamZipWith(addInt64)(fib)(fib.tail)
+-   }
+  
+  def main =
+-   fn {
++   \param$17 ->
+-     _#7 ->
++     case param$17 of {
+-       {
++       _#7 ->
+-         printString(toStringInt64(fib.tail.tail.tail.tail.tail.head))
++         invoke printString( invoke toStringInt64( invoke fib.tail.tail.tail.tail.tail.head ) )
+-       }
++     }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def streamZipWith =
+    \param$8 ->
+      \param$9 ->
+        \param$10 ->
+          { head = case Tuple(param$8, param$9, param$10) of {
+            Tuple(f#1, xs#2, ys#3) -> f#1(xs#2.head)(ys#3.head)
+            Tuple(_$11, _$12, _$13) -> {}
+          }
+          , tail = case Tuple(param$8, param$9, param$10) of {
+            Tuple(f#4, xs#5, ys#6) ->
+              invoke streamZipWith(f#4)(xs#5.tail)(ys#6.tail)
+            Tuple(_$14, _$15, _$16) -> {}
+          } }
+  
+  def fib =
+    { head = invoke Int64#(1L)
+    , tail = { head = invoke Int64#(1L)
+    , tail = invoke streamZipWith( invoke addInt64 )( invoke fib )( invoke fib.tail ) } }
+  
+  def main =
+    \param$17 ->
+      case param$17 of {
+        _#7 ->
+          invoke printString( invoke toStringInt64( invoke fib.tail.tail.tail.tail.tail.head ) )
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def streamZipWith =
+    \param$8 ->
+      \param$9 ->
+        \param$10 ->
+          { head = case Tuple(param$8, param$9, param$10) of {
+            Tuple(f#1, xs#2, ys#3) -> f#1(xs#2.head)(ys#3.head)
+            Tuple(_$11, _$12, _$13) -> {}
+          }
+          , tail = case Tuple(param$8, param$9, param$10) of {
+            Tuple(f#4, xs#5, ys#6) ->
+              invoke streamZipWith(f#4)(xs#5.tail)(ys#6.tail)
+            Tuple(_$14, _$15, _$16) -> {}
+          } }
+  
+  def fib =
+    { head = invoke Int64#(1L)
+    , tail = { head = invoke Int64#(1L)
+    , tail = invoke streamZipWith( invoke addInt64 )( invoke fib )( invoke fib.tail ) } }
+  
+  def main =
+    \param$17 ->
+      case param$17 of {
+        _#7 ->
+          invoke printString( invoke toStringInt64( invoke fib.tail.tail.tail.tail.tail.head ) )
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def streamZipWith =
++ def streamZipWith(return$18) =
+-   \param$8 ->
++   \param$8 return$19 . {
+-     \param$9 ->
++     \param$9 return$20 . {
+-       \param$10 ->
++       \param$10 return$21 . {
+-         { head = case Tuple(param$8, param$9, param$10) of {
++         { head(return$22) = {
+-           Tuple(f#1, xs#2, ys#3) -> f#1(xs#2.head)(ys#3.head)
++           Tuple(param$8, param$9, param$10) ~ select {
+-           Tuple(_$11, _$12, _$13) -> {}
++             Tuple(f#1, xs#2, ys#3) ->
++               f#1 ~ ( do return$24 . {
++                 xs#2 ~ .head -> return$24
++               }
++               , ( do return$23 . {
++                 ys#3 ~ .head -> return$23
++               }
++               , return$22 ) )
++             Tuple(_$11, _$12, _$13) -> {} ~ return$22
++           }
+          }
+-         , tail = case Tuple(param$8, param$9, param$10) of {
++         , tail(return$25) = {
+-           Tuple(f#4, xs#5, ys#6) ->
++           Tuple(param$8, param$9, param$10) ~ select {
+-             invoke streamZipWith(f#4)(xs#5.tail)(ys#6.tail)
++             Tuple(f#4, xs#5, ys#6) ->
+-           Tuple(_$14, _$15, _$16) -> {}
++               invoke streamZipWith ~ ( f#4
+-         } }
++               , ( do return$27 . {
++                 xs#5 ~ .tail -> return$27
++               }
++               , ( do return$26 . {
++                 ys#6 ~ .tail -> return$26
++               }
++               , return$25 ) ) )
++             Tuple(_$14, _$15, _$16) -> {} ~ return$25
++           }
++         } } ~ return$21
++       } ~ return$20
++     } ~ return$19
++   } ~ return$18
+  
+- def fib =
++ def fib(return$28) =
+-   { head = invoke Int64#(1L)
++   { head(return$29) = {
+-   , tail = { head = invoke Int64#(1L)
++     invoke Int64# ~ (1L, return$29)
+-   , tail = invoke streamZipWith( invoke addInt64 )( invoke fib )( invoke fib.tail ) } }
++   }
++   , tail(return$30) = {
++     { head(return$31) = {
++       invoke Int64# ~ (1L, return$31)
++     }
++     , tail(return$32) = {
++       invoke streamZipWith ~ ( do return$35 . {
++         invoke addInt64 ~ return$35
++       }
++       , ( do return$34 . {
++         invoke fib ~ return$34
++       }
++       , ( do return$33 . {
++         invoke fib ~ .tail -> return$33
++       }
++       , return$32 ) ) )
++     } } ~ return$30
++   } } ~ return$28
+  
+- def main =
++ def main(return$36) =
+-   \param$17 ->
++   \param$17 return$37 . {
+-     case param$17 of {
++     param$17 ~ select {
+        _#7 ->
+-         invoke printString( invoke toStringInt64( invoke fib.tail.tail.tail.tail.tail.head ) )
++         invoke printString ~ ( do return$38 . {
++           invoke toStringInt64 ~ ( do return$39 . {
++             invoke fib ~ .tail -> .tail -> .tail -> .tail -> .tail -> .head -> return$39
++           }
++           , return$38 )
++         }
++         , return$37 )
+      }
++   } ~ return$36
+
+
+=== ToCore -> Flat ===
+  def streamZipWith(return$18) =
+    \param$8 return$19 . {
+      \param$9 return$20 . {
+        \param$10 return$21 . {
+          { head(return$22) = {
+            Tuple(param$8, param$9, param$10) ~ select {
+              Tuple(f#1, xs#2, ys#3) ->
+-               f#1 ~ ( do return$24 . {
++               f#1 ~ then outer$40 -> {
+-                 xs#2 ~ .head -> return$24
++                 join return$24 = then inner$41 -> {
+-               }
++                   outer$40 ~ ( inner$41
+-               , ( do return$23 . {
++                   , then outer$42 -> {
+-                 ys#3 ~ .head -> return$23
++                     join return$23 = then inner$43 -> {
++                       outer$42 ~ (inner$43, return$22)
++                     }
++                     in ys#3 ~ .head -> return$23
++                   } )
++                 }
++                 in xs#2 ~ .head -> return$24
+                }
+-               , return$22 ) )
+              Tuple(_$11, _$12, _$13) -> {} ~ return$22
+            }
+          }
+          , tail(return$25) = {
+            Tuple(param$8, param$9, param$10) ~ select {
+              Tuple(f#4, xs#5, ys#6) ->
+                invoke streamZipWith ~ ( f#4
+-               , ( do return$27 . {
++               , then outer$44 -> {
+-                 xs#5 ~ .tail -> return$27
++                 join return$27 = then inner$45 -> {
+-               }
++                   outer$44 ~ ( inner$45
+-               , ( do return$26 . {
++                   , then outer$46 -> {
+-                 ys#6 ~ .tail -> return$26
++                     join return$26 = then inner$47 -> {
+-               }
++                       outer$46 ~ (inner$47, return$25)
+-               , return$25 ) ) )
++                     }
++                     in ys#6 ~ .tail -> return$26
++                   } )
++                 }
++                 in xs#5 ~ .tail -> return$27
++               } )
+              Tuple(_$14, _$15, _$16) -> {} ~ return$25
+            }
+          } } ~ return$21
+        } ~ return$20
+      } ~ return$19
+    } ~ return$18
+  
+  def fib(return$28) =
+    { head(return$29) = {
+      invoke Int64# ~ (1L, return$29)
+    }
+    , tail(return$30) = {
+      { head(return$31) = {
+        invoke Int64# ~ (1L, return$31)
+      }
+      , tail(return$32) = {
+-       invoke streamZipWith ~ ( do return$35 . {
++       invoke streamZipWith ~ then outer$48 -> {
+-         invoke addInt64 ~ return$35
++         join return$35 = then inner$49 -> {
+-       }
++           outer$48 ~ ( inner$49
+-       , ( do return$34 . {
++           , then outer$50 -> {
+-         invoke fib ~ return$34
++             join return$34 = then inner$51 -> {
+-       }
++               outer$50 ~ ( inner$51
+-       , ( do return$33 . {
++               , then outer$52 -> {
+-         invoke fib ~ .tail -> return$33
++                 join return$33 = then inner$53 -> {
++                   outer$52 ~ (inner$53, return$32)
++                 }
++                 in invoke fib ~ .tail -> return$33
++               } )
++             }
++             in invoke fib ~ return$34
++           } )
++         }
++         in invoke addInt64 ~ return$35
+        }
+-       , return$32 ) ) )
+      } } ~ return$30
+    } } ~ return$28
+  
+  def main(return$36) =
+    \param$17 return$37 . {
+      param$17 ~ select {
+        _#7 ->
+-         invoke printString ~ ( do return$38 . {
++         invoke printString ~ then outer$54 -> {
+-           invoke toStringInt64 ~ ( do return$39 . {
++           join return$38 = then inner$55 -> {
+-             invoke fib ~ .tail -> .tail -> .tail -> .tail -> .tail -> .head -> return$39
++             outer$54 ~ (inner$55, return$37)
+            }
+-           , return$38 )
++           in invoke toStringInt64 ~ then outer$56 -> {
++             join return$39 = then inner$57 -> {
++               outer$56 ~ (inner$57, return$38)
++             }
++             in invoke fib ~ .tail -> .tail -> .tail -> .tail -> .tail -> .head -> return$39
++           }
+          }
+-         , return$37 )
+      }
+    } ~ return$36
+
+
+=== Flat -> Join ===
+  def streamZipWith(return$18) =
+    \param$8 return$19 . {
+      \param$9 return$20 . {
+        \param$10 return$21 . {
+          { head(return$22) = {
+-           Tuple(param$8, param$9, param$10) ~ select {
++           join select$64 = select {
+              Tuple(f#1, xs#2, ys#3) ->
+-               f#1 ~ then outer$40 -> {
++               join then$63 = then outer$40 -> {
+                  join return$24 = then inner$41 -> {
+-                   outer$40 ~ ( inner$41
++                   join then$61 = then outer$42 -> {
+-                   , then outer$42 -> {
+                      join return$23 = then inner$43 -> {
+-                       outer$42 ~ (inner$43, return$22)
++                       join apply$60 = (inner$43, return$22)
++                       in outer$42 ~ apply$60
+                      }
+-                     in ys#3 ~ .head -> return$23
++                     in join project$59 = .head -> return$23
+-                   } )
++                     in ys#3 ~ project$59
++                   }
++                   in join apply$62 = (inner$41, then$61)
++                   in outer$40 ~ apply$62
+                  }
+-                 in xs#2 ~ .head -> return$24
++                 in join project$58 = .head -> return$24
++                 in xs#2 ~ project$58
+                }
++               in f#1 ~ then$63
+              Tuple(_$11, _$12, _$13) -> {} ~ return$22
+            }
++           in Tuple(param$8, param$9, param$10) ~ select$64
+          }
+          , tail(return$25) = {
+-           Tuple(param$8, param$9, param$10) ~ select {
++           join select$72 = select {
+              Tuple(f#4, xs#5, ys#6) ->
+-               invoke streamZipWith ~ ( f#4
++               join then$70 = then outer$44 -> {
+-               , then outer$44 -> {
+                  join return$27 = then inner$45 -> {
+-                   outer$44 ~ ( inner$45
++                   join then$68 = then outer$46 -> {
+-                   , then outer$46 -> {
+                      join return$26 = then inner$47 -> {
+-                       outer$46 ~ (inner$47, return$25)
++                       join apply$67 = (inner$47, return$25)
++                       in outer$46 ~ apply$67
+                      }
+-                     in ys#6 ~ .tail -> return$26
++                     in join project$66 = .tail -> return$26
+-                   } )
++                     in ys#6 ~ project$66
++                   }
++                   in join apply$69 = (inner$45, then$68)
++                   in outer$44 ~ apply$69
+                  }
+-                 in xs#5 ~ .tail -> return$27
++                 in join project$65 = .tail -> return$27
+-               } )
++                 in xs#5 ~ project$65
++               }
++               in join apply$71 = (f#4, then$70)
++               in invoke streamZipWith ~ apply$71
+              Tuple(_$14, _$15, _$16) -> {} ~ return$25
+            }
++           in Tuple(param$8, param$9, param$10) ~ select$72
+          } } ~ return$21
+        } ~ return$20
+      } ~ return$19
+    } ~ return$18
+  
+  def fib(return$28) =
+    { head(return$29) = {
+-     invoke Int64# ~ (1L, return$29)
++     join apply$73 = (1L, return$29)
++     in invoke Int64# ~ apply$73
+    }
+    , tail(return$30) = {
+      { head(return$31) = {
+-       invoke Int64# ~ (1L, return$31)
++       join apply$74 = (1L, return$31)
++       in invoke Int64# ~ apply$74
+      }
+      , tail(return$32) = {
+-       invoke streamZipWith ~ then outer$48 -> {
++       join then$81 = then outer$48 -> {
+          join return$35 = then inner$49 -> {
+-           outer$48 ~ ( inner$49
++           join then$79 = then outer$50 -> {
+-           , then outer$50 -> {
+              join return$34 = then inner$51 -> {
+-               outer$50 ~ ( inner$51
++               join then$77 = then outer$52 -> {
+-               , then outer$52 -> {
+                  join return$33 = then inner$53 -> {
+-                   outer$52 ~ (inner$53, return$32)
++                   join apply$76 = (inner$53, return$32)
++                   in outer$52 ~ apply$76
+                  }
+-                 in invoke fib ~ .tail -> return$33
++                 in join project$75 = .tail -> return$33
+-               } )
++                 in invoke fib ~ project$75
++               }
++               in join apply$78 = (inner$51, then$77)
++               in outer$50 ~ apply$78
+              }
+              in invoke fib ~ return$34
+-           } )
++           }
++           in join apply$80 = (inner$49, then$79)
++           in outer$48 ~ apply$80
+          }
+          in invoke addInt64 ~ return$35
+        }
++       in invoke streamZipWith ~ then$81
+      } } ~ return$30
+    } } ~ return$28
+  
+  def main(return$36) =
+    \param$17 return$37 . {
+-     param$17 ~ select {
++     join select$92 = select {
+        _#7 ->
+-         invoke printString ~ then outer$54 -> {
++         join then$91 = then outer$54 -> {
+            join return$38 = then inner$55 -> {
+-             outer$54 ~ (inner$55, return$37)
++             join apply$90 = (inner$55, return$37)
++             in outer$54 ~ apply$90
+            }
+-           in invoke toStringInt64 ~ then outer$56 -> {
++           in join then$89 = then outer$56 -> {
+              join return$39 = then inner$57 -> {
+-               outer$56 ~ (inner$57, return$38)
++               join apply$88 = (inner$57, return$38)
++               in outer$56 ~ apply$88
+              }
+-             in invoke fib ~ .tail -> .tail -> .tail -> .tail -> .tail -> .head -> return$39
++             in join project$82 = .head -> return$39
++             in join project$83 = .tail -> project$82
++             in join project$84 = .tail -> project$83
++             in join project$85 = .tail -> project$84
++             in join project$86 = .tail -> project$85
++             in join project$87 = .tail -> project$86
++             in invoke fib ~ project$87
+            }
++           in invoke toStringInt64 ~ then$89
+          }
++         in invoke printString ~ then$91
+      }
++     in param$17 ~ select$92
+    } ~ return$36
+
+
+=== Join -> ClosureConv ===
+- def streamZipWith(return$18) =
++ toplevel fn streamZipWith(return$18) =
+-   \param$8 return$19 . {
++   let closure$135 = closure lambda$94()
+-     \param$9 return$20 . {
++   return return$18(closure$135)
+-       \param$10 return$21 . {
+-         { head(return$22) = {
+-           join select$64 = select {
+-             Tuple(f#1, xs#2, ys#3) ->
+-               join then$63 = then outer$40 -> {
+-                 join return$24 = then inner$41 -> {
+-                   join then$61 = then outer$42 -> {
+-                     join return$23 = then inner$43 -> {
+-                       join apply$60 = (inner$43, return$22)
+-                       in outer$42 ~ apply$60
+-                     }
+-                     in join project$59 = .head -> return$23
+-                     in ys#3 ~ project$59
+-                   }
+-                   in join apply$62 = (inner$41, then$61)
+-                   in outer$40 ~ apply$62
+-                 }
+-                 in join project$58 = .head -> return$24
+-                 in xs#2 ~ project$58
+-               }
+-               in f#1 ~ then$63
+-             Tuple(_$11, _$12, _$13) -> {} ~ return$22
+-           }
+-           in Tuple(param$8, param$9, param$10) ~ select$64
+-         }
+-         , tail(return$25) = {
+-           join select$72 = select {
+-             Tuple(f#4, xs#5, ys#6) ->
+-               join then$70 = then outer$44 -> {
+-                 join return$27 = then inner$45 -> {
+-                   join then$68 = then outer$46 -> {
+-                     join return$26 = then inner$47 -> {
+-                       join apply$67 = (inner$47, return$25)
+-                       in outer$46 ~ apply$67
+-                     }
+-                     in join project$66 = .tail -> return$26
+-                     in ys#6 ~ project$66
+-                   }
+-                   in join apply$69 = (inner$45, then$68)
+-                   in outer$44 ~ apply$69
+-                 }
+-                 in join project$65 = .tail -> return$27
+-                 in xs#5 ~ project$65
+-               }
+-               in join apply$71 = (f#4, then$70)
+-               in invoke streamZipWith ~ apply$71
+-             Tuple(_$14, _$15, _$16) -> {} ~ return$25
+-           }
+-           in Tuple(param$8, param$9, param$10) ~ select$72
+-         } } ~ return$21
+-       } ~ return$20
+-     } ~ return$19
+-   } ~ return$18
+  
+- def fib(return$28) =
++ closure fn lambda$94(self$95, param$8, return$19) =
+-   { head(return$29) = {
++   let closure$134 = closure lambda$96(param$8)
+-     join apply$73 = (1L, return$29)
++   return return$19(closure$134)
+-     in invoke Int64# ~ apply$73
++ 
+-   }
++ closure fn lambda$96(self$97, param$9, return$20) =
+-   , tail(return$30) = {
++   let param$8 = self$97.cap[0]
+-     { head(return$31) = {
++   let closure$133 = closure lambda$98(param$8, param$9)
+-       join apply$74 = (1L, return$31)
++   return return$20(closure$133)
+-       in invoke Int64# ~ apply$74
++ 
++ closure fn lambda$98(self$99, param$10, return$21) =
++   let param$8 = self$99.cap[0]
++   let param$9 = self$99.cap[1]
++   let record$132 = record(head = field$100, tail = field$113) captures( param$8
++   , param$9
++   , param$10 )
++   return return$21(record$132)
++ 
++ field fn field$100(self$101, return$22) =
++   let param$8 = self$101.cap[0]
++   let param$9 = self$101.cap[1]
++   let param$10 = self$101.cap[2]
++   let struct$102 = Tuple(param$8, param$9, param$10)
++   if struct$102.tag == Tuple then {
++     let f#1 = struct$102.0
++     let xs#2 = struct$102.1
++     let ys#3 = struct$102.2
++     let return$24 = closure join$103(f#1, return$22, ys#3)
++     return xs#2.head(return$24)
++   } else {
++     if struct$102.tag == Tuple then {
++       let _$11 = struct$102.0
++       let _$12 = struct$102.1
++       let _$13 = struct$102.2
++       let record$112 = record() captures()
++       return return$22(record$112)
++     } else {
++       panic "no matching branch"
+      }
+-     , tail(return$32) = {
++   }
+-       join then$81 = then outer$48 -> {
+-         join return$35 = then inner$49 -> {
+-           join then$79 = then outer$50 -> {
+-             join return$34 = then inner$51 -> {
+-               join then$77 = then outer$52 -> {
+-                 join return$33 = then inner$53 -> {
+-                   join apply$76 = (inner$53, return$32)
+-                   in outer$52 ~ apply$76
+-                 }
+-                 in join project$75 = .tail -> return$33
+-                 in invoke fib ~ project$75
+-               }
+-               in join apply$78 = (inner$51, then$77)
+-               in outer$50 ~ apply$78
+-             }
+-             in invoke fib ~ return$34
+-           }
+-           in join apply$80 = (inner$49, then$79)
+-           in outer$48 ~ apply$80
+-         }
+-         in invoke addInt64 ~ return$35
+-       }
+-       in invoke streamZipWith ~ then$81
+-     } } ~ return$30
+-   } } ~ return$28
+  
+- def main(return$36) =
++ closure fn join$103(self$104, value$105) =
+-   \param$17 return$37 . {
++   let f#1 = self$104.cap[0]
+-     join select$92 = select {
++   let return$22 = self$104.cap[1]
+-       _#7 ->
++   let ys#3 = self$104.cap[2]
+-         join then$91 = then outer$54 -> {
++   let then$61 = closure join$106(return$22, ys#3)
+-           join return$38 = then inner$55 -> {
++   return f#1(value$105, then$61)
+-             join apply$90 = (inner$55, return$37)
++ 
+-             in outer$54 ~ apply$90
++ closure fn join$106(self$107, value$108) =
+-           }
++   let return$22 = self$107.cap[0]
+-           in join then$89 = then outer$56 -> {
++   let ys#3 = self$107.cap[1]
+-             join return$39 = then inner$57 -> {
++   let return$23 = closure join$109(return$22, value$108)
+-               join apply$88 = (inner$57, return$38)
++   return ys#3.head(return$23)
+-               in outer$56 ~ apply$88
++ 
+-             }
++ closure fn join$109(self$110, value$111) =
+-             in join project$82 = .head -> return$39
++   let return$22 = self$110.cap[0]
+-             in join project$83 = .tail -> project$82
++   let value$108 = self$110.cap[1]
+-             in join project$84 = .tail -> project$83
++   return value$108(value$111, return$22)
+-             in join project$85 = .tail -> project$84
++ 
+-             in join project$86 = .tail -> project$85
++ field fn field$113(self$114, return$25) =
+-             in join project$87 = .tail -> project$86
++   let param$8 = self$114.cap[0]
+-             in invoke fib ~ project$87
++   let param$9 = self$114.cap[1]
+-           }
++   let param$10 = self$114.cap[2]
+-           in invoke toStringInt64 ~ then$89
++   let struct$115 = Tuple(param$8, param$9, param$10)
+-         }
++   if struct$115.tag == Tuple then {
+-         in invoke printString ~ then$91
++     let f#4 = struct$115.0
++     let xs#5 = struct$115.1
++     let ys#6 = struct$115.2
++     let then$70 = closure join$116(return$25, xs#5, ys#6)
++     let apply$71 = closure join$128(f#4, then$70)
++     return streamZipWith(apply$71)
++   } else {
++     if struct$115.tag == Tuple then {
++       let _$14 = struct$115.0
++       let _$15 = struct$115.1
++       let _$16 = struct$115.2
++       let record$131 = record() captures()
++       return return$25(record$131)
++     } else {
++       panic "no matching branch"
+      }
+-     in param$17 ~ select$92
++   }
+-   } ~ return$36
++ 
++ closure fn join$116(self$117, value$118) =
++   let return$25 = self$117.cap[0]
++   let xs#5 = self$117.cap[1]
++   let ys#6 = self$117.cap[2]
++   let return$27 = closure join$119(return$25, value$118, ys#6)
++   return xs#5.tail(return$27)
++ 
++ closure fn join$119(self$120, value$121) =
++   let return$25 = self$120.cap[0]
++   let value$118 = self$120.cap[1]
++   let ys#6 = self$120.cap[2]
++   let then$68 = closure join$122(return$25, ys#6)
++   return value$118(value$121, then$68)
++ 
++ closure fn join$122(self$123, value$124) =
++   let return$25 = self$123.cap[0]
++   let ys#6 = self$123.cap[1]
++   let return$26 = closure join$125(return$25, value$124)
++   return ys#6.tail(return$26)
++ 
++ closure fn join$125(self$126, value$127) =
++   let return$25 = self$126.cap[0]
++   let value$124 = self$126.cap[1]
++   return value$124(value$127, return$25)
++ 
++ closure fn join$128(self$129, value$130) =
++   let f#4 = self$129.cap[0]
++   let then$70 = self$129.cap[1]
++   return value$130(f#4, then$70)
++ 
++ toplevel fn fib(return$28) =
++   let record$175 = record(head = field$137, tail = field$143) captures()
++   return return$28(record$175)
++ 
++ field fn field$137(self$138, return$29) =
++   let apply$73 = closure join$139(return$29)
++   return Int64#(apply$73)
++ 
++ closure fn join$139(self$140, value$141) =
++   let return$29 = self$140.cap[0]
++   let lit$142 = 1L
++   return value$141(lit$142, return$29)
++ 
++ field fn field$143(self$144, return$30) =
++   let record$174 = record(head = field$145, tail = field$151) captures()
++   return return$30(record$174)
++ 
++ field fn field$145(self$146, return$31) =
++   let apply$74 = closure join$147(return$31)
++   return Int64#(apply$74)
++ 
++ closure fn join$147(self$148, value$149) =
++   let return$31 = self$148.cap[0]
++   let lit$150 = 1L
++   return value$149(lit$150, return$31)
++ 
++ field fn field$151(self$152, return$32) =
++   let then$81 = closure join$153(return$32)
++   return streamZipWith(then$81)
++ 
++ closure fn join$153(self$154, value$155) =
++   let return$32 = self$154.cap[0]
++   let return$35 = closure join$156(return$32, value$155)
++   return addInt64(return$35)
++ 
++ closure fn join$156(self$157, value$158) =
++   let return$32 = self$157.cap[0]
++   let value$155 = self$157.cap[1]
++   let then$79 = closure join$159(return$32)
++   return value$155(value$158, then$79)
++ 
++ closure fn join$159(self$160, value$161) =
++   let return$32 = self$160.cap[0]
++   let return$34 = closure join$162(return$32, value$161)
++   return fib(return$34)
++ 
++ closure fn join$162(self$163, value$164) =
++   let return$32 = self$163.cap[0]
++   let value$161 = self$163.cap[1]
++   let then$77 = closure join$165(return$32)
++   return value$161(value$164, then$77)
++ 
++ closure fn join$165(self$166, value$167) =
++   let return$32 = self$166.cap[0]
++   let return$33 = closure join$168(return$32, value$167)
++   let project$75 = closure join$171(return$33)
++   return fib(project$75)
++ 
++ closure fn join$168(self$169, value$170) =
++   let return$32 = self$169.cap[0]
++   let value$167 = self$169.cap[1]
++   return value$167(value$170, return$32)
++ 
++ closure fn join$171(self$172, value$173) =
++   let return$33 = self$172.cap[0]
++   return value$173.tail(return$33)
++ 
++ toplevel fn main(return$36) =
++   let closure$209 = closure lambda$177()
++   return return$36(closure$209)
++ 
++ closure fn lambda$177(self$178, param$17, return$37) =
++   if  then {
++     let _#7 = param$17
++     let then$91 = closure join$179(return$37)
++     return printString(then$91)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$179(self$180, value$181) =
++   let return$37 = self$180.cap[0]
++   let return$38 = closure join$182(return$37, value$181)
++   let then$89 = closure join$185(return$38)
++   return toStringInt64(then$89)
++ 
++ closure fn join$182(self$183, value$184) =
++   let return$37 = self$183.cap[0]
++   let value$181 = self$183.cap[1]
++   return value$181(value$184, return$37)
++ 
++ closure fn join$185(self$186, value$187) =
++   let return$38 = self$186.cap[0]
++   let return$39 = closure join$188(return$38, value$187)
++   let project$82 = closure join$191(return$39)
++   let project$83 = closure join$194(project$82)
++   let project$84 = closure join$197(project$83)
++   let project$85 = closure join$200(project$84)
++   let project$86 = closure join$203(project$85)
++   let project$87 = closure join$206(project$86)
++   return fib(project$87)
++ 
++ closure fn join$188(self$189, value$190) =
++   let return$38 = self$189.cap[0]
++   let value$187 = self$189.cap[1]
++   return value$187(value$190, return$38)
++ 
++ closure fn join$191(self$192, value$193) =
++   let return$39 = self$192.cap[0]
++   return value$193.head(return$39)
++ 
++ closure fn join$194(self$195, value$196) =
++   let project$82 = self$195.cap[0]
++   return value$196.tail(project$82)
++ 
++ closure fn join$197(self$198, value$199) =
++   let project$83 = self$198.cap[0]
++   return value$199.tail(project$83)
++ 
++ closure fn join$200(self$201, value$202) =
++   let project$84 = self$201.cap[0]
++   return value$202.tail(project$84)
++ 
++ closure fn join$203(self$204, value$205) =
++   let project$85 = self$204.cap[0]
++   return value$205.tail(project$85)
++ 
++ closure fn join$206(self$207, value$208) =
++   let project$86 = self$207.cap[0]
++   return value$208.tail(project$86)
++ 
++ toplevel fn zig_main$212() =
++   let finish$210 = closure join$214()
++   let after_main$211 = closure join$217(finish$210)
++   return main(after_main$211)
++ 
++ closure fn join$214(self$215, value$216) = return value$216
++ 
++ closure fn join$217(self$218, value$219) =
++   let finish$210 = self$218.cap[0]
++   let struct$220 = Tuple()
++   return value$219(struct$220, finish$210)
++ 
++ entry = zig_main$212
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn streamZipWith(return$18) =
+    let closure$135 = closure lambda$94()
+    return return$18(closure$135)
+  
+  closure fn lambda$94(self$95, param$8, return$19) =
+    let closure$134 = closure lambda$96(param$8)
+    return return$19(closure$134)
+  
+  closure fn lambda$96(self$97, param$9, return$20) =
+    let param$8 = self$97.cap[0]
+    let closure$133 = closure lambda$98(param$8, param$9)
+    return return$20(closure$133)
+  
+  closure fn lambda$98(self$99, param$10, return$21) =
+    let param$8 = self$99.cap[0]
+    let param$9 = self$99.cap[1]
+    let record$132 = record(head = field$100, tail = field$113) captures( param$8
+    , param$9
+    , param$10 )
+    return return$21(record$132)
+  
+  field fn field$100(self$101, return$22) =
+    let param$8 = self$101.cap[0]
+    let param$9 = self$101.cap[1]
+    let param$10 = self$101.cap[2]
+-   let struct$102 = Tuple(param$8, param$9, param$10)
++   if  then {
+-   if struct$102.tag == Tuple then {
++     let return$24 = closure join$103(param$8, return$22, param$10)
+-     let f#1 = struct$102.0
++     return param$9.head(return$24)
+-     let xs#2 = struct$102.1
+-     let ys#3 = struct$102.2
+-     let return$24 = closure join$103(f#1, return$22, ys#3)
+-     return xs#2.head(return$24)
+    } else {
+-     if struct$102.tag == Tuple then {
++     if  then {
+-       let _$11 = struct$102.0
+-       let _$12 = struct$102.1
+-       let _$13 = struct$102.2
+        let record$112 = record() captures()
+        return return$22(record$112)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$103(self$104, value$105) =
+    let f#1 = self$104.cap[0]
+    let return$22 = self$104.cap[1]
+    let ys#3 = self$104.cap[2]
+    let then$61 = closure join$106(return$22, ys#3)
+    return f#1(value$105, then$61)
+  
+  closure fn join$106(self$107, value$108) =
+    let return$22 = self$107.cap[0]
+    let ys#3 = self$107.cap[1]
+    let return$23 = closure join$109(return$22, value$108)
+    return ys#3.head(return$23)
+  
+  closure fn join$109(self$110, value$111) =
+    let return$22 = self$110.cap[0]
+    let value$108 = self$110.cap[1]
+    return value$108(value$111, return$22)
+  
+  field fn field$113(self$114, return$25) =
+    let param$8 = self$114.cap[0]
+    let param$9 = self$114.cap[1]
+    let param$10 = self$114.cap[2]
+-   let struct$115 = Tuple(param$8, param$9, param$10)
++   if  then {
+-   if struct$115.tag == Tuple then {
++     let then$70 = closure join$116(return$25, param$9, param$10)
+-     let f#4 = struct$115.0
++     let apply$71 = closure join$128(param$8, then$70)
+-     let xs#5 = struct$115.1
+-     let ys#6 = struct$115.2
+-     let then$70 = closure join$116(return$25, xs#5, ys#6)
+-     let apply$71 = closure join$128(f#4, then$70)
+      return streamZipWith(apply$71)
+    } else {
+-     if struct$115.tag == Tuple then {
++     if  then {
+-       let _$14 = struct$115.0
+-       let _$15 = struct$115.1
+-       let _$16 = struct$115.2
+        let record$131 = record() captures()
+        return return$25(record$131)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$116(self$117, value$118) =
+    let return$25 = self$117.cap[0]
+    let xs#5 = self$117.cap[1]
+    let ys#6 = self$117.cap[2]
+    let return$27 = closure join$119(return$25, value$118, ys#6)
+    return xs#5.tail(return$27)
+  
+  closure fn join$119(self$120, value$121) =
+    let return$25 = self$120.cap[0]
+    let value$118 = self$120.cap[1]
+    let ys#6 = self$120.cap[2]
+    let then$68 = closure join$122(return$25, ys#6)
+    return value$118(value$121, then$68)
+  
+  closure fn join$122(self$123, value$124) =
+    let return$25 = self$123.cap[0]
+    let ys#6 = self$123.cap[1]
+    let return$26 = closure join$125(return$25, value$124)
+    return ys#6.tail(return$26)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$25 = self$126.cap[0]
+    let value$124 = self$126.cap[1]
+    return value$124(value$127, return$25)
+  
+  closure fn join$128(self$129, value$130) =
+    let f#4 = self$129.cap[0]
+    let then$70 = self$129.cap[1]
+    return value$130(f#4, then$70)
+  
+  toplevel fn fib(return$28) =
+    let record$175 = record(head = field$137, tail = field$143) captures()
+    return return$28(record$175)
+  
+  field fn field$137(self$138, return$29) =
+    let apply$73 = closure join$139(return$29)
+    return Int64#(apply$73)
+  
+  closure fn join$139(self$140, value$141) =
+    let return$29 = self$140.cap[0]
+    let lit$142 = 1L
+    return value$141(lit$142, return$29)
+  
+  field fn field$143(self$144, return$30) =
+    let record$174 = record(head = field$145, tail = field$151) captures()
+    return return$30(record$174)
+  
+  field fn field$145(self$146, return$31) =
+    let apply$74 = closure join$147(return$31)
+    return Int64#(apply$74)
+  
+  closure fn join$147(self$148, value$149) =
+    let return$31 = self$148.cap[0]
+    let lit$150 = 1L
+    return value$149(lit$150, return$31)
+  
+  field fn field$151(self$152, return$32) =
+    let then$81 = closure join$153(return$32)
+    return streamZipWith(then$81)
+  
+  closure fn join$153(self$154, value$155) =
+    let return$32 = self$154.cap[0]
+    let return$35 = closure join$156(return$32, value$155)
+    return addInt64(return$35)
+  
+  closure fn join$156(self$157, value$158) =
+    let return$32 = self$157.cap[0]
+    let value$155 = self$157.cap[1]
+    let then$79 = closure join$159(return$32)
+    return value$155(value$158, then$79)
+  
+  closure fn join$159(self$160, value$161) =
+    let return$32 = self$160.cap[0]
+    let return$34 = closure join$162(return$32, value$161)
+    return fib(return$34)
+  
+  closure fn join$162(self$163, value$164) =
+    let return$32 = self$163.cap[0]
+    let value$161 = self$163.cap[1]
+    let then$77 = closure join$165(return$32)
+    return value$161(value$164, then$77)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$32 = self$166.cap[0]
+    let return$33 = closure join$168(return$32, value$167)
+    let project$75 = closure join$171(return$33)
+    return fib(project$75)
+  
+  closure fn join$168(self$169, value$170) =
+    let return$32 = self$169.cap[0]
+    let value$167 = self$169.cap[1]
+    return value$167(value$170, return$32)
+  
+  closure fn join$171(self$172, value$173) =
+    let return$33 = self$172.cap[0]
+    return value$173.tail(return$33)
+  
+  toplevel fn main(return$36) =
+    let closure$209 = closure lambda$177()
+    return return$36(closure$209)
+  
+  closure fn lambda$177(self$178, param$17, return$37) =
+    if  then {
+-     let _#7 = param$17
+      let then$91 = closure join$179(return$37)
+      return printString(then$91)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$179(self$180, value$181) =
+    let return$37 = self$180.cap[0]
+    let return$38 = closure join$182(return$37, value$181)
+    let then$89 = closure join$185(return$38)
+    return toStringInt64(then$89)
+  
+  closure fn join$182(self$183, value$184) =
+    let return$37 = self$183.cap[0]
+    let value$181 = self$183.cap[1]
+    return value$181(value$184, return$37)
+  
+  closure fn join$185(self$186, value$187) =
+    let return$38 = self$186.cap[0]
+    let return$39 = closure join$188(return$38, value$187)
+    let project$82 = closure join$191(return$39)
+    let project$83 = closure join$194(project$82)
+    let project$84 = closure join$197(project$83)
+    let project$85 = closure join$200(project$84)
+    let project$86 = closure join$203(project$85)
+    let project$87 = closure join$206(project$86)
+    return fib(project$87)
+  
+  closure fn join$188(self$189, value$190) =
+    let return$38 = self$189.cap[0]
+    let value$187 = self$189.cap[1]
+    return value$187(value$190, return$38)
+  
+  closure fn join$191(self$192, value$193) =
+    let return$39 = self$192.cap[0]
+    return value$193.head(return$39)
+  
+  closure fn join$194(self$195, value$196) =
+    let project$82 = self$195.cap[0]
+    return value$196.tail(project$82)
+  
+  closure fn join$197(self$198, value$199) =
+    let project$83 = self$198.cap[0]
+    return value$199.tail(project$83)
+  
+  closure fn join$200(self$201, value$202) =
+    let project$84 = self$201.cap[0]
+    return value$202.tail(project$84)
+  
+  closure fn join$203(self$204, value$205) =
+    let project$85 = self$204.cap[0]
+    return value$205.tail(project$85)
+  
+  closure fn join$206(self$207, value$208) =
+    let project$86 = self$207.cap[0]
+    return value$208.tail(project$86)
+  
+  toplevel fn zig_main$212() =
+    let finish$210 = closure join$214()
+    let after_main$211 = closure join$217(finish$210)
+    return main(after_main$211)
+  
+  closure fn join$214(self$215, value$216) = return value$216
+  
+  closure fn join$217(self$218, value$219) =
+    let finish$210 = self$218.cap[0]
+    let struct$220 = Tuple()
+    return value$219(struct$220, finish$210)
+  
+  entry = zig_main$212
+
+
+=== Peephole -> Perceus ===
+  toplevel fn streamZipWith(return$18) =
+    let closure$135 = closure lambda$94()
+    return return$18(closure$135)
+  
+  closure fn lambda$94(self$95, param$8, return$19) =
++   drop self$95
+    let closure$134 = closure lambda$96(param$8)
+    return return$19(closure$134)
+  
+  closure fn lambda$96(self$97, param$9, return$20) =
+    let param$8 = self$97.cap[0]
++   dup param$8
++   drop self$97
+    let closure$133 = closure lambda$98(param$8, param$9)
+    return return$20(closure$133)
+  
+  closure fn lambda$98(self$99, param$10, return$21) =
+    let param$8 = self$99.cap[0]
++   dup param$8
+    let param$9 = self$99.cap[1]
++   dup param$9
++   drop self$99
+    let record$132 = record(head = field$100, tail = field$113) captures( param$8
+    , param$9
+    , param$10 )
+    return return$21(record$132)
+  
+  field fn field$100(self$101, return$22) =
+    let param$8 = self$101.cap[0]
++   dup param$8
+    let param$9 = self$101.cap[1]
++   dup param$9
+    let param$10 = self$101.cap[2]
++   dup param$10
++   drop self$101
+    if  then {
+      let return$24 = closure join$103(param$8, return$22, param$10)
+      return param$9.head(return$24)
+    } else {
++     drop param$8
++     drop param$9
++     drop param$10
+      if  then {
+        let record$112 = record() captures()
+        return return$22(record$112)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$103(self$104, value$105) =
+    let f#1 = self$104.cap[0]
++   dup f#1
+    let return$22 = self$104.cap[1]
++   dup return$22
+    let ys#3 = self$104.cap[2]
++   dup ys#3
++   drop self$104
+    let then$61 = closure join$106(return$22, ys#3)
+    return f#1(value$105, then$61)
+  
+  closure fn join$106(self$107, value$108) =
+    let return$22 = self$107.cap[0]
++   dup return$22
+    let ys#3 = self$107.cap[1]
++   dup ys#3
++   drop self$107
+    let return$23 = closure join$109(return$22, value$108)
+    return ys#3.head(return$23)
+  
+  closure fn join$109(self$110, value$111) =
+    let return$22 = self$110.cap[0]
++   dup return$22
+    let value$108 = self$110.cap[1]
++   dup value$108
++   drop self$110
+    return value$108(value$111, return$22)
+  
+  field fn field$113(self$114, return$25) =
+    let param$8 = self$114.cap[0]
++   dup param$8
+    let param$9 = self$114.cap[1]
++   dup param$9
+    let param$10 = self$114.cap[2]
++   dup param$10
++   drop self$114
+    if  then {
+      let then$70 = closure join$116(return$25, param$9, param$10)
+      let apply$71 = closure join$128(param$8, then$70)
+      return streamZipWith(apply$71)
+    } else {
++     drop param$8
++     drop param$9
++     drop param$10
+      if  then {
+        let record$131 = record() captures()
+        return return$25(record$131)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$116(self$117, value$118) =
+    let return$25 = self$117.cap[0]
++   dup return$25
+    let xs#5 = self$117.cap[1]
++   dup xs#5
+    let ys#6 = self$117.cap[2]
++   dup ys#6
++   drop self$117
+    let return$27 = closure join$119(return$25, value$118, ys#6)
+    return xs#5.tail(return$27)
+  
+  closure fn join$119(self$120, value$121) =
+    let return$25 = self$120.cap[0]
++   dup return$25
+    let value$118 = self$120.cap[1]
++   dup value$118
+    let ys#6 = self$120.cap[2]
++   dup ys#6
++   drop self$120
+    let then$68 = closure join$122(return$25, ys#6)
+    return value$118(value$121, then$68)
+  
+  closure fn join$122(self$123, value$124) =
+    let return$25 = self$123.cap[0]
++   dup return$25
+    let ys#6 = self$123.cap[1]
++   dup ys#6
++   drop self$123
+    let return$26 = closure join$125(return$25, value$124)
+    return ys#6.tail(return$26)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$25 = self$126.cap[0]
++   dup return$25
+    let value$124 = self$126.cap[1]
++   dup value$124
++   drop self$126
+    return value$124(value$127, return$25)
+  
+  closure fn join$128(self$129, value$130) =
+    let f#4 = self$129.cap[0]
++   dup f#4
+    let then$70 = self$129.cap[1]
++   dup then$70
++   drop self$129
+    return value$130(f#4, then$70)
+  
+  toplevel fn fib(return$28) =
+    let record$175 = record(head = field$137, tail = field$143) captures()
+    return return$28(record$175)
+  
+  field fn field$137(self$138, return$29) =
++   drop self$138
+    let apply$73 = closure join$139(return$29)
+    return Int64#(apply$73)
+  
+  closure fn join$139(self$140, value$141) =
+    let return$29 = self$140.cap[0]
++   dup return$29
++   drop self$140
+    let lit$142 = 1L
+    return value$141(lit$142, return$29)
+  
+  field fn field$143(self$144, return$30) =
++   drop self$144
+    let record$174 = record(head = field$145, tail = field$151) captures()
+    return return$30(record$174)
+  
+  field fn field$145(self$146, return$31) =
++   drop self$146
+    let apply$74 = closure join$147(return$31)
+    return Int64#(apply$74)
+  
+  closure fn join$147(self$148, value$149) =
+    let return$31 = self$148.cap[0]
++   dup return$31
++   drop self$148
+    let lit$150 = 1L
+    return value$149(lit$150, return$31)
+  
+  field fn field$151(self$152, return$32) =
++   drop self$152
+    let then$81 = closure join$153(return$32)
+    return streamZipWith(then$81)
+  
+  closure fn join$153(self$154, value$155) =
+    let return$32 = self$154.cap[0]
++   dup return$32
++   drop self$154
+    let return$35 = closure join$156(return$32, value$155)
+    return addInt64(return$35)
+  
+  closure fn join$156(self$157, value$158) =
+    let return$32 = self$157.cap[0]
++   dup return$32
+    let value$155 = self$157.cap[1]
++   dup value$155
++   drop self$157
+    let then$79 = closure join$159(return$32)
+    return value$155(value$158, then$79)
+  
+  closure fn join$159(self$160, value$161) =
+    let return$32 = self$160.cap[0]
++   dup return$32
++   drop self$160
+    let return$34 = closure join$162(return$32, value$161)
+    return fib(return$34)
+  
+  closure fn join$162(self$163, value$164) =
+    let return$32 = self$163.cap[0]
++   dup return$32
+    let value$161 = self$163.cap[1]
++   dup value$161
++   drop self$163
+    let then$77 = closure join$165(return$32)
+    return value$161(value$164, then$77)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$32 = self$166.cap[0]
++   dup return$32
++   drop self$166
+    let return$33 = closure join$168(return$32, value$167)
+    let project$75 = closure join$171(return$33)
+    return fib(project$75)
+  
+  closure fn join$168(self$169, value$170) =
+    let return$32 = self$169.cap[0]
++   dup return$32
+    let value$167 = self$169.cap[1]
++   dup value$167
++   drop self$169
+    return value$167(value$170, return$32)
+  
+  closure fn join$171(self$172, value$173) =
+    let return$33 = self$172.cap[0]
++   dup return$33
++   drop self$172
+    return value$173.tail(return$33)
+  
+  toplevel fn main(return$36) =
+    let closure$209 = closure lambda$177()
+    return return$36(closure$209)
+  
+  closure fn lambda$177(self$178, param$17, return$37) =
++   drop param$17
++   drop self$178
+    if  then {
+      let then$91 = closure join$179(return$37)
+      return printString(then$91)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$179(self$180, value$181) =
+    let return$37 = self$180.cap[0]
++   dup return$37
++   drop self$180
+    let return$38 = closure join$182(return$37, value$181)
+    let then$89 = closure join$185(return$38)
+    return toStringInt64(then$89)
+  
+  closure fn join$182(self$183, value$184) =
+    let return$37 = self$183.cap[0]
++   dup return$37
+    let value$181 = self$183.cap[1]
++   dup value$181
++   drop self$183
+    return value$181(value$184, return$37)
+  
+  closure fn join$185(self$186, value$187) =
+    let return$38 = self$186.cap[0]
++   dup return$38
++   drop self$186
+    let return$39 = closure join$188(return$38, value$187)
+    let project$82 = closure join$191(return$39)
+    let project$83 = closure join$194(project$82)
+    let project$84 = closure join$197(project$83)
+    let project$85 = closure join$200(project$84)
+    let project$86 = closure join$203(project$85)
+    let project$87 = closure join$206(project$86)
+    return fib(project$87)
+  
+  closure fn join$188(self$189, value$190) =
+    let return$38 = self$189.cap[0]
++   dup return$38
+    let value$187 = self$189.cap[1]
++   dup value$187
++   drop self$189
+    return value$187(value$190, return$38)
+  
+  closure fn join$191(self$192, value$193) =
+    let return$39 = self$192.cap[0]
++   dup return$39
++   drop self$192
+    return value$193.head(return$39)
+  
+  closure fn join$194(self$195, value$196) =
+    let project$82 = self$195.cap[0]
++   dup project$82
++   drop self$195
+    return value$196.tail(project$82)
+  
+  closure fn join$197(self$198, value$199) =
+    let project$83 = self$198.cap[0]
++   dup project$83
++   drop self$198
+    return value$199.tail(project$83)
+  
+  closure fn join$200(self$201, value$202) =
+    let project$84 = self$201.cap[0]
++   dup project$84
++   drop self$201
+    return value$202.tail(project$84)
+  
+  closure fn join$203(self$204, value$205) =
+    let project$85 = self$204.cap[0]
++   dup project$85
++   drop self$204
+    return value$205.tail(project$85)
+  
+  closure fn join$206(self$207, value$208) =
+    let project$86 = self$207.cap[0]
++   dup project$86
++   drop self$207
+    return value$208.tail(project$86)
+  
+  toplevel fn zig_main$212() =
+    let finish$210 = closure join$214()
+    let after_main$211 = closure join$217(finish$210)
+    return main(after_main$211)
+  
+- closure fn join$214(self$215, value$216) = return value$216
++ closure fn join$214(self$215, value$216) =
++   drop self$215
++   return value$216
+  
+  closure fn join$217(self$218, value$219) =
+    let finish$210 = self$218.cap[0]
++   dup finish$210
++   drop self$218
+    let struct$220 = Tuple()
+    return value$219(struct$220, finish$210)
+  
+  entry = zig_main$212
+
+
+=== Perceus -> Reuse ===
+  toplevel fn streamZipWith(return$18) =
+    let closure$135 = closure lambda$94()
+    return return$18(closure$135)
+  
+  closure fn lambda$94(self$95, param$8, return$19) =
+-   drop self$95
+    let closure$134 = closure lambda$96(param$8)
++   drop self$95
+    return return$19(closure$134)
+  
+  closure fn lambda$96(self$97, param$9, return$20) =
+    let param$8 = self$97.cap[0]
+    dup param$8
+-   drop self$97
+    let closure$133 = closure lambda$98(param$8, param$9)
++   drop self$97
+    return return$20(closure$133)
+  
+  closure fn lambda$98(self$99, param$10, return$21) =
+    let param$8 = self$99.cap[0]
+    dup param$8
+    let param$9 = self$99.cap[1]
+    dup param$9
+-   drop self$99
+    let record$132 = record(head = field$100, tail = field$113) captures( param$8
+    , param$9
+    , param$10 )
++   drop self$99
+    return return$21(record$132)
+  
+  field fn field$100(self$101, return$22) =
+    let param$8 = self$101.cap[0]
+    dup param$8
+    let param$9 = self$101.cap[1]
+    dup param$9
+    let param$10 = self$101.cap[2]
+    dup param$10
+    drop self$101
+    if  then {
+      let return$24 = closure join$103(param$8, return$22, param$10)
+      return param$9.head(return$24)
+    } else {
+      drop param$8
+      drop param$9
+      drop param$10
+      if  then {
+        let record$112 = record() captures()
+        return return$22(record$112)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$103(self$104, value$105) =
+    let f#1 = self$104.cap[0]
+    dup f#1
+    let return$22 = self$104.cap[1]
+    dup return$22
+    let ys#3 = self$104.cap[2]
+    dup ys#3
+-   drop self$104
+    let then$61 = closure join$106(return$22, ys#3)
++   drop self$104
+    return f#1(value$105, then$61)
+  
+  closure fn join$106(self$107, value$108) =
+    let return$22 = self$107.cap[0]
+    dup return$22
+    let ys#3 = self$107.cap[1]
+    dup ys#3
+-   drop self$107
+    let return$23 = closure join$109(return$22, value$108)
++   drop self$107
+    return ys#3.head(return$23)
+  
+  closure fn join$109(self$110, value$111) =
+    let return$22 = self$110.cap[0]
+    dup return$22
+    let value$108 = self$110.cap[1]
+    dup value$108
+    drop self$110
+    return value$108(value$111, return$22)
+  
+  field fn field$113(self$114, return$25) =
+    let param$8 = self$114.cap[0]
+    dup param$8
+    let param$9 = self$114.cap[1]
+    dup param$9
+    let param$10 = self$114.cap[2]
+    dup param$10
+    drop self$114
+    if  then {
+      let then$70 = closure join$116(return$25, param$9, param$10)
+      let apply$71 = closure join$128(param$8, then$70)
+      return streamZipWith(apply$71)
+    } else {
+      drop param$8
+      drop param$9
+      drop param$10
+      if  then {
+        let record$131 = record() captures()
+        return return$25(record$131)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$116(self$117, value$118) =
+    let return$25 = self$117.cap[0]
+    dup return$25
+    let xs#5 = self$117.cap[1]
+    dup xs#5
+    let ys#6 = self$117.cap[2]
+    dup ys#6
+-   drop self$117
+    let return$27 = closure join$119(return$25, value$118, ys#6)
++   drop self$117
+    return xs#5.tail(return$27)
+  
+  closure fn join$119(self$120, value$121) =
+    let return$25 = self$120.cap[0]
+    dup return$25
+    let value$118 = self$120.cap[1]
+    dup value$118
+    let ys#6 = self$120.cap[2]
+    dup ys#6
+-   drop self$120
+    let then$68 = closure join$122(return$25, ys#6)
++   drop self$120
+    return value$118(value$121, then$68)
+  
+  closure fn join$122(self$123, value$124) =
+    let return$25 = self$123.cap[0]
+    dup return$25
+    let ys#6 = self$123.cap[1]
+    dup ys#6
+-   drop self$123
+    let return$26 = closure join$125(return$25, value$124)
++   drop self$123
+    return ys#6.tail(return$26)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$25 = self$126.cap[0]
+    dup return$25
+    let value$124 = self$126.cap[1]
+    dup value$124
+    drop self$126
+    return value$124(value$127, return$25)
+  
+  closure fn join$128(self$129, value$130) =
+    let f#4 = self$129.cap[0]
+    dup f#4
+    let then$70 = self$129.cap[1]
+    dup then$70
+    drop self$129
+    return value$130(f#4, then$70)
+  
+  toplevel fn fib(return$28) =
+    let record$175 = record(head = field$137, tail = field$143) captures()
+    return return$28(record$175)
+  
+  field fn field$137(self$138, return$29) =
+-   drop self$138
+    let apply$73 = closure join$139(return$29)
++   drop self$138
+    return Int64#(apply$73)
+  
+  closure fn join$139(self$140, value$141) =
+    let return$29 = self$140.cap[0]
+    dup return$29
+-   drop self$140
+    let lit$142 = 1L
++   drop self$140
+    return value$141(lit$142, return$29)
+  
+  field fn field$143(self$144, return$30) =
+-   drop self$144
+    let record$174 = record(head = field$145, tail = field$151) captures()
++   drop self$144
+    return return$30(record$174)
+  
+  field fn field$145(self$146, return$31) =
+-   drop self$146
+    let apply$74 = closure join$147(return$31)
++   drop self$146
+    return Int64#(apply$74)
+  
+  closure fn join$147(self$148, value$149) =
+    let return$31 = self$148.cap[0]
+    dup return$31
+-   drop self$148
+    let lit$150 = 1L
++   drop self$148
+    return value$149(lit$150, return$31)
+  
+  field fn field$151(self$152, return$32) =
+-   drop self$152
+    let then$81 = closure join$153(return$32)
++   drop self$152
+    return streamZipWith(then$81)
+  
+  closure fn join$153(self$154, value$155) =
+    let return$32 = self$154.cap[0]
+    dup return$32
+-   drop self$154
+    let return$35 = closure join$156(return$32, value$155)
++   drop self$154
+    return addInt64(return$35)
+  
+  closure fn join$156(self$157, value$158) =
+    let return$32 = self$157.cap[0]
+    dup return$32
+    let value$155 = self$157.cap[1]
+    dup value$155
+-   drop self$157
+    let then$79 = closure join$159(return$32)
++   drop self$157
+    return value$155(value$158, then$79)
+  
+  closure fn join$159(self$160, value$161) =
+    let return$32 = self$160.cap[0]
+    dup return$32
+-   drop self$160
+    let return$34 = closure join$162(return$32, value$161)
++   drop self$160
+    return fib(return$34)
+  
+  closure fn join$162(self$163, value$164) =
+    let return$32 = self$163.cap[0]
+    dup return$32
+    let value$161 = self$163.cap[1]
+    dup value$161
+-   drop self$163
+    let then$77 = closure join$165(return$32)
++   drop self$163
+    return value$161(value$164, then$77)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$32 = self$166.cap[0]
+    dup return$32
+-   drop self$166
+    let return$33 = closure join$168(return$32, value$167)
+    let project$75 = closure join$171(return$33)
++   drop self$166
+    return fib(project$75)
+  
+  closure fn join$168(self$169, value$170) =
+    let return$32 = self$169.cap[0]
+    dup return$32
+    let value$167 = self$169.cap[1]
+    dup value$167
+    drop self$169
+    return value$167(value$170, return$32)
+  
+  closure fn join$171(self$172, value$173) =
+    let return$33 = self$172.cap[0]
+    dup return$33
+    drop self$172
+    return value$173.tail(return$33)
+  
+  toplevel fn main(return$36) =
+    let closure$209 = closure lambda$177()
+    return return$36(closure$209)
+  
+  closure fn lambda$177(self$178, param$17, return$37) =
+    drop param$17
+    drop self$178
+    if  then {
+      let then$91 = closure join$179(return$37)
+      return printString(then$91)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$179(self$180, value$181) =
+    let return$37 = self$180.cap[0]
+    dup return$37
+-   drop self$180
+    let return$38 = closure join$182(return$37, value$181)
+    let then$89 = closure join$185(return$38)
++   drop self$180
+    return toStringInt64(then$89)
+  
+  closure fn join$182(self$183, value$184) =
+    let return$37 = self$183.cap[0]
+    dup return$37
+    let value$181 = self$183.cap[1]
+    dup value$181
+    drop self$183
+    return value$181(value$184, return$37)
+  
+  closure fn join$185(self$186, value$187) =
+    let return$38 = self$186.cap[0]
+    dup return$38
+-   drop self$186
+    let return$39 = closure join$188(return$38, value$187)
+    let project$82 = closure join$191(return$39)
+    let project$83 = closure join$194(project$82)
+    let project$84 = closure join$197(project$83)
+    let project$85 = closure join$200(project$84)
+    let project$86 = closure join$203(project$85)
+    let project$87 = closure join$206(project$86)
++   drop self$186
+    return fib(project$87)
+  
+  closure fn join$188(self$189, value$190) =
+    let return$38 = self$189.cap[0]
+    dup return$38
+    let value$187 = self$189.cap[1]
+    dup value$187
+    drop self$189
+    return value$187(value$190, return$38)
+  
+  closure fn join$191(self$192, value$193) =
+    let return$39 = self$192.cap[0]
+    dup return$39
+    drop self$192
+    return value$193.head(return$39)
+  
+  closure fn join$194(self$195, value$196) =
+    let project$82 = self$195.cap[0]
+    dup project$82
+    drop self$195
+    return value$196.tail(project$82)
+  
+  closure fn join$197(self$198, value$199) =
+    let project$83 = self$198.cap[0]
+    dup project$83
+    drop self$198
+    return value$199.tail(project$83)
+  
+  closure fn join$200(self$201, value$202) =
+    let project$84 = self$201.cap[0]
+    dup project$84
+    drop self$201
+    return value$202.tail(project$84)
+  
+  closure fn join$203(self$204, value$205) =
+    let project$85 = self$204.cap[0]
+    dup project$85
+    drop self$204
+    return value$205.tail(project$85)
+  
+  closure fn join$206(self$207, value$208) =
+    let project$86 = self$207.cap[0]
+    dup project$86
+    drop self$207
+    return value$208.tail(project$86)
+  
+  toplevel fn zig_main$212() =
+    let finish$210 = closure join$214()
+    let after_main$211 = closure join$217(finish$210)
+    return main(after_main$211)
+  
+  closure fn join$214(self$215, value$216) =
+    drop self$215
+    return value$216
+  
+  closure fn join$217(self$218, value$219) =
+    let finish$210 = self$218.cap[0]
+    dup finish$210
+-   drop self$218
++   dropReuse reuse$221 = self$218 /0
+-   let struct$220 = Tuple()
++   let struct$220 = reuse reuse$221 Tuple()
+    return value$219(struct$220, finish$210)
+  
+  entry = zig_main$212

@@ -1,0 +1,3226 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+def classify =
+  fn {
+    "red" ->
+      {
+        "stop"
+      } |
+    "green" ->
+      {
+        "go"
+      } |
+    "amber" ->
+      {
+        "slow"
+      } |
+    _ ->
+      {
+        "unknown"
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        let _ = putStrLn(classify("red"))
+        let _ = putStrLn(classify("green"))
+        let _ = putStrLn(classify(appendString("am")("ber")))
+        putStrLn(classify("blue"))
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+def classify =
+  fn {
+    String#("red") ->
+      {
+        String#("stop")
+      } |
+    String#("green") ->
+      {
+        String#("go")
+      } |
+    String#("amber") ->
+      {
+        String#("slow")
+      } |
+    _#0 ->
+      {
+        String#("unknown")
+      }
+  }
+
+def main =
+  fn {
+    _#1 ->
+      {
+        let _#2 = putStrLn(classify(String#("red")))
+        let _#3 = putStrLn(classify(String#("green")))
+        let _#4 =
+          putStrLn(classify(appendString(String#("am"))(String#("ber"))))
+        putStrLn(classify(String#("blue")))
+      }
+  }
+
+=== ToFun ===
+def classify =
+  \param$5 ->
+    case param$5 of {
+      String#("red") -> invoke String#("stop")
+      String#("green") -> invoke String#("go")
+      String#("amber") -> invoke String#("slow")
+      _#0 -> invoke String#("unknown")
+    }
+
+def main =
+  \param$6 ->
+    case param$6 of {
+      _#1 ->
+        let _#2 =
+          invoke putStrLn(invoke classify(invoke String#("red")))
+        in
+          let _#3 =
+            invoke putStrLn(invoke classify(invoke String#("green")))
+          in
+            let _#4 =
+              invoke putStrLn( invoke classify( invoke appendString( invoke String#( "am" ) )( invoke String#( "ber" ) ) ) )
+            in
+              invoke putStrLn(invoke classify(invoke String#("blue")))
+    }
+
+=== SaturateCtor ===
+def classify =
+  \param$5 ->
+    case param$5 of {
+      String#("red") -> invoke String#("stop")
+      String#("green") -> invoke String#("go")
+      String#("amber") -> invoke String#("slow")
+      _#0 -> invoke String#("unknown")
+    }
+
+def main =
+  \param$6 ->
+    case param$6 of {
+      _#1 ->
+        let _#2 =
+          invoke putStrLn(invoke classify(invoke String#("red")))
+        in
+          let _#3 =
+            invoke putStrLn(invoke classify(invoke String#("green")))
+          in
+            let _#4 =
+              invoke putStrLn( invoke classify( invoke appendString( invoke String#( "am" ) )( invoke String#( "ber" ) ) ) )
+            in
+              invoke putStrLn(invoke classify(invoke String#("blue")))
+    }
+
+=== ReuseSpecialize ===
+def classify =
+  \param$5 ->
+    case param$5 of {
+      String#("red") -> invoke String#("stop")
+      String#("green") -> invoke String#("go")
+      String#("amber") -> invoke String#("slow")
+      _#0 -> invoke String#("unknown")
+    }
+
+def main =
+  \param$6 ->
+    case param$6 of {
+      _#1 ->
+        let _#2 =
+          invoke putStrLn(invoke classify(invoke String#("red")))
+        in
+          let _#3 =
+            invoke putStrLn(invoke classify(invoke String#("green")))
+          in
+            let _#4 =
+              invoke putStrLn( invoke classify( invoke appendString( invoke String#( "am" ) )( invoke String#( "ber" ) ) ) )
+            in
+              invoke putStrLn(invoke classify(invoke String#("blue")))
+    }
+
+=== ToCore ===
+def classify(return$7) =
+  \param$5 return$8 . {
+    param$5 ~ select {
+      String#("red") -> invoke String# ~ ("stop", return$8)
+      String#("green") -> invoke String# ~ ("go", return$8)
+      String#("amber") -> invoke String# ~ ("slow", return$8)
+      _#0 -> invoke String# ~ ("unknown", return$8)
+    }
+  } ~ return$7
+
+def main(return$9) =
+  \param$6 return$10 . {
+    param$6 ~ select {
+      _#1 ->
+        invoke putStrLn ~ ( do return$19 . {
+          invoke classify ~ ( do return$20 . {
+            invoke String# ~ ("red", return$20)
+          }
+          , return$19 )
+        }
+        , then _#2 -> {
+          invoke putStrLn ~ ( do return$17 . {
+            invoke classify ~ ( do return$18 . {
+              invoke String# ~ ("green", return$18)
+            }
+            , return$17 )
+          }
+          , then _#3 -> {
+            invoke putStrLn ~ ( do return$13 . {
+              invoke classify ~ ( do return$14 . {
+                invoke appendString ~ ( do return$16 . {
+                  invoke String# ~ ("am", return$16)
+                }
+                , ( do return$15 . {
+                  invoke String# ~ ("ber", return$15)
+                }
+                , return$14 ) )
+              }
+              , return$13 )
+            }
+            , then _#4 -> {
+              invoke putStrLn ~ ( do return$11 . {
+                invoke classify ~ ( do return$12 . {
+                  invoke String# ~ ("blue", return$12)
+                }
+                , return$11 )
+              }
+              , return$10 )
+            } )
+          } )
+        } )
+    }
+  } ~ return$9
+
+=== Flat ===
+def classify(return$7) =
+  \param$5 return$8 . {
+    param$5 ~ select {
+      String#("red") -> invoke String# ~ ("stop", return$8)
+      String#("green") -> invoke String# ~ ("go", return$8)
+      String#("amber") -> invoke String# ~ ("slow", return$8)
+      _#0 -> invoke String# ~ ("unknown", return$8)
+    }
+  } ~ return$7
+
+def main(return$9) =
+  \param$6 return$10 . {
+    param$6 ~ select {
+      _#1 ->
+        invoke putStrLn ~ then outer$21 -> {
+          join return$19 = then inner$22 -> {
+            outer$21 ~ ( inner$22
+            , then _#2 -> {
+              invoke putStrLn ~ then outer$23 -> {
+                join return$17 = then inner$24 -> {
+                  outer$23 ~ ( inner$24
+                  , then _#3 -> {
+                    invoke putStrLn ~ then outer$25 -> {
+                      join return$13 = then inner$26 -> {
+                        outer$25 ~ ( inner$26
+                        , then _#4 -> {
+                          invoke putStrLn ~ then outer$27 -> {
+                            join return$11 = then inner$28 -> {
+                              outer$27 ~ (inner$28, return$10)
+                            }
+                            in invoke classify ~ then outer$29 -> {
+                              join return$12 = then inner$30 -> {
+                                outer$29 ~ (inner$30, return$11)
+                              }
+                              in invoke String# ~ ("blue", return$12)
+                            }
+                          }
+                        } )
+                      }
+                      in invoke classify ~ then outer$31 -> {
+                        join return$14 = then inner$32 -> {
+                          outer$31 ~ (inner$32, return$13)
+                        }
+                        in invoke appendString ~ then outer$33 -> {
+                          join return$16 = then inner$34 -> {
+                            outer$33 ~ ( inner$34
+                            , then outer$35 -> {
+                              join return$15 = then inner$36 -> {
+                                outer$35 ~ (inner$36, return$14)
+                              }
+                              in invoke String# ~ ("ber", return$15)
+                            } )
+                          }
+                          in invoke String# ~ ("am", return$16)
+                        }
+                      }
+                    }
+                  } )
+                }
+                in invoke classify ~ then outer$37 -> {
+                  join return$18 = then inner$38 -> {
+                    outer$37 ~ (inner$38, return$17)
+                  }
+                  in invoke String# ~ ("green", return$18)
+                }
+              }
+            } )
+          }
+          in invoke classify ~ then outer$39 -> {
+            join return$20 = then inner$40 -> {
+              outer$39 ~ (inner$40, return$19)
+            }
+            in invoke String# ~ ("red", return$20)
+          }
+        }
+    }
+  } ~ return$9
+
+=== Join ===
+def classify(return$7) =
+  \param$5 return$8 . {
+    join select$45 = select {
+      String#("red") ->
+        join apply$41 = ("stop", return$8)
+        in invoke String# ~ apply$41
+      String#("green") ->
+        join apply$42 = ("go", return$8)
+        in invoke String# ~ apply$42
+      String#("amber") ->
+        join apply$43 = ("slow", return$8)
+        in invoke String# ~ apply$43
+      _#0 -> join apply$44 = ("unknown", return$8) in invoke String# ~ apply$44
+    }
+    in param$5 ~ select$45
+  } ~ return$7
+
+def main(return$9) =
+  \param$6 return$10 . {
+    join select$74 = select {
+      _#1 ->
+        join then$73 = then outer$21 -> {
+          join return$19 = then inner$22 -> {
+            join then$71 = then _#2 -> {
+              join then$70 = then outer$23 -> {
+                join return$17 = then inner$24 -> {
+                  join then$68 = then _#3 -> {
+                    join then$67 = then outer$25 -> {
+                      join return$13 = then inner$26 -> {
+                        join then$65 = then _#4 -> {
+                          join then$64 = then outer$27 -> {
+                            join return$11 = then inner$28 -> {
+                              join apply$63 = (inner$28, return$10)
+                              in outer$27 ~ apply$63
+                            }
+                            in join then$62 = then outer$29 -> {
+                              join return$12 = then inner$30 -> {
+                                join apply$61 = (inner$30, return$11)
+                                in outer$29 ~ apply$61
+                              }
+                              in join apply$60 = ("blue", return$12)
+                              in invoke String# ~ apply$60
+                            }
+                            in invoke classify ~ then$62
+                          }
+                          in invoke putStrLn ~ then$64
+                        }
+                        in join apply$66 = (inner$26, then$65)
+                        in outer$25 ~ apply$66
+                      }
+                      in join then$59 = then outer$31 -> {
+                        join return$14 = then inner$32 -> {
+                          join apply$58 = (inner$32, return$13)
+                          in outer$31 ~ apply$58
+                        }
+                        in join then$57 = then outer$33 -> {
+                          join return$16 = then inner$34 -> {
+                            join then$55 = then outer$35 -> {
+                              join return$15 = then inner$36 -> {
+                                join apply$54 = (inner$36, return$14)
+                                in outer$35 ~ apply$54
+                              }
+                              in join apply$53 = ("ber", return$15)
+                              in invoke String# ~ apply$53
+                            }
+                            in join apply$56 = (inner$34, then$55)
+                            in outer$33 ~ apply$56
+                          }
+                          in join apply$52 = ("am", return$16)
+                          in invoke String# ~ apply$52
+                        }
+                        in invoke appendString ~ then$57
+                      }
+                      in invoke classify ~ then$59
+                    }
+                    in invoke putStrLn ~ then$67
+                  }
+                  in join apply$69 = (inner$24, then$68)
+                  in outer$23 ~ apply$69
+                }
+                in join then$51 = then outer$37 -> {
+                  join return$18 = then inner$38 -> {
+                    join apply$50 = (inner$38, return$17)
+                    in outer$37 ~ apply$50
+                  }
+                  in join apply$49 = ("green", return$18)
+                  in invoke String# ~ apply$49
+                }
+                in invoke classify ~ then$51
+              }
+              in invoke putStrLn ~ then$70
+            }
+            in join apply$72 = (inner$22, then$71)
+            in outer$21 ~ apply$72
+          }
+          in join then$48 = then outer$39 -> {
+            join return$20 = then inner$40 -> {
+              join apply$47 = (inner$40, return$19)
+              in outer$39 ~ apply$47
+            }
+            in join apply$46 = ("red", return$20)
+            in invoke String# ~ apply$46
+          }
+          in invoke classify ~ then$48
+        }
+        in invoke putStrLn ~ then$73
+    }
+    in param$6 ~ select$74
+  } ~ return$9
+
+=== ClosureConv ===
+toplevel fn classify(return$7) =
+  let closure$94 = closure lambda$76()
+  return return$7(closure$94)
+
+closure fn lambda$76(self$77, param$5, return$8) =
+  if param$5.tag == String# && param$5.0 == "red" then {
+    let apply$41 = closure join$78(return$8)
+    return String#(apply$41)
+  } else {
+    if param$5.tag == String# && param$5.0 == "green" then {
+      let apply$42 = closure join$82(return$8)
+      return String#(apply$42)
+    } else {
+      if param$5.tag == String# && param$5.0 == "amber" then {
+        let apply$43 = closure join$86(return$8)
+        return String#(apply$43)
+      } else {
+        if  then {
+          let _#0 = param$5
+          let apply$44 = closure join$90(return$8)
+          return String#(apply$44)
+        } else {
+          panic "no matching branch"
+        }
+      }
+    }
+  }
+
+closure fn join$78(self$79, value$80) =
+  let return$8 = self$79.cap[0]
+  let lit$81 = "stop"
+  return value$80(lit$81, return$8)
+
+closure fn join$82(self$83, value$84) =
+  let return$8 = self$83.cap[0]
+  let lit$85 = "go"
+  return value$84(lit$85, return$8)
+
+closure fn join$86(self$87, value$88) =
+  let return$8 = self$87.cap[0]
+  let lit$89 = "slow"
+  return value$88(lit$89, return$8)
+
+closure fn join$90(self$91, value$92) =
+  let return$8 = self$91.cap[0]
+  let lit$93 = "unknown"
+  return value$92(lit$93, return$8)
+
+toplevel fn main(return$9) =
+  let closure$187 = closure lambda$96()
+  return return$9(closure$187)
+
+closure fn lambda$96(self$97, param$6, return$10) =
+  if  then {
+    let _#1 = param$6
+    let then$73 = closure join$98(return$10)
+    return putStrLn(then$73)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$98(self$99, value$100) =
+  let return$10 = self$99.cap[0]
+  let return$19 = closure join$101(return$10, value$100)
+  let then$48 = closure join$177(return$19)
+  return classify(then$48)
+
+closure fn join$101(self$102, value$103) =
+  let return$10 = self$102.cap[0]
+  let value$100 = self$102.cap[1]
+  let then$71 = closure join$104(return$10)
+  return value$100(value$103, then$71)
+
+closure fn join$104(self$105, value$106) =
+  let return$10 = self$105.cap[0]
+  let then$70 = closure join$107(return$10)
+  return putStrLn(then$70)
+
+closure fn join$107(self$108, value$109) =
+  let return$10 = self$108.cap[0]
+  let return$17 = closure join$110(return$10, value$109)
+  let then$51 = closure join$167(return$17)
+  return classify(then$51)
+
+closure fn join$110(self$111, value$112) =
+  let return$10 = self$111.cap[0]
+  let value$109 = self$111.cap[1]
+  let then$68 = closure join$113(return$10)
+  return value$109(value$112, then$68)
+
+closure fn join$113(self$114, value$115) =
+  let return$10 = self$114.cap[0]
+  let then$67 = closure join$116(return$10)
+  return putStrLn(then$67)
+
+closure fn join$116(self$117, value$118) =
+  let return$10 = self$117.cap[0]
+  let return$13 = closure join$119(return$10, value$118)
+  let then$59 = closure join$141(return$13)
+  return classify(then$59)
+
+closure fn join$119(self$120, value$121) =
+  let return$10 = self$120.cap[0]
+  let value$118 = self$120.cap[1]
+  let then$65 = closure join$122(return$10)
+  return value$118(value$121, then$65)
+
+closure fn join$122(self$123, value$124) =
+  let return$10 = self$123.cap[0]
+  let then$64 = closure join$125(return$10)
+  return putStrLn(then$64)
+
+closure fn join$125(self$126, value$127) =
+  let return$10 = self$126.cap[0]
+  let return$11 = closure join$128(return$10, value$127)
+  let then$62 = closure join$131(return$11)
+  return classify(then$62)
+
+closure fn join$128(self$129, value$130) =
+  let return$10 = self$129.cap[0]
+  let value$127 = self$129.cap[1]
+  return value$127(value$130, return$10)
+
+closure fn join$131(self$132, value$133) =
+  let return$11 = self$132.cap[0]
+  let return$12 = closure join$134(return$11, value$133)
+  let apply$60 = closure join$137(return$12)
+  return String#(apply$60)
+
+closure fn join$134(self$135, value$136) =
+  let return$11 = self$135.cap[0]
+  let value$133 = self$135.cap[1]
+  return value$133(value$136, return$11)
+
+closure fn join$137(self$138, value$139) =
+  let return$12 = self$138.cap[0]
+  let lit$140 = "blue"
+  return value$139(lit$140, return$12)
+
+closure fn join$141(self$142, value$143) =
+  let return$13 = self$142.cap[0]
+  let return$14 = closure join$144(return$13, value$143)
+  let then$57 = closure join$147(return$14)
+  return appendString(then$57)
+
+closure fn join$144(self$145, value$146) =
+  let return$13 = self$145.cap[0]
+  let value$143 = self$145.cap[1]
+  return value$143(value$146, return$13)
+
+closure fn join$147(self$148, value$149) =
+  let return$14 = self$148.cap[0]
+  let return$16 = closure join$150(return$14, value$149)
+  let apply$52 = closure join$163(return$16)
+  return String#(apply$52)
+
+closure fn join$150(self$151, value$152) =
+  let return$14 = self$151.cap[0]
+  let value$149 = self$151.cap[1]
+  let then$55 = closure join$153(return$14)
+  return value$149(value$152, then$55)
+
+closure fn join$153(self$154, value$155) =
+  let return$14 = self$154.cap[0]
+  let return$15 = closure join$156(return$14, value$155)
+  let apply$53 = closure join$159(return$15)
+  return String#(apply$53)
+
+closure fn join$156(self$157, value$158) =
+  let return$14 = self$157.cap[0]
+  let value$155 = self$157.cap[1]
+  return value$155(value$158, return$14)
+
+closure fn join$159(self$160, value$161) =
+  let return$15 = self$160.cap[0]
+  let lit$162 = "ber"
+  return value$161(lit$162, return$15)
+
+closure fn join$163(self$164, value$165) =
+  let return$16 = self$164.cap[0]
+  let lit$166 = "am"
+  return value$165(lit$166, return$16)
+
+closure fn join$167(self$168, value$169) =
+  let return$17 = self$168.cap[0]
+  let return$18 = closure join$170(return$17, value$169)
+  let apply$49 = closure join$173(return$18)
+  return String#(apply$49)
+
+closure fn join$170(self$171, value$172) =
+  let return$17 = self$171.cap[0]
+  let value$169 = self$171.cap[1]
+  return value$169(value$172, return$17)
+
+closure fn join$173(self$174, value$175) =
+  let return$18 = self$174.cap[0]
+  let lit$176 = "green"
+  return value$175(lit$176, return$18)
+
+closure fn join$177(self$178, value$179) =
+  let return$19 = self$178.cap[0]
+  let return$20 = closure join$180(return$19, value$179)
+  let apply$46 = closure join$183(return$20)
+  return String#(apply$46)
+
+closure fn join$180(self$181, value$182) =
+  let return$19 = self$181.cap[0]
+  let value$179 = self$181.cap[1]
+  return value$179(value$182, return$19)
+
+closure fn join$183(self$184, value$185) =
+  let return$20 = self$184.cap[0]
+  let lit$186 = "red"
+  return value$185(lit$186, return$20)
+
+toplevel fn zig_main$190() =
+  let finish$188 = closure join$192()
+  let after_main$189 = closure join$195(finish$188)
+  return main(after_main$189)
+
+closure fn join$192(self$193, value$194) = return value$194
+
+closure fn join$195(self$196, value$197) =
+  let finish$188 = self$196.cap[0]
+  let struct$198 = Tuple()
+  return value$197(struct$198, finish$188)
+
+entry = zig_main$190
+
+=== Peephole ===
+toplevel fn classify(return$7) =
+  let closure$94 = closure lambda$76()
+  return return$7(closure$94)
+
+closure fn lambda$76(self$77, param$5, return$8) =
+  if param$5.tag == String# && param$5.0 == "red" then {
+    let apply$41 = closure join$78(return$8)
+    return String#(apply$41)
+  } else {
+    if param$5.tag == String# && param$5.0 == "green" then {
+      let apply$42 = closure join$82(return$8)
+      return String#(apply$42)
+    } else {
+      if param$5.tag == String# && param$5.0 == "amber" then {
+        let apply$43 = closure join$86(return$8)
+        return String#(apply$43)
+      } else {
+        if  then {
+          let apply$44 = closure join$90(return$8)
+          return String#(apply$44)
+        } else {
+          panic "no matching branch"
+        }
+      }
+    }
+  }
+
+closure fn join$78(self$79, value$80) =
+  let return$8 = self$79.cap[0]
+  let lit$81 = "stop"
+  return value$80(lit$81, return$8)
+
+closure fn join$82(self$83, value$84) =
+  let return$8 = self$83.cap[0]
+  let lit$85 = "go"
+  return value$84(lit$85, return$8)
+
+closure fn join$86(self$87, value$88) =
+  let return$8 = self$87.cap[0]
+  let lit$89 = "slow"
+  return value$88(lit$89, return$8)
+
+closure fn join$90(self$91, value$92) =
+  let return$8 = self$91.cap[0]
+  let lit$93 = "unknown"
+  return value$92(lit$93, return$8)
+
+toplevel fn main(return$9) =
+  let closure$187 = closure lambda$96()
+  return return$9(closure$187)
+
+closure fn lambda$96(self$97, param$6, return$10) =
+  if  then {
+    let then$73 = closure join$98(return$10)
+    return putStrLn(then$73)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$98(self$99, value$100) =
+  let return$10 = self$99.cap[0]
+  let return$19 = closure join$101(return$10, value$100)
+  let then$48 = closure join$177(return$19)
+  return classify(then$48)
+
+closure fn join$101(self$102, value$103) =
+  let return$10 = self$102.cap[0]
+  let value$100 = self$102.cap[1]
+  let then$71 = closure join$104(return$10)
+  return value$100(value$103, then$71)
+
+closure fn join$104(self$105, value$106) =
+  let return$10 = self$105.cap[0]
+  let then$70 = closure join$107(return$10)
+  return putStrLn(then$70)
+
+closure fn join$107(self$108, value$109) =
+  let return$10 = self$108.cap[0]
+  let return$17 = closure join$110(return$10, value$109)
+  let then$51 = closure join$167(return$17)
+  return classify(then$51)
+
+closure fn join$110(self$111, value$112) =
+  let return$10 = self$111.cap[0]
+  let value$109 = self$111.cap[1]
+  let then$68 = closure join$113(return$10)
+  return value$109(value$112, then$68)
+
+closure fn join$113(self$114, value$115) =
+  let return$10 = self$114.cap[0]
+  let then$67 = closure join$116(return$10)
+  return putStrLn(then$67)
+
+closure fn join$116(self$117, value$118) =
+  let return$10 = self$117.cap[0]
+  let return$13 = closure join$119(return$10, value$118)
+  let then$59 = closure join$141(return$13)
+  return classify(then$59)
+
+closure fn join$119(self$120, value$121) =
+  let return$10 = self$120.cap[0]
+  let value$118 = self$120.cap[1]
+  let then$65 = closure join$122(return$10)
+  return value$118(value$121, then$65)
+
+closure fn join$122(self$123, value$124) =
+  let return$10 = self$123.cap[0]
+  let then$64 = closure join$125(return$10)
+  return putStrLn(then$64)
+
+closure fn join$125(self$126, value$127) =
+  let return$10 = self$126.cap[0]
+  let return$11 = closure join$128(return$10, value$127)
+  let then$62 = closure join$131(return$11)
+  return classify(then$62)
+
+closure fn join$128(self$129, value$130) =
+  let return$10 = self$129.cap[0]
+  let value$127 = self$129.cap[1]
+  return value$127(value$130, return$10)
+
+closure fn join$131(self$132, value$133) =
+  let return$11 = self$132.cap[0]
+  let return$12 = closure join$134(return$11, value$133)
+  let apply$60 = closure join$137(return$12)
+  return String#(apply$60)
+
+closure fn join$134(self$135, value$136) =
+  let return$11 = self$135.cap[0]
+  let value$133 = self$135.cap[1]
+  return value$133(value$136, return$11)
+
+closure fn join$137(self$138, value$139) =
+  let return$12 = self$138.cap[0]
+  let lit$140 = "blue"
+  return value$139(lit$140, return$12)
+
+closure fn join$141(self$142, value$143) =
+  let return$13 = self$142.cap[0]
+  let return$14 = closure join$144(return$13, value$143)
+  let then$57 = closure join$147(return$14)
+  return appendString(then$57)
+
+closure fn join$144(self$145, value$146) =
+  let return$13 = self$145.cap[0]
+  let value$143 = self$145.cap[1]
+  return value$143(value$146, return$13)
+
+closure fn join$147(self$148, value$149) =
+  let return$14 = self$148.cap[0]
+  let return$16 = closure join$150(return$14, value$149)
+  let apply$52 = closure join$163(return$16)
+  return String#(apply$52)
+
+closure fn join$150(self$151, value$152) =
+  let return$14 = self$151.cap[0]
+  let value$149 = self$151.cap[1]
+  let then$55 = closure join$153(return$14)
+  return value$149(value$152, then$55)
+
+closure fn join$153(self$154, value$155) =
+  let return$14 = self$154.cap[0]
+  let return$15 = closure join$156(return$14, value$155)
+  let apply$53 = closure join$159(return$15)
+  return String#(apply$53)
+
+closure fn join$156(self$157, value$158) =
+  let return$14 = self$157.cap[0]
+  let value$155 = self$157.cap[1]
+  return value$155(value$158, return$14)
+
+closure fn join$159(self$160, value$161) =
+  let return$15 = self$160.cap[0]
+  let lit$162 = "ber"
+  return value$161(lit$162, return$15)
+
+closure fn join$163(self$164, value$165) =
+  let return$16 = self$164.cap[0]
+  let lit$166 = "am"
+  return value$165(lit$166, return$16)
+
+closure fn join$167(self$168, value$169) =
+  let return$17 = self$168.cap[0]
+  let return$18 = closure join$170(return$17, value$169)
+  let apply$49 = closure join$173(return$18)
+  return String#(apply$49)
+
+closure fn join$170(self$171, value$172) =
+  let return$17 = self$171.cap[0]
+  let value$169 = self$171.cap[1]
+  return value$169(value$172, return$17)
+
+closure fn join$173(self$174, value$175) =
+  let return$18 = self$174.cap[0]
+  let lit$176 = "green"
+  return value$175(lit$176, return$18)
+
+closure fn join$177(self$178, value$179) =
+  let return$19 = self$178.cap[0]
+  let return$20 = closure join$180(return$19, value$179)
+  let apply$46 = closure join$183(return$20)
+  return String#(apply$46)
+
+closure fn join$180(self$181, value$182) =
+  let return$19 = self$181.cap[0]
+  let value$179 = self$181.cap[1]
+  return value$179(value$182, return$19)
+
+closure fn join$183(self$184, value$185) =
+  let return$20 = self$184.cap[0]
+  let lit$186 = "red"
+  return value$185(lit$186, return$20)
+
+toplevel fn zig_main$190() =
+  let finish$188 = closure join$192()
+  let after_main$189 = closure join$195(finish$188)
+  return main(after_main$189)
+
+closure fn join$192(self$193, value$194) = return value$194
+
+closure fn join$195(self$196, value$197) =
+  let finish$188 = self$196.cap[0]
+  let struct$198 = Tuple()
+  return value$197(struct$198, finish$188)
+
+entry = zig_main$190
+
+=== Perceus ===
+toplevel fn classify(return$7) =
+  let closure$94 = closure lambda$76()
+  return return$7(closure$94)
+
+closure fn lambda$76(self$77, param$5, return$8) =
+  drop self$77
+  if param$5.tag == String# && param$5.0 == "red" then {
+    drop param$5
+    let apply$41 = closure join$78(return$8)
+    return String#(apply$41)
+  } else {
+    if param$5.tag == String# && param$5.0 == "green" then {
+      drop param$5
+      let apply$42 = closure join$82(return$8)
+      return String#(apply$42)
+    } else {
+      if param$5.tag == String# && param$5.0 == "amber" then {
+        drop param$5
+        let apply$43 = closure join$86(return$8)
+        return String#(apply$43)
+      } else {
+        drop param$5
+        if  then {
+          let apply$44 = closure join$90(return$8)
+          return String#(apply$44)
+        } else {
+          panic "no matching branch"
+        }
+      }
+    }
+  }
+
+closure fn join$78(self$79, value$80) =
+  let return$8 = self$79.cap[0]
+  dup return$8
+  drop self$79
+  let lit$81 = "stop"
+  return value$80(lit$81, return$8)
+
+closure fn join$82(self$83, value$84) =
+  let return$8 = self$83.cap[0]
+  dup return$8
+  drop self$83
+  let lit$85 = "go"
+  return value$84(lit$85, return$8)
+
+closure fn join$86(self$87, value$88) =
+  let return$8 = self$87.cap[0]
+  dup return$8
+  drop self$87
+  let lit$89 = "slow"
+  return value$88(lit$89, return$8)
+
+closure fn join$90(self$91, value$92) =
+  let return$8 = self$91.cap[0]
+  dup return$8
+  drop self$91
+  let lit$93 = "unknown"
+  return value$92(lit$93, return$8)
+
+toplevel fn main(return$9) =
+  let closure$187 = closure lambda$96()
+  return return$9(closure$187)
+
+closure fn lambda$96(self$97, param$6, return$10) =
+  drop param$6
+  drop self$97
+  if  then {
+    let then$73 = closure join$98(return$10)
+    return putStrLn(then$73)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$98(self$99, value$100) =
+  let return$10 = self$99.cap[0]
+  dup return$10
+  drop self$99
+  let return$19 = closure join$101(return$10, value$100)
+  let then$48 = closure join$177(return$19)
+  return classify(then$48)
+
+closure fn join$101(self$102, value$103) =
+  let return$10 = self$102.cap[0]
+  dup return$10
+  let value$100 = self$102.cap[1]
+  dup value$100
+  drop self$102
+  let then$71 = closure join$104(return$10)
+  return value$100(value$103, then$71)
+
+closure fn join$104(self$105, value$106) =
+  drop value$106
+  let return$10 = self$105.cap[0]
+  dup return$10
+  drop self$105
+  let then$70 = closure join$107(return$10)
+  return putStrLn(then$70)
+
+closure fn join$107(self$108, value$109) =
+  let return$10 = self$108.cap[0]
+  dup return$10
+  drop self$108
+  let return$17 = closure join$110(return$10, value$109)
+  let then$51 = closure join$167(return$17)
+  return classify(then$51)
+
+closure fn join$110(self$111, value$112) =
+  let return$10 = self$111.cap[0]
+  dup return$10
+  let value$109 = self$111.cap[1]
+  dup value$109
+  drop self$111
+  let then$68 = closure join$113(return$10)
+  return value$109(value$112, then$68)
+
+closure fn join$113(self$114, value$115) =
+  drop value$115
+  let return$10 = self$114.cap[0]
+  dup return$10
+  drop self$114
+  let then$67 = closure join$116(return$10)
+  return putStrLn(then$67)
+
+closure fn join$116(self$117, value$118) =
+  let return$10 = self$117.cap[0]
+  dup return$10
+  drop self$117
+  let return$13 = closure join$119(return$10, value$118)
+  let then$59 = closure join$141(return$13)
+  return classify(then$59)
+
+closure fn join$119(self$120, value$121) =
+  let return$10 = self$120.cap[0]
+  dup return$10
+  let value$118 = self$120.cap[1]
+  dup value$118
+  drop self$120
+  let then$65 = closure join$122(return$10)
+  return value$118(value$121, then$65)
+
+closure fn join$122(self$123, value$124) =
+  drop value$124
+  let return$10 = self$123.cap[0]
+  dup return$10
+  drop self$123
+  let then$64 = closure join$125(return$10)
+  return putStrLn(then$64)
+
+closure fn join$125(self$126, value$127) =
+  let return$10 = self$126.cap[0]
+  dup return$10
+  drop self$126
+  let return$11 = closure join$128(return$10, value$127)
+  let then$62 = closure join$131(return$11)
+  return classify(then$62)
+
+closure fn join$128(self$129, value$130) =
+  let return$10 = self$129.cap[0]
+  dup return$10
+  let value$127 = self$129.cap[1]
+  dup value$127
+  drop self$129
+  return value$127(value$130, return$10)
+
+closure fn join$131(self$132, value$133) =
+  let return$11 = self$132.cap[0]
+  dup return$11
+  drop self$132
+  let return$12 = closure join$134(return$11, value$133)
+  let apply$60 = closure join$137(return$12)
+  return String#(apply$60)
+
+closure fn join$134(self$135, value$136) =
+  let return$11 = self$135.cap[0]
+  dup return$11
+  let value$133 = self$135.cap[1]
+  dup value$133
+  drop self$135
+  return value$133(value$136, return$11)
+
+closure fn join$137(self$138, value$139) =
+  let return$12 = self$138.cap[0]
+  dup return$12
+  drop self$138
+  let lit$140 = "blue"
+  return value$139(lit$140, return$12)
+
+closure fn join$141(self$142, value$143) =
+  let return$13 = self$142.cap[0]
+  dup return$13
+  drop self$142
+  let return$14 = closure join$144(return$13, value$143)
+  let then$57 = closure join$147(return$14)
+  return appendString(then$57)
+
+closure fn join$144(self$145, value$146) =
+  let return$13 = self$145.cap[0]
+  dup return$13
+  let value$143 = self$145.cap[1]
+  dup value$143
+  drop self$145
+  return value$143(value$146, return$13)
+
+closure fn join$147(self$148, value$149) =
+  let return$14 = self$148.cap[0]
+  dup return$14
+  drop self$148
+  let return$16 = closure join$150(return$14, value$149)
+  let apply$52 = closure join$163(return$16)
+  return String#(apply$52)
+
+closure fn join$150(self$151, value$152) =
+  let return$14 = self$151.cap[0]
+  dup return$14
+  let value$149 = self$151.cap[1]
+  dup value$149
+  drop self$151
+  let then$55 = closure join$153(return$14)
+  return value$149(value$152, then$55)
+
+closure fn join$153(self$154, value$155) =
+  let return$14 = self$154.cap[0]
+  dup return$14
+  drop self$154
+  let return$15 = closure join$156(return$14, value$155)
+  let apply$53 = closure join$159(return$15)
+  return String#(apply$53)
+
+closure fn join$156(self$157, value$158) =
+  let return$14 = self$157.cap[0]
+  dup return$14
+  let value$155 = self$157.cap[1]
+  dup value$155
+  drop self$157
+  return value$155(value$158, return$14)
+
+closure fn join$159(self$160, value$161) =
+  let return$15 = self$160.cap[0]
+  dup return$15
+  drop self$160
+  let lit$162 = "ber"
+  return value$161(lit$162, return$15)
+
+closure fn join$163(self$164, value$165) =
+  let return$16 = self$164.cap[0]
+  dup return$16
+  drop self$164
+  let lit$166 = "am"
+  return value$165(lit$166, return$16)
+
+closure fn join$167(self$168, value$169) =
+  let return$17 = self$168.cap[0]
+  dup return$17
+  drop self$168
+  let return$18 = closure join$170(return$17, value$169)
+  let apply$49 = closure join$173(return$18)
+  return String#(apply$49)
+
+closure fn join$170(self$171, value$172) =
+  let return$17 = self$171.cap[0]
+  dup return$17
+  let value$169 = self$171.cap[1]
+  dup value$169
+  drop self$171
+  return value$169(value$172, return$17)
+
+closure fn join$173(self$174, value$175) =
+  let return$18 = self$174.cap[0]
+  dup return$18
+  drop self$174
+  let lit$176 = "green"
+  return value$175(lit$176, return$18)
+
+closure fn join$177(self$178, value$179) =
+  let return$19 = self$178.cap[0]
+  dup return$19
+  drop self$178
+  let return$20 = closure join$180(return$19, value$179)
+  let apply$46 = closure join$183(return$20)
+  return String#(apply$46)
+
+closure fn join$180(self$181, value$182) =
+  let return$19 = self$181.cap[0]
+  dup return$19
+  let value$179 = self$181.cap[1]
+  dup value$179
+  drop self$181
+  return value$179(value$182, return$19)
+
+closure fn join$183(self$184, value$185) =
+  let return$20 = self$184.cap[0]
+  dup return$20
+  drop self$184
+  let lit$186 = "red"
+  return value$185(lit$186, return$20)
+
+toplevel fn zig_main$190() =
+  let finish$188 = closure join$192()
+  let after_main$189 = closure join$195(finish$188)
+  return main(after_main$189)
+
+closure fn join$192(self$193, value$194) =
+  drop self$193
+  return value$194
+
+closure fn join$195(self$196, value$197) =
+  let finish$188 = self$196.cap[0]
+  dup finish$188
+  drop self$196
+  let struct$198 = Tuple()
+  return value$197(struct$198, finish$188)
+
+entry = zig_main$190
+
+=== Reuse ===
+toplevel fn classify(return$7) =
+  let closure$94 = closure lambda$76()
+  return return$7(closure$94)
+
+closure fn lambda$76(self$77, param$5, return$8) =
+  drop self$77
+  if param$5.tag == String# && param$5.0 == "red" then {
+    let apply$41 = closure join$78(return$8)
+    drop param$5
+    return String#(apply$41)
+  } else {
+    if param$5.tag == String# && param$5.0 == "green" then {
+      let apply$42 = closure join$82(return$8)
+      drop param$5
+      return String#(apply$42)
+    } else {
+      if param$5.tag == String# && param$5.0 == "amber" then {
+        let apply$43 = closure join$86(return$8)
+        drop param$5
+        return String#(apply$43)
+      } else {
+        drop param$5
+        if  then {
+          let apply$44 = closure join$90(return$8)
+          return String#(apply$44)
+        } else {
+          panic "no matching branch"
+        }
+      }
+    }
+  }
+
+closure fn join$78(self$79, value$80) =
+  let return$8 = self$79.cap[0]
+  dup return$8
+  let lit$81 = "stop"
+  drop self$79
+  return value$80(lit$81, return$8)
+
+closure fn join$82(self$83, value$84) =
+  let return$8 = self$83.cap[0]
+  dup return$8
+  let lit$85 = "go"
+  drop self$83
+  return value$84(lit$85, return$8)
+
+closure fn join$86(self$87, value$88) =
+  let return$8 = self$87.cap[0]
+  dup return$8
+  let lit$89 = "slow"
+  drop self$87
+  return value$88(lit$89, return$8)
+
+closure fn join$90(self$91, value$92) =
+  let return$8 = self$91.cap[0]
+  dup return$8
+  let lit$93 = "unknown"
+  drop self$91
+  return value$92(lit$93, return$8)
+
+toplevel fn main(return$9) =
+  let closure$187 = closure lambda$96()
+  return return$9(closure$187)
+
+closure fn lambda$96(self$97, param$6, return$10) =
+  drop param$6
+  drop self$97
+  if  then {
+    let then$73 = closure join$98(return$10)
+    return putStrLn(then$73)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$98(self$99, value$100) =
+  let return$10 = self$99.cap[0]
+  dup return$10
+  let return$19 = closure join$101(return$10, value$100)
+  let then$48 = closure join$177(return$19)
+  drop self$99
+  return classify(then$48)
+
+closure fn join$101(self$102, value$103) =
+  let return$10 = self$102.cap[0]
+  dup return$10
+  let value$100 = self$102.cap[1]
+  dup value$100
+  let then$71 = closure join$104(return$10)
+  drop self$102
+  return value$100(value$103, then$71)
+
+closure fn join$104(self$105, value$106) =
+  let return$10 = self$105.cap[0]
+  dup return$10
+  let then$70 = closure join$107(return$10)
+  drop value$106
+  drop self$105
+  return putStrLn(then$70)
+
+closure fn join$107(self$108, value$109) =
+  let return$10 = self$108.cap[0]
+  dup return$10
+  let return$17 = closure join$110(return$10, value$109)
+  let then$51 = closure join$167(return$17)
+  drop self$108
+  return classify(then$51)
+
+closure fn join$110(self$111, value$112) =
+  let return$10 = self$111.cap[0]
+  dup return$10
+  let value$109 = self$111.cap[1]
+  dup value$109
+  let then$68 = closure join$113(return$10)
+  drop self$111
+  return value$109(value$112, then$68)
+
+closure fn join$113(self$114, value$115) =
+  let return$10 = self$114.cap[0]
+  dup return$10
+  let then$67 = closure join$116(return$10)
+  drop value$115
+  drop self$114
+  return putStrLn(then$67)
+
+closure fn join$116(self$117, value$118) =
+  let return$10 = self$117.cap[0]
+  dup return$10
+  let return$13 = closure join$119(return$10, value$118)
+  let then$59 = closure join$141(return$13)
+  drop self$117
+  return classify(then$59)
+
+closure fn join$119(self$120, value$121) =
+  let return$10 = self$120.cap[0]
+  dup return$10
+  let value$118 = self$120.cap[1]
+  dup value$118
+  let then$65 = closure join$122(return$10)
+  drop self$120
+  return value$118(value$121, then$65)
+
+closure fn join$122(self$123, value$124) =
+  let return$10 = self$123.cap[0]
+  dup return$10
+  let then$64 = closure join$125(return$10)
+  drop value$124
+  drop self$123
+  return putStrLn(then$64)
+
+closure fn join$125(self$126, value$127) =
+  let return$10 = self$126.cap[0]
+  dup return$10
+  let return$11 = closure join$128(return$10, value$127)
+  let then$62 = closure join$131(return$11)
+  drop self$126
+  return classify(then$62)
+
+closure fn join$128(self$129, value$130) =
+  let return$10 = self$129.cap[0]
+  dup return$10
+  let value$127 = self$129.cap[1]
+  dup value$127
+  drop self$129
+  return value$127(value$130, return$10)
+
+closure fn join$131(self$132, value$133) =
+  let return$11 = self$132.cap[0]
+  dup return$11
+  let return$12 = closure join$134(return$11, value$133)
+  let apply$60 = closure join$137(return$12)
+  drop self$132
+  return String#(apply$60)
+
+closure fn join$134(self$135, value$136) =
+  let return$11 = self$135.cap[0]
+  dup return$11
+  let value$133 = self$135.cap[1]
+  dup value$133
+  drop self$135
+  return value$133(value$136, return$11)
+
+closure fn join$137(self$138, value$139) =
+  let return$12 = self$138.cap[0]
+  dup return$12
+  let lit$140 = "blue"
+  drop self$138
+  return value$139(lit$140, return$12)
+
+closure fn join$141(self$142, value$143) =
+  let return$13 = self$142.cap[0]
+  dup return$13
+  let return$14 = closure join$144(return$13, value$143)
+  let then$57 = closure join$147(return$14)
+  drop self$142
+  return appendString(then$57)
+
+closure fn join$144(self$145, value$146) =
+  let return$13 = self$145.cap[0]
+  dup return$13
+  let value$143 = self$145.cap[1]
+  dup value$143
+  drop self$145
+  return value$143(value$146, return$13)
+
+closure fn join$147(self$148, value$149) =
+  let return$14 = self$148.cap[0]
+  dup return$14
+  let return$16 = closure join$150(return$14, value$149)
+  let apply$52 = closure join$163(return$16)
+  drop self$148
+  return String#(apply$52)
+
+closure fn join$150(self$151, value$152) =
+  let return$14 = self$151.cap[0]
+  dup return$14
+  let value$149 = self$151.cap[1]
+  dup value$149
+  let then$55 = closure join$153(return$14)
+  drop self$151
+  return value$149(value$152, then$55)
+
+closure fn join$153(self$154, value$155) =
+  let return$14 = self$154.cap[0]
+  dup return$14
+  let return$15 = closure join$156(return$14, value$155)
+  let apply$53 = closure join$159(return$15)
+  drop self$154
+  return String#(apply$53)
+
+closure fn join$156(self$157, value$158) =
+  let return$14 = self$157.cap[0]
+  dup return$14
+  let value$155 = self$157.cap[1]
+  dup value$155
+  drop self$157
+  return value$155(value$158, return$14)
+
+closure fn join$159(self$160, value$161) =
+  let return$15 = self$160.cap[0]
+  dup return$15
+  let lit$162 = "ber"
+  drop self$160
+  return value$161(lit$162, return$15)
+
+closure fn join$163(self$164, value$165) =
+  let return$16 = self$164.cap[0]
+  dup return$16
+  let lit$166 = "am"
+  drop self$164
+  return value$165(lit$166, return$16)
+
+closure fn join$167(self$168, value$169) =
+  let return$17 = self$168.cap[0]
+  dup return$17
+  let return$18 = closure join$170(return$17, value$169)
+  let apply$49 = closure join$173(return$18)
+  drop self$168
+  return String#(apply$49)
+
+closure fn join$170(self$171, value$172) =
+  let return$17 = self$171.cap[0]
+  dup return$17
+  let value$169 = self$171.cap[1]
+  dup value$169
+  drop self$171
+  return value$169(value$172, return$17)
+
+closure fn join$173(self$174, value$175) =
+  let return$18 = self$174.cap[0]
+  dup return$18
+  let lit$176 = "green"
+  drop self$174
+  return value$175(lit$176, return$18)
+
+closure fn join$177(self$178, value$179) =
+  let return$19 = self$178.cap[0]
+  dup return$19
+  let return$20 = closure join$180(return$19, value$179)
+  let apply$46 = closure join$183(return$20)
+  drop self$178
+  return String#(apply$46)
+
+closure fn join$180(self$181, value$182) =
+  let return$19 = self$181.cap[0]
+  dup return$19
+  let value$179 = self$181.cap[1]
+  dup value$179
+  drop self$181
+  return value$179(value$182, return$19)
+
+closure fn join$183(self$184, value$185) =
+  let return$20 = self$184.cap[0]
+  dup return$20
+  let lit$186 = "red"
+  drop self$184
+  return value$185(lit$186, return$20)
+
+toplevel fn zig_main$190() =
+  let finish$188 = closure join$192()
+  let after_main$189 = closure join$195(finish$188)
+  return main(after_main$189)
+
+closure fn join$192(self$193, value$194) =
+  drop self$193
+  return value$194
+
+closure fn join$195(self$196, value$197) =
+  let finish$188 = self$196.cap[0]
+  dup finish$188
+  dropReuse reuse$199 = self$196 /0
+  let struct$198 = reuse reuse$199 Tuple()
+  return value$197(struct$198, finish$188)
+
+entry = zig_main$190
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  def classify =
+    fn {
+-     "red" ->
++     String#("red") ->
+        {
+-         "stop"
++         String#("stop")
+        } |
+-     "green" ->
++     String#("green") ->
+        {
+-         "go"
++         String#("go")
+        } |
+-     "amber" ->
++     String#("amber") ->
+        {
+-         "slow"
++         String#("slow")
+        } |
+-     _ ->
++     _#0 ->
+        {
+-         "unknown"
++         String#("unknown")
+        }
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#1 ->
+        {
+-         let _ = putStrLn(classify("red"))
++         let _#2 = putStrLn(classify(String#("red")))
+-         let _ = putStrLn(classify("green"))
++         let _#3 = putStrLn(classify(String#("green")))
+-         let _ = putStrLn(classify(appendString("am")("ber")))
++         let _#4 =
+-         putStrLn(classify("blue"))
++           putStrLn(classify(appendString(String#("am"))(String#("ber"))))
++         putStrLn(classify(String#("blue")))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+  def classify =
+-   fn {
++   \param$5 ->
+-     String#("red") ->
++     case param$5 of {
+-       {
++       String#("red") -> invoke String#("stop")
+-         String#("stop")
++       String#("green") -> invoke String#("go")
+-       } |
++       String#("amber") -> invoke String#("slow")
+-     String#("green") ->
++       _#0 -> invoke String#("unknown")
+-       {
++     }
+-         String#("go")
+-       } |
+-     String#("amber") ->
+-       {
+-         String#("slow")
+-       } |
+-     _#0 ->
+-       {
+-         String#("unknown")
+-       }
+-   }
+  
+  def main =
+-   fn {
++   \param$6 ->
+-     _#1 ->
++     case param$6 of {
+-       {
++       _#1 ->
+-         let _#2 = putStrLn(classify(String#("red")))
++         let _#2 =
+-         let _#3 = putStrLn(classify(String#("green")))
++           invoke putStrLn(invoke classify(invoke String#("red")))
+-         let _#4 =
++         in
+-           putStrLn(classify(appendString(String#("am"))(String#("ber"))))
++           let _#3 =
+-         putStrLn(classify(String#("blue")))
++             invoke putStrLn(invoke classify(invoke String#("green")))
+-       }
++           in
+-   }
++             let _#4 =
++               invoke putStrLn( invoke classify( invoke appendString( invoke String#( "am" ) )( invoke String#( "ber" ) ) ) )
++             in
++               invoke putStrLn(invoke classify(invoke String#("blue")))
++     }
+
+
+=== ToFun -> SaturateCtor ===
+  def classify =
+    \param$5 ->
+      case param$5 of {
+        String#("red") -> invoke String#("stop")
+        String#("green") -> invoke String#("go")
+        String#("amber") -> invoke String#("slow")
+        _#0 -> invoke String#("unknown")
+      }
+  
+  def main =
+    \param$6 ->
+      case param$6 of {
+        _#1 ->
+          let _#2 =
+            invoke putStrLn(invoke classify(invoke String#("red")))
+          in
+            let _#3 =
+              invoke putStrLn(invoke classify(invoke String#("green")))
+            in
+              let _#4 =
+                invoke putStrLn( invoke classify( invoke appendString( invoke String#( "am" ) )( invoke String#( "ber" ) ) ) )
+              in
+                invoke putStrLn(invoke classify(invoke String#("blue")))
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def classify =
+    \param$5 ->
+      case param$5 of {
+        String#("red") -> invoke String#("stop")
+        String#("green") -> invoke String#("go")
+        String#("amber") -> invoke String#("slow")
+        _#0 -> invoke String#("unknown")
+      }
+  
+  def main =
+    \param$6 ->
+      case param$6 of {
+        _#1 ->
+          let _#2 =
+            invoke putStrLn(invoke classify(invoke String#("red")))
+          in
+            let _#3 =
+              invoke putStrLn(invoke classify(invoke String#("green")))
+            in
+              let _#4 =
+                invoke putStrLn( invoke classify( invoke appendString( invoke String#( "am" ) )( invoke String#( "ber" ) ) ) )
+              in
+                invoke putStrLn(invoke classify(invoke String#("blue")))
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def classify =
++ def classify(return$7) =
+-   \param$5 ->
++   \param$5 return$8 . {
+-     case param$5 of {
++     param$5 ~ select {
+-       String#("red") -> invoke String#("stop")
++       String#("red") -> invoke String# ~ ("stop", return$8)
+-       String#("green") -> invoke String#("go")
++       String#("green") -> invoke String# ~ ("go", return$8)
+-       String#("amber") -> invoke String#("slow")
++       String#("amber") -> invoke String# ~ ("slow", return$8)
+-       _#0 -> invoke String#("unknown")
++       _#0 -> invoke String# ~ ("unknown", return$8)
+      }
++   } ~ return$7
+  
+- def main =
++ def main(return$9) =
+-   \param$6 ->
++   \param$6 return$10 . {
+-     case param$6 of {
++     param$6 ~ select {
+        _#1 ->
+-         let _#2 =
++         invoke putStrLn ~ ( do return$19 . {
+-           invoke putStrLn(invoke classify(invoke String#("red")))
++           invoke classify ~ ( do return$20 . {
+-         in
++             invoke String# ~ ("red", return$20)
+-           let _#3 =
++           }
+-             invoke putStrLn(invoke classify(invoke String#("green")))
++           , return$19 )
+-           in
++         }
+-             let _#4 =
++         , then _#2 -> {
+-               invoke putStrLn( invoke classify( invoke appendString( invoke String#( "am" ) )( invoke String#( "ber" ) ) ) )
++           invoke putStrLn ~ ( do return$17 . {
+-             in
++             invoke classify ~ ( do return$18 . {
+-               invoke putStrLn(invoke classify(invoke String#("blue")))
++               invoke String# ~ ("green", return$18)
++             }
++             , return$17 )
++           }
++           , then _#3 -> {
++             invoke putStrLn ~ ( do return$13 . {
++               invoke classify ~ ( do return$14 . {
++                 invoke appendString ~ ( do return$16 . {
++                   invoke String# ~ ("am", return$16)
++                 }
++                 , ( do return$15 . {
++                   invoke String# ~ ("ber", return$15)
++                 }
++                 , return$14 ) )
++               }
++               , return$13 )
++             }
++             , then _#4 -> {
++               invoke putStrLn ~ ( do return$11 . {
++                 invoke classify ~ ( do return$12 . {
++                   invoke String# ~ ("blue", return$12)
++                 }
++                 , return$11 )
++               }
++               , return$10 )
++             } )
++           } )
++         } )
+      }
++   } ~ return$9
+
+
+=== ToCore -> Flat ===
+  def classify(return$7) =
+    \param$5 return$8 . {
+      param$5 ~ select {
+        String#("red") -> invoke String# ~ ("stop", return$8)
+        String#("green") -> invoke String# ~ ("go", return$8)
+        String#("amber") -> invoke String# ~ ("slow", return$8)
+        _#0 -> invoke String# ~ ("unknown", return$8)
+      }
+    } ~ return$7
+  
+  def main(return$9) =
+    \param$6 return$10 . {
+      param$6 ~ select {
+        _#1 ->
+-         invoke putStrLn ~ ( do return$19 . {
++         invoke putStrLn ~ then outer$21 -> {
+-           invoke classify ~ ( do return$20 . {
++           join return$19 = then inner$22 -> {
+-             invoke String# ~ ("red", return$20)
++             outer$21 ~ ( inner$22
+-           }
++             , then _#2 -> {
+-           , return$19 )
++               invoke putStrLn ~ then outer$23 -> {
+-         }
++                 join return$17 = then inner$24 -> {
+-         , then _#2 -> {
++                   outer$23 ~ ( inner$24
+-           invoke putStrLn ~ ( do return$17 . {
++                   , then _#3 -> {
+-             invoke classify ~ ( do return$18 . {
++                     invoke putStrLn ~ then outer$25 -> {
+-               invoke String# ~ ("green", return$18)
++                       join return$13 = then inner$26 -> {
+-             }
++                         outer$25 ~ ( inner$26
+-             , return$17 )
++                         , then _#4 -> {
+-           }
++                           invoke putStrLn ~ then outer$27 -> {
+-           , then _#3 -> {
++                             join return$11 = then inner$28 -> {
+-             invoke putStrLn ~ ( do return$13 . {
++                               outer$27 ~ (inner$28, return$10)
+-               invoke classify ~ ( do return$14 . {
++                             }
+-                 invoke appendString ~ ( do return$16 . {
++                             in invoke classify ~ then outer$29 -> {
+-                   invoke String# ~ ("am", return$16)
++                               join return$12 = then inner$30 -> {
++                                 outer$29 ~ (inner$30, return$11)
++                               }
++                               in invoke String# ~ ("blue", return$12)
++                             }
++                           }
++                         } )
++                       }
++                       in invoke classify ~ then outer$31 -> {
++                         join return$14 = then inner$32 -> {
++                           outer$31 ~ (inner$32, return$13)
++                         }
++                         in invoke appendString ~ then outer$33 -> {
++                           join return$16 = then inner$34 -> {
++                             outer$33 ~ ( inner$34
++                             , then outer$35 -> {
++                               join return$15 = then inner$36 -> {
++                                 outer$35 ~ (inner$36, return$14)
++                               }
++                               in invoke String# ~ ("ber", return$15)
++                             } )
++                           }
++                           in invoke String# ~ ("am", return$16)
++                         }
++                       }
++                     }
++                   } )
+                  }
+-                 , ( do return$15 . {
++                 in invoke classify ~ then outer$37 -> {
+-                   invoke String# ~ ("ber", return$15)
++                   join return$18 = then inner$38 -> {
++                     outer$37 ~ (inner$38, return$17)
++                   }
++                   in invoke String# ~ ("green", return$18)
+                  }
+-                 , return$14 ) )
+                }
+-               , return$13 )
+-             }
+-             , then _#4 -> {
+-               invoke putStrLn ~ ( do return$11 . {
+-                 invoke classify ~ ( do return$12 . {
+-                   invoke String# ~ ("blue", return$12)
+-                 }
+-                 , return$11 )
+-               }
+-               , return$10 )
+              } )
+-           } )
++           }
+-         } )
++           in invoke classify ~ then outer$39 -> {
++             join return$20 = then inner$40 -> {
++               outer$39 ~ (inner$40, return$19)
++             }
++             in invoke String# ~ ("red", return$20)
++           }
++         }
+      }
+    } ~ return$9
+
+
+=== Flat -> Join ===
+  def classify(return$7) =
+    \param$5 return$8 . {
+-     param$5 ~ select {
++     join select$45 = select {
+-       String#("red") -> invoke String# ~ ("stop", return$8)
++       String#("red") ->
+-       String#("green") -> invoke String# ~ ("go", return$8)
++         join apply$41 = ("stop", return$8)
+-       String#("amber") -> invoke String# ~ ("slow", return$8)
++         in invoke String# ~ apply$41
+-       _#0 -> invoke String# ~ ("unknown", return$8)
++       String#("green") ->
++         join apply$42 = ("go", return$8)
++         in invoke String# ~ apply$42
++       String#("amber") ->
++         join apply$43 = ("slow", return$8)
++         in invoke String# ~ apply$43
++       _#0 -> join apply$44 = ("unknown", return$8) in invoke String# ~ apply$44
+      }
++     in param$5 ~ select$45
+    } ~ return$7
+  
+  def main(return$9) =
+    \param$6 return$10 . {
+-     param$6 ~ select {
++     join select$74 = select {
+        _#1 ->
+-         invoke putStrLn ~ then outer$21 -> {
++         join then$73 = then outer$21 -> {
+            join return$19 = then inner$22 -> {
+-             outer$21 ~ ( inner$22
++             join then$71 = then _#2 -> {
+-             , then _#2 -> {
++               join then$70 = then outer$23 -> {
+-               invoke putStrLn ~ then outer$23 -> {
+                  join return$17 = then inner$24 -> {
+-                   outer$23 ~ ( inner$24
++                   join then$68 = then _#3 -> {
+-                   , then _#3 -> {
++                     join then$67 = then outer$25 -> {
+-                     invoke putStrLn ~ then outer$25 -> {
+                        join return$13 = then inner$26 -> {
+-                         outer$25 ~ ( inner$26
++                         join then$65 = then _#4 -> {
+-                         , then _#4 -> {
++                           join then$64 = then outer$27 -> {
+-                           invoke putStrLn ~ then outer$27 -> {
+                              join return$11 = then inner$28 -> {
+-                               outer$27 ~ (inner$28, return$10)
++                               join apply$63 = (inner$28, return$10)
++                               in outer$27 ~ apply$63
+                              }
+-                             in invoke classify ~ then outer$29 -> {
++                             in join then$62 = then outer$29 -> {
+                                join return$12 = then inner$30 -> {
+-                                 outer$29 ~ (inner$30, return$11)
++                                 join apply$61 = (inner$30, return$11)
++                                 in outer$29 ~ apply$61
+                                }
+-                               in invoke String# ~ ("blue", return$12)
++                               in join apply$60 = ("blue", return$12)
++                               in invoke String# ~ apply$60
+                              }
++                             in invoke classify ~ then$62
+                            }
+-                         } )
++                           in invoke putStrLn ~ then$64
++                         }
++                         in join apply$66 = (inner$26, then$65)
++                         in outer$25 ~ apply$66
+                        }
+-                       in invoke classify ~ then outer$31 -> {
++                       in join then$59 = then outer$31 -> {
+                          join return$14 = then inner$32 -> {
+-                           outer$31 ~ (inner$32, return$13)
++                           join apply$58 = (inner$32, return$13)
++                           in outer$31 ~ apply$58
+                          }
+-                         in invoke appendString ~ then outer$33 -> {
++                         in join then$57 = then outer$33 -> {
+                            join return$16 = then inner$34 -> {
+-                             outer$33 ~ ( inner$34
++                             join then$55 = then outer$35 -> {
+-                             , then outer$35 -> {
+                                join return$15 = then inner$36 -> {
+-                                 outer$35 ~ (inner$36, return$14)
++                                 join apply$54 = (inner$36, return$14)
++                                 in outer$35 ~ apply$54
+                                }
+-                               in invoke String# ~ ("ber", return$15)
++                               in join apply$53 = ("ber", return$15)
+-                             } )
++                               in invoke String# ~ apply$53
++                             }
++                             in join apply$56 = (inner$34, then$55)
++                             in outer$33 ~ apply$56
+                            }
+-                           in invoke String# ~ ("am", return$16)
++                           in join apply$52 = ("am", return$16)
++                           in invoke String# ~ apply$52
+                          }
++                         in invoke appendString ~ then$57
+                        }
++                       in invoke classify ~ then$59
+                      }
+-                   } )
++                     in invoke putStrLn ~ then$67
++                   }
++                   in join apply$69 = (inner$24, then$68)
++                   in outer$23 ~ apply$69
+                  }
+-                 in invoke classify ~ then outer$37 -> {
++                 in join then$51 = then outer$37 -> {
+                    join return$18 = then inner$38 -> {
+-                     outer$37 ~ (inner$38, return$17)
++                     join apply$50 = (inner$38, return$17)
++                     in outer$37 ~ apply$50
+                    }
+-                   in invoke String# ~ ("green", return$18)
++                   in join apply$49 = ("green", return$18)
++                   in invoke String# ~ apply$49
+                  }
++                 in invoke classify ~ then$51
+                }
+-             } )
++               in invoke putStrLn ~ then$70
++             }
++             in join apply$72 = (inner$22, then$71)
++             in outer$21 ~ apply$72
+            }
+-           in invoke classify ~ then outer$39 -> {
++           in join then$48 = then outer$39 -> {
+              join return$20 = then inner$40 -> {
+-               outer$39 ~ (inner$40, return$19)
++               join apply$47 = (inner$40, return$19)
++               in outer$39 ~ apply$47
+              }
+-             in invoke String# ~ ("red", return$20)
++             in join apply$46 = ("red", return$20)
++             in invoke String# ~ apply$46
+            }
++           in invoke classify ~ then$48
+          }
++         in invoke putStrLn ~ then$73
+      }
++     in param$6 ~ select$74
+    } ~ return$9
+
+
+=== Join -> ClosureConv ===
+- def classify(return$7) =
++ toplevel fn classify(return$7) =
+-   \param$5 return$8 . {
++   let closure$94 = closure lambda$76()
+-     join select$45 = select {
++   return return$7(closure$94)
+-       String#("red") ->
+-         join apply$41 = ("stop", return$8)
+-         in invoke String# ~ apply$41
+-       String#("green") ->
+-         join apply$42 = ("go", return$8)
+-         in invoke String# ~ apply$42
+-       String#("amber") ->
+-         join apply$43 = ("slow", return$8)
+-         in invoke String# ~ apply$43
+-       _#0 -> join apply$44 = ("unknown", return$8) in invoke String# ~ apply$44
+-     }
+-     in param$5 ~ select$45
+-   } ~ return$7
+  
+- def main(return$9) =
++ closure fn lambda$76(self$77, param$5, return$8) =
+-   \param$6 return$10 . {
++   if param$5.tag == String# && param$5.0 == "red" then {
+-     join select$74 = select {
++     let apply$41 = closure join$78(return$8)
+-       _#1 ->
++     return String#(apply$41)
+-         join then$73 = then outer$21 -> {
++   } else {
+-           join return$19 = then inner$22 -> {
++     if param$5.tag == String# && param$5.0 == "green" then {
+-             join then$71 = then _#2 -> {
++       let apply$42 = closure join$82(return$8)
+-               join then$70 = then outer$23 -> {
++       return String#(apply$42)
+-                 join return$17 = then inner$24 -> {
++     } else {
+-                   join then$68 = then _#3 -> {
++       if param$5.tag == String# && param$5.0 == "amber" then {
+-                     join then$67 = then outer$25 -> {
++         let apply$43 = closure join$86(return$8)
+-                       join return$13 = then inner$26 -> {
++         return String#(apply$43)
+-                         join then$65 = then _#4 -> {
++       } else {
+-                           join then$64 = then outer$27 -> {
++         if  then {
+-                             join return$11 = then inner$28 -> {
++           let _#0 = param$5
+-                               join apply$63 = (inner$28, return$10)
++           let apply$44 = closure join$90(return$8)
+-                               in outer$27 ~ apply$63
++           return String#(apply$44)
+-                             }
++         } else {
+-                             in join then$62 = then outer$29 -> {
++           panic "no matching branch"
+-                               join return$12 = then inner$30 -> {
+-                                 join apply$61 = (inner$30, return$11)
+-                                 in outer$29 ~ apply$61
+-                               }
+-                               in join apply$60 = ("blue", return$12)
+-                               in invoke String# ~ apply$60
+-                             }
+-                             in invoke classify ~ then$62
+-                           }
+-                           in invoke putStrLn ~ then$64
+-                         }
+-                         in join apply$66 = (inner$26, then$65)
+-                         in outer$25 ~ apply$66
+-                       }
+-                       in join then$59 = then outer$31 -> {
+-                         join return$14 = then inner$32 -> {
+-                           join apply$58 = (inner$32, return$13)
+-                           in outer$31 ~ apply$58
+-                         }
+-                         in join then$57 = then outer$33 -> {
+-                           join return$16 = then inner$34 -> {
+-                             join then$55 = then outer$35 -> {
+-                               join return$15 = then inner$36 -> {
+-                                 join apply$54 = (inner$36, return$14)
+-                                 in outer$35 ~ apply$54
+-                               }
+-                               in join apply$53 = ("ber", return$15)
+-                               in invoke String# ~ apply$53
+-                             }
+-                             in join apply$56 = (inner$34, then$55)
+-                             in outer$33 ~ apply$56
+-                           }
+-                           in join apply$52 = ("am", return$16)
+-                           in invoke String# ~ apply$52
+-                         }
+-                         in invoke appendString ~ then$57
+-                       }
+-                       in invoke classify ~ then$59
+-                     }
+-                     in invoke putStrLn ~ then$67
+-                   }
+-                   in join apply$69 = (inner$24, then$68)
+-                   in outer$23 ~ apply$69
+-                 }
+-                 in join then$51 = then outer$37 -> {
+-                   join return$18 = then inner$38 -> {
+-                     join apply$50 = (inner$38, return$17)
+-                     in outer$37 ~ apply$50
+-                   }
+-                   in join apply$49 = ("green", return$18)
+-                   in invoke String# ~ apply$49
+-                 }
+-                 in invoke classify ~ then$51
+-               }
+-               in invoke putStrLn ~ then$70
+-             }
+-             in join apply$72 = (inner$22, then$71)
+-             in outer$21 ~ apply$72
+-           }
+-           in join then$48 = then outer$39 -> {
+-             join return$20 = then inner$40 -> {
+-               join apply$47 = (inner$40, return$19)
+-               in outer$39 ~ apply$47
+-             }
+-             in join apply$46 = ("red", return$20)
+-             in invoke String# ~ apply$46
+-           }
+-           in invoke classify ~ then$48
+          }
+-         in invoke putStrLn ~ then$73
++       }
+      }
+-     in param$6 ~ select$74
++   }
+-   } ~ return$9
++ 
++ closure fn join$78(self$79, value$80) =
++   let return$8 = self$79.cap[0]
++   let lit$81 = "stop"
++   return value$80(lit$81, return$8)
++ 
++ closure fn join$82(self$83, value$84) =
++   let return$8 = self$83.cap[0]
++   let lit$85 = "go"
++   return value$84(lit$85, return$8)
++ 
++ closure fn join$86(self$87, value$88) =
++   let return$8 = self$87.cap[0]
++   let lit$89 = "slow"
++   return value$88(lit$89, return$8)
++ 
++ closure fn join$90(self$91, value$92) =
++   let return$8 = self$91.cap[0]
++   let lit$93 = "unknown"
++   return value$92(lit$93, return$8)
++ 
++ toplevel fn main(return$9) =
++   let closure$187 = closure lambda$96()
++   return return$9(closure$187)
++ 
++ closure fn lambda$96(self$97, param$6, return$10) =
++   if  then {
++     let _#1 = param$6
++     let then$73 = closure join$98(return$10)
++     return putStrLn(then$73)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$98(self$99, value$100) =
++   let return$10 = self$99.cap[0]
++   let return$19 = closure join$101(return$10, value$100)
++   let then$48 = closure join$177(return$19)
++   return classify(then$48)
++ 
++ closure fn join$101(self$102, value$103) =
++   let return$10 = self$102.cap[0]
++   let value$100 = self$102.cap[1]
++   let then$71 = closure join$104(return$10)
++   return value$100(value$103, then$71)
++ 
++ closure fn join$104(self$105, value$106) =
++   let return$10 = self$105.cap[0]
++   let then$70 = closure join$107(return$10)
++   return putStrLn(then$70)
++ 
++ closure fn join$107(self$108, value$109) =
++   let return$10 = self$108.cap[0]
++   let return$17 = closure join$110(return$10, value$109)
++   let then$51 = closure join$167(return$17)
++   return classify(then$51)
++ 
++ closure fn join$110(self$111, value$112) =
++   let return$10 = self$111.cap[0]
++   let value$109 = self$111.cap[1]
++   let then$68 = closure join$113(return$10)
++   return value$109(value$112, then$68)
++ 
++ closure fn join$113(self$114, value$115) =
++   let return$10 = self$114.cap[0]
++   let then$67 = closure join$116(return$10)
++   return putStrLn(then$67)
++ 
++ closure fn join$116(self$117, value$118) =
++   let return$10 = self$117.cap[0]
++   let return$13 = closure join$119(return$10, value$118)
++   let then$59 = closure join$141(return$13)
++   return classify(then$59)
++ 
++ closure fn join$119(self$120, value$121) =
++   let return$10 = self$120.cap[0]
++   let value$118 = self$120.cap[1]
++   let then$65 = closure join$122(return$10)
++   return value$118(value$121, then$65)
++ 
++ closure fn join$122(self$123, value$124) =
++   let return$10 = self$123.cap[0]
++   let then$64 = closure join$125(return$10)
++   return putStrLn(then$64)
++ 
++ closure fn join$125(self$126, value$127) =
++   let return$10 = self$126.cap[0]
++   let return$11 = closure join$128(return$10, value$127)
++   let then$62 = closure join$131(return$11)
++   return classify(then$62)
++ 
++ closure fn join$128(self$129, value$130) =
++   let return$10 = self$129.cap[0]
++   let value$127 = self$129.cap[1]
++   return value$127(value$130, return$10)
++ 
++ closure fn join$131(self$132, value$133) =
++   let return$11 = self$132.cap[0]
++   let return$12 = closure join$134(return$11, value$133)
++   let apply$60 = closure join$137(return$12)
++   return String#(apply$60)
++ 
++ closure fn join$134(self$135, value$136) =
++   let return$11 = self$135.cap[0]
++   let value$133 = self$135.cap[1]
++   return value$133(value$136, return$11)
++ 
++ closure fn join$137(self$138, value$139) =
++   let return$12 = self$138.cap[0]
++   let lit$140 = "blue"
++   return value$139(lit$140, return$12)
++ 
++ closure fn join$141(self$142, value$143) =
++   let return$13 = self$142.cap[0]
++   let return$14 = closure join$144(return$13, value$143)
++   let then$57 = closure join$147(return$14)
++   return appendString(then$57)
++ 
++ closure fn join$144(self$145, value$146) =
++   let return$13 = self$145.cap[0]
++   let value$143 = self$145.cap[1]
++   return value$143(value$146, return$13)
++ 
++ closure fn join$147(self$148, value$149) =
++   let return$14 = self$148.cap[0]
++   let return$16 = closure join$150(return$14, value$149)
++   let apply$52 = closure join$163(return$16)
++   return String#(apply$52)
++ 
++ closure fn join$150(self$151, value$152) =
++   let return$14 = self$151.cap[0]
++   let value$149 = self$151.cap[1]
++   let then$55 = closure join$153(return$14)
++   return value$149(value$152, then$55)
++ 
++ closure fn join$153(self$154, value$155) =
++   let return$14 = self$154.cap[0]
++   let return$15 = closure join$156(return$14, value$155)
++   let apply$53 = closure join$159(return$15)
++   return String#(apply$53)
++ 
++ closure fn join$156(self$157, value$158) =
++   let return$14 = self$157.cap[0]
++   let value$155 = self$157.cap[1]
++   return value$155(value$158, return$14)
++ 
++ closure fn join$159(self$160, value$161) =
++   let return$15 = self$160.cap[0]
++   let lit$162 = "ber"
++   return value$161(lit$162, return$15)
++ 
++ closure fn join$163(self$164, value$165) =
++   let return$16 = self$164.cap[0]
++   let lit$166 = "am"
++   return value$165(lit$166, return$16)
++ 
++ closure fn join$167(self$168, value$169) =
++   let return$17 = self$168.cap[0]
++   let return$18 = closure join$170(return$17, value$169)
++   let apply$49 = closure join$173(return$18)
++   return String#(apply$49)
++ 
++ closure fn join$170(self$171, value$172) =
++   let return$17 = self$171.cap[0]
++   let value$169 = self$171.cap[1]
++   return value$169(value$172, return$17)
++ 
++ closure fn join$173(self$174, value$175) =
++   let return$18 = self$174.cap[0]
++   let lit$176 = "green"
++   return value$175(lit$176, return$18)
++ 
++ closure fn join$177(self$178, value$179) =
++   let return$19 = self$178.cap[0]
++   let return$20 = closure join$180(return$19, value$179)
++   let apply$46 = closure join$183(return$20)
++   return String#(apply$46)
++ 
++ closure fn join$180(self$181, value$182) =
++   let return$19 = self$181.cap[0]
++   let value$179 = self$181.cap[1]
++   return value$179(value$182, return$19)
++ 
++ closure fn join$183(self$184, value$185) =
++   let return$20 = self$184.cap[0]
++   let lit$186 = "red"
++   return value$185(lit$186, return$20)
++ 
++ toplevel fn zig_main$190() =
++   let finish$188 = closure join$192()
++   let after_main$189 = closure join$195(finish$188)
++   return main(after_main$189)
++ 
++ closure fn join$192(self$193, value$194) = return value$194
++ 
++ closure fn join$195(self$196, value$197) =
++   let finish$188 = self$196.cap[0]
++   let struct$198 = Tuple()
++   return value$197(struct$198, finish$188)
++ 
++ entry = zig_main$190
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn classify(return$7) =
+    let closure$94 = closure lambda$76()
+    return return$7(closure$94)
+  
+  closure fn lambda$76(self$77, param$5, return$8) =
+    if param$5.tag == String# && param$5.0 == "red" then {
+      let apply$41 = closure join$78(return$8)
+      return String#(apply$41)
+    } else {
+      if param$5.tag == String# && param$5.0 == "green" then {
+        let apply$42 = closure join$82(return$8)
+        return String#(apply$42)
+      } else {
+        if param$5.tag == String# && param$5.0 == "amber" then {
+          let apply$43 = closure join$86(return$8)
+          return String#(apply$43)
+        } else {
+          if  then {
+-           let _#0 = param$5
+            let apply$44 = closure join$90(return$8)
+            return String#(apply$44)
+          } else {
+            panic "no matching branch"
+          }
+        }
+      }
+    }
+  
+  closure fn join$78(self$79, value$80) =
+    let return$8 = self$79.cap[0]
+    let lit$81 = "stop"
+    return value$80(lit$81, return$8)
+  
+  closure fn join$82(self$83, value$84) =
+    let return$8 = self$83.cap[0]
+    let lit$85 = "go"
+    return value$84(lit$85, return$8)
+  
+  closure fn join$86(self$87, value$88) =
+    let return$8 = self$87.cap[0]
+    let lit$89 = "slow"
+    return value$88(lit$89, return$8)
+  
+  closure fn join$90(self$91, value$92) =
+    let return$8 = self$91.cap[0]
+    let lit$93 = "unknown"
+    return value$92(lit$93, return$8)
+  
+  toplevel fn main(return$9) =
+    let closure$187 = closure lambda$96()
+    return return$9(closure$187)
+  
+  closure fn lambda$96(self$97, param$6, return$10) =
+    if  then {
+-     let _#1 = param$6
+      let then$73 = closure join$98(return$10)
+      return putStrLn(then$73)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$98(self$99, value$100) =
+    let return$10 = self$99.cap[0]
+    let return$19 = closure join$101(return$10, value$100)
+    let then$48 = closure join$177(return$19)
+    return classify(then$48)
+  
+  closure fn join$101(self$102, value$103) =
+    let return$10 = self$102.cap[0]
+    let value$100 = self$102.cap[1]
+    let then$71 = closure join$104(return$10)
+    return value$100(value$103, then$71)
+  
+  closure fn join$104(self$105, value$106) =
+    let return$10 = self$105.cap[0]
+    let then$70 = closure join$107(return$10)
+    return putStrLn(then$70)
+  
+  closure fn join$107(self$108, value$109) =
+    let return$10 = self$108.cap[0]
+    let return$17 = closure join$110(return$10, value$109)
+    let then$51 = closure join$167(return$17)
+    return classify(then$51)
+  
+  closure fn join$110(self$111, value$112) =
+    let return$10 = self$111.cap[0]
+    let value$109 = self$111.cap[1]
+    let then$68 = closure join$113(return$10)
+    return value$109(value$112, then$68)
+  
+  closure fn join$113(self$114, value$115) =
+    let return$10 = self$114.cap[0]
+    let then$67 = closure join$116(return$10)
+    return putStrLn(then$67)
+  
+  closure fn join$116(self$117, value$118) =
+    let return$10 = self$117.cap[0]
+    let return$13 = closure join$119(return$10, value$118)
+    let then$59 = closure join$141(return$13)
+    return classify(then$59)
+  
+  closure fn join$119(self$120, value$121) =
+    let return$10 = self$120.cap[0]
+    let value$118 = self$120.cap[1]
+    let then$65 = closure join$122(return$10)
+    return value$118(value$121, then$65)
+  
+  closure fn join$122(self$123, value$124) =
+    let return$10 = self$123.cap[0]
+    let then$64 = closure join$125(return$10)
+    return putStrLn(then$64)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$10 = self$126.cap[0]
+    let return$11 = closure join$128(return$10, value$127)
+    let then$62 = closure join$131(return$11)
+    return classify(then$62)
+  
+  closure fn join$128(self$129, value$130) =
+    let return$10 = self$129.cap[0]
+    let value$127 = self$129.cap[1]
+    return value$127(value$130, return$10)
+  
+  closure fn join$131(self$132, value$133) =
+    let return$11 = self$132.cap[0]
+    let return$12 = closure join$134(return$11, value$133)
+    let apply$60 = closure join$137(return$12)
+    return String#(apply$60)
+  
+  closure fn join$134(self$135, value$136) =
+    let return$11 = self$135.cap[0]
+    let value$133 = self$135.cap[1]
+    return value$133(value$136, return$11)
+  
+  closure fn join$137(self$138, value$139) =
+    let return$12 = self$138.cap[0]
+    let lit$140 = "blue"
+    return value$139(lit$140, return$12)
+  
+  closure fn join$141(self$142, value$143) =
+    let return$13 = self$142.cap[0]
+    let return$14 = closure join$144(return$13, value$143)
+    let then$57 = closure join$147(return$14)
+    return appendString(then$57)
+  
+  closure fn join$144(self$145, value$146) =
+    let return$13 = self$145.cap[0]
+    let value$143 = self$145.cap[1]
+    return value$143(value$146, return$13)
+  
+  closure fn join$147(self$148, value$149) =
+    let return$14 = self$148.cap[0]
+    let return$16 = closure join$150(return$14, value$149)
+    let apply$52 = closure join$163(return$16)
+    return String#(apply$52)
+  
+  closure fn join$150(self$151, value$152) =
+    let return$14 = self$151.cap[0]
+    let value$149 = self$151.cap[1]
+    let then$55 = closure join$153(return$14)
+    return value$149(value$152, then$55)
+  
+  closure fn join$153(self$154, value$155) =
+    let return$14 = self$154.cap[0]
+    let return$15 = closure join$156(return$14, value$155)
+    let apply$53 = closure join$159(return$15)
+    return String#(apply$53)
+  
+  closure fn join$156(self$157, value$158) =
+    let return$14 = self$157.cap[0]
+    let value$155 = self$157.cap[1]
+    return value$155(value$158, return$14)
+  
+  closure fn join$159(self$160, value$161) =
+    let return$15 = self$160.cap[0]
+    let lit$162 = "ber"
+    return value$161(lit$162, return$15)
+  
+  closure fn join$163(self$164, value$165) =
+    let return$16 = self$164.cap[0]
+    let lit$166 = "am"
+    return value$165(lit$166, return$16)
+  
+  closure fn join$167(self$168, value$169) =
+    let return$17 = self$168.cap[0]
+    let return$18 = closure join$170(return$17, value$169)
+    let apply$49 = closure join$173(return$18)
+    return String#(apply$49)
+  
+  closure fn join$170(self$171, value$172) =
+    let return$17 = self$171.cap[0]
+    let value$169 = self$171.cap[1]
+    return value$169(value$172, return$17)
+  
+  closure fn join$173(self$174, value$175) =
+    let return$18 = self$174.cap[0]
+    let lit$176 = "green"
+    return value$175(lit$176, return$18)
+  
+  closure fn join$177(self$178, value$179) =
+    let return$19 = self$178.cap[0]
+    let return$20 = closure join$180(return$19, value$179)
+    let apply$46 = closure join$183(return$20)
+    return String#(apply$46)
+  
+  closure fn join$180(self$181, value$182) =
+    let return$19 = self$181.cap[0]
+    let value$179 = self$181.cap[1]
+    return value$179(value$182, return$19)
+  
+  closure fn join$183(self$184, value$185) =
+    let return$20 = self$184.cap[0]
+    let lit$186 = "red"
+    return value$185(lit$186, return$20)
+  
+  toplevel fn zig_main$190() =
+    let finish$188 = closure join$192()
+    let after_main$189 = closure join$195(finish$188)
+    return main(after_main$189)
+  
+  closure fn join$192(self$193, value$194) = return value$194
+  
+  closure fn join$195(self$196, value$197) =
+    let finish$188 = self$196.cap[0]
+    let struct$198 = Tuple()
+    return value$197(struct$198, finish$188)
+  
+  entry = zig_main$190
+
+
+=== Peephole -> Perceus ===
+  toplevel fn classify(return$7) =
+    let closure$94 = closure lambda$76()
+    return return$7(closure$94)
+  
+  closure fn lambda$76(self$77, param$5, return$8) =
++   drop self$77
+    if param$5.tag == String# && param$5.0 == "red" then {
++     drop param$5
+      let apply$41 = closure join$78(return$8)
+      return String#(apply$41)
+    } else {
+      if param$5.tag == String# && param$5.0 == "green" then {
++       drop param$5
+        let apply$42 = closure join$82(return$8)
+        return String#(apply$42)
+      } else {
+        if param$5.tag == String# && param$5.0 == "amber" then {
++         drop param$5
+          let apply$43 = closure join$86(return$8)
+          return String#(apply$43)
+        } else {
++         drop param$5
+          if  then {
+            let apply$44 = closure join$90(return$8)
+            return String#(apply$44)
+          } else {
+            panic "no matching branch"
+          }
+        }
+      }
+    }
+  
+  closure fn join$78(self$79, value$80) =
+    let return$8 = self$79.cap[0]
++   dup return$8
++   drop self$79
+    let lit$81 = "stop"
+    return value$80(lit$81, return$8)
+  
+  closure fn join$82(self$83, value$84) =
+    let return$8 = self$83.cap[0]
++   dup return$8
++   drop self$83
+    let lit$85 = "go"
+    return value$84(lit$85, return$8)
+  
+  closure fn join$86(self$87, value$88) =
+    let return$8 = self$87.cap[0]
++   dup return$8
++   drop self$87
+    let lit$89 = "slow"
+    return value$88(lit$89, return$8)
+  
+  closure fn join$90(self$91, value$92) =
+    let return$8 = self$91.cap[0]
++   dup return$8
++   drop self$91
+    let lit$93 = "unknown"
+    return value$92(lit$93, return$8)
+  
+  toplevel fn main(return$9) =
+    let closure$187 = closure lambda$96()
+    return return$9(closure$187)
+  
+  closure fn lambda$96(self$97, param$6, return$10) =
++   drop param$6
++   drop self$97
+    if  then {
+      let then$73 = closure join$98(return$10)
+      return putStrLn(then$73)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$98(self$99, value$100) =
+    let return$10 = self$99.cap[0]
++   dup return$10
++   drop self$99
+    let return$19 = closure join$101(return$10, value$100)
+    let then$48 = closure join$177(return$19)
+    return classify(then$48)
+  
+  closure fn join$101(self$102, value$103) =
+    let return$10 = self$102.cap[0]
++   dup return$10
+    let value$100 = self$102.cap[1]
++   dup value$100
++   drop self$102
+    let then$71 = closure join$104(return$10)
+    return value$100(value$103, then$71)
+  
+  closure fn join$104(self$105, value$106) =
++   drop value$106
+    let return$10 = self$105.cap[0]
++   dup return$10
++   drop self$105
+    let then$70 = closure join$107(return$10)
+    return putStrLn(then$70)
+  
+  closure fn join$107(self$108, value$109) =
+    let return$10 = self$108.cap[0]
++   dup return$10
++   drop self$108
+    let return$17 = closure join$110(return$10, value$109)
+    let then$51 = closure join$167(return$17)
+    return classify(then$51)
+  
+  closure fn join$110(self$111, value$112) =
+    let return$10 = self$111.cap[0]
++   dup return$10
+    let value$109 = self$111.cap[1]
++   dup value$109
++   drop self$111
+    let then$68 = closure join$113(return$10)
+    return value$109(value$112, then$68)
+  
+  closure fn join$113(self$114, value$115) =
++   drop value$115
+    let return$10 = self$114.cap[0]
++   dup return$10
++   drop self$114
+    let then$67 = closure join$116(return$10)
+    return putStrLn(then$67)
+  
+  closure fn join$116(self$117, value$118) =
+    let return$10 = self$117.cap[0]
++   dup return$10
++   drop self$117
+    let return$13 = closure join$119(return$10, value$118)
+    let then$59 = closure join$141(return$13)
+    return classify(then$59)
+  
+  closure fn join$119(self$120, value$121) =
+    let return$10 = self$120.cap[0]
++   dup return$10
+    let value$118 = self$120.cap[1]
++   dup value$118
++   drop self$120
+    let then$65 = closure join$122(return$10)
+    return value$118(value$121, then$65)
+  
+  closure fn join$122(self$123, value$124) =
++   drop value$124
+    let return$10 = self$123.cap[0]
++   dup return$10
++   drop self$123
+    let then$64 = closure join$125(return$10)
+    return putStrLn(then$64)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$10 = self$126.cap[0]
++   dup return$10
++   drop self$126
+    let return$11 = closure join$128(return$10, value$127)
+    let then$62 = closure join$131(return$11)
+    return classify(then$62)
+  
+  closure fn join$128(self$129, value$130) =
+    let return$10 = self$129.cap[0]
++   dup return$10
+    let value$127 = self$129.cap[1]
++   dup value$127
++   drop self$129
+    return value$127(value$130, return$10)
+  
+  closure fn join$131(self$132, value$133) =
+    let return$11 = self$132.cap[0]
++   dup return$11
++   drop self$132
+    let return$12 = closure join$134(return$11, value$133)
+    let apply$60 = closure join$137(return$12)
+    return String#(apply$60)
+  
+  closure fn join$134(self$135, value$136) =
+    let return$11 = self$135.cap[0]
++   dup return$11
+    let value$133 = self$135.cap[1]
++   dup value$133
++   drop self$135
+    return value$133(value$136, return$11)
+  
+  closure fn join$137(self$138, value$139) =
+    let return$12 = self$138.cap[0]
++   dup return$12
++   drop self$138
+    let lit$140 = "blue"
+    return value$139(lit$140, return$12)
+  
+  closure fn join$141(self$142, value$143) =
+    let return$13 = self$142.cap[0]
++   dup return$13
++   drop self$142
+    let return$14 = closure join$144(return$13, value$143)
+    let then$57 = closure join$147(return$14)
+    return appendString(then$57)
+  
+  closure fn join$144(self$145, value$146) =
+    let return$13 = self$145.cap[0]
++   dup return$13
+    let value$143 = self$145.cap[1]
++   dup value$143
++   drop self$145
+    return value$143(value$146, return$13)
+  
+  closure fn join$147(self$148, value$149) =
+    let return$14 = self$148.cap[0]
++   dup return$14
++   drop self$148
+    let return$16 = closure join$150(return$14, value$149)
+    let apply$52 = closure join$163(return$16)
+    return String#(apply$52)
+  
+  closure fn join$150(self$151, value$152) =
+    let return$14 = self$151.cap[0]
++   dup return$14
+    let value$149 = self$151.cap[1]
++   dup value$149
++   drop self$151
+    let then$55 = closure join$153(return$14)
+    return value$149(value$152, then$55)
+  
+  closure fn join$153(self$154, value$155) =
+    let return$14 = self$154.cap[0]
++   dup return$14
++   drop self$154
+    let return$15 = closure join$156(return$14, value$155)
+    let apply$53 = closure join$159(return$15)
+    return String#(apply$53)
+  
+  closure fn join$156(self$157, value$158) =
+    let return$14 = self$157.cap[0]
++   dup return$14
+    let value$155 = self$157.cap[1]
++   dup value$155
++   drop self$157
+    return value$155(value$158, return$14)
+  
+  closure fn join$159(self$160, value$161) =
+    let return$15 = self$160.cap[0]
++   dup return$15
++   drop self$160
+    let lit$162 = "ber"
+    return value$161(lit$162, return$15)
+  
+  closure fn join$163(self$164, value$165) =
+    let return$16 = self$164.cap[0]
++   dup return$16
++   drop self$164
+    let lit$166 = "am"
+    return value$165(lit$166, return$16)
+  
+  closure fn join$167(self$168, value$169) =
+    let return$17 = self$168.cap[0]
++   dup return$17
++   drop self$168
+    let return$18 = closure join$170(return$17, value$169)
+    let apply$49 = closure join$173(return$18)
+    return String#(apply$49)
+  
+  closure fn join$170(self$171, value$172) =
+    let return$17 = self$171.cap[0]
++   dup return$17
+    let value$169 = self$171.cap[1]
++   dup value$169
++   drop self$171
+    return value$169(value$172, return$17)
+  
+  closure fn join$173(self$174, value$175) =
+    let return$18 = self$174.cap[0]
++   dup return$18
++   drop self$174
+    let lit$176 = "green"
+    return value$175(lit$176, return$18)
+  
+  closure fn join$177(self$178, value$179) =
+    let return$19 = self$178.cap[0]
++   dup return$19
++   drop self$178
+    let return$20 = closure join$180(return$19, value$179)
+    let apply$46 = closure join$183(return$20)
+    return String#(apply$46)
+  
+  closure fn join$180(self$181, value$182) =
+    let return$19 = self$181.cap[0]
++   dup return$19
+    let value$179 = self$181.cap[1]
++   dup value$179
++   drop self$181
+    return value$179(value$182, return$19)
+  
+  closure fn join$183(self$184, value$185) =
+    let return$20 = self$184.cap[0]
++   dup return$20
++   drop self$184
+    let lit$186 = "red"
+    return value$185(lit$186, return$20)
+  
+  toplevel fn zig_main$190() =
+    let finish$188 = closure join$192()
+    let after_main$189 = closure join$195(finish$188)
+    return main(after_main$189)
+  
+- closure fn join$192(self$193, value$194) = return value$194
++ closure fn join$192(self$193, value$194) =
++   drop self$193
++   return value$194
+  
+  closure fn join$195(self$196, value$197) =
+    let finish$188 = self$196.cap[0]
++   dup finish$188
++   drop self$196
+    let struct$198 = Tuple()
+    return value$197(struct$198, finish$188)
+  
+  entry = zig_main$190
+
+
+=== Perceus -> Reuse ===
+  toplevel fn classify(return$7) =
+    let closure$94 = closure lambda$76()
+    return return$7(closure$94)
+  
+  closure fn lambda$76(self$77, param$5, return$8) =
+    drop self$77
+    if param$5.tag == String# && param$5.0 == "red" then {
+-     drop param$5
+      let apply$41 = closure join$78(return$8)
++     drop param$5
+      return String#(apply$41)
+    } else {
+      if param$5.tag == String# && param$5.0 == "green" then {
+-       drop param$5
+        let apply$42 = closure join$82(return$8)
++       drop param$5
+        return String#(apply$42)
+      } else {
+        if param$5.tag == String# && param$5.0 == "amber" then {
+-         drop param$5
+          let apply$43 = closure join$86(return$8)
++         drop param$5
+          return String#(apply$43)
+        } else {
+          drop param$5
+          if  then {
+            let apply$44 = closure join$90(return$8)
+            return String#(apply$44)
+          } else {
+            panic "no matching branch"
+          }
+        }
+      }
+    }
+  
+  closure fn join$78(self$79, value$80) =
+    let return$8 = self$79.cap[0]
+    dup return$8
+-   drop self$79
+    let lit$81 = "stop"
++   drop self$79
+    return value$80(lit$81, return$8)
+  
+  closure fn join$82(self$83, value$84) =
+    let return$8 = self$83.cap[0]
+    dup return$8
+-   drop self$83
+    let lit$85 = "go"
++   drop self$83
+    return value$84(lit$85, return$8)
+  
+  closure fn join$86(self$87, value$88) =
+    let return$8 = self$87.cap[0]
+    dup return$8
+-   drop self$87
+    let lit$89 = "slow"
++   drop self$87
+    return value$88(lit$89, return$8)
+  
+  closure fn join$90(self$91, value$92) =
+    let return$8 = self$91.cap[0]
+    dup return$8
+-   drop self$91
+    let lit$93 = "unknown"
++   drop self$91
+    return value$92(lit$93, return$8)
+  
+  toplevel fn main(return$9) =
+    let closure$187 = closure lambda$96()
+    return return$9(closure$187)
+  
+  closure fn lambda$96(self$97, param$6, return$10) =
+    drop param$6
+    drop self$97
+    if  then {
+      let then$73 = closure join$98(return$10)
+      return putStrLn(then$73)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$98(self$99, value$100) =
+    let return$10 = self$99.cap[0]
+    dup return$10
+-   drop self$99
+    let return$19 = closure join$101(return$10, value$100)
+    let then$48 = closure join$177(return$19)
++   drop self$99
+    return classify(then$48)
+  
+  closure fn join$101(self$102, value$103) =
+    let return$10 = self$102.cap[0]
+    dup return$10
+    let value$100 = self$102.cap[1]
+    dup value$100
+-   drop self$102
+    let then$71 = closure join$104(return$10)
++   drop self$102
+    return value$100(value$103, then$71)
+  
+  closure fn join$104(self$105, value$106) =
+-   drop value$106
+    let return$10 = self$105.cap[0]
+    dup return$10
+-   drop self$105
+    let then$70 = closure join$107(return$10)
++   drop value$106
++   drop self$105
+    return putStrLn(then$70)
+  
+  closure fn join$107(self$108, value$109) =
+    let return$10 = self$108.cap[0]
+    dup return$10
+-   drop self$108
+    let return$17 = closure join$110(return$10, value$109)
+    let then$51 = closure join$167(return$17)
++   drop self$108
+    return classify(then$51)
+  
+  closure fn join$110(self$111, value$112) =
+    let return$10 = self$111.cap[0]
+    dup return$10
+    let value$109 = self$111.cap[1]
+    dup value$109
+-   drop self$111
+    let then$68 = closure join$113(return$10)
++   drop self$111
+    return value$109(value$112, then$68)
+  
+  closure fn join$113(self$114, value$115) =
+-   drop value$115
+    let return$10 = self$114.cap[0]
+    dup return$10
+-   drop self$114
+    let then$67 = closure join$116(return$10)
++   drop value$115
++   drop self$114
+    return putStrLn(then$67)
+  
+  closure fn join$116(self$117, value$118) =
+    let return$10 = self$117.cap[0]
+    dup return$10
+-   drop self$117
+    let return$13 = closure join$119(return$10, value$118)
+    let then$59 = closure join$141(return$13)
++   drop self$117
+    return classify(then$59)
+  
+  closure fn join$119(self$120, value$121) =
+    let return$10 = self$120.cap[0]
+    dup return$10
+    let value$118 = self$120.cap[1]
+    dup value$118
+-   drop self$120
+    let then$65 = closure join$122(return$10)
++   drop self$120
+    return value$118(value$121, then$65)
+  
+  closure fn join$122(self$123, value$124) =
+-   drop value$124
+    let return$10 = self$123.cap[0]
+    dup return$10
+-   drop self$123
+    let then$64 = closure join$125(return$10)
++   drop value$124
++   drop self$123
+    return putStrLn(then$64)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$10 = self$126.cap[0]
+    dup return$10
+-   drop self$126
+    let return$11 = closure join$128(return$10, value$127)
+    let then$62 = closure join$131(return$11)
++   drop self$126
+    return classify(then$62)
+  
+  closure fn join$128(self$129, value$130) =
+    let return$10 = self$129.cap[0]
+    dup return$10
+    let value$127 = self$129.cap[1]
+    dup value$127
+    drop self$129
+    return value$127(value$130, return$10)
+  
+  closure fn join$131(self$132, value$133) =
+    let return$11 = self$132.cap[0]
+    dup return$11
+-   drop self$132
+    let return$12 = closure join$134(return$11, value$133)
+    let apply$60 = closure join$137(return$12)
++   drop self$132
+    return String#(apply$60)
+  
+  closure fn join$134(self$135, value$136) =
+    let return$11 = self$135.cap[0]
+    dup return$11
+    let value$133 = self$135.cap[1]
+    dup value$133
+    drop self$135
+    return value$133(value$136, return$11)
+  
+  closure fn join$137(self$138, value$139) =
+    let return$12 = self$138.cap[0]
+    dup return$12
+-   drop self$138
+    let lit$140 = "blue"
++   drop self$138
+    return value$139(lit$140, return$12)
+  
+  closure fn join$141(self$142, value$143) =
+    let return$13 = self$142.cap[0]
+    dup return$13
+-   drop self$142
+    let return$14 = closure join$144(return$13, value$143)
+    let then$57 = closure join$147(return$14)
++   drop self$142
+    return appendString(then$57)
+  
+  closure fn join$144(self$145, value$146) =
+    let return$13 = self$145.cap[0]
+    dup return$13
+    let value$143 = self$145.cap[1]
+    dup value$143
+    drop self$145
+    return value$143(value$146, return$13)
+  
+  closure fn join$147(self$148, value$149) =
+    let return$14 = self$148.cap[0]
+    dup return$14
+-   drop self$148
+    let return$16 = closure join$150(return$14, value$149)
+    let apply$52 = closure join$163(return$16)
++   drop self$148
+    return String#(apply$52)
+  
+  closure fn join$150(self$151, value$152) =
+    let return$14 = self$151.cap[0]
+    dup return$14
+    let value$149 = self$151.cap[1]
+    dup value$149
+-   drop self$151
+    let then$55 = closure join$153(return$14)
++   drop self$151
+    return value$149(value$152, then$55)
+  
+  closure fn join$153(self$154, value$155) =
+    let return$14 = self$154.cap[0]
+    dup return$14
+-   drop self$154
+    let return$15 = closure join$156(return$14, value$155)
+    let apply$53 = closure join$159(return$15)
++   drop self$154
+    return String#(apply$53)
+  
+  closure fn join$156(self$157, value$158) =
+    let return$14 = self$157.cap[0]
+    dup return$14
+    let value$155 = self$157.cap[1]
+    dup value$155
+    drop self$157
+    return value$155(value$158, return$14)
+  
+  closure fn join$159(self$160, value$161) =
+    let return$15 = self$160.cap[0]
+    dup return$15
+-   drop self$160
+    let lit$162 = "ber"
++   drop self$160
+    return value$161(lit$162, return$15)
+  
+  closure fn join$163(self$164, value$165) =
+    let return$16 = self$164.cap[0]
+    dup return$16
+-   drop self$164
+    let lit$166 = "am"
++   drop self$164
+    return value$165(lit$166, return$16)
+  
+  closure fn join$167(self$168, value$169) =
+    let return$17 = self$168.cap[0]
+    dup return$17
+-   drop self$168
+    let return$18 = closure join$170(return$17, value$169)
+    let apply$49 = closure join$173(return$18)
++   drop self$168
+    return String#(apply$49)
+  
+  closure fn join$170(self$171, value$172) =
+    let return$17 = self$171.cap[0]
+    dup return$17
+    let value$169 = self$171.cap[1]
+    dup value$169
+    drop self$171
+    return value$169(value$172, return$17)
+  
+  closure fn join$173(self$174, value$175) =
+    let return$18 = self$174.cap[0]
+    dup return$18
+-   drop self$174
+    let lit$176 = "green"
++   drop self$174
+    return value$175(lit$176, return$18)
+  
+  closure fn join$177(self$178, value$179) =
+    let return$19 = self$178.cap[0]
+    dup return$19
+-   drop self$178
+    let return$20 = closure join$180(return$19, value$179)
+    let apply$46 = closure join$183(return$20)
++   drop self$178
+    return String#(apply$46)
+  
+  closure fn join$180(self$181, value$182) =
+    let return$19 = self$181.cap[0]
+    dup return$19
+    let value$179 = self$181.cap[1]
+    dup value$179
+    drop self$181
+    return value$179(value$182, return$19)
+  
+  closure fn join$183(self$184, value$185) =
+    let return$20 = self$184.cap[0]
+    dup return$20
+-   drop self$184
+    let lit$186 = "red"
++   drop self$184
+    return value$185(lit$186, return$20)
+  
+  toplevel fn zig_main$190() =
+    let finish$188 = closure join$192()
+    let after_main$189 = closure join$195(finish$188)
+    return main(after_main$189)
+  
+  closure fn join$192(self$193, value$194) =
+    drop self$193
+    return value$194
+  
+  closure fn join$195(self$196, value$197) =
+    let finish$188 = self$196.cap[0]
+    dup finish$188
+-   drop self$196
++   dropReuse reuse$199 = self$196 /0
+-   let struct$198 = Tuple()
++   let struct$198 = reuse reuse$199 Tuple()
+    return value$197(struct$198, finish$188)
+  
+  entry = zig_main$190

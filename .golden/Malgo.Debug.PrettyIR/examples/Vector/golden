@@ -1,0 +1,5910 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+foreign malgo_new_vector : Int64# -> Ptr#(Char#) -> Ptr#(Ptr#(Char#))
+
+foreign malgo_read_vector : Int64# -> Ptr#(Ptr#(Char#)) -> Ptr#(Char#)
+
+data Vector a = Vector(Int64, Ptr#(a))
+
+sig newVector : Int64 -> a -> Vector(a)
+
+def newVector =
+  fn {
+    Int64#(length) init ->
+      {
+        Vector( Int64#( length ) )( malgo_unsafe_cast( malgo_new_vector( length )( malgo_unsafe_cast( init ) ) ) )
+      }
+  }
+
+sig readVector : Int64 -> Vector(a) -> Maybe(a)
+
+def readVector =
+  fn {
+    Int64#(index) Vector(Int64#(length), ptr) ->
+      {
+        if(isTrue#(geInt64#(index)(length)))( fn {
+          _ ->
+            {
+              Nothing
+            }
+        } )( fn {
+          _ ->
+            {
+              Just( malgo_unsafe_cast( malgo_read_vector( index )( malgo_unsafe_cast( ptr ) ) ) )
+            }
+        } )
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        let vec = newVector(10L)(5)
+        let val = readVector(2L)(vec)
+        val |> fn {
+          Nothing ->
+            {
+              putStrLn("ERROR")
+            } |
+          Just x ->
+            {
+              putStrLn(toStringInt32(x))
+            }
+        }
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data Vector a#0 = Vector(Int64, Ptr#(a#0))
+
+foreign malgo_new_vector : Int64# -> Ptr#(Char#) -> Ptr#(Ptr#(Char#))
+
+foreign malgo_read_vector : Int64# -> Ptr#(Ptr#(Char#)) -> Ptr#(Char#)
+
+sig newVector : Int64 -> a#1 -> Vector(a#1)
+
+sig readVector : Int64 -> Vector(a#4) -> Maybe(a#4)
+
+def readVector =
+  fn {
+    Int64#(index#5) Vector(Int64#(length#6), ptr#7) ->
+      {
+        if(isTrue#(geInt64#(index#5)(length#6)))( fn {
+          _#8 ->
+            {
+              Nothing
+            }
+        } )( fn {
+          _#9 ->
+            {
+              Just( malgo_unsafe_cast( malgo_read_vector( index#5 )( malgo_unsafe_cast( ptr#7 ) ) ) )
+            }
+        } )
+      }
+  }
+
+def newVector =
+  fn {
+    Int64#(length#2) init#3 ->
+      {
+        Vector( Int64#( length#2 ) )( malgo_unsafe_cast( malgo_new_vector( length#2 )( malgo_unsafe_cast( init#3 ) ) ) )
+      }
+  }
+
+def main =
+  fn {
+    _#10 ->
+      {
+        let vec#11 = newVector(Int64#(10L))(Int32#(5))
+        let val#12 = readVector(Int64#(2L))(vec#11)
+        val#12 |> fn {
+          Nothing() ->
+            {
+              putStrLn(String#("ERROR"))
+            } |
+          Just() x#13 ->
+            {
+              putStrLn(toStringInt32(x#13))
+            }
+        }
+      }
+  }
+
+=== ToFun ===
+def readVector =
+  \param$14 ->
+    \param$15 ->
+      case Tuple(param$14, param$15) of {
+        Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+          invoke if( invoke isTrue#( invoke geInt64#( index#5 )( length#6 ) ) )( \param$16 ->
+            case param$16 of {
+              _#8 -> invoke Nothing
+            } )( \param$17 ->
+            case param$17 of {
+              _#9 ->
+                invoke Just( invoke malgo_unsafe_cast( invoke malgo_read_vector( index#5 )( invoke malgo_unsafe_cast( ptr#7 ) ) ) )
+            } )
+      }
+
+def newVector =
+  \param$18 ->
+    \param$19 ->
+      case Tuple(param$18, param$19) of {
+        Tuple(Int64#(length#2), init#3) ->
+          invoke Vector( invoke Int64#( length#2 ) )( invoke malgo_unsafe_cast( invoke malgo_new_vector( length#2 )( invoke malgo_unsafe_cast( init#3 ) ) ) )
+      }
+
+def main =
+  \param$20 ->
+    case param$20 of {
+      _#10 ->
+        let vec#11 =
+          invoke newVector(invoke Int64#(10L))(invoke Int32#(5))
+        in
+          let val#12 =
+            invoke readVector(invoke Int64#(2L))(vec#11)
+          in
+            invoke |>(val#12)( \param$21 ->
+              case param$21 of {
+                Nothing() -> invoke putStrLn(invoke String#("ERROR"))
+                Tuple(Just(), x#13) ->
+                  invoke putStrLn(invoke toStringInt32(x#13))
+              } )
+    }
+
+def Vector =
+  \constructor$22 -> \constructor$23 -> Vector(constructor$22, constructor$23)
+
+def malgo_new_vector =
+  \primitive$24 ->
+    \primitive$25 -> #malgo_new_vector(primitive$24, primitive$25)
+
+def malgo_read_vector =
+  \primitive$26 ->
+    \primitive$27 -> #malgo_read_vector(primitive$26, primitive$27)
+
+=== SaturateCtor ===
+def readVector =
+  \param$14 ->
+    \param$15 ->
+      case Tuple(param$14, param$15) of {
+        Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+          invoke if( invoke isTrue#( invoke geInt64#( index#5 )( length#6 ) ) )( \param$16 ->
+            case param$16 of {
+              _#8 -> invoke Nothing
+            } )( \param$17 ->
+            case param$17 of {
+              _#9 ->
+                invoke Just( invoke malgo_unsafe_cast( invoke malgo_read_vector( index#5 )( invoke malgo_unsafe_cast( ptr#7 ) ) ) )
+            } )
+      }
+
+def newVector =
+  \param$18 ->
+    \param$19 ->
+      case Tuple(param$18, param$19) of {
+        Tuple(Int64#(length#2), init#3) ->
+          Vector( invoke Int64#(length#2)
+          , invoke malgo_unsafe_cast( invoke malgo_new_vector( length#2 )( invoke malgo_unsafe_cast( init#3 ) ) ) )
+      }
+
+def main =
+  \param$20 ->
+    case param$20 of {
+      _#10 ->
+        let vec#11 =
+          invoke newVector(invoke Int64#(10L))(invoke Int32#(5))
+        in
+          let val#12 =
+            invoke readVector(invoke Int64#(2L))(vec#11)
+          in
+            invoke |>(val#12)( \param$21 ->
+              case param$21 of {
+                Nothing() -> invoke putStrLn(invoke String#("ERROR"))
+                Tuple(Just(), x#13) ->
+                  invoke putStrLn(invoke toStringInt32(x#13))
+              } )
+    }
+
+def Vector =
+  \constructor$22 -> \constructor$23 -> Vector(constructor$22, constructor$23)
+
+def malgo_new_vector =
+  \primitive$24 ->
+    \primitive$25 -> #malgo_new_vector(primitive$24, primitive$25)
+
+def malgo_read_vector =
+  \primitive$26 ->
+    \primitive$27 -> #malgo_read_vector(primitive$26, primitive$27)
+
+=== ReuseSpecialize ===
+def readVector =
+  \param$14 ->
+    \param$15 ->
+      case Tuple(param$14, param$15) of {
+        Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+          invoke if( invoke isTrue#( invoke geInt64#( index#5 )( length#6 ) ) )( \param$16 ->
+            case param$16 of {
+              _#8 -> invoke Nothing
+            } )( \param$17 ->
+            case param$17 of {
+              _#9 ->
+                invoke Just( invoke malgo_unsafe_cast( invoke malgo_read_vector( index#5 )( invoke malgo_unsafe_cast( ptr#7 ) ) ) )
+            } )
+      }
+
+def newVector =
+  \param$18 ->
+    \param$19 ->
+      case Tuple(param$18, param$19) of {
+        Tuple(Int64#(length#2), init#3) ->
+          Vector( invoke Int64#(length#2)
+          , invoke malgo_unsafe_cast( invoke malgo_new_vector( length#2 )( invoke malgo_unsafe_cast( init#3 ) ) ) )
+      }
+
+def main =
+  \param$20 ->
+    case param$20 of {
+      _#10 ->
+        let vec#11 =
+          invoke newVector(invoke Int64#(10L))(invoke Int32#(5))
+        in
+          let val#12 =
+            invoke readVector(invoke Int64#(2L))(vec#11)
+          in
+            invoke |>(val#12)( \param$21 ->
+              case param$21 of {
+                Nothing() -> invoke putStrLn(invoke String#("ERROR"))
+                Tuple(Just(), x#13) ->
+                  invoke putStrLn(invoke toStringInt32(x#13))
+              } )
+    }
+
+def Vector =
+  \constructor$22 -> \constructor$23 -> Vector(constructor$22, constructor$23)
+
+def malgo_new_vector =
+  \primitive$24 ->
+    \primitive$25 -> #malgo_new_vector(primitive$24, primitive$25)
+
+def malgo_read_vector =
+  \primitive$26 ->
+    \primitive$27 -> #malgo_read_vector(primitive$26, primitive$27)
+
+=== ToCore ===
+def readVector(return$28) =
+  \param$14 return$29 . {
+    \param$15 return$30 . {
+      Tuple(param$14, param$15) ~ select {
+        Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+          invoke if ~ ( do return$36 . {
+            invoke isTrue# ~ ( do return$37 . {
+              invoke geInt64# ~ (index#5, (length#6, return$37))
+            }
+            , return$36 )
+          }
+          , ( \param$16 return$35 . {
+            param$16 ~ select {
+              _#8 -> invoke Nothing ~ return$35
+            }
+          }
+          , ( \param$17 return$31 . {
+            param$17 ~ select {
+              _#9 ->
+                invoke Just ~ ( do return$32 . {
+                  invoke malgo_unsafe_cast ~ ( do return$33 . {
+                    invoke malgo_read_vector ~ ( index#5
+                    , ( do return$34 . {
+                      invoke malgo_unsafe_cast ~ (ptr#7, return$34)
+                    }
+                    , return$33 ) )
+                  }
+                  , return$32 )
+                }
+                , return$31 )
+            }
+          }
+          , return$30 ) ) )
+      }
+    } ~ return$29
+  } ~ return$28
+
+def newVector(return$38) =
+  \param$18 return$39 . {
+    \param$19 return$40 . {
+      Tuple(param$18, param$19) ~ select {
+        Tuple(Int64#(length#2), init#3) ->
+          Vector( do return$41 . {
+            invoke Int64# ~ (length#2, return$41)
+          }
+          , do return$42 . {
+            invoke malgo_unsafe_cast ~ ( do return$43 . {
+              invoke malgo_new_vector ~ ( length#2
+              , ( do return$44 . {
+                invoke malgo_unsafe_cast ~ (init#3, return$44)
+              }
+              , return$43 ) )
+            }
+            , return$42 )
+          } ) ~ return$40
+      }
+    } ~ return$39
+  } ~ return$38
+
+def main(return$45) =
+  \param$20 return$46 . {
+    param$20 ~ select {
+      _#10 ->
+        invoke newVector ~ ( do return$52 . {
+          invoke Int64# ~ (10L, return$52)
+        }
+        , ( do return$51 . {
+          invoke Int32# ~ (5, return$51)
+        }
+        , then vec#11 -> {
+          invoke readVector ~ ( do return$50 . {
+            invoke Int64# ~ (2L, return$50)
+          }
+          , ( vec#11
+          , then val#12 -> {
+            invoke |> ~ ( val#12
+            , ( \param$21 return$47 . {
+              param$21 ~ select {
+                Nothing() ->
+                  invoke putStrLn ~ ( do return$48 . {
+                    invoke String# ~ ("ERROR", return$48)
+                  }
+                  , return$47 )
+                Tuple(Just(), x#13) ->
+                  invoke putStrLn ~ ( do return$49 . {
+                    invoke toStringInt32 ~ (x#13, return$49)
+                  }
+                  , return$47 )
+              }
+            }
+            , return$46 ) )
+          } ) )
+        } ) )
+    }
+  } ~ return$45
+
+def Vector(return$53) =
+  \constructor$22 return$54 . {
+    \constructor$23 return$55 . {
+      Vector(constructor$22, constructor$23) ~ return$55
+    } ~ return$54
+  } ~ return$53
+
+def malgo_new_vector(return$56) =
+  \primitive$24 return$57 . {
+    \primitive$25 return$58 . {
+      #malgo_new_vector(primitive$24, primitive$25) ~ return$58
+    } ~ return$57
+  } ~ return$56
+
+def malgo_read_vector(return$59) =
+  \primitive$26 return$60 . {
+    \primitive$27 return$61 . {
+      #malgo_read_vector(primitive$26, primitive$27) ~ return$61
+    } ~ return$60
+  } ~ return$59
+
+=== Flat ===
+def readVector(return$28) =
+  \param$14 return$29 . {
+    \param$15 return$30 . {
+      Tuple(param$14, param$15) ~ select {
+        Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+          invoke if ~ then outer$62 -> {
+            join return$36 = then inner$63 -> {
+              outer$62 ~ ( inner$63
+              , ( \param$16 return$35 . {
+                param$16 ~ select {
+                  _#8 -> invoke Nothing ~ return$35
+                }
+              }
+              , ( \param$17 return$31 . {
+                param$17 ~ select {
+                  _#9 ->
+                    invoke Just ~ then outer$64 -> {
+                      join return$32 = then inner$65 -> {
+                        outer$64 ~ (inner$65, return$31)
+                      }
+                      in invoke malgo_unsafe_cast ~ then outer$66 -> {
+                        join return$33 = then inner$67 -> {
+                          outer$66 ~ (inner$67, return$32)
+                        }
+                        in invoke malgo_read_vector ~ ( index#5
+                        , then outer$68 -> {
+                          join return$34 = then inner$69 -> {
+                            outer$68 ~ (inner$69, return$33)
+                          }
+                          in invoke malgo_unsafe_cast ~ (ptr#7, return$34)
+                        } )
+                      }
+                    }
+                }
+              }
+              , return$30 ) ) )
+            }
+            in invoke isTrue# ~ then outer$70 -> {
+              join return$37 = then inner$71 -> {
+                outer$70 ~ (inner$71, return$36)
+              }
+              in invoke geInt64# ~ (index#5, (length#6, return$37))
+            }
+          }
+      }
+    } ~ return$29
+  } ~ return$28
+
+def newVector(return$38) =
+  \param$18 return$39 . {
+    \param$19 return$40 . {
+      Tuple(param$18, param$19) ~ select {
+        Tuple(Int64#(length#2), init#3) ->
+          join label$72 = return$40
+          in join return$41 = then var$73 -> {
+            join label$74 = label$72
+            in join return$42 = then var$75 -> {
+              Vector(var$73, var$75) ~ label$74
+            }
+            in invoke malgo_unsafe_cast ~ then outer$76 -> {
+              join return$43 = then inner$77 -> {
+                outer$76 ~ (inner$77, return$42)
+              }
+              in invoke malgo_new_vector ~ ( length#2
+              , then outer$78 -> {
+                join return$44 = then inner$79 -> {
+                  outer$78 ~ (inner$79, return$43)
+                }
+                in invoke malgo_unsafe_cast ~ (init#3, return$44)
+              } )
+            }
+          }
+          in invoke Int64# ~ (length#2, return$41)
+      }
+    } ~ return$39
+  } ~ return$38
+
+def main(return$45) =
+  \param$20 return$46 . {
+    param$20 ~ select {
+      _#10 ->
+        invoke newVector ~ then outer$80 -> {
+          join return$52 = then inner$81 -> {
+            outer$80 ~ ( inner$81
+            , then outer$82 -> {
+              join return$51 = then inner$83 -> {
+                outer$82 ~ ( inner$83
+                , then vec#11 -> {
+                  invoke readVector ~ then outer$84 -> {
+                    join return$50 = then inner$85 -> {
+                      outer$84 ~ ( inner$85
+                      , ( vec#11
+                      , then val#12 -> {
+                        invoke |> ~ ( val#12
+                        , ( \param$21 return$47 . {
+                          param$21 ~ select {
+                            Nothing() ->
+                              invoke putStrLn ~ then outer$86 -> {
+                                join return$48 = then inner$87 -> {
+                                  outer$86 ~ (inner$87, return$47)
+                                }
+                                in invoke String# ~ ("ERROR", return$48)
+                              }
+                            Tuple(Just(), x#13) ->
+                              invoke putStrLn ~ then outer$88 -> {
+                                join return$49 = then inner$89 -> {
+                                  outer$88 ~ (inner$89, return$47)
+                                }
+                                in invoke toStringInt32 ~ (x#13, return$49)
+                              }
+                          }
+                        }
+                        , return$46 ) )
+                      } ) )
+                    }
+                    in invoke Int64# ~ (2L, return$50)
+                  }
+                } )
+              }
+              in invoke Int32# ~ (5, return$51)
+            } )
+          }
+          in invoke Int64# ~ (10L, return$52)
+        }
+    }
+  } ~ return$45
+
+def Vector(return$53) =
+  \constructor$22 return$54 . {
+    \constructor$23 return$55 . {
+      Vector(constructor$22, constructor$23) ~ return$55
+    } ~ return$54
+  } ~ return$53
+
+def malgo_new_vector(return$56) =
+  \primitive$24 return$57 . {
+    \primitive$25 return$58 . {
+      #malgo_new_vector(primitive$24, primitive$25) ~ return$58
+    } ~ return$57
+  } ~ return$56
+
+def malgo_read_vector(return$59) =
+  \primitive$26 return$60 . {
+    \primitive$27 return$61 . {
+      #malgo_read_vector(primitive$26, primitive$27) ~ return$61
+    } ~ return$60
+  } ~ return$59
+
+=== Join ===
+def readVector(return$28) =
+  \param$14 return$29 . {
+    \param$15 return$30 . {
+      join select$108 = select {
+        Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+          join then$107 = then outer$62 -> {
+            join return$36 = then inner$63 -> {
+              join apply$104 = ( \param$17 return$31 . {
+                join select$103 = select {
+                  _#9 ->
+                    join then$102 = then outer$64 -> {
+                      join return$32 = then inner$65 -> {
+                        join apply$101 = (inner$65, return$31)
+                        in outer$64 ~ apply$101
+                      }
+                      in join then$100 = then outer$66 -> {
+                        join return$33 = then inner$67 -> {
+                          join apply$99 = (inner$67, return$32)
+                          in outer$66 ~ apply$99
+                        }
+                        in join then$97 = then outer$68 -> {
+                          join return$34 = then inner$69 -> {
+                            join apply$96 = (inner$69, return$33)
+                            in outer$68 ~ apply$96
+                          }
+                          in join apply$95 = (ptr#7, return$34)
+                          in invoke malgo_unsafe_cast ~ apply$95
+                        }
+                        in join apply$98 = (index#5, then$97)
+                        in invoke malgo_read_vector ~ apply$98
+                      }
+                      in invoke malgo_unsafe_cast ~ then$100
+                    }
+                    in invoke Just ~ then$102
+                }
+                in param$17 ~ select$103
+              }
+              , return$30 )
+              in join apply$105 = ( \param$16 return$35 . {
+                join select$94 = select {
+                  _#8 -> invoke Nothing ~ return$35
+                }
+                in param$16 ~ select$94
+              }
+              , apply$104 )
+              in join apply$106 = (inner$63, apply$105)
+              in outer$62 ~ apply$106
+            }
+            in join then$93 = then outer$70 -> {
+              join return$37 = then inner$71 -> {
+                join apply$92 = (inner$71, return$36)
+                in outer$70 ~ apply$92
+              }
+              in join apply$90 = (length#6, return$37)
+              in join apply$91 = (index#5, apply$90)
+              in invoke geInt64# ~ apply$91
+            }
+            in invoke isTrue# ~ then$93
+          }
+          in invoke if ~ then$107
+      }
+      in Tuple(param$14, param$15) ~ select$108
+    } ~ return$29
+  } ~ return$28
+
+def newVector(return$38) =
+  \param$18 return$39 . {
+    \param$19 return$40 . {
+      join select$116 = select {
+        Tuple(Int64#(length#2), init#3) ->
+          join label$72 = return$40
+          in join return$41 = then var$73 -> {
+            join label$74 = label$72
+            in join return$42 = then var$75 -> {
+              Vector(var$73, var$75) ~ label$74
+            }
+            in join then$115 = then outer$76 -> {
+              join return$43 = then inner$77 -> {
+                join apply$114 = (inner$77, return$42)
+                in outer$76 ~ apply$114
+              }
+              in join then$112 = then outer$78 -> {
+                join return$44 = then inner$79 -> {
+                  join apply$111 = (inner$79, return$43)
+                  in outer$78 ~ apply$111
+                }
+                in join apply$110 = (init#3, return$44)
+                in invoke malgo_unsafe_cast ~ apply$110
+              }
+              in join apply$113 = (length#2, then$112)
+              in invoke malgo_new_vector ~ apply$113
+            }
+            in invoke malgo_unsafe_cast ~ then$115
+          }
+          in join apply$109 = (length#2, return$41)
+          in invoke Int64# ~ apply$109
+      }
+      in Tuple(param$18, param$19) ~ select$116
+    } ~ return$39
+  } ~ return$38
+
+def main(return$45) =
+  \param$20 return$46 . {
+    join select$138 = select {
+      _#10 ->
+        join then$137 = then outer$80 -> {
+          join return$52 = then inner$81 -> {
+            join then$135 = then outer$82 -> {
+              join return$51 = then inner$83 -> {
+                join then$133 = then vec#11 -> {
+                  join then$132 = then outer$84 -> {
+                    join return$50 = then inner$85 -> {
+                      join then$129 = then val#12 -> {
+                        join apply$127 = ( \param$21 return$47 . {
+                          join select$126 = select {
+                            Nothing() ->
+                              join then$122 = then outer$86 -> {
+                                join return$48 = then inner$87 -> {
+                                  join apply$121 = (inner$87, return$47)
+                                  in outer$86 ~ apply$121
+                                }
+                                in join apply$120 = ("ERROR", return$48)
+                                in invoke String# ~ apply$120
+                              }
+                              in invoke putStrLn ~ then$122
+                            Tuple(Just(), x#13) ->
+                              join then$125 = then outer$88 -> {
+                                join return$49 = then inner$89 -> {
+                                  join apply$124 = (inner$89, return$47)
+                                  in outer$88 ~ apply$124
+                                }
+                                in join apply$123 = (x#13, return$49)
+                                in invoke toStringInt32 ~ apply$123
+                              }
+                              in invoke putStrLn ~ then$125
+                          }
+                          in param$21 ~ select$126
+                        }
+                        , return$46 )
+                        in join apply$128 = (val#12, apply$127)
+                        in invoke |> ~ apply$128
+                      }
+                      in join apply$130 = (vec#11, then$129)
+                      in join apply$131 = (inner$85, apply$130)
+                      in outer$84 ~ apply$131
+                    }
+                    in join apply$119 = (2L, return$50)
+                    in invoke Int64# ~ apply$119
+                  }
+                  in invoke readVector ~ then$132
+                }
+                in join apply$134 = (inner$83, then$133)
+                in outer$82 ~ apply$134
+              }
+              in join apply$118 = (5, return$51)
+              in invoke Int32# ~ apply$118
+            }
+            in join apply$136 = (inner$81, then$135)
+            in outer$80 ~ apply$136
+          }
+          in join apply$117 = (10L, return$52)
+          in invoke Int64# ~ apply$117
+        }
+        in invoke newVector ~ then$137
+    }
+    in param$20 ~ select$138
+  } ~ return$45
+
+def Vector(return$53) =
+  \constructor$22 return$54 . {
+    \constructor$23 return$55 . {
+      Vector(constructor$22, constructor$23) ~ return$55
+    } ~ return$54
+  } ~ return$53
+
+def malgo_new_vector(return$56) =
+  \primitive$24 return$57 . {
+    \primitive$25 return$58 . {
+      #malgo_new_vector(primitive$24, primitive$25) ~ return$58
+    } ~ return$57
+  } ~ return$56
+
+def malgo_read_vector(return$59) =
+  \primitive$26 return$60 . {
+    \primitive$27 return$61 . {
+      #malgo_read_vector(primitive$26, primitive$27) ~ return$61
+    } ~ return$60
+  } ~ return$59
+
+=== ClosureConv ===
+toplevel fn readVector(return$28) =
+  let closure$200 = closure lambda$140()
+  return return$28(closure$200)
+
+closure fn lambda$140(self$141, param$14, return$29) =
+  let closure$199 = closure lambda$142(param$14)
+  return return$29(closure$199)
+
+closure fn lambda$142(self$143, param$15, return$30) =
+  let param$14 = self$143.cap[0]
+  let struct$144 = Tuple(param$14, param$15)
+  if struct$144.tag == Tuple &&
+  struct$144.0.tag == Int64# &&
+  struct$144.1.tag == Vector &&
+  struct$144.1.0.tag == Int64# then {
+    let index#5 = struct$144.0.0
+    let length#6 = struct$144.1.0.0
+    let ptr#7 = struct$144.1.1
+    let then$107 = closure join$145(index#5, length#6, ptr#7, return$30)
+    return if(then$107)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$145(self$146, value$147) =
+  let index#5 = self$146.cap[0]
+  let length#6 = self$146.cap[1]
+  let ptr#7 = self$146.cap[2]
+  let return$30 = self$146.cap[3]
+  let return$36 = closure join$148(index#5, ptr#7, return$30, value$147)
+  let then$93 = closure join$187(index#5, length#6, return$36)
+  return isTrue#(then$93)
+
+closure fn join$148(self$149, value$150) =
+  let index#5 = self$149.cap[0]
+  let ptr#7 = self$149.cap[1]
+  let return$30 = self$149.cap[2]
+  let value$147 = self$149.cap[3]
+  let apply$104 = closure join$151(index#5, ptr#7, return$30)
+  let apply$105 = closure join$181(apply$104)
+  return value$147(value$150, apply$105)
+
+closure fn join$151(self$152, value$153) =
+  let index#5 = self$152.cap[0]
+  let ptr#7 = self$152.cap[1]
+  let return$30 = self$152.cap[2]
+  let closure$180 = closure lambda$154(index#5, ptr#7)
+  return value$153(closure$180, return$30)
+
+closure fn lambda$154(self$155, param$17, return$31) =
+  let index#5 = self$155.cap[0]
+  let ptr#7 = self$155.cap[1]
+  if  then {
+    let _#9 = param$17
+    let then$102 = closure join$156(index#5, ptr#7, return$31)
+    return Just(then$102)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$156(self$157, value$158) =
+  let index#5 = self$157.cap[0]
+  let ptr#7 = self$157.cap[1]
+  let return$31 = self$157.cap[2]
+  let return$32 = closure join$159(return$31, value$158)
+  let then$100 = closure join$162(index#5, ptr#7, return$32)
+  return malgo_unsafe_cast(then$100)
+
+closure fn join$159(self$160, value$161) =
+  let return$31 = self$160.cap[0]
+  let value$158 = self$160.cap[1]
+  return value$158(value$161, return$31)
+
+closure fn join$162(self$163, value$164) =
+  let index#5 = self$163.cap[0]
+  let ptr#7 = self$163.cap[1]
+  let return$32 = self$163.cap[2]
+  let return$33 = closure join$165(return$32, value$164)
+  let then$97 = closure join$168(ptr#7, return$33)
+  let apply$98 = closure join$177(index#5, then$97)
+  return malgo_read_vector(apply$98)
+
+closure fn join$165(self$166, value$167) =
+  let return$32 = self$166.cap[0]
+  let value$164 = self$166.cap[1]
+  return value$164(value$167, return$32)
+
+closure fn join$168(self$169, value$170) =
+  let ptr#7 = self$169.cap[0]
+  let return$33 = self$169.cap[1]
+  let return$34 = closure join$171(return$33, value$170)
+  let apply$95 = closure join$174(ptr#7, return$34)
+  return malgo_unsafe_cast(apply$95)
+
+closure fn join$171(self$172, value$173) =
+  let return$33 = self$172.cap[0]
+  let value$170 = self$172.cap[1]
+  return value$170(value$173, return$33)
+
+closure fn join$174(self$175, value$176) =
+  let ptr#7 = self$175.cap[0]
+  let return$34 = self$175.cap[1]
+  return value$176(ptr#7, return$34)
+
+closure fn join$177(self$178, value$179) =
+  let index#5 = self$178.cap[0]
+  let then$97 = self$178.cap[1]
+  return value$179(index#5, then$97)
+
+closure fn join$181(self$182, value$183) =
+  let apply$104 = self$182.cap[0]
+  let closure$186 = closure lambda$184()
+  return value$183(closure$186, apply$104)
+
+closure fn lambda$184(self$185, param$16, return$35) =
+  if  then {
+    let _#8 = param$16
+    return Nothing(return$35)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$187(self$188, value$189) =
+  let index#5 = self$188.cap[0]
+  let length#6 = self$188.cap[1]
+  let return$36 = self$188.cap[2]
+  let return$37 = closure join$190(return$36, value$189)
+  let apply$90 = closure join$193(length#6, return$37)
+  let apply$91 = closure join$196(apply$90, index#5)
+  return geInt64#(apply$91)
+
+closure fn join$190(self$191, value$192) =
+  let return$36 = self$191.cap[0]
+  let value$189 = self$191.cap[1]
+  return value$189(value$192, return$36)
+
+closure fn join$193(self$194, value$195) =
+  let length#6 = self$194.cap[0]
+  let return$37 = self$194.cap[1]
+  return value$195(length#6, return$37)
+
+closure fn join$196(self$197, value$198) =
+  let apply$90 = self$197.cap[0]
+  let index#5 = self$197.cap[1]
+  return value$198(index#5, apply$90)
+
+toplevel fn newVector(return$38) =
+  let closure$236 = closure lambda$202()
+  return return$38(closure$236)
+
+closure fn lambda$202(self$203, param$18, return$39) =
+  let closure$235 = closure lambda$204(param$18)
+  return return$39(closure$235)
+
+closure fn lambda$204(self$205, param$19, return$40) =
+  let param$18 = self$205.cap[0]
+  let struct$206 = Tuple(param$18, param$19)
+  if struct$206.tag == Tuple && struct$206.0.tag == Int64# then {
+    let length#2 = struct$206.0.0
+    let init#3 = struct$206.1
+    let return$41 = closure join$207(init#3, length#2, return$40)
+    let apply$109 = closure join$232(length#2, return$41)
+    return Int64#(apply$109)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$207(self$208, value$209) =
+  let init#3 = self$208.cap[0]
+  let length#2 = self$208.cap[1]
+  let return$40 = self$208.cap[2]
+  let return$42 = closure join$210(return$40, value$209)
+  let then$115 = closure join$214(init#3, length#2, return$42)
+  return malgo_unsafe_cast(then$115)
+
+closure fn join$210(self$211, value$212) =
+  let return$40 = self$211.cap[0]
+  let value$209 = self$211.cap[1]
+  let struct$213 = Vector(value$209, value$212)
+  return return$40(struct$213)
+
+closure fn join$214(self$215, value$216) =
+  let init#3 = self$215.cap[0]
+  let length#2 = self$215.cap[1]
+  let return$42 = self$215.cap[2]
+  let return$43 = closure join$217(return$42, value$216)
+  let then$112 = closure join$220(init#3, return$43)
+  let apply$113 = closure join$229(length#2, then$112)
+  return malgo_new_vector(apply$113)
+
+closure fn join$217(self$218, value$219) =
+  let return$42 = self$218.cap[0]
+  let value$216 = self$218.cap[1]
+  return value$216(value$219, return$42)
+
+closure fn join$220(self$221, value$222) =
+  let init#3 = self$221.cap[0]
+  let return$43 = self$221.cap[1]
+  let return$44 = closure join$223(return$43, value$222)
+  let apply$110 = closure join$226(init#3, return$44)
+  return malgo_unsafe_cast(apply$110)
+
+closure fn join$223(self$224, value$225) =
+  let return$43 = self$224.cap[0]
+  let value$222 = self$224.cap[1]
+  return value$222(value$225, return$43)
+
+closure fn join$226(self$227, value$228) =
+  let init#3 = self$227.cap[0]
+  let return$44 = self$227.cap[1]
+  return value$228(init#3, return$44)
+
+closure fn join$229(self$230, value$231) =
+  let length#2 = self$230.cap[0]
+  let then$112 = self$230.cap[1]
+  return value$231(length#2, then$112)
+
+closure fn join$232(self$233, value$234) =
+  let length#2 = self$233.cap[0]
+  let return$41 = self$233.cap[1]
+  return value$234(length#2, return$41)
+
+toplevel fn main(return$45) =
+  let closure$307 = closure lambda$238()
+  return return$45(closure$307)
+
+closure fn lambda$238(self$239, param$20, return$46) =
+  if  then {
+    let _#10 = param$20
+    let then$137 = closure join$240(return$46)
+    return newVector(then$137)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$240(self$241, value$242) =
+  let return$46 = self$241.cap[0]
+  let return$52 = closure join$243(return$46, value$242)
+  let apply$117 = closure join$303(return$52)
+  return Int64#(apply$117)
+
+closure fn join$243(self$244, value$245) =
+  let return$46 = self$244.cap[0]
+  let value$242 = self$244.cap[1]
+  let then$135 = closure join$246(return$46)
+  return value$242(value$245, then$135)
+
+closure fn join$246(self$247, value$248) =
+  let return$46 = self$247.cap[0]
+  let return$51 = closure join$249(return$46, value$248)
+  let apply$118 = closure join$299(return$51)
+  return Int32#(apply$118)
+
+closure fn join$249(self$250, value$251) =
+  let return$46 = self$250.cap[0]
+  let value$248 = self$250.cap[1]
+  let then$133 = closure join$252(return$46)
+  return value$248(value$251, then$133)
+
+closure fn join$252(self$253, value$254) =
+  let return$46 = self$253.cap[0]
+  let then$132 = closure join$255(return$46, value$254)
+  return readVector(then$132)
+
+closure fn join$255(self$256, value$257) =
+  let return$46 = self$256.cap[0]
+  let value$254 = self$256.cap[1]
+  let return$50 = closure join$258(return$46, value$254, value$257)
+  let apply$119 = closure join$295(return$50)
+  return Int64#(apply$119)
+
+closure fn join$258(self$259, value$260) =
+  let return$46 = self$259.cap[0]
+  let value$254 = self$259.cap[1]
+  let value$257 = self$259.cap[2]
+  let then$129 = closure join$261(return$46)
+  let apply$130 = closure join$292(then$129, value$254)
+  return value$257(value$260, apply$130)
+
+closure fn join$261(self$262, value$263) =
+  let return$46 = self$262.cap[0]
+  let apply$127 = closure join$264(return$46)
+  let apply$128 = closure join$289(apply$127, value$263)
+  return |>(apply$128)
+
+closure fn join$264(self$265, value$266) =
+  let return$46 = self$265.cap[0]
+  let closure$288 = closure lambda$267()
+  return value$266(closure$288, return$46)
+
+closure fn lambda$267(self$268, param$21, return$47) =
+  if param$21.tag == Nothing then {
+    let then$122 = closure join$269(return$47)
+    return putStrLn(then$122)
+  } else {
+    if param$21.tag == Tuple && param$21.0.tag == Just then {
+      let x#13 = param$21.1
+      let then$125 = closure join$279(return$47, x#13)
+      return putStrLn(then$125)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$269(self$270, value$271) =
+  let return$47 = self$270.cap[0]
+  let return$48 = closure join$272(return$47, value$271)
+  let apply$120 = closure join$275(return$48)
+  return String#(apply$120)
+
+closure fn join$272(self$273, value$274) =
+  let return$47 = self$273.cap[0]
+  let value$271 = self$273.cap[1]
+  return value$271(value$274, return$47)
+
+closure fn join$275(self$276, value$277) =
+  let return$48 = self$276.cap[0]
+  let lit$278 = "ERROR"
+  return value$277(lit$278, return$48)
+
+closure fn join$279(self$280, value$281) =
+  let return$47 = self$280.cap[0]
+  let x#13 = self$280.cap[1]
+  let return$49 = closure join$282(return$47, value$281)
+  let apply$123 = closure join$285(return$49, x#13)
+  return toStringInt32(apply$123)
+
+closure fn join$282(self$283, value$284) =
+  let return$47 = self$283.cap[0]
+  let value$281 = self$283.cap[1]
+  return value$281(value$284, return$47)
+
+closure fn join$285(self$286, value$287) =
+  let return$49 = self$286.cap[0]
+  let x#13 = self$286.cap[1]
+  return value$287(x#13, return$49)
+
+closure fn join$289(self$290, value$291) =
+  let apply$127 = self$290.cap[0]
+  let value$263 = self$290.cap[1]
+  return value$291(value$263, apply$127)
+
+closure fn join$292(self$293, value$294) =
+  let then$129 = self$293.cap[0]
+  let value$254 = self$293.cap[1]
+  return value$294(value$254, then$129)
+
+closure fn join$295(self$296, value$297) =
+  let return$50 = self$296.cap[0]
+  let lit$298 = 2L
+  return value$297(lit$298, return$50)
+
+closure fn join$299(self$300, value$301) =
+  let return$51 = self$300.cap[0]
+  let lit$302 = 5
+  return value$301(lit$302, return$51)
+
+closure fn join$303(self$304, value$305) =
+  let return$52 = self$304.cap[0]
+  let lit$306 = 10L
+  return value$305(lit$306, return$52)
+
+toplevel fn Vector(return$53) =
+  let closure$315 = closure lambda$309()
+  return return$53(closure$315)
+
+closure fn lambda$309(self$310, constructor$22, return$54) =
+  let closure$314 = closure lambda$311(constructor$22)
+  return return$54(closure$314)
+
+closure fn lambda$311(self$312, constructor$23, return$55) =
+  let constructor$22 = self$312.cap[0]
+  let struct$313 = Vector(constructor$22, constructor$23)
+  return return$55(struct$313)
+
+toplevel fn malgo_new_vector(return$56) =
+  let closure$323 = closure lambda$317()
+  return return$56(closure$323)
+
+closure fn lambda$317(self$318, primitive$24, return$57) =
+  let closure$322 = closure lambda$319(primitive$24)
+  return return$57(closure$322)
+
+closure fn lambda$319(self$320, primitive$25, return$58) =
+  let primitive$24 = self$320.cap[0]
+  let prim_result$321 = #malgo_new_vector(primitive$24, primitive$25)
+  return return$58(prim_result$321)
+
+toplevel fn malgo_read_vector(return$59) =
+  let closure$331 = closure lambda$325()
+  return return$59(closure$331)
+
+closure fn lambda$325(self$326, primitive$26, return$60) =
+  let closure$330 = closure lambda$327(primitive$26)
+  return return$60(closure$330)
+
+closure fn lambda$327(self$328, primitive$27, return$61) =
+  let primitive$26 = self$328.cap[0]
+  let prim_result$329 = #malgo_read_vector(primitive$26, primitive$27)
+  return return$61(prim_result$329)
+
+toplevel fn zig_main$334() =
+  let finish$332 = closure join$336()
+  let after_main$333 = closure join$339(finish$332)
+  return main(after_main$333)
+
+closure fn join$336(self$337, value$338) = return value$338
+
+closure fn join$339(self$340, value$341) =
+  let finish$332 = self$340.cap[0]
+  let struct$342 = Tuple()
+  return value$341(struct$342, finish$332)
+
+entry = zig_main$334
+
+=== Peephole ===
+toplevel fn readVector(return$28) =
+  let closure$200 = closure lambda$140()
+  return return$28(closure$200)
+
+closure fn lambda$140(self$141, param$14, return$29) =
+  let closure$199 = closure lambda$142(param$14)
+  return return$29(closure$199)
+
+closure fn lambda$142(self$143, param$15, return$30) =
+  let param$14 = self$143.cap[0]
+  if param$14.tag == Int64# &&
+  param$15.tag == Vector &&
+  param$15.0.tag == Int64# then {
+    let index#5 = param$14.0
+    let length#6 = param$15.0.0
+    let ptr#7 = param$15.1
+    let then$107 = closure join$145(index#5, length#6, ptr#7, return$30)
+    return if(then$107)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$145(self$146, value$147) =
+  let index#5 = self$146.cap[0]
+  let length#6 = self$146.cap[1]
+  let ptr#7 = self$146.cap[2]
+  let return$30 = self$146.cap[3]
+  let return$36 = closure join$148(index#5, ptr#7, return$30, value$147)
+  let then$93 = closure join$187(index#5, length#6, return$36)
+  return isTrue#(then$93)
+
+closure fn join$148(self$149, value$150) =
+  let index#5 = self$149.cap[0]
+  let ptr#7 = self$149.cap[1]
+  let return$30 = self$149.cap[2]
+  let value$147 = self$149.cap[3]
+  let apply$104 = closure join$151(index#5, ptr#7, return$30)
+  let apply$105 = closure join$181(apply$104)
+  return value$147(value$150, apply$105)
+
+closure fn join$151(self$152, value$153) =
+  let index#5 = self$152.cap[0]
+  let ptr#7 = self$152.cap[1]
+  let return$30 = self$152.cap[2]
+  let closure$180 = closure lambda$154(index#5, ptr#7)
+  return value$153(closure$180, return$30)
+
+closure fn lambda$154(self$155, param$17, return$31) =
+  let index#5 = self$155.cap[0]
+  let ptr#7 = self$155.cap[1]
+  if  then {
+    let then$102 = closure join$156(index#5, ptr#7, return$31)
+    return Just(then$102)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$156(self$157, value$158) =
+  let index#5 = self$157.cap[0]
+  let ptr#7 = self$157.cap[1]
+  let return$31 = self$157.cap[2]
+  let return$32 = closure join$159(return$31, value$158)
+  let then$100 = closure join$162(index#5, ptr#7, return$32)
+  return malgo_unsafe_cast(then$100)
+
+closure fn join$159(self$160, value$161) =
+  let return$31 = self$160.cap[0]
+  let value$158 = self$160.cap[1]
+  return value$158(value$161, return$31)
+
+closure fn join$162(self$163, value$164) =
+  let index#5 = self$163.cap[0]
+  let ptr#7 = self$163.cap[1]
+  let return$32 = self$163.cap[2]
+  let return$33 = closure join$165(return$32, value$164)
+  let then$97 = closure join$168(ptr#7, return$33)
+  let apply$98 = closure join$177(index#5, then$97)
+  return malgo_read_vector(apply$98)
+
+closure fn join$165(self$166, value$167) =
+  let return$32 = self$166.cap[0]
+  let value$164 = self$166.cap[1]
+  return value$164(value$167, return$32)
+
+closure fn join$168(self$169, value$170) =
+  let ptr#7 = self$169.cap[0]
+  let return$33 = self$169.cap[1]
+  let return$34 = closure join$171(return$33, value$170)
+  let apply$95 = closure join$174(ptr#7, return$34)
+  return malgo_unsafe_cast(apply$95)
+
+closure fn join$171(self$172, value$173) =
+  let return$33 = self$172.cap[0]
+  let value$170 = self$172.cap[1]
+  return value$170(value$173, return$33)
+
+closure fn join$174(self$175, value$176) =
+  let ptr#7 = self$175.cap[0]
+  let return$34 = self$175.cap[1]
+  return value$176(ptr#7, return$34)
+
+closure fn join$177(self$178, value$179) =
+  let index#5 = self$178.cap[0]
+  let then$97 = self$178.cap[1]
+  return value$179(index#5, then$97)
+
+closure fn join$181(self$182, value$183) =
+  let apply$104 = self$182.cap[0]
+  let closure$186 = closure lambda$184()
+  return value$183(closure$186, apply$104)
+
+closure fn lambda$184(self$185, param$16, return$35) =
+  if  then {
+    return Nothing(return$35)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$187(self$188, value$189) =
+  let index#5 = self$188.cap[0]
+  let length#6 = self$188.cap[1]
+  let return$36 = self$188.cap[2]
+  let return$37 = closure join$190(return$36, value$189)
+  let apply$90 = closure join$193(length#6, return$37)
+  let apply$91 = closure join$196(apply$90, index#5)
+  return geInt64#(apply$91)
+
+closure fn join$190(self$191, value$192) =
+  let return$36 = self$191.cap[0]
+  let value$189 = self$191.cap[1]
+  return value$189(value$192, return$36)
+
+closure fn join$193(self$194, value$195) =
+  let length#6 = self$194.cap[0]
+  let return$37 = self$194.cap[1]
+  return value$195(length#6, return$37)
+
+closure fn join$196(self$197, value$198) =
+  let apply$90 = self$197.cap[0]
+  let index#5 = self$197.cap[1]
+  return value$198(index#5, apply$90)
+
+toplevel fn newVector(return$38) =
+  let closure$236 = closure lambda$202()
+  return return$38(closure$236)
+
+closure fn lambda$202(self$203, param$18, return$39) =
+  let closure$235 = closure lambda$204(param$18)
+  return return$39(closure$235)
+
+closure fn lambda$204(self$205, param$19, return$40) =
+  let param$18 = self$205.cap[0]
+  if param$18.tag == Int64# then {
+    let length#2 = param$18.0
+    let return$41 = closure join$207(param$19, length#2, return$40)
+    let apply$109 = closure join$232(length#2, return$41)
+    return Int64#(apply$109)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$207(self$208, value$209) =
+  let init#3 = self$208.cap[0]
+  let length#2 = self$208.cap[1]
+  let return$40 = self$208.cap[2]
+  let return$42 = closure join$210(return$40, value$209)
+  let then$115 = closure join$214(init#3, length#2, return$42)
+  return malgo_unsafe_cast(then$115)
+
+closure fn join$210(self$211, value$212) =
+  let return$40 = self$211.cap[0]
+  let value$209 = self$211.cap[1]
+  let struct$213 = Vector(value$209, value$212)
+  return return$40(struct$213)
+
+closure fn join$214(self$215, value$216) =
+  let init#3 = self$215.cap[0]
+  let length#2 = self$215.cap[1]
+  let return$42 = self$215.cap[2]
+  let return$43 = closure join$217(return$42, value$216)
+  let then$112 = closure join$220(init#3, return$43)
+  let apply$113 = closure join$229(length#2, then$112)
+  return malgo_new_vector(apply$113)
+
+closure fn join$217(self$218, value$219) =
+  let return$42 = self$218.cap[0]
+  let value$216 = self$218.cap[1]
+  return value$216(value$219, return$42)
+
+closure fn join$220(self$221, value$222) =
+  let init#3 = self$221.cap[0]
+  let return$43 = self$221.cap[1]
+  let return$44 = closure join$223(return$43, value$222)
+  let apply$110 = closure join$226(init#3, return$44)
+  return malgo_unsafe_cast(apply$110)
+
+closure fn join$223(self$224, value$225) =
+  let return$43 = self$224.cap[0]
+  let value$222 = self$224.cap[1]
+  return value$222(value$225, return$43)
+
+closure fn join$226(self$227, value$228) =
+  let init#3 = self$227.cap[0]
+  let return$44 = self$227.cap[1]
+  return value$228(init#3, return$44)
+
+closure fn join$229(self$230, value$231) =
+  let length#2 = self$230.cap[0]
+  let then$112 = self$230.cap[1]
+  return value$231(length#2, then$112)
+
+closure fn join$232(self$233, value$234) =
+  let length#2 = self$233.cap[0]
+  let return$41 = self$233.cap[1]
+  return value$234(length#2, return$41)
+
+toplevel fn main(return$45) =
+  let closure$307 = closure lambda$238()
+  return return$45(closure$307)
+
+closure fn lambda$238(self$239, param$20, return$46) =
+  if  then {
+    let then$137 = closure join$240(return$46)
+    return newVector(then$137)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$240(self$241, value$242) =
+  let return$46 = self$241.cap[0]
+  let return$52 = closure join$243(return$46, value$242)
+  let apply$117 = closure join$303(return$52)
+  return Int64#(apply$117)
+
+closure fn join$243(self$244, value$245) =
+  let return$46 = self$244.cap[0]
+  let value$242 = self$244.cap[1]
+  let then$135 = closure join$246(return$46)
+  return value$242(value$245, then$135)
+
+closure fn join$246(self$247, value$248) =
+  let return$46 = self$247.cap[0]
+  let return$51 = closure join$249(return$46, value$248)
+  let apply$118 = closure join$299(return$51)
+  return Int32#(apply$118)
+
+closure fn join$249(self$250, value$251) =
+  let return$46 = self$250.cap[0]
+  let value$248 = self$250.cap[1]
+  let then$133 = closure join$252(return$46)
+  return value$248(value$251, then$133)
+
+closure fn join$252(self$253, value$254) =
+  let return$46 = self$253.cap[0]
+  let then$132 = closure join$255(return$46, value$254)
+  return readVector(then$132)
+
+closure fn join$255(self$256, value$257) =
+  let return$46 = self$256.cap[0]
+  let value$254 = self$256.cap[1]
+  let return$50 = closure join$258(return$46, value$254, value$257)
+  let apply$119 = closure join$295(return$50)
+  return Int64#(apply$119)
+
+closure fn join$258(self$259, value$260) =
+  let return$46 = self$259.cap[0]
+  let value$254 = self$259.cap[1]
+  let value$257 = self$259.cap[2]
+  let then$129 = closure join$261(return$46)
+  let apply$130 = closure join$292(then$129, value$254)
+  return value$257(value$260, apply$130)
+
+closure fn join$261(self$262, value$263) =
+  let return$46 = self$262.cap[0]
+  let apply$127 = closure join$264(return$46)
+  let apply$128 = closure join$289(apply$127, value$263)
+  return |>(apply$128)
+
+closure fn join$264(self$265, value$266) =
+  let return$46 = self$265.cap[0]
+  let closure$288 = closure lambda$267()
+  return value$266(closure$288, return$46)
+
+closure fn lambda$267(self$268, param$21, return$47) =
+  if param$21.tag == Nothing then {
+    let then$122 = closure join$269(return$47)
+    return putStrLn(then$122)
+  } else {
+    if param$21.tag == Tuple && param$21.0.tag == Just then {
+      let x#13 = param$21.1
+      let then$125 = closure join$279(return$47, x#13)
+      return putStrLn(then$125)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$269(self$270, value$271) =
+  let return$47 = self$270.cap[0]
+  let return$48 = closure join$272(return$47, value$271)
+  let apply$120 = closure join$275(return$48)
+  return String#(apply$120)
+
+closure fn join$272(self$273, value$274) =
+  let return$47 = self$273.cap[0]
+  let value$271 = self$273.cap[1]
+  return value$271(value$274, return$47)
+
+closure fn join$275(self$276, value$277) =
+  let return$48 = self$276.cap[0]
+  let lit$278 = "ERROR"
+  return value$277(lit$278, return$48)
+
+closure fn join$279(self$280, value$281) =
+  let return$47 = self$280.cap[0]
+  let x#13 = self$280.cap[1]
+  let return$49 = closure join$282(return$47, value$281)
+  let apply$123 = closure join$285(return$49, x#13)
+  return toStringInt32(apply$123)
+
+closure fn join$282(self$283, value$284) =
+  let return$47 = self$283.cap[0]
+  let value$281 = self$283.cap[1]
+  return value$281(value$284, return$47)
+
+closure fn join$285(self$286, value$287) =
+  let return$49 = self$286.cap[0]
+  let x#13 = self$286.cap[1]
+  return value$287(x#13, return$49)
+
+closure fn join$289(self$290, value$291) =
+  let apply$127 = self$290.cap[0]
+  let value$263 = self$290.cap[1]
+  return value$291(value$263, apply$127)
+
+closure fn join$292(self$293, value$294) =
+  let then$129 = self$293.cap[0]
+  let value$254 = self$293.cap[1]
+  return value$294(value$254, then$129)
+
+closure fn join$295(self$296, value$297) =
+  let return$50 = self$296.cap[0]
+  let lit$298 = 2L
+  return value$297(lit$298, return$50)
+
+closure fn join$299(self$300, value$301) =
+  let return$51 = self$300.cap[0]
+  let lit$302 = 5
+  return value$301(lit$302, return$51)
+
+closure fn join$303(self$304, value$305) =
+  let return$52 = self$304.cap[0]
+  let lit$306 = 10L
+  return value$305(lit$306, return$52)
+
+toplevel fn Vector(return$53) =
+  let closure$315 = closure lambda$309()
+  return return$53(closure$315)
+
+closure fn lambda$309(self$310, constructor$22, return$54) =
+  let closure$314 = closure lambda$311(constructor$22)
+  return return$54(closure$314)
+
+closure fn lambda$311(self$312, constructor$23, return$55) =
+  let constructor$22 = self$312.cap[0]
+  let struct$313 = Vector(constructor$22, constructor$23)
+  return return$55(struct$313)
+
+toplevel fn malgo_new_vector(return$56) =
+  let closure$323 = closure lambda$317()
+  return return$56(closure$323)
+
+closure fn lambda$317(self$318, primitive$24, return$57) =
+  let closure$322 = closure lambda$319(primitive$24)
+  return return$57(closure$322)
+
+closure fn lambda$319(self$320, primitive$25, return$58) =
+  let primitive$24 = self$320.cap[0]
+  let prim_result$321 = #malgo_new_vector(primitive$24, primitive$25)
+  return return$58(prim_result$321)
+
+toplevel fn malgo_read_vector(return$59) =
+  let closure$331 = closure lambda$325()
+  return return$59(closure$331)
+
+closure fn lambda$325(self$326, primitive$26, return$60) =
+  let closure$330 = closure lambda$327(primitive$26)
+  return return$60(closure$330)
+
+closure fn lambda$327(self$328, primitive$27, return$61) =
+  let primitive$26 = self$328.cap[0]
+  let prim_result$329 = #malgo_read_vector(primitive$26, primitive$27)
+  return return$61(prim_result$329)
+
+toplevel fn zig_main$334() =
+  let finish$332 = closure join$336()
+  let after_main$333 = closure join$339(finish$332)
+  return main(after_main$333)
+
+closure fn join$336(self$337, value$338) = return value$338
+
+closure fn join$339(self$340, value$341) =
+  let finish$332 = self$340.cap[0]
+  let struct$342 = Tuple()
+  return value$341(struct$342, finish$332)
+
+entry = zig_main$334
+
+=== Perceus ===
+toplevel fn readVector(return$28) =
+  let closure$200 = closure lambda$140()
+  return return$28(closure$200)
+
+closure fn lambda$140(self$141, param$14, return$29) =
+  drop self$141
+  let closure$199 = closure lambda$142(param$14)
+  return return$29(closure$199)
+
+closure fn lambda$142(self$143, param$15, return$30) =
+  let param$14 = self$143.cap[0]
+  dup param$14
+  drop self$143
+  if param$14.tag == Int64# &&
+  param$15.tag == Vector &&
+  param$15.0.tag == Int64# then {
+    let index#5 = param$14.0
+    dup index#5
+    drop param$14
+    let length#6 = param$15.0.0
+    dup length#6
+    let ptr#7 = param$15.1
+    dup ptr#7
+    drop param$15
+    let then$107 = closure join$145(index#5, length#6, ptr#7, return$30)
+    return if(then$107)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$145(self$146, value$147) =
+  let index#5 = self$146.cap[0]
+  dup index#5
+  let length#6 = self$146.cap[1]
+  dup length#6
+  let ptr#7 = self$146.cap[2]
+  dup ptr#7
+  let return$30 = self$146.cap[3]
+  dup return$30
+  drop self$146
+  dup index#5
+  let return$36 = closure join$148(index#5, ptr#7, return$30, value$147)
+  let then$93 = closure join$187(index#5, length#6, return$36)
+  return isTrue#(then$93)
+
+closure fn join$148(self$149, value$150) =
+  let index#5 = self$149.cap[0]
+  dup index#5
+  let ptr#7 = self$149.cap[1]
+  dup ptr#7
+  let return$30 = self$149.cap[2]
+  dup return$30
+  let value$147 = self$149.cap[3]
+  dup value$147
+  drop self$149
+  let apply$104 = closure join$151(index#5, ptr#7, return$30)
+  let apply$105 = closure join$181(apply$104)
+  return value$147(value$150, apply$105)
+
+closure fn join$151(self$152, value$153) =
+  let index#5 = self$152.cap[0]
+  dup index#5
+  let ptr#7 = self$152.cap[1]
+  dup ptr#7
+  let return$30 = self$152.cap[2]
+  dup return$30
+  drop self$152
+  let closure$180 = closure lambda$154(index#5, ptr#7)
+  return value$153(closure$180, return$30)
+
+closure fn lambda$154(self$155, param$17, return$31) =
+  drop param$17
+  let index#5 = self$155.cap[0]
+  dup index#5
+  let ptr#7 = self$155.cap[1]
+  dup ptr#7
+  drop self$155
+  if  then {
+    let then$102 = closure join$156(index#5, ptr#7, return$31)
+    return Just(then$102)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$156(self$157, value$158) =
+  let index#5 = self$157.cap[0]
+  dup index#5
+  let ptr#7 = self$157.cap[1]
+  dup ptr#7
+  let return$31 = self$157.cap[2]
+  dup return$31
+  drop self$157
+  let return$32 = closure join$159(return$31, value$158)
+  let then$100 = closure join$162(index#5, ptr#7, return$32)
+  return malgo_unsafe_cast(then$100)
+
+closure fn join$159(self$160, value$161) =
+  let return$31 = self$160.cap[0]
+  dup return$31
+  let value$158 = self$160.cap[1]
+  dup value$158
+  drop self$160
+  return value$158(value$161, return$31)
+
+closure fn join$162(self$163, value$164) =
+  let index#5 = self$163.cap[0]
+  dup index#5
+  let ptr#7 = self$163.cap[1]
+  dup ptr#7
+  let return$32 = self$163.cap[2]
+  dup return$32
+  drop self$163
+  let return$33 = closure join$165(return$32, value$164)
+  let then$97 = closure join$168(ptr#7, return$33)
+  let apply$98 = closure join$177(index#5, then$97)
+  return malgo_read_vector(apply$98)
+
+closure fn join$165(self$166, value$167) =
+  let return$32 = self$166.cap[0]
+  dup return$32
+  let value$164 = self$166.cap[1]
+  dup value$164
+  drop self$166
+  return value$164(value$167, return$32)
+
+closure fn join$168(self$169, value$170) =
+  let ptr#7 = self$169.cap[0]
+  dup ptr#7
+  let return$33 = self$169.cap[1]
+  dup return$33
+  drop self$169
+  let return$34 = closure join$171(return$33, value$170)
+  let apply$95 = closure join$174(ptr#7, return$34)
+  return malgo_unsafe_cast(apply$95)
+
+closure fn join$171(self$172, value$173) =
+  let return$33 = self$172.cap[0]
+  dup return$33
+  let value$170 = self$172.cap[1]
+  dup value$170
+  drop self$172
+  return value$170(value$173, return$33)
+
+closure fn join$174(self$175, value$176) =
+  let ptr#7 = self$175.cap[0]
+  dup ptr#7
+  let return$34 = self$175.cap[1]
+  dup return$34
+  drop self$175
+  return value$176(ptr#7, return$34)
+
+closure fn join$177(self$178, value$179) =
+  let index#5 = self$178.cap[0]
+  dup index#5
+  let then$97 = self$178.cap[1]
+  dup then$97
+  drop self$178
+  return value$179(index#5, then$97)
+
+closure fn join$181(self$182, value$183) =
+  let apply$104 = self$182.cap[0]
+  dup apply$104
+  drop self$182
+  let closure$186 = closure lambda$184()
+  return value$183(closure$186, apply$104)
+
+closure fn lambda$184(self$185, param$16, return$35) =
+  drop param$16
+  drop self$185
+  if  then {
+    return Nothing(return$35)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$187(self$188, value$189) =
+  let index#5 = self$188.cap[0]
+  dup index#5
+  let length#6 = self$188.cap[1]
+  dup length#6
+  let return$36 = self$188.cap[2]
+  dup return$36
+  drop self$188
+  let return$37 = closure join$190(return$36, value$189)
+  let apply$90 = closure join$193(length#6, return$37)
+  let apply$91 = closure join$196(apply$90, index#5)
+  return geInt64#(apply$91)
+
+closure fn join$190(self$191, value$192) =
+  let return$36 = self$191.cap[0]
+  dup return$36
+  let value$189 = self$191.cap[1]
+  dup value$189
+  drop self$191
+  return value$189(value$192, return$36)
+
+closure fn join$193(self$194, value$195) =
+  let length#6 = self$194.cap[0]
+  dup length#6
+  let return$37 = self$194.cap[1]
+  dup return$37
+  drop self$194
+  return value$195(length#6, return$37)
+
+closure fn join$196(self$197, value$198) =
+  let apply$90 = self$197.cap[0]
+  dup apply$90
+  let index#5 = self$197.cap[1]
+  dup index#5
+  drop self$197
+  return value$198(index#5, apply$90)
+
+toplevel fn newVector(return$38) =
+  let closure$236 = closure lambda$202()
+  return return$38(closure$236)
+
+closure fn lambda$202(self$203, param$18, return$39) =
+  drop self$203
+  let closure$235 = closure lambda$204(param$18)
+  return return$39(closure$235)
+
+closure fn lambda$204(self$205, param$19, return$40) =
+  let param$18 = self$205.cap[0]
+  dup param$18
+  drop self$205
+  if param$18.tag == Int64# then {
+    let length#2 = param$18.0
+    dup length#2
+    drop param$18
+    dup length#2
+    let return$41 = closure join$207(param$19, length#2, return$40)
+    let apply$109 = closure join$232(length#2, return$41)
+    return Int64#(apply$109)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$207(self$208, value$209) =
+  let init#3 = self$208.cap[0]
+  dup init#3
+  let length#2 = self$208.cap[1]
+  dup length#2
+  let return$40 = self$208.cap[2]
+  dup return$40
+  drop self$208
+  let return$42 = closure join$210(return$40, value$209)
+  let then$115 = closure join$214(init#3, length#2, return$42)
+  return malgo_unsafe_cast(then$115)
+
+closure fn join$210(self$211, value$212) =
+  let return$40 = self$211.cap[0]
+  dup return$40
+  let value$209 = self$211.cap[1]
+  dup value$209
+  drop self$211
+  let struct$213 = Vector(value$209, value$212)
+  return return$40(struct$213)
+
+closure fn join$214(self$215, value$216) =
+  let init#3 = self$215.cap[0]
+  dup init#3
+  let length#2 = self$215.cap[1]
+  dup length#2
+  let return$42 = self$215.cap[2]
+  dup return$42
+  drop self$215
+  let return$43 = closure join$217(return$42, value$216)
+  let then$112 = closure join$220(init#3, return$43)
+  let apply$113 = closure join$229(length#2, then$112)
+  return malgo_new_vector(apply$113)
+
+closure fn join$217(self$218, value$219) =
+  let return$42 = self$218.cap[0]
+  dup return$42
+  let value$216 = self$218.cap[1]
+  dup value$216
+  drop self$218
+  return value$216(value$219, return$42)
+
+closure fn join$220(self$221, value$222) =
+  let init#3 = self$221.cap[0]
+  dup init#3
+  let return$43 = self$221.cap[1]
+  dup return$43
+  drop self$221
+  let return$44 = closure join$223(return$43, value$222)
+  let apply$110 = closure join$226(init#3, return$44)
+  return malgo_unsafe_cast(apply$110)
+
+closure fn join$223(self$224, value$225) =
+  let return$43 = self$224.cap[0]
+  dup return$43
+  let value$222 = self$224.cap[1]
+  dup value$222
+  drop self$224
+  return value$222(value$225, return$43)
+
+closure fn join$226(self$227, value$228) =
+  let init#3 = self$227.cap[0]
+  dup init#3
+  let return$44 = self$227.cap[1]
+  dup return$44
+  drop self$227
+  return value$228(init#3, return$44)
+
+closure fn join$229(self$230, value$231) =
+  let length#2 = self$230.cap[0]
+  dup length#2
+  let then$112 = self$230.cap[1]
+  dup then$112
+  drop self$230
+  return value$231(length#2, then$112)
+
+closure fn join$232(self$233, value$234) =
+  let length#2 = self$233.cap[0]
+  dup length#2
+  let return$41 = self$233.cap[1]
+  dup return$41
+  drop self$233
+  return value$234(length#2, return$41)
+
+toplevel fn main(return$45) =
+  let closure$307 = closure lambda$238()
+  return return$45(closure$307)
+
+closure fn lambda$238(self$239, param$20, return$46) =
+  drop param$20
+  drop self$239
+  if  then {
+    let then$137 = closure join$240(return$46)
+    return newVector(then$137)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$240(self$241, value$242) =
+  let return$46 = self$241.cap[0]
+  dup return$46
+  drop self$241
+  let return$52 = closure join$243(return$46, value$242)
+  let apply$117 = closure join$303(return$52)
+  return Int64#(apply$117)
+
+closure fn join$243(self$244, value$245) =
+  let return$46 = self$244.cap[0]
+  dup return$46
+  let value$242 = self$244.cap[1]
+  dup value$242
+  drop self$244
+  let then$135 = closure join$246(return$46)
+  return value$242(value$245, then$135)
+
+closure fn join$246(self$247, value$248) =
+  let return$46 = self$247.cap[0]
+  dup return$46
+  drop self$247
+  let return$51 = closure join$249(return$46, value$248)
+  let apply$118 = closure join$299(return$51)
+  return Int32#(apply$118)
+
+closure fn join$249(self$250, value$251) =
+  let return$46 = self$250.cap[0]
+  dup return$46
+  let value$248 = self$250.cap[1]
+  dup value$248
+  drop self$250
+  let then$133 = closure join$252(return$46)
+  return value$248(value$251, then$133)
+
+closure fn join$252(self$253, value$254) =
+  let return$46 = self$253.cap[0]
+  dup return$46
+  drop self$253
+  let then$132 = closure join$255(return$46, value$254)
+  return readVector(then$132)
+
+closure fn join$255(self$256, value$257) =
+  let return$46 = self$256.cap[0]
+  dup return$46
+  let value$254 = self$256.cap[1]
+  dup value$254
+  drop self$256
+  let return$50 = closure join$258(return$46, value$254, value$257)
+  let apply$119 = closure join$295(return$50)
+  return Int64#(apply$119)
+
+closure fn join$258(self$259, value$260) =
+  let return$46 = self$259.cap[0]
+  dup return$46
+  let value$254 = self$259.cap[1]
+  dup value$254
+  let value$257 = self$259.cap[2]
+  dup value$257
+  drop self$259
+  let then$129 = closure join$261(return$46)
+  let apply$130 = closure join$292(then$129, value$254)
+  return value$257(value$260, apply$130)
+
+closure fn join$261(self$262, value$263) =
+  let return$46 = self$262.cap[0]
+  dup return$46
+  drop self$262
+  let apply$127 = closure join$264(return$46)
+  let apply$128 = closure join$289(apply$127, value$263)
+  return |>(apply$128)
+
+closure fn join$264(self$265, value$266) =
+  let return$46 = self$265.cap[0]
+  dup return$46
+  drop self$265
+  let closure$288 = closure lambda$267()
+  return value$266(closure$288, return$46)
+
+closure fn lambda$267(self$268, param$21, return$47) =
+  drop self$268
+  if param$21.tag == Nothing then {
+    drop param$21
+    let then$122 = closure join$269(return$47)
+    return putStrLn(then$122)
+  } else {
+    if param$21.tag == Tuple && param$21.0.tag == Just then {
+      let x#13 = param$21.1
+      dup x#13
+      drop param$21
+      let then$125 = closure join$279(return$47, x#13)
+      return putStrLn(then$125)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$269(self$270, value$271) =
+  let return$47 = self$270.cap[0]
+  dup return$47
+  drop self$270
+  let return$48 = closure join$272(return$47, value$271)
+  let apply$120 = closure join$275(return$48)
+  return String#(apply$120)
+
+closure fn join$272(self$273, value$274) =
+  let return$47 = self$273.cap[0]
+  dup return$47
+  let value$271 = self$273.cap[1]
+  dup value$271
+  drop self$273
+  return value$271(value$274, return$47)
+
+closure fn join$275(self$276, value$277) =
+  let return$48 = self$276.cap[0]
+  dup return$48
+  drop self$276
+  let lit$278 = "ERROR"
+  return value$277(lit$278, return$48)
+
+closure fn join$279(self$280, value$281) =
+  let return$47 = self$280.cap[0]
+  dup return$47
+  let x#13 = self$280.cap[1]
+  dup x#13
+  drop self$280
+  let return$49 = closure join$282(return$47, value$281)
+  let apply$123 = closure join$285(return$49, x#13)
+  return toStringInt32(apply$123)
+
+closure fn join$282(self$283, value$284) =
+  let return$47 = self$283.cap[0]
+  dup return$47
+  let value$281 = self$283.cap[1]
+  dup value$281
+  drop self$283
+  return value$281(value$284, return$47)
+
+closure fn join$285(self$286, value$287) =
+  let return$49 = self$286.cap[0]
+  dup return$49
+  let x#13 = self$286.cap[1]
+  dup x#13
+  drop self$286
+  return value$287(x#13, return$49)
+
+closure fn join$289(self$290, value$291) =
+  let apply$127 = self$290.cap[0]
+  dup apply$127
+  let value$263 = self$290.cap[1]
+  dup value$263
+  drop self$290
+  return value$291(value$263, apply$127)
+
+closure fn join$292(self$293, value$294) =
+  let then$129 = self$293.cap[0]
+  dup then$129
+  let value$254 = self$293.cap[1]
+  dup value$254
+  drop self$293
+  return value$294(value$254, then$129)
+
+closure fn join$295(self$296, value$297) =
+  let return$50 = self$296.cap[0]
+  dup return$50
+  drop self$296
+  let lit$298 = 2L
+  return value$297(lit$298, return$50)
+
+closure fn join$299(self$300, value$301) =
+  let return$51 = self$300.cap[0]
+  dup return$51
+  drop self$300
+  let lit$302 = 5
+  return value$301(lit$302, return$51)
+
+closure fn join$303(self$304, value$305) =
+  let return$52 = self$304.cap[0]
+  dup return$52
+  drop self$304
+  let lit$306 = 10L
+  return value$305(lit$306, return$52)
+
+toplevel fn Vector(return$53) =
+  let closure$315 = closure lambda$309()
+  return return$53(closure$315)
+
+closure fn lambda$309(self$310, constructor$22, return$54) =
+  drop self$310
+  let closure$314 = closure lambda$311(constructor$22)
+  return return$54(closure$314)
+
+closure fn lambda$311(self$312, constructor$23, return$55) =
+  let constructor$22 = self$312.cap[0]
+  dup constructor$22
+  drop self$312
+  let struct$313 = Vector(constructor$22, constructor$23)
+  return return$55(struct$313)
+
+toplevel fn malgo_new_vector(return$56) =
+  let closure$323 = closure lambda$317()
+  return return$56(closure$323)
+
+closure fn lambda$317(self$318, primitive$24, return$57) =
+  drop self$318
+  let closure$322 = closure lambda$319(primitive$24)
+  return return$57(closure$322)
+
+closure fn lambda$319(self$320, primitive$25, return$58) =
+  let primitive$24 = self$320.cap[0]
+  dup primitive$24
+  drop self$320
+  let prim_result$321 = #malgo_new_vector(primitive$24, primitive$25)
+  drop primitive$24
+  drop primitive$25
+  return return$58(prim_result$321)
+
+toplevel fn malgo_read_vector(return$59) =
+  let closure$331 = closure lambda$325()
+  return return$59(closure$331)
+
+closure fn lambda$325(self$326, primitive$26, return$60) =
+  drop self$326
+  let closure$330 = closure lambda$327(primitive$26)
+  return return$60(closure$330)
+
+closure fn lambda$327(self$328, primitive$27, return$61) =
+  let primitive$26 = self$328.cap[0]
+  dup primitive$26
+  drop self$328
+  let prim_result$329 = #malgo_read_vector(primitive$26, primitive$27)
+  drop primitive$26
+  drop primitive$27
+  return return$61(prim_result$329)
+
+toplevel fn zig_main$334() =
+  let finish$332 = closure join$336()
+  let after_main$333 = closure join$339(finish$332)
+  return main(after_main$333)
+
+closure fn join$336(self$337, value$338) =
+  drop self$337
+  return value$338
+
+closure fn join$339(self$340, value$341) =
+  let finish$332 = self$340.cap[0]
+  dup finish$332
+  drop self$340
+  let struct$342 = Tuple()
+  return value$341(struct$342, finish$332)
+
+entry = zig_main$334
+
+=== Reuse ===
+toplevel fn readVector(return$28) =
+  let closure$200 = closure lambda$140()
+  return return$28(closure$200)
+
+closure fn lambda$140(self$141, param$14, return$29) =
+  let closure$199 = closure lambda$142(param$14)
+  drop self$141
+  return return$29(closure$199)
+
+closure fn lambda$142(self$143, param$15, return$30) =
+  let param$14 = self$143.cap[0]
+  dup param$14
+  drop self$143
+  if param$14.tag == Int64# &&
+  param$15.tag == Vector &&
+  param$15.0.tag == Int64# then {
+    let index#5 = param$14.0
+    dup index#5
+    let length#6 = param$15.0.0
+    dup length#6
+    let ptr#7 = param$15.1
+    dup ptr#7
+    let then$107 = closure join$145(index#5, length#6, ptr#7, return$30)
+    drop param$14
+    drop param$15
+    return if(then$107)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$145(self$146, value$147) =
+  let index#5 = self$146.cap[0]
+  dup index#5
+  let length#6 = self$146.cap[1]
+  dup length#6
+  let ptr#7 = self$146.cap[2]
+  dup ptr#7
+  let return$30 = self$146.cap[3]
+  dup return$30
+  dup index#5
+  let return$36 = closure join$148(index#5, ptr#7, return$30, value$147)
+  let then$93 = closure join$187(index#5, length#6, return$36)
+  drop self$146
+  return isTrue#(then$93)
+
+closure fn join$148(self$149, value$150) =
+  let index#5 = self$149.cap[0]
+  dup index#5
+  let ptr#7 = self$149.cap[1]
+  dup ptr#7
+  let return$30 = self$149.cap[2]
+  dup return$30
+  let value$147 = self$149.cap[3]
+  dup value$147
+  let apply$104 = closure join$151(index#5, ptr#7, return$30)
+  let apply$105 = closure join$181(apply$104)
+  drop self$149
+  return value$147(value$150, apply$105)
+
+closure fn join$151(self$152, value$153) =
+  let index#5 = self$152.cap[0]
+  dup index#5
+  let ptr#7 = self$152.cap[1]
+  dup ptr#7
+  let return$30 = self$152.cap[2]
+  dup return$30
+  let closure$180 = closure lambda$154(index#5, ptr#7)
+  drop self$152
+  return value$153(closure$180, return$30)
+
+closure fn lambda$154(self$155, param$17, return$31) =
+  let index#5 = self$155.cap[0]
+  dup index#5
+  let ptr#7 = self$155.cap[1]
+  dup ptr#7
+  drop param$17
+  drop self$155
+  if  then {
+    let then$102 = closure join$156(index#5, ptr#7, return$31)
+    return Just(then$102)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$156(self$157, value$158) =
+  let index#5 = self$157.cap[0]
+  dup index#5
+  let ptr#7 = self$157.cap[1]
+  dup ptr#7
+  let return$31 = self$157.cap[2]
+  dup return$31
+  let return$32 = closure join$159(return$31, value$158)
+  let then$100 = closure join$162(index#5, ptr#7, return$32)
+  drop self$157
+  return malgo_unsafe_cast(then$100)
+
+closure fn join$159(self$160, value$161) =
+  let return$31 = self$160.cap[0]
+  dup return$31
+  let value$158 = self$160.cap[1]
+  dup value$158
+  drop self$160
+  return value$158(value$161, return$31)
+
+closure fn join$162(self$163, value$164) =
+  let index#5 = self$163.cap[0]
+  dup index#5
+  let ptr#7 = self$163.cap[1]
+  dup ptr#7
+  let return$32 = self$163.cap[2]
+  dup return$32
+  let return$33 = closure join$165(return$32, value$164)
+  let then$97 = closure join$168(ptr#7, return$33)
+  let apply$98 = closure join$177(index#5, then$97)
+  drop self$163
+  return malgo_read_vector(apply$98)
+
+closure fn join$165(self$166, value$167) =
+  let return$32 = self$166.cap[0]
+  dup return$32
+  let value$164 = self$166.cap[1]
+  dup value$164
+  drop self$166
+  return value$164(value$167, return$32)
+
+closure fn join$168(self$169, value$170) =
+  let ptr#7 = self$169.cap[0]
+  dup ptr#7
+  let return$33 = self$169.cap[1]
+  dup return$33
+  let return$34 = closure join$171(return$33, value$170)
+  let apply$95 = closure join$174(ptr#7, return$34)
+  drop self$169
+  return malgo_unsafe_cast(apply$95)
+
+closure fn join$171(self$172, value$173) =
+  let return$33 = self$172.cap[0]
+  dup return$33
+  let value$170 = self$172.cap[1]
+  dup value$170
+  drop self$172
+  return value$170(value$173, return$33)
+
+closure fn join$174(self$175, value$176) =
+  let ptr#7 = self$175.cap[0]
+  dup ptr#7
+  let return$34 = self$175.cap[1]
+  dup return$34
+  drop self$175
+  return value$176(ptr#7, return$34)
+
+closure fn join$177(self$178, value$179) =
+  let index#5 = self$178.cap[0]
+  dup index#5
+  let then$97 = self$178.cap[1]
+  dup then$97
+  drop self$178
+  return value$179(index#5, then$97)
+
+closure fn join$181(self$182, value$183) =
+  let apply$104 = self$182.cap[0]
+  dup apply$104
+  let closure$186 = closure lambda$184()
+  drop self$182
+  return value$183(closure$186, apply$104)
+
+closure fn lambda$184(self$185, param$16, return$35) =
+  drop param$16
+  drop self$185
+  if  then {
+    return Nothing(return$35)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$187(self$188, value$189) =
+  let index#5 = self$188.cap[0]
+  dup index#5
+  let length#6 = self$188.cap[1]
+  dup length#6
+  let return$36 = self$188.cap[2]
+  dup return$36
+  let return$37 = closure join$190(return$36, value$189)
+  let apply$90 = closure join$193(length#6, return$37)
+  let apply$91 = closure join$196(apply$90, index#5)
+  drop self$188
+  return geInt64#(apply$91)
+
+closure fn join$190(self$191, value$192) =
+  let return$36 = self$191.cap[0]
+  dup return$36
+  let value$189 = self$191.cap[1]
+  dup value$189
+  drop self$191
+  return value$189(value$192, return$36)
+
+closure fn join$193(self$194, value$195) =
+  let length#6 = self$194.cap[0]
+  dup length#6
+  let return$37 = self$194.cap[1]
+  dup return$37
+  drop self$194
+  return value$195(length#6, return$37)
+
+closure fn join$196(self$197, value$198) =
+  let apply$90 = self$197.cap[0]
+  dup apply$90
+  let index#5 = self$197.cap[1]
+  dup index#5
+  drop self$197
+  return value$198(index#5, apply$90)
+
+toplevel fn newVector(return$38) =
+  let closure$236 = closure lambda$202()
+  return return$38(closure$236)
+
+closure fn lambda$202(self$203, param$18, return$39) =
+  let closure$235 = closure lambda$204(param$18)
+  drop self$203
+  return return$39(closure$235)
+
+closure fn lambda$204(self$205, param$19, return$40) =
+  let param$18 = self$205.cap[0]
+  dup param$18
+  drop self$205
+  if param$18.tag == Int64# then {
+    let length#2 = param$18.0
+    dup length#2
+    dup length#2
+    let return$41 = closure join$207(param$19, length#2, return$40)
+    let apply$109 = closure join$232(length#2, return$41)
+    drop param$18
+    return Int64#(apply$109)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$207(self$208, value$209) =
+  let init#3 = self$208.cap[0]
+  dup init#3
+  let length#2 = self$208.cap[1]
+  dup length#2
+  let return$40 = self$208.cap[2]
+  dup return$40
+  let return$42 = closure join$210(return$40, value$209)
+  let then$115 = closure join$214(init#3, length#2, return$42)
+  drop self$208
+  return malgo_unsafe_cast(then$115)
+
+closure fn join$210(self$211, value$212) =
+  let return$40 = self$211.cap[0]
+  dup return$40
+  let value$209 = self$211.cap[1]
+  dup value$209
+  dropReuse reuse$343 = self$211 /2
+  let struct$213 = reuse reuse$343 Vector(value$209, value$212)
+  return return$40(struct$213)
+
+closure fn join$214(self$215, value$216) =
+  let init#3 = self$215.cap[0]
+  dup init#3
+  let length#2 = self$215.cap[1]
+  dup length#2
+  let return$42 = self$215.cap[2]
+  dup return$42
+  let return$43 = closure join$217(return$42, value$216)
+  let then$112 = closure join$220(init#3, return$43)
+  let apply$113 = closure join$229(length#2, then$112)
+  drop self$215
+  return malgo_new_vector(apply$113)
+
+closure fn join$217(self$218, value$219) =
+  let return$42 = self$218.cap[0]
+  dup return$42
+  let value$216 = self$218.cap[1]
+  dup value$216
+  drop self$218
+  return value$216(value$219, return$42)
+
+closure fn join$220(self$221, value$222) =
+  let init#3 = self$221.cap[0]
+  dup init#3
+  let return$43 = self$221.cap[1]
+  dup return$43
+  let return$44 = closure join$223(return$43, value$222)
+  let apply$110 = closure join$226(init#3, return$44)
+  drop self$221
+  return malgo_unsafe_cast(apply$110)
+
+closure fn join$223(self$224, value$225) =
+  let return$43 = self$224.cap[0]
+  dup return$43
+  let value$222 = self$224.cap[1]
+  dup value$222
+  drop self$224
+  return value$222(value$225, return$43)
+
+closure fn join$226(self$227, value$228) =
+  let init#3 = self$227.cap[0]
+  dup init#3
+  let return$44 = self$227.cap[1]
+  dup return$44
+  drop self$227
+  return value$228(init#3, return$44)
+
+closure fn join$229(self$230, value$231) =
+  let length#2 = self$230.cap[0]
+  dup length#2
+  let then$112 = self$230.cap[1]
+  dup then$112
+  drop self$230
+  return value$231(length#2, then$112)
+
+closure fn join$232(self$233, value$234) =
+  let length#2 = self$233.cap[0]
+  dup length#2
+  let return$41 = self$233.cap[1]
+  dup return$41
+  drop self$233
+  return value$234(length#2, return$41)
+
+toplevel fn main(return$45) =
+  let closure$307 = closure lambda$238()
+  return return$45(closure$307)
+
+closure fn lambda$238(self$239, param$20, return$46) =
+  drop param$20
+  drop self$239
+  if  then {
+    let then$137 = closure join$240(return$46)
+    return newVector(then$137)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$240(self$241, value$242) =
+  let return$46 = self$241.cap[0]
+  dup return$46
+  let return$52 = closure join$243(return$46, value$242)
+  let apply$117 = closure join$303(return$52)
+  drop self$241
+  return Int64#(apply$117)
+
+closure fn join$243(self$244, value$245) =
+  let return$46 = self$244.cap[0]
+  dup return$46
+  let value$242 = self$244.cap[1]
+  dup value$242
+  let then$135 = closure join$246(return$46)
+  drop self$244
+  return value$242(value$245, then$135)
+
+closure fn join$246(self$247, value$248) =
+  let return$46 = self$247.cap[0]
+  dup return$46
+  let return$51 = closure join$249(return$46, value$248)
+  let apply$118 = closure join$299(return$51)
+  drop self$247
+  return Int32#(apply$118)
+
+closure fn join$249(self$250, value$251) =
+  let return$46 = self$250.cap[0]
+  dup return$46
+  let value$248 = self$250.cap[1]
+  dup value$248
+  let then$133 = closure join$252(return$46)
+  drop self$250
+  return value$248(value$251, then$133)
+
+closure fn join$252(self$253, value$254) =
+  let return$46 = self$253.cap[0]
+  dup return$46
+  let then$132 = closure join$255(return$46, value$254)
+  drop self$253
+  return readVector(then$132)
+
+closure fn join$255(self$256, value$257) =
+  let return$46 = self$256.cap[0]
+  dup return$46
+  let value$254 = self$256.cap[1]
+  dup value$254
+  let return$50 = closure join$258(return$46, value$254, value$257)
+  let apply$119 = closure join$295(return$50)
+  drop self$256
+  return Int64#(apply$119)
+
+closure fn join$258(self$259, value$260) =
+  let return$46 = self$259.cap[0]
+  dup return$46
+  let value$254 = self$259.cap[1]
+  dup value$254
+  let value$257 = self$259.cap[2]
+  dup value$257
+  let then$129 = closure join$261(return$46)
+  let apply$130 = closure join$292(then$129, value$254)
+  drop self$259
+  return value$257(value$260, apply$130)
+
+closure fn join$261(self$262, value$263) =
+  let return$46 = self$262.cap[0]
+  dup return$46
+  let apply$127 = closure join$264(return$46)
+  let apply$128 = closure join$289(apply$127, value$263)
+  drop self$262
+  return |>(apply$128)
+
+closure fn join$264(self$265, value$266) =
+  let return$46 = self$265.cap[0]
+  dup return$46
+  let closure$288 = closure lambda$267()
+  drop self$265
+  return value$266(closure$288, return$46)
+
+closure fn lambda$267(self$268, param$21, return$47) =
+  drop self$268
+  if param$21.tag == Nothing then {
+    let then$122 = closure join$269(return$47)
+    drop param$21
+    return putStrLn(then$122)
+  } else {
+    if param$21.tag == Tuple && param$21.0.tag == Just then {
+      let x#13 = param$21.1
+      dup x#13
+      let then$125 = closure join$279(return$47, x#13)
+      drop param$21
+      return putStrLn(then$125)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$269(self$270, value$271) =
+  let return$47 = self$270.cap[0]
+  dup return$47
+  let return$48 = closure join$272(return$47, value$271)
+  let apply$120 = closure join$275(return$48)
+  drop self$270
+  return String#(apply$120)
+
+closure fn join$272(self$273, value$274) =
+  let return$47 = self$273.cap[0]
+  dup return$47
+  let value$271 = self$273.cap[1]
+  dup value$271
+  drop self$273
+  return value$271(value$274, return$47)
+
+closure fn join$275(self$276, value$277) =
+  let return$48 = self$276.cap[0]
+  dup return$48
+  let lit$278 = "ERROR"
+  drop self$276
+  return value$277(lit$278, return$48)
+
+closure fn join$279(self$280, value$281) =
+  let return$47 = self$280.cap[0]
+  dup return$47
+  let x#13 = self$280.cap[1]
+  dup x#13
+  let return$49 = closure join$282(return$47, value$281)
+  let apply$123 = closure join$285(return$49, x#13)
+  drop self$280
+  return toStringInt32(apply$123)
+
+closure fn join$282(self$283, value$284) =
+  let return$47 = self$283.cap[0]
+  dup return$47
+  let value$281 = self$283.cap[1]
+  dup value$281
+  drop self$283
+  return value$281(value$284, return$47)
+
+closure fn join$285(self$286, value$287) =
+  let return$49 = self$286.cap[0]
+  dup return$49
+  let x#13 = self$286.cap[1]
+  dup x#13
+  drop self$286
+  return value$287(x#13, return$49)
+
+closure fn join$289(self$290, value$291) =
+  let apply$127 = self$290.cap[0]
+  dup apply$127
+  let value$263 = self$290.cap[1]
+  dup value$263
+  drop self$290
+  return value$291(value$263, apply$127)
+
+closure fn join$292(self$293, value$294) =
+  let then$129 = self$293.cap[0]
+  dup then$129
+  let value$254 = self$293.cap[1]
+  dup value$254
+  drop self$293
+  return value$294(value$254, then$129)
+
+closure fn join$295(self$296, value$297) =
+  let return$50 = self$296.cap[0]
+  dup return$50
+  let lit$298 = 2L
+  drop self$296
+  return value$297(lit$298, return$50)
+
+closure fn join$299(self$300, value$301) =
+  let return$51 = self$300.cap[0]
+  dup return$51
+  let lit$302 = 5
+  drop self$300
+  return value$301(lit$302, return$51)
+
+closure fn join$303(self$304, value$305) =
+  let return$52 = self$304.cap[0]
+  dup return$52
+  let lit$306 = 10L
+  drop self$304
+  return value$305(lit$306, return$52)
+
+toplevel fn Vector(return$53) =
+  let closure$315 = closure lambda$309()
+  return return$53(closure$315)
+
+closure fn lambda$309(self$310, constructor$22, return$54) =
+  let closure$314 = closure lambda$311(constructor$22)
+  drop self$310
+  return return$54(closure$314)
+
+closure fn lambda$311(self$312, constructor$23, return$55) =
+  let constructor$22 = self$312.cap[0]
+  dup constructor$22
+  dropReuse reuse$344 = self$312 /2
+  let struct$313 = reuse reuse$344 Vector(constructor$22, constructor$23)
+  return return$55(struct$313)
+
+toplevel fn malgo_new_vector(return$56) =
+  let closure$323 = closure lambda$317()
+  return return$56(closure$323)
+
+closure fn lambda$317(self$318, primitive$24, return$57) =
+  let closure$322 = closure lambda$319(primitive$24)
+  drop self$318
+  return return$57(closure$322)
+
+closure fn lambda$319(self$320, primitive$25, return$58) =
+  let primitive$24 = self$320.cap[0]
+  dup primitive$24
+  let prim_result$321 = #malgo_new_vector(primitive$24, primitive$25)
+  drop self$320
+  drop primitive$24
+  drop primitive$25
+  return return$58(prim_result$321)
+
+toplevel fn malgo_read_vector(return$59) =
+  let closure$331 = closure lambda$325()
+  return return$59(closure$331)
+
+closure fn lambda$325(self$326, primitive$26, return$60) =
+  let closure$330 = closure lambda$327(primitive$26)
+  drop self$326
+  return return$60(closure$330)
+
+closure fn lambda$327(self$328, primitive$27, return$61) =
+  let primitive$26 = self$328.cap[0]
+  dup primitive$26
+  let prim_result$329 = #malgo_read_vector(primitive$26, primitive$27)
+  drop self$328
+  drop primitive$26
+  drop primitive$27
+  return return$61(prim_result$329)
+
+toplevel fn zig_main$334() =
+  let finish$332 = closure join$336()
+  let after_main$333 = closure join$339(finish$332)
+  return main(after_main$333)
+
+closure fn join$336(self$337, value$338) =
+  drop self$337
+  return value$338
+
+closure fn join$339(self$340, value$341) =
+  let finish$332 = self$340.cap[0]
+  dup finish$332
+  dropReuse reuse$345 = self$340 /0
+  let struct$342 = reuse reuse$345 Tuple()
+  return value$341(struct$342, finish$332)
+
+entry = zig_main$334
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
++ data Vector a#0 = Vector(Int64, Ptr#(a#0))
++ 
+  foreign malgo_new_vector : Int64# -> Ptr#(Char#) -> Ptr#(Ptr#(Char#))
+  
+  foreign malgo_read_vector : Int64# -> Ptr#(Ptr#(Char#)) -> Ptr#(Char#)
+  
+- data Vector a = Vector(Int64, Ptr#(a))
++ sig newVector : Int64 -> a#1 -> Vector(a#1)
+- 
+- sig newVector : Int64 -> a -> Vector(a)
+- 
+- def newVector =
+-   fn {
+-     Int64#(length) init ->
+-       {
+-         Vector( Int64#( length ) )( malgo_unsafe_cast( malgo_new_vector( length )( malgo_unsafe_cast( init ) ) ) )
+-       }
+-   }
+  
+- sig readVector : Int64 -> Vector(a) -> Maybe(a)
++ sig readVector : Int64 -> Vector(a#4) -> Maybe(a#4)
+  
+  def readVector =
+    fn {
+-     Int64#(index) Vector(Int64#(length), ptr) ->
++     Int64#(index#5) Vector(Int64#(length#6), ptr#7) ->
+        {
+-         if(isTrue#(geInt64#(index)(length)))( fn {
++         if(isTrue#(geInt64#(index#5)(length#6)))( fn {
+-           _ ->
++           _#8 ->
+              {
+                Nothing
+              }
+          } )( fn {
+-           _ ->
++           _#9 ->
+              {
+-               Just( malgo_unsafe_cast( malgo_read_vector( index )( malgo_unsafe_cast( ptr ) ) ) )
++               Just( malgo_unsafe_cast( malgo_read_vector( index#5 )( malgo_unsafe_cast( ptr#7 ) ) ) )
+              }
+          } )
+        }
+    }
+  
++ def newVector =
++   fn {
++     Int64#(length#2) init#3 ->
++       {
++         Vector( Int64#( length#2 ) )( malgo_unsafe_cast( malgo_new_vector( length#2 )( malgo_unsafe_cast( init#3 ) ) ) )
++       }
++   }
++ 
+  def main =
+    fn {
+-     _ ->
++     _#10 ->
+        {
+-         let vec = newVector(10L)(5)
++         let vec#11 = newVector(Int64#(10L))(Int32#(5))
+-         let val = readVector(2L)(vec)
++         let val#12 = readVector(Int64#(2L))(vec#11)
+-         val |> fn {
++         val#12 |> fn {
+-           Nothing ->
++           Nothing() ->
+              {
+-               putStrLn("ERROR")
++               putStrLn(String#("ERROR"))
+              } |
+-           Just x ->
++           Just() x#13 ->
+              {
+-               putStrLn(toStringInt32(x))
++               putStrLn(toStringInt32(x#13))
+              }
+          }
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- data Vector a#0 = Vector(Int64, Ptr#(a#0))
+- 
+- foreign malgo_new_vector : Int64# -> Ptr#(Char#) -> Ptr#(Ptr#(Char#))
+- 
+- foreign malgo_read_vector : Int64# -> Ptr#(Ptr#(Char#)) -> Ptr#(Char#)
+- 
+- sig newVector : Int64 -> a#1 -> Vector(a#1)
+- 
+- sig readVector : Int64 -> Vector(a#4) -> Maybe(a#4)
+- 
+  def readVector =
+-   fn {
++   \param$14 ->
+-     Int64#(index#5) Vector(Int64#(length#6), ptr#7) ->
++     \param$15 ->
+-       {
++       case Tuple(param$14, param$15) of {
+-         if(isTrue#(geInt64#(index#5)(length#6)))( fn {
++         Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+-           _#8 ->
++           invoke if( invoke isTrue#( invoke geInt64#( index#5 )( length#6 ) ) )( \param$16 ->
+-             {
++             case param$16 of {
+-               Nothing
++               _#8 -> invoke Nothing
+-             }
++             } )( \param$17 ->
+-         } )( fn {
++             case param$17 of {
+-           _#9 ->
++               _#9 ->
+-             {
++                 invoke Just( invoke malgo_unsafe_cast( invoke malgo_read_vector( index#5 )( invoke malgo_unsafe_cast( ptr#7 ) ) ) )
+-               Just( malgo_unsafe_cast( malgo_read_vector( index#5 )( malgo_unsafe_cast( ptr#7 ) ) ) )
++             } )
+-             }
+-         } )
+        }
+-   }
+  
+  def newVector =
+-   fn {
++   \param$18 ->
+-     Int64#(length#2) init#3 ->
++     \param$19 ->
+-       {
++       case Tuple(param$18, param$19) of {
+-         Vector( Int64#( length#2 ) )( malgo_unsafe_cast( malgo_new_vector( length#2 )( malgo_unsafe_cast( init#3 ) ) ) )
++         Tuple(Int64#(length#2), init#3) ->
++           invoke Vector( invoke Int64#( length#2 ) )( invoke malgo_unsafe_cast( invoke malgo_new_vector( length#2 )( invoke malgo_unsafe_cast( init#3 ) ) ) )
+        }
+-   }
+  
+  def main =
+-   fn {
++   \param$20 ->
+-     _#10 ->
++     case param$20 of {
+-       {
++       _#10 ->
+-         let vec#11 = newVector(Int64#(10L))(Int32#(5))
++         let vec#11 =
+-         let val#12 = readVector(Int64#(2L))(vec#11)
++           invoke newVector(invoke Int64#(10L))(invoke Int32#(5))
+-         val#12 |> fn {
++         in
+-           Nothing() ->
++           let val#12 =
+-             {
++             invoke readVector(invoke Int64#(2L))(vec#11)
+-               putStrLn(String#("ERROR"))
++           in
+-             } |
++             invoke |>(val#12)( \param$21 ->
+-           Just() x#13 ->
++               case param$21 of {
+-             {
++                 Nothing() -> invoke putStrLn(invoke String#("ERROR"))
+-               putStrLn(toStringInt32(x#13))
++                 Tuple(Just(), x#13) ->
+-             }
++                   invoke putStrLn(invoke toStringInt32(x#13))
+-         }
++               } )
+-       }
++     }
+-   }
++ 
++ def Vector =
++   \constructor$22 -> \constructor$23 -> Vector(constructor$22, constructor$23)
++ 
++ def malgo_new_vector =
++   \primitive$24 ->
++     \primitive$25 -> #malgo_new_vector(primitive$24, primitive$25)
++ 
++ def malgo_read_vector =
++   \primitive$26 ->
++     \primitive$27 -> #malgo_read_vector(primitive$26, primitive$27)
+
+
+=== ToFun -> SaturateCtor ===
+  def readVector =
+    \param$14 ->
+      \param$15 ->
+        case Tuple(param$14, param$15) of {
+          Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+            invoke if( invoke isTrue#( invoke geInt64#( index#5 )( length#6 ) ) )( \param$16 ->
+              case param$16 of {
+                _#8 -> invoke Nothing
+              } )( \param$17 ->
+              case param$17 of {
+                _#9 ->
+                  invoke Just( invoke malgo_unsafe_cast( invoke malgo_read_vector( index#5 )( invoke malgo_unsafe_cast( ptr#7 ) ) ) )
+              } )
+        }
+  
+  def newVector =
+    \param$18 ->
+      \param$19 ->
+        case Tuple(param$18, param$19) of {
+          Tuple(Int64#(length#2), init#3) ->
+-           invoke Vector( invoke Int64#( length#2 ) )( invoke malgo_unsafe_cast( invoke malgo_new_vector( length#2 )( invoke malgo_unsafe_cast( init#3 ) ) ) )
++           Vector( invoke Int64#(length#2)
++           , invoke malgo_unsafe_cast( invoke malgo_new_vector( length#2 )( invoke malgo_unsafe_cast( init#3 ) ) ) )
+        }
+  
+  def main =
+    \param$20 ->
+      case param$20 of {
+        _#10 ->
+          let vec#11 =
+            invoke newVector(invoke Int64#(10L))(invoke Int32#(5))
+          in
+            let val#12 =
+              invoke readVector(invoke Int64#(2L))(vec#11)
+            in
+              invoke |>(val#12)( \param$21 ->
+                case param$21 of {
+                  Nothing() -> invoke putStrLn(invoke String#("ERROR"))
+                  Tuple(Just(), x#13) ->
+                    invoke putStrLn(invoke toStringInt32(x#13))
+                } )
+      }
+  
+  def Vector =
+    \constructor$22 -> \constructor$23 -> Vector(constructor$22, constructor$23)
+  
+  def malgo_new_vector =
+    \primitive$24 ->
+      \primitive$25 -> #malgo_new_vector(primitive$24, primitive$25)
+  
+  def malgo_read_vector =
+    \primitive$26 ->
+      \primitive$27 -> #malgo_read_vector(primitive$26, primitive$27)
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def readVector =
+    \param$14 ->
+      \param$15 ->
+        case Tuple(param$14, param$15) of {
+          Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+            invoke if( invoke isTrue#( invoke geInt64#( index#5 )( length#6 ) ) )( \param$16 ->
+              case param$16 of {
+                _#8 -> invoke Nothing
+              } )( \param$17 ->
+              case param$17 of {
+                _#9 ->
+                  invoke Just( invoke malgo_unsafe_cast( invoke malgo_read_vector( index#5 )( invoke malgo_unsafe_cast( ptr#7 ) ) ) )
+              } )
+        }
+  
+  def newVector =
+    \param$18 ->
+      \param$19 ->
+        case Tuple(param$18, param$19) of {
+          Tuple(Int64#(length#2), init#3) ->
+            Vector( invoke Int64#(length#2)
+            , invoke malgo_unsafe_cast( invoke malgo_new_vector( length#2 )( invoke malgo_unsafe_cast( init#3 ) ) ) )
+        }
+  
+  def main =
+    \param$20 ->
+      case param$20 of {
+        _#10 ->
+          let vec#11 =
+            invoke newVector(invoke Int64#(10L))(invoke Int32#(5))
+          in
+            let val#12 =
+              invoke readVector(invoke Int64#(2L))(vec#11)
+            in
+              invoke |>(val#12)( \param$21 ->
+                case param$21 of {
+                  Nothing() -> invoke putStrLn(invoke String#("ERROR"))
+                  Tuple(Just(), x#13) ->
+                    invoke putStrLn(invoke toStringInt32(x#13))
+                } )
+      }
+  
+  def Vector =
+    \constructor$22 -> \constructor$23 -> Vector(constructor$22, constructor$23)
+  
+  def malgo_new_vector =
+    \primitive$24 ->
+      \primitive$25 -> #malgo_new_vector(primitive$24, primitive$25)
+  
+  def malgo_read_vector =
+    \primitive$26 ->
+      \primitive$27 -> #malgo_read_vector(primitive$26, primitive$27)
+
+
+=== ReuseSpecialize -> ToCore ===
+- def readVector =
++ def readVector(return$28) =
+-   \param$14 ->
++   \param$14 return$29 . {
+-     \param$15 ->
++     \param$15 return$30 . {
+-       case Tuple(param$14, param$15) of {
++       Tuple(param$14, param$15) ~ select {
+          Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+-           invoke if( invoke isTrue#( invoke geInt64#( index#5 )( length#6 ) ) )( \param$16 ->
++           invoke if ~ ( do return$36 . {
+-             case param$16 of {
++             invoke isTrue# ~ ( do return$37 . {
+-               _#8 -> invoke Nothing
++               invoke geInt64# ~ (index#5, (length#6, return$37))
+-             } )( \param$17 ->
++             }
+-             case param$17 of {
++             , return$36 )
++           }
++           , ( \param$16 return$35 . {
++             param$16 ~ select {
++               _#8 -> invoke Nothing ~ return$35
++             }
++           }
++           , ( \param$17 return$31 . {
++             param$17 ~ select {
+                _#9 ->
+-                 invoke Just( invoke malgo_unsafe_cast( invoke malgo_read_vector( index#5 )( invoke malgo_unsafe_cast( ptr#7 ) ) ) )
++                 invoke Just ~ ( do return$32 . {
+-             } )
++                   invoke malgo_unsafe_cast ~ ( do return$33 . {
++                     invoke malgo_read_vector ~ ( index#5
++                     , ( do return$34 . {
++                       invoke malgo_unsafe_cast ~ (ptr#7, return$34)
++                     }
++                     , return$33 ) )
++                   }
++                   , return$32 )
++                 }
++                 , return$31 )
++             }
++           }
++           , return$30 ) ) )
+        }
++     } ~ return$29
++   } ~ return$28
+  
+- def newVector =
++ def newVector(return$38) =
+-   \param$18 ->
++   \param$18 return$39 . {
+-     \param$19 ->
++     \param$19 return$40 . {
+-       case Tuple(param$18, param$19) of {
++       Tuple(param$18, param$19) ~ select {
+          Tuple(Int64#(length#2), init#3) ->
+-           Vector( invoke Int64#(length#2)
++           Vector( do return$41 . {
+-           , invoke malgo_unsafe_cast( invoke malgo_new_vector( length#2 )( invoke malgo_unsafe_cast( init#3 ) ) ) )
++             invoke Int64# ~ (length#2, return$41)
++           }
++           , do return$42 . {
++             invoke malgo_unsafe_cast ~ ( do return$43 . {
++               invoke malgo_new_vector ~ ( length#2
++               , ( do return$44 . {
++                 invoke malgo_unsafe_cast ~ (init#3, return$44)
++               }
++               , return$43 ) )
++             }
++             , return$42 )
++           } ) ~ return$40
+        }
++     } ~ return$39
++   } ~ return$38
+  
+- def main =
++ def main(return$45) =
+-   \param$20 ->
++   \param$20 return$46 . {
+-     case param$20 of {
++     param$20 ~ select {
+        _#10 ->
+-         let vec#11 =
++         invoke newVector ~ ( do return$52 . {
+-           invoke newVector(invoke Int64#(10L))(invoke Int32#(5))
++           invoke Int64# ~ (10L, return$52)
+-         in
++         }
+-           let val#12 =
++         , ( do return$51 . {
+-             invoke readVector(invoke Int64#(2L))(vec#11)
++           invoke Int32# ~ (5, return$51)
+-           in
++         }
+-             invoke |>(val#12)( \param$21 ->
++         , then vec#11 -> {
+-               case param$21 of {
++           invoke readVector ~ ( do return$50 . {
+-                 Nothing() -> invoke putStrLn(invoke String#("ERROR"))
++             invoke Int64# ~ (2L, return$50)
++           }
++           , ( vec#11
++           , then val#12 -> {
++             invoke |> ~ ( val#12
++             , ( \param$21 return$47 . {
++               param$21 ~ select {
++                 Nothing() ->
++                   invoke putStrLn ~ ( do return$48 . {
++                     invoke String# ~ ("ERROR", return$48)
++                   }
++                   , return$47 )
+                  Tuple(Just(), x#13) ->
+-                   invoke putStrLn(invoke toStringInt32(x#13))
++                   invoke putStrLn ~ ( do return$49 . {
+-               } )
++                     invoke toStringInt32 ~ (x#13, return$49)
++                   }
++                   , return$47 )
++               }
++             }
++             , return$46 ) )
++           } ) )
++         } ) )
+      }
++   } ~ return$45
+  
+- def Vector =
++ def Vector(return$53) =
+-   \constructor$22 -> \constructor$23 -> Vector(constructor$22, constructor$23)
++   \constructor$22 return$54 . {
++     \constructor$23 return$55 . {
++       Vector(constructor$22, constructor$23) ~ return$55
++     } ~ return$54
++   } ~ return$53
+  
+- def malgo_new_vector =
++ def malgo_new_vector(return$56) =
+-   \primitive$24 ->
++   \primitive$24 return$57 . {
+-     \primitive$25 -> #malgo_new_vector(primitive$24, primitive$25)
++     \primitive$25 return$58 . {
++       #malgo_new_vector(primitive$24, primitive$25) ~ return$58
++     } ~ return$57
++   } ~ return$56
+  
+- def malgo_read_vector =
++ def malgo_read_vector(return$59) =
+-   \primitive$26 ->
++   \primitive$26 return$60 . {
+-     \primitive$27 -> #malgo_read_vector(primitive$26, primitive$27)
++     \primitive$27 return$61 . {
++       #malgo_read_vector(primitive$26, primitive$27) ~ return$61
++     } ~ return$60
++   } ~ return$59
+
+
+=== ToCore -> Flat ===
+  def readVector(return$28) =
+    \param$14 return$29 . {
+      \param$15 return$30 . {
+        Tuple(param$14, param$15) ~ select {
+          Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+-           invoke if ~ ( do return$36 . {
++           invoke if ~ then outer$62 -> {
+-             invoke isTrue# ~ ( do return$37 . {
++             join return$36 = then inner$63 -> {
+-               invoke geInt64# ~ (index#5, (length#6, return$37))
++               outer$62 ~ ( inner$63
+-             }
++               , ( \param$16 return$35 . {
+-             , return$36 )
++                 param$16 ~ select {
+-           }
++                   _#8 -> invoke Nothing ~ return$35
+-           , ( \param$16 return$35 . {
++                 }
+-             param$16 ~ select {
++               }
+-               _#8 -> invoke Nothing ~ return$35
++               , ( \param$17 return$31 . {
+-             }
++                 param$17 ~ select {
+-           }
++                   _#9 ->
+-           , ( \param$17 return$31 . {
++                     invoke Just ~ then outer$64 -> {
+-             param$17 ~ select {
++                       join return$32 = then inner$65 -> {
+-               _#9 ->
++                         outer$64 ~ (inner$65, return$31)
+-                 invoke Just ~ ( do return$32 . {
++                       }
+-                   invoke malgo_unsafe_cast ~ ( do return$33 . {
++                       in invoke malgo_unsafe_cast ~ then outer$66 -> {
+-                     invoke malgo_read_vector ~ ( index#5
++                         join return$33 = then inner$67 -> {
+-                     , ( do return$34 . {
++                           outer$66 ~ (inner$67, return$32)
+-                       invoke malgo_unsafe_cast ~ (ptr#7, return$34)
++                         }
++                         in invoke malgo_read_vector ~ ( index#5
++                         , then outer$68 -> {
++                           join return$34 = then inner$69 -> {
++                             outer$68 ~ (inner$69, return$33)
++                           }
++                           in invoke malgo_unsafe_cast ~ (ptr#7, return$34)
++                         } )
++                       }
+                      }
+-                     , return$33 ) )
+-                   }
+-                   , return$32 )
+                  }
+-                 , return$31 )
++               }
++               , return$30 ) ) )
+              }
++             in invoke isTrue# ~ then outer$70 -> {
++               join return$37 = then inner$71 -> {
++                 outer$70 ~ (inner$71, return$36)
++               }
++               in invoke geInt64# ~ (index#5, (length#6, return$37))
++             }
+            }
+-           , return$30 ) ) )
+        }
+      } ~ return$29
+    } ~ return$28
+  
+  def newVector(return$38) =
+    \param$18 return$39 . {
+      \param$19 return$40 . {
+        Tuple(param$18, param$19) ~ select {
+          Tuple(Int64#(length#2), init#3) ->
+-           Vector( do return$41 . {
++           join label$72 = return$40
+-             invoke Int64# ~ (length#2, return$41)
++           in join return$41 = then var$73 -> {
+-           }
++             join label$74 = label$72
+-           , do return$42 . {
++             in join return$42 = then var$75 -> {
+-             invoke malgo_unsafe_cast ~ ( do return$43 . {
++               Vector(var$73, var$75) ~ label$74
+-               invoke malgo_new_vector ~ ( length#2
++             }
+-               , ( do return$44 . {
++             in invoke malgo_unsafe_cast ~ then outer$76 -> {
+-                 invoke malgo_unsafe_cast ~ (init#3, return$44)
++               join return$43 = then inner$77 -> {
++                 outer$76 ~ (inner$77, return$42)
+                }
+-               , return$43 ) )
++               in invoke malgo_new_vector ~ ( length#2
++               , then outer$78 -> {
++                 join return$44 = then inner$79 -> {
++                   outer$78 ~ (inner$79, return$43)
++                 }
++                 in invoke malgo_unsafe_cast ~ (init#3, return$44)
++               } )
+              }
+-             , return$42 )
++           }
+-           } ) ~ return$40
++           in invoke Int64# ~ (length#2, return$41)
+        }
+      } ~ return$39
+    } ~ return$38
+  
+  def main(return$45) =
+    \param$20 return$46 . {
+      param$20 ~ select {
+        _#10 ->
+-         invoke newVector ~ ( do return$52 . {
++         invoke newVector ~ then outer$80 -> {
+-           invoke Int64# ~ (10L, return$52)
++           join return$52 = then inner$81 -> {
+-         }
++             outer$80 ~ ( inner$81
+-         , ( do return$51 . {
++             , then outer$82 -> {
+-           invoke Int32# ~ (5, return$51)
++               join return$51 = then inner$83 -> {
+-         }
++                 outer$82 ~ ( inner$83
+-         , then vec#11 -> {
++                 , then vec#11 -> {
+-           invoke readVector ~ ( do return$50 . {
++                   invoke readVector ~ then outer$84 -> {
+-             invoke Int64# ~ (2L, return$50)
++                     join return$50 = then inner$85 -> {
+-           }
++                       outer$84 ~ ( inner$85
+-           , ( vec#11
++                       , ( vec#11
+-           , then val#12 -> {
++                       , then val#12 -> {
+-             invoke |> ~ ( val#12
++                         invoke |> ~ ( val#12
+-             , ( \param$21 return$47 . {
++                         , ( \param$21 return$47 . {
+-               param$21 ~ select {
++                           param$21 ~ select {
+-                 Nothing() ->
++                             Nothing() ->
+-                   invoke putStrLn ~ ( do return$48 . {
++                               invoke putStrLn ~ then outer$86 -> {
+-                     invoke String# ~ ("ERROR", return$48)
++                                 join return$48 = then inner$87 -> {
+-                   }
++                                   outer$86 ~ (inner$87, return$47)
+-                   , return$47 )
++                                 }
+-                 Tuple(Just(), x#13) ->
++                                 in invoke String# ~ ("ERROR", return$48)
+-                   invoke putStrLn ~ ( do return$49 . {
++                               }
+-                     invoke toStringInt32 ~ (x#13, return$49)
++                             Tuple(Just(), x#13) ->
++                               invoke putStrLn ~ then outer$88 -> {
++                                 join return$49 = then inner$89 -> {
++                                   outer$88 ~ (inner$89, return$47)
++                                 }
++                                 in invoke toStringInt32 ~ (x#13, return$49)
++                               }
++                           }
++                         }
++                         , return$46 ) )
++                       } ) )
++                     }
++                     in invoke Int64# ~ (2L, return$50)
+                    }
+-                   , return$47 )
++                 } )
+                }
+-             }
++               in invoke Int32# ~ (5, return$51)
+-             , return$46 ) )
++             } )
+-           } ) )
++           }
+-         } ) )
++           in invoke Int64# ~ (10L, return$52)
++         }
+      }
+    } ~ return$45
+  
+  def Vector(return$53) =
+    \constructor$22 return$54 . {
+      \constructor$23 return$55 . {
+        Vector(constructor$22, constructor$23) ~ return$55
+      } ~ return$54
+    } ~ return$53
+  
+  def malgo_new_vector(return$56) =
+    \primitive$24 return$57 . {
+      \primitive$25 return$58 . {
+        #malgo_new_vector(primitive$24, primitive$25) ~ return$58
+      } ~ return$57
+    } ~ return$56
+  
+  def malgo_read_vector(return$59) =
+    \primitive$26 return$60 . {
+      \primitive$27 return$61 . {
+        #malgo_read_vector(primitive$26, primitive$27) ~ return$61
+      } ~ return$60
+    } ~ return$59
+
+
+=== Flat -> Join ===
+  def readVector(return$28) =
+    \param$14 return$29 . {
+      \param$15 return$30 . {
+-       Tuple(param$14, param$15) ~ select {
++       join select$108 = select {
+          Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+-           invoke if ~ then outer$62 -> {
++           join then$107 = then outer$62 -> {
+              join return$36 = then inner$63 -> {
+-               outer$62 ~ ( inner$63
++               join apply$104 = ( \param$17 return$31 . {
+-               , ( \param$16 return$35 . {
++                 join select$103 = select {
+-                 param$16 ~ select {
+-                   _#8 -> invoke Nothing ~ return$35
+-                 }
+-               }
+-               , ( \param$17 return$31 . {
+-                 param$17 ~ select {
+                    _#9 ->
+-                     invoke Just ~ then outer$64 -> {
++                     join then$102 = then outer$64 -> {
+                        join return$32 = then inner$65 -> {
+-                         outer$64 ~ (inner$65, return$31)
++                         join apply$101 = (inner$65, return$31)
++                         in outer$64 ~ apply$101
+                        }
+-                       in invoke malgo_unsafe_cast ~ then outer$66 -> {
++                       in join then$100 = then outer$66 -> {
+                          join return$33 = then inner$67 -> {
+-                           outer$66 ~ (inner$67, return$32)
++                           join apply$99 = (inner$67, return$32)
++                           in outer$66 ~ apply$99
+                          }
+-                         in invoke malgo_read_vector ~ ( index#5
++                         in join then$97 = then outer$68 -> {
+-                         , then outer$68 -> {
+                            join return$34 = then inner$69 -> {
+-                             outer$68 ~ (inner$69, return$33)
++                             join apply$96 = (inner$69, return$33)
++                             in outer$68 ~ apply$96
+                            }
+-                           in invoke malgo_unsafe_cast ~ (ptr#7, return$34)
++                           in join apply$95 = (ptr#7, return$34)
+-                         } )
++                           in invoke malgo_unsafe_cast ~ apply$95
++                         }
++                         in join apply$98 = (index#5, then$97)
++                         in invoke malgo_read_vector ~ apply$98
+                        }
++                       in invoke malgo_unsafe_cast ~ then$100
+                      }
++                     in invoke Just ~ then$102
+                  }
++                 in param$17 ~ select$103
+                }
+-               , return$30 ) ) )
++               , return$30 )
++               in join apply$105 = ( \param$16 return$35 . {
++                 join select$94 = select {
++                   _#8 -> invoke Nothing ~ return$35
++                 }
++                 in param$16 ~ select$94
++               }
++               , apply$104 )
++               in join apply$106 = (inner$63, apply$105)
++               in outer$62 ~ apply$106
+              }
+-             in invoke isTrue# ~ then outer$70 -> {
++             in join then$93 = then outer$70 -> {
+                join return$37 = then inner$71 -> {
+-                 outer$70 ~ (inner$71, return$36)
++                 join apply$92 = (inner$71, return$36)
++                 in outer$70 ~ apply$92
+                }
+-               in invoke geInt64# ~ (index#5, (length#6, return$37))
++               in join apply$90 = (length#6, return$37)
++               in join apply$91 = (index#5, apply$90)
++               in invoke geInt64# ~ apply$91
+              }
++             in invoke isTrue# ~ then$93
+            }
++           in invoke if ~ then$107
+        }
++       in Tuple(param$14, param$15) ~ select$108
+      } ~ return$29
+    } ~ return$28
+  
+  def newVector(return$38) =
+    \param$18 return$39 . {
+      \param$19 return$40 . {
+-       Tuple(param$18, param$19) ~ select {
++       join select$116 = select {
+          Tuple(Int64#(length#2), init#3) ->
+            join label$72 = return$40
+            in join return$41 = then var$73 -> {
+              join label$74 = label$72
+              in join return$42 = then var$75 -> {
+                Vector(var$73, var$75) ~ label$74
+              }
+-             in invoke malgo_unsafe_cast ~ then outer$76 -> {
++             in join then$115 = then outer$76 -> {
+                join return$43 = then inner$77 -> {
+-                 outer$76 ~ (inner$77, return$42)
++                 join apply$114 = (inner$77, return$42)
++                 in outer$76 ~ apply$114
+                }
+-               in invoke malgo_new_vector ~ ( length#2
++               in join then$112 = then outer$78 -> {
+-               , then outer$78 -> {
+                  join return$44 = then inner$79 -> {
+-                   outer$78 ~ (inner$79, return$43)
++                   join apply$111 = (inner$79, return$43)
++                   in outer$78 ~ apply$111
+                  }
+-                 in invoke malgo_unsafe_cast ~ (init#3, return$44)
++                 in join apply$110 = (init#3, return$44)
+-               } )
++                 in invoke malgo_unsafe_cast ~ apply$110
++               }
++               in join apply$113 = (length#2, then$112)
++               in invoke malgo_new_vector ~ apply$113
+              }
++             in invoke malgo_unsafe_cast ~ then$115
+            }
+-           in invoke Int64# ~ (length#2, return$41)
++           in join apply$109 = (length#2, return$41)
++           in invoke Int64# ~ apply$109
+        }
++       in Tuple(param$18, param$19) ~ select$116
+      } ~ return$39
+    } ~ return$38
+  
+  def main(return$45) =
+    \param$20 return$46 . {
+-     param$20 ~ select {
++     join select$138 = select {
+        _#10 ->
+-         invoke newVector ~ then outer$80 -> {
++         join then$137 = then outer$80 -> {
+            join return$52 = then inner$81 -> {
+-             outer$80 ~ ( inner$81
++             join then$135 = then outer$82 -> {
+-             , then outer$82 -> {
+                join return$51 = then inner$83 -> {
+-                 outer$82 ~ ( inner$83
++                 join then$133 = then vec#11 -> {
+-                 , then vec#11 -> {
++                   join then$132 = then outer$84 -> {
+-                   invoke readVector ~ then outer$84 -> {
+                      join return$50 = then inner$85 -> {
+-                       outer$84 ~ ( inner$85
++                       join then$129 = then val#12 -> {
+-                       , ( vec#11
++                         join apply$127 = ( \param$21 return$47 . {
+-                       , then val#12 -> {
++                           join select$126 = select {
+-                         invoke |> ~ ( val#12
+-                         , ( \param$21 return$47 . {
+-                           param$21 ~ select {
+                              Nothing() ->
+-                               invoke putStrLn ~ then outer$86 -> {
++                               join then$122 = then outer$86 -> {
+                                  join return$48 = then inner$87 -> {
+-                                   outer$86 ~ (inner$87, return$47)
++                                   join apply$121 = (inner$87, return$47)
++                                   in outer$86 ~ apply$121
+                                  }
+-                                 in invoke String# ~ ("ERROR", return$48)
++                                 in join apply$120 = ("ERROR", return$48)
++                                 in invoke String# ~ apply$120
+                                }
++                               in invoke putStrLn ~ then$122
+                              Tuple(Just(), x#13) ->
+-                               invoke putStrLn ~ then outer$88 -> {
++                               join then$125 = then outer$88 -> {
+                                  join return$49 = then inner$89 -> {
+-                                   outer$88 ~ (inner$89, return$47)
++                                   join apply$124 = (inner$89, return$47)
++                                   in outer$88 ~ apply$124
+                                  }
+-                                 in invoke toStringInt32 ~ (x#13, return$49)
++                                 in join apply$123 = (x#13, return$49)
++                                 in invoke toStringInt32 ~ apply$123
+                                }
++                               in invoke putStrLn ~ then$125
+                            }
++                           in param$21 ~ select$126
+                          }
+-                         , return$46 ) )
++                         , return$46 )
+-                       } ) )
++                         in join apply$128 = (val#12, apply$127)
++                         in invoke |> ~ apply$128
++                       }
++                       in join apply$130 = (vec#11, then$129)
++                       in join apply$131 = (inner$85, apply$130)
++                       in outer$84 ~ apply$131
+                      }
+-                     in invoke Int64# ~ (2L, return$50)
++                     in join apply$119 = (2L, return$50)
++                     in invoke Int64# ~ apply$119
+                    }
+-                 } )
++                   in invoke readVector ~ then$132
++                 }
++                 in join apply$134 = (inner$83, then$133)
++                 in outer$82 ~ apply$134
+                }
+-               in invoke Int32# ~ (5, return$51)
++               in join apply$118 = (5, return$51)
+-             } )
++               in invoke Int32# ~ apply$118
++             }
++             in join apply$136 = (inner$81, then$135)
++             in outer$80 ~ apply$136
+            }
+-           in invoke Int64# ~ (10L, return$52)
++           in join apply$117 = (10L, return$52)
++           in invoke Int64# ~ apply$117
+          }
++         in invoke newVector ~ then$137
+      }
++     in param$20 ~ select$138
+    } ~ return$45
+  
+  def Vector(return$53) =
+    \constructor$22 return$54 . {
+      \constructor$23 return$55 . {
+        Vector(constructor$22, constructor$23) ~ return$55
+      } ~ return$54
+    } ~ return$53
+  
+  def malgo_new_vector(return$56) =
+    \primitive$24 return$57 . {
+      \primitive$25 return$58 . {
+        #malgo_new_vector(primitive$24, primitive$25) ~ return$58
+      } ~ return$57
+    } ~ return$56
+  
+  def malgo_read_vector(return$59) =
+    \primitive$26 return$60 . {
+      \primitive$27 return$61 . {
+        #malgo_read_vector(primitive$26, primitive$27) ~ return$61
+      } ~ return$60
+    } ~ return$59
+
+
+=== Join -> ClosureConv ===
+- def readVector(return$28) =
++ toplevel fn readVector(return$28) =
+-   \param$14 return$29 . {
++   let closure$200 = closure lambda$140()
+-     \param$15 return$30 . {
++   return return$28(closure$200)
+-       join select$108 = select {
+-         Tuple(Int64#(index#5), Vector(Int64#(length#6), ptr#7)) ->
+-           join then$107 = then outer$62 -> {
+-             join return$36 = then inner$63 -> {
+-               join apply$104 = ( \param$17 return$31 . {
+-                 join select$103 = select {
+-                   _#9 ->
+-                     join then$102 = then outer$64 -> {
+-                       join return$32 = then inner$65 -> {
+-                         join apply$101 = (inner$65, return$31)
+-                         in outer$64 ~ apply$101
+-                       }
+-                       in join then$100 = then outer$66 -> {
+-                         join return$33 = then inner$67 -> {
+-                           join apply$99 = (inner$67, return$32)
+-                           in outer$66 ~ apply$99
+-                         }
+-                         in join then$97 = then outer$68 -> {
+-                           join return$34 = then inner$69 -> {
+-                             join apply$96 = (inner$69, return$33)
+-                             in outer$68 ~ apply$96
+-                           }
+-                           in join apply$95 = (ptr#7, return$34)
+-                           in invoke malgo_unsafe_cast ~ apply$95
+-                         }
+-                         in join apply$98 = (index#5, then$97)
+-                         in invoke malgo_read_vector ~ apply$98
+-                       }
+-                       in invoke malgo_unsafe_cast ~ then$100
+-                     }
+-                     in invoke Just ~ then$102
+-                 }
+-                 in param$17 ~ select$103
+-               }
+-               , return$30 )
+-               in join apply$105 = ( \param$16 return$35 . {
+-                 join select$94 = select {
+-                   _#8 -> invoke Nothing ~ return$35
+-                 }
+-                 in param$16 ~ select$94
+-               }
+-               , apply$104 )
+-               in join apply$106 = (inner$63, apply$105)
+-               in outer$62 ~ apply$106
+-             }
+-             in join then$93 = then outer$70 -> {
+-               join return$37 = then inner$71 -> {
+-                 join apply$92 = (inner$71, return$36)
+-                 in outer$70 ~ apply$92
+-               }
+-               in join apply$90 = (length#6, return$37)
+-               in join apply$91 = (index#5, apply$90)
+-               in invoke geInt64# ~ apply$91
+-             }
+-             in invoke isTrue# ~ then$93
+-           }
+-           in invoke if ~ then$107
+-       }
+-       in Tuple(param$14, param$15) ~ select$108
+-     } ~ return$29
+-   } ~ return$28
+  
+- def newVector(return$38) =
++ closure fn lambda$140(self$141, param$14, return$29) =
+-   \param$18 return$39 . {
++   let closure$199 = closure lambda$142(param$14)
+-     \param$19 return$40 . {
++   return return$29(closure$199)
+-       join select$116 = select {
+-         Tuple(Int64#(length#2), init#3) ->
+-           join label$72 = return$40
+-           in join return$41 = then var$73 -> {
+-             join label$74 = label$72
+-             in join return$42 = then var$75 -> {
+-               Vector(var$73, var$75) ~ label$74
+-             }
+-             in join then$115 = then outer$76 -> {
+-               join return$43 = then inner$77 -> {
+-                 join apply$114 = (inner$77, return$42)
+-                 in outer$76 ~ apply$114
+-               }
+-               in join then$112 = then outer$78 -> {
+-                 join return$44 = then inner$79 -> {
+-                   join apply$111 = (inner$79, return$43)
+-                   in outer$78 ~ apply$111
+-                 }
+-                 in join apply$110 = (init#3, return$44)
+-                 in invoke malgo_unsafe_cast ~ apply$110
+-               }
+-               in join apply$113 = (length#2, then$112)
+-               in invoke malgo_new_vector ~ apply$113
+-             }
+-             in invoke malgo_unsafe_cast ~ then$115
+-           }
+-           in join apply$109 = (length#2, return$41)
+-           in invoke Int64# ~ apply$109
+-       }
+-       in Tuple(param$18, param$19) ~ select$116
+-     } ~ return$39
+-   } ~ return$38
+  
+- def main(return$45) =
++ closure fn lambda$142(self$143, param$15, return$30) =
+-   \param$20 return$46 . {
++   let param$14 = self$143.cap[0]
+-     join select$138 = select {
++   let struct$144 = Tuple(param$14, param$15)
+-       _#10 ->
++   if struct$144.tag == Tuple &&
+-         join then$137 = then outer$80 -> {
++   struct$144.0.tag == Int64# &&
+-           join return$52 = then inner$81 -> {
++   struct$144.1.tag == Vector &&
+-             join then$135 = then outer$82 -> {
++   struct$144.1.0.tag == Int64# then {
+-               join return$51 = then inner$83 -> {
++     let index#5 = struct$144.0.0
+-                 join then$133 = then vec#11 -> {
++     let length#6 = struct$144.1.0.0
+-                   join then$132 = then outer$84 -> {
++     let ptr#7 = struct$144.1.1
+-                     join return$50 = then inner$85 -> {
++     let then$107 = closure join$145(index#5, length#6, ptr#7, return$30)
+-                       join then$129 = then val#12 -> {
++     return if(then$107)
+-                         join apply$127 = ( \param$21 return$47 . {
++   } else {
+-                           join select$126 = select {
++     panic "no matching branch"
+-                             Nothing() ->
++   }
+-                               join then$122 = then outer$86 -> {
++ 
+-                                 join return$48 = then inner$87 -> {
++ closure fn join$145(self$146, value$147) =
+-                                   join apply$121 = (inner$87, return$47)
++   let index#5 = self$146.cap[0]
+-                                   in outer$86 ~ apply$121
++   let length#6 = self$146.cap[1]
+-                                 }
++   let ptr#7 = self$146.cap[2]
+-                                 in join apply$120 = ("ERROR", return$48)
++   let return$30 = self$146.cap[3]
+-                                 in invoke String# ~ apply$120
++   let return$36 = closure join$148(index#5, ptr#7, return$30, value$147)
+-                               }
++   let then$93 = closure join$187(index#5, length#6, return$36)
+-                               in invoke putStrLn ~ then$122
++   return isTrue#(then$93)
+-                             Tuple(Just(), x#13) ->
++ 
+-                               join then$125 = then outer$88 -> {
++ closure fn join$148(self$149, value$150) =
+-                                 join return$49 = then inner$89 -> {
++   let index#5 = self$149.cap[0]
+-                                   join apply$124 = (inner$89, return$47)
++   let ptr#7 = self$149.cap[1]
+-                                   in outer$88 ~ apply$124
++   let return$30 = self$149.cap[2]
+-                                 }
++   let value$147 = self$149.cap[3]
+-                                 in join apply$123 = (x#13, return$49)
++   let apply$104 = closure join$151(index#5, ptr#7, return$30)
+-                                 in invoke toStringInt32 ~ apply$123
++   let apply$105 = closure join$181(apply$104)
+-                               }
++   return value$147(value$150, apply$105)
+-                               in invoke putStrLn ~ then$125
++ 
+-                           }
++ closure fn join$151(self$152, value$153) =
+-                           in param$21 ~ select$126
++   let index#5 = self$152.cap[0]
+-                         }
++   let ptr#7 = self$152.cap[1]
+-                         , return$46 )
++   let return$30 = self$152.cap[2]
+-                         in join apply$128 = (val#12, apply$127)
++   let closure$180 = closure lambda$154(index#5, ptr#7)
+-                         in invoke |> ~ apply$128
++   return value$153(closure$180, return$30)
+-                       }
++ 
+-                       in join apply$130 = (vec#11, then$129)
++ closure fn lambda$154(self$155, param$17, return$31) =
+-                       in join apply$131 = (inner$85, apply$130)
++   let index#5 = self$155.cap[0]
+-                       in outer$84 ~ apply$131
++   let ptr#7 = self$155.cap[1]
+-                     }
++   if  then {
+-                     in join apply$119 = (2L, return$50)
++     let _#9 = param$17
+-                     in invoke Int64# ~ apply$119
++     let then$102 = closure join$156(index#5, ptr#7, return$31)
+-                   }
++     return Just(then$102)
+-                   in invoke readVector ~ then$132
++   } else {
+-                 }
++     panic "no matching branch"
+-                 in join apply$134 = (inner$83, then$133)
++   }
+-                 in outer$82 ~ apply$134
++ 
+-               }
++ closure fn join$156(self$157, value$158) =
+-               in join apply$118 = (5, return$51)
++   let index#5 = self$157.cap[0]
+-               in invoke Int32# ~ apply$118
++   let ptr#7 = self$157.cap[1]
+-             }
++   let return$31 = self$157.cap[2]
+-             in join apply$136 = (inner$81, then$135)
++   let return$32 = closure join$159(return$31, value$158)
+-             in outer$80 ~ apply$136
++   let then$100 = closure join$162(index#5, ptr#7, return$32)
+-           }
++   return malgo_unsafe_cast(then$100)
+-           in join apply$117 = (10L, return$52)
++ 
+-           in invoke Int64# ~ apply$117
++ closure fn join$159(self$160, value$161) =
+-         }
++   let return$31 = self$160.cap[0]
+-         in invoke newVector ~ then$137
++   let value$158 = self$160.cap[1]
++   return value$158(value$161, return$31)
++ 
++ closure fn join$162(self$163, value$164) =
++   let index#5 = self$163.cap[0]
++   let ptr#7 = self$163.cap[1]
++   let return$32 = self$163.cap[2]
++   let return$33 = closure join$165(return$32, value$164)
++   let then$97 = closure join$168(ptr#7, return$33)
++   let apply$98 = closure join$177(index#5, then$97)
++   return malgo_read_vector(apply$98)
++ 
++ closure fn join$165(self$166, value$167) =
++   let return$32 = self$166.cap[0]
++   let value$164 = self$166.cap[1]
++   return value$164(value$167, return$32)
++ 
++ closure fn join$168(self$169, value$170) =
++   let ptr#7 = self$169.cap[0]
++   let return$33 = self$169.cap[1]
++   let return$34 = closure join$171(return$33, value$170)
++   let apply$95 = closure join$174(ptr#7, return$34)
++   return malgo_unsafe_cast(apply$95)
++ 
++ closure fn join$171(self$172, value$173) =
++   let return$33 = self$172.cap[0]
++   let value$170 = self$172.cap[1]
++   return value$170(value$173, return$33)
++ 
++ closure fn join$174(self$175, value$176) =
++   let ptr#7 = self$175.cap[0]
++   let return$34 = self$175.cap[1]
++   return value$176(ptr#7, return$34)
++ 
++ closure fn join$177(self$178, value$179) =
++   let index#5 = self$178.cap[0]
++   let then$97 = self$178.cap[1]
++   return value$179(index#5, then$97)
++ 
++ closure fn join$181(self$182, value$183) =
++   let apply$104 = self$182.cap[0]
++   let closure$186 = closure lambda$184()
++   return value$183(closure$186, apply$104)
++ 
++ closure fn lambda$184(self$185, param$16, return$35) =
++   if  then {
++     let _#8 = param$16
++     return Nothing(return$35)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$187(self$188, value$189) =
++   let index#5 = self$188.cap[0]
++   let length#6 = self$188.cap[1]
++   let return$36 = self$188.cap[2]
++   let return$37 = closure join$190(return$36, value$189)
++   let apply$90 = closure join$193(length#6, return$37)
++   let apply$91 = closure join$196(apply$90, index#5)
++   return geInt64#(apply$91)
++ 
++ closure fn join$190(self$191, value$192) =
++   let return$36 = self$191.cap[0]
++   let value$189 = self$191.cap[1]
++   return value$189(value$192, return$36)
++ 
++ closure fn join$193(self$194, value$195) =
++   let length#6 = self$194.cap[0]
++   let return$37 = self$194.cap[1]
++   return value$195(length#6, return$37)
++ 
++ closure fn join$196(self$197, value$198) =
++   let apply$90 = self$197.cap[0]
++   let index#5 = self$197.cap[1]
++   return value$198(index#5, apply$90)
++ 
++ toplevel fn newVector(return$38) =
++   let closure$236 = closure lambda$202()
++   return return$38(closure$236)
++ 
++ closure fn lambda$202(self$203, param$18, return$39) =
++   let closure$235 = closure lambda$204(param$18)
++   return return$39(closure$235)
++ 
++ closure fn lambda$204(self$205, param$19, return$40) =
++   let param$18 = self$205.cap[0]
++   let struct$206 = Tuple(param$18, param$19)
++   if struct$206.tag == Tuple && struct$206.0.tag == Int64# then {
++     let length#2 = struct$206.0.0
++     let init#3 = struct$206.1
++     let return$41 = closure join$207(init#3, length#2, return$40)
++     let apply$109 = closure join$232(length#2, return$41)
++     return Int64#(apply$109)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$207(self$208, value$209) =
++   let init#3 = self$208.cap[0]
++   let length#2 = self$208.cap[1]
++   let return$40 = self$208.cap[2]
++   let return$42 = closure join$210(return$40, value$209)
++   let then$115 = closure join$214(init#3, length#2, return$42)
++   return malgo_unsafe_cast(then$115)
++ 
++ closure fn join$210(self$211, value$212) =
++   let return$40 = self$211.cap[0]
++   let value$209 = self$211.cap[1]
++   let struct$213 = Vector(value$209, value$212)
++   return return$40(struct$213)
++ 
++ closure fn join$214(self$215, value$216) =
++   let init#3 = self$215.cap[0]
++   let length#2 = self$215.cap[1]
++   let return$42 = self$215.cap[2]
++   let return$43 = closure join$217(return$42, value$216)
++   let then$112 = closure join$220(init#3, return$43)
++   let apply$113 = closure join$229(length#2, then$112)
++   return malgo_new_vector(apply$113)
++ 
++ closure fn join$217(self$218, value$219) =
++   let return$42 = self$218.cap[0]
++   let value$216 = self$218.cap[1]
++   return value$216(value$219, return$42)
++ 
++ closure fn join$220(self$221, value$222) =
++   let init#3 = self$221.cap[0]
++   let return$43 = self$221.cap[1]
++   let return$44 = closure join$223(return$43, value$222)
++   let apply$110 = closure join$226(init#3, return$44)
++   return malgo_unsafe_cast(apply$110)
++ 
++ closure fn join$223(self$224, value$225) =
++   let return$43 = self$224.cap[0]
++   let value$222 = self$224.cap[1]
++   return value$222(value$225, return$43)
++ 
++ closure fn join$226(self$227, value$228) =
++   let init#3 = self$227.cap[0]
++   let return$44 = self$227.cap[1]
++   return value$228(init#3, return$44)
++ 
++ closure fn join$229(self$230, value$231) =
++   let length#2 = self$230.cap[0]
++   let then$112 = self$230.cap[1]
++   return value$231(length#2, then$112)
++ 
++ closure fn join$232(self$233, value$234) =
++   let length#2 = self$233.cap[0]
++   let return$41 = self$233.cap[1]
++   return value$234(length#2, return$41)
++ 
++ toplevel fn main(return$45) =
++   let closure$307 = closure lambda$238()
++   return return$45(closure$307)
++ 
++ closure fn lambda$238(self$239, param$20, return$46) =
++   if  then {
++     let _#10 = param$20
++     let then$137 = closure join$240(return$46)
++     return newVector(then$137)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$240(self$241, value$242) =
++   let return$46 = self$241.cap[0]
++   let return$52 = closure join$243(return$46, value$242)
++   let apply$117 = closure join$303(return$52)
++   return Int64#(apply$117)
++ 
++ closure fn join$243(self$244, value$245) =
++   let return$46 = self$244.cap[0]
++   let value$242 = self$244.cap[1]
++   let then$135 = closure join$246(return$46)
++   return value$242(value$245, then$135)
++ 
++ closure fn join$246(self$247, value$248) =
++   let return$46 = self$247.cap[0]
++   let return$51 = closure join$249(return$46, value$248)
++   let apply$118 = closure join$299(return$51)
++   return Int32#(apply$118)
++ 
++ closure fn join$249(self$250, value$251) =
++   let return$46 = self$250.cap[0]
++   let value$248 = self$250.cap[1]
++   let then$133 = closure join$252(return$46)
++   return value$248(value$251, then$133)
++ 
++ closure fn join$252(self$253, value$254) =
++   let return$46 = self$253.cap[0]
++   let then$132 = closure join$255(return$46, value$254)
++   return readVector(then$132)
++ 
++ closure fn join$255(self$256, value$257) =
++   let return$46 = self$256.cap[0]
++   let value$254 = self$256.cap[1]
++   let return$50 = closure join$258(return$46, value$254, value$257)
++   let apply$119 = closure join$295(return$50)
++   return Int64#(apply$119)
++ 
++ closure fn join$258(self$259, value$260) =
++   let return$46 = self$259.cap[0]
++   let value$254 = self$259.cap[1]
++   let value$257 = self$259.cap[2]
++   let then$129 = closure join$261(return$46)
++   let apply$130 = closure join$292(then$129, value$254)
++   return value$257(value$260, apply$130)
++ 
++ closure fn join$261(self$262, value$263) =
++   let return$46 = self$262.cap[0]
++   let apply$127 = closure join$264(return$46)
++   let apply$128 = closure join$289(apply$127, value$263)
++   return |>(apply$128)
++ 
++ closure fn join$264(self$265, value$266) =
++   let return$46 = self$265.cap[0]
++   let closure$288 = closure lambda$267()
++   return value$266(closure$288, return$46)
++ 
++ closure fn lambda$267(self$268, param$21, return$47) =
++   if param$21.tag == Nothing then {
++     let then$122 = closure join$269(return$47)
++     return putStrLn(then$122)
++   } else {
++     if param$21.tag == Tuple && param$21.0.tag == Just then {
++       let x#13 = param$21.1
++       let then$125 = closure join$279(return$47, x#13)
++       return putStrLn(then$125)
++     } else {
++       panic "no matching branch"
+      }
+-     in param$20 ~ select$138
++   }
+-   } ~ return$45
+  
+- def Vector(return$53) =
++ closure fn join$269(self$270, value$271) =
+-   \constructor$22 return$54 . {
++   let return$47 = self$270.cap[0]
+-     \constructor$23 return$55 . {
++   let return$48 = closure join$272(return$47, value$271)
+-       Vector(constructor$22, constructor$23) ~ return$55
++   let apply$120 = closure join$275(return$48)
+-     } ~ return$54
++   return String#(apply$120)
+-   } ~ return$53
+  
+- def malgo_new_vector(return$56) =
++ closure fn join$272(self$273, value$274) =
+-   \primitive$24 return$57 . {
++   let return$47 = self$273.cap[0]
+-     \primitive$25 return$58 . {
++   let value$271 = self$273.cap[1]
+-       #malgo_new_vector(primitive$24, primitive$25) ~ return$58
++   return value$271(value$274, return$47)
+-     } ~ return$57
+-   } ~ return$56
+  
+- def malgo_read_vector(return$59) =
++ closure fn join$275(self$276, value$277) =
+-   \primitive$26 return$60 . {
++   let return$48 = self$276.cap[0]
+-     \primitive$27 return$61 . {
++   let lit$278 = "ERROR"
+-       #malgo_read_vector(primitive$26, primitive$27) ~ return$61
++   return value$277(lit$278, return$48)
+-     } ~ return$60
++ 
+-   } ~ return$59
++ closure fn join$279(self$280, value$281) =
++   let return$47 = self$280.cap[0]
++   let x#13 = self$280.cap[1]
++   let return$49 = closure join$282(return$47, value$281)
++   let apply$123 = closure join$285(return$49, x#13)
++   return toStringInt32(apply$123)
++ 
++ closure fn join$282(self$283, value$284) =
++   let return$47 = self$283.cap[0]
++   let value$281 = self$283.cap[1]
++   return value$281(value$284, return$47)
++ 
++ closure fn join$285(self$286, value$287) =
++   let return$49 = self$286.cap[0]
++   let x#13 = self$286.cap[1]
++   return value$287(x#13, return$49)
++ 
++ closure fn join$289(self$290, value$291) =
++   let apply$127 = self$290.cap[0]
++   let value$263 = self$290.cap[1]
++   return value$291(value$263, apply$127)
++ 
++ closure fn join$292(self$293, value$294) =
++   let then$129 = self$293.cap[0]
++   let value$254 = self$293.cap[1]
++   return value$294(value$254, then$129)
++ 
++ closure fn join$295(self$296, value$297) =
++   let return$50 = self$296.cap[0]
++   let lit$298 = 2L
++   return value$297(lit$298, return$50)
++ 
++ closure fn join$299(self$300, value$301) =
++   let return$51 = self$300.cap[0]
++   let lit$302 = 5
++   return value$301(lit$302, return$51)
++ 
++ closure fn join$303(self$304, value$305) =
++   let return$52 = self$304.cap[0]
++   let lit$306 = 10L
++   return value$305(lit$306, return$52)
++ 
++ toplevel fn Vector(return$53) =
++   let closure$315 = closure lambda$309()
++   return return$53(closure$315)
++ 
++ closure fn lambda$309(self$310, constructor$22, return$54) =
++   let closure$314 = closure lambda$311(constructor$22)
++   return return$54(closure$314)
++ 
++ closure fn lambda$311(self$312, constructor$23, return$55) =
++   let constructor$22 = self$312.cap[0]
++   let struct$313 = Vector(constructor$22, constructor$23)
++   return return$55(struct$313)
++ 
++ toplevel fn malgo_new_vector(return$56) =
++   let closure$323 = closure lambda$317()
++   return return$56(closure$323)
++ 
++ closure fn lambda$317(self$318, primitive$24, return$57) =
++   let closure$322 = closure lambda$319(primitive$24)
++   return return$57(closure$322)
++ 
++ closure fn lambda$319(self$320, primitive$25, return$58) =
++   let primitive$24 = self$320.cap[0]
++   let prim_result$321 = #malgo_new_vector(primitive$24, primitive$25)
++   return return$58(prim_result$321)
++ 
++ toplevel fn malgo_read_vector(return$59) =
++   let closure$331 = closure lambda$325()
++   return return$59(closure$331)
++ 
++ closure fn lambda$325(self$326, primitive$26, return$60) =
++   let closure$330 = closure lambda$327(primitive$26)
++   return return$60(closure$330)
++ 
++ closure fn lambda$327(self$328, primitive$27, return$61) =
++   let primitive$26 = self$328.cap[0]
++   let prim_result$329 = #malgo_read_vector(primitive$26, primitive$27)
++   return return$61(prim_result$329)
++ 
++ toplevel fn zig_main$334() =
++   let finish$332 = closure join$336()
++   let after_main$333 = closure join$339(finish$332)
++   return main(after_main$333)
++ 
++ closure fn join$336(self$337, value$338) = return value$338
++ 
++ closure fn join$339(self$340, value$341) =
++   let finish$332 = self$340.cap[0]
++   let struct$342 = Tuple()
++   return value$341(struct$342, finish$332)
++ 
++ entry = zig_main$334
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn readVector(return$28) =
+    let closure$200 = closure lambda$140()
+    return return$28(closure$200)
+  
+  closure fn lambda$140(self$141, param$14, return$29) =
+    let closure$199 = closure lambda$142(param$14)
+    return return$29(closure$199)
+  
+  closure fn lambda$142(self$143, param$15, return$30) =
+    let param$14 = self$143.cap[0]
+-   let struct$144 = Tuple(param$14, param$15)
++   if param$14.tag == Int64# &&
+-   if struct$144.tag == Tuple &&
++   param$15.tag == Vector &&
+-   struct$144.0.tag == Int64# &&
++   param$15.0.tag == Int64# then {
+-   struct$144.1.tag == Vector &&
++     let index#5 = param$14.0
+-   struct$144.1.0.tag == Int64# then {
++     let length#6 = param$15.0.0
+-     let index#5 = struct$144.0.0
++     let ptr#7 = param$15.1
+-     let length#6 = struct$144.1.0.0
+-     let ptr#7 = struct$144.1.1
+      let then$107 = closure join$145(index#5, length#6, ptr#7, return$30)
+      return if(then$107)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$145(self$146, value$147) =
+    let index#5 = self$146.cap[0]
+    let length#6 = self$146.cap[1]
+    let ptr#7 = self$146.cap[2]
+    let return$30 = self$146.cap[3]
+    let return$36 = closure join$148(index#5, ptr#7, return$30, value$147)
+    let then$93 = closure join$187(index#5, length#6, return$36)
+    return isTrue#(then$93)
+  
+  closure fn join$148(self$149, value$150) =
+    let index#5 = self$149.cap[0]
+    let ptr#7 = self$149.cap[1]
+    let return$30 = self$149.cap[2]
+    let value$147 = self$149.cap[3]
+    let apply$104 = closure join$151(index#5, ptr#7, return$30)
+    let apply$105 = closure join$181(apply$104)
+    return value$147(value$150, apply$105)
+  
+  closure fn join$151(self$152, value$153) =
+    let index#5 = self$152.cap[0]
+    let ptr#7 = self$152.cap[1]
+    let return$30 = self$152.cap[2]
+    let closure$180 = closure lambda$154(index#5, ptr#7)
+    return value$153(closure$180, return$30)
+  
+  closure fn lambda$154(self$155, param$17, return$31) =
+    let index#5 = self$155.cap[0]
+    let ptr#7 = self$155.cap[1]
+    if  then {
+-     let _#9 = param$17
+      let then$102 = closure join$156(index#5, ptr#7, return$31)
+      return Just(then$102)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$156(self$157, value$158) =
+    let index#5 = self$157.cap[0]
+    let ptr#7 = self$157.cap[1]
+    let return$31 = self$157.cap[2]
+    let return$32 = closure join$159(return$31, value$158)
+    let then$100 = closure join$162(index#5, ptr#7, return$32)
+    return malgo_unsafe_cast(then$100)
+  
+  closure fn join$159(self$160, value$161) =
+    let return$31 = self$160.cap[0]
+    let value$158 = self$160.cap[1]
+    return value$158(value$161, return$31)
+  
+  closure fn join$162(self$163, value$164) =
+    let index#5 = self$163.cap[0]
+    let ptr#7 = self$163.cap[1]
+    let return$32 = self$163.cap[2]
+    let return$33 = closure join$165(return$32, value$164)
+    let then$97 = closure join$168(ptr#7, return$33)
+    let apply$98 = closure join$177(index#5, then$97)
+    return malgo_read_vector(apply$98)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$32 = self$166.cap[0]
+    let value$164 = self$166.cap[1]
+    return value$164(value$167, return$32)
+  
+  closure fn join$168(self$169, value$170) =
+    let ptr#7 = self$169.cap[0]
+    let return$33 = self$169.cap[1]
+    let return$34 = closure join$171(return$33, value$170)
+    let apply$95 = closure join$174(ptr#7, return$34)
+    return malgo_unsafe_cast(apply$95)
+  
+  closure fn join$171(self$172, value$173) =
+    let return$33 = self$172.cap[0]
+    let value$170 = self$172.cap[1]
+    return value$170(value$173, return$33)
+  
+  closure fn join$174(self$175, value$176) =
+    let ptr#7 = self$175.cap[0]
+    let return$34 = self$175.cap[1]
+    return value$176(ptr#7, return$34)
+  
+  closure fn join$177(self$178, value$179) =
+    let index#5 = self$178.cap[0]
+    let then$97 = self$178.cap[1]
+    return value$179(index#5, then$97)
+  
+  closure fn join$181(self$182, value$183) =
+    let apply$104 = self$182.cap[0]
+    let closure$186 = closure lambda$184()
+    return value$183(closure$186, apply$104)
+  
+  closure fn lambda$184(self$185, param$16, return$35) =
+    if  then {
+-     let _#8 = param$16
+      return Nothing(return$35)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$187(self$188, value$189) =
+    let index#5 = self$188.cap[0]
+    let length#6 = self$188.cap[1]
+    let return$36 = self$188.cap[2]
+    let return$37 = closure join$190(return$36, value$189)
+    let apply$90 = closure join$193(length#6, return$37)
+    let apply$91 = closure join$196(apply$90, index#5)
+    return geInt64#(apply$91)
+  
+  closure fn join$190(self$191, value$192) =
+    let return$36 = self$191.cap[0]
+    let value$189 = self$191.cap[1]
+    return value$189(value$192, return$36)
+  
+  closure fn join$193(self$194, value$195) =
+    let length#6 = self$194.cap[0]
+    let return$37 = self$194.cap[1]
+    return value$195(length#6, return$37)
+  
+  closure fn join$196(self$197, value$198) =
+    let apply$90 = self$197.cap[0]
+    let index#5 = self$197.cap[1]
+    return value$198(index#5, apply$90)
+  
+  toplevel fn newVector(return$38) =
+    let closure$236 = closure lambda$202()
+    return return$38(closure$236)
+  
+  closure fn lambda$202(self$203, param$18, return$39) =
+    let closure$235 = closure lambda$204(param$18)
+    return return$39(closure$235)
+  
+  closure fn lambda$204(self$205, param$19, return$40) =
+    let param$18 = self$205.cap[0]
+-   let struct$206 = Tuple(param$18, param$19)
++   if param$18.tag == Int64# then {
+-   if struct$206.tag == Tuple && struct$206.0.tag == Int64# then {
++     let length#2 = param$18.0
+-     let length#2 = struct$206.0.0
++     let return$41 = closure join$207(param$19, length#2, return$40)
+-     let init#3 = struct$206.1
+-     let return$41 = closure join$207(init#3, length#2, return$40)
+      let apply$109 = closure join$232(length#2, return$41)
+      return Int64#(apply$109)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$207(self$208, value$209) =
+    let init#3 = self$208.cap[0]
+    let length#2 = self$208.cap[1]
+    let return$40 = self$208.cap[2]
+    let return$42 = closure join$210(return$40, value$209)
+    let then$115 = closure join$214(init#3, length#2, return$42)
+    return malgo_unsafe_cast(then$115)
+  
+  closure fn join$210(self$211, value$212) =
+    let return$40 = self$211.cap[0]
+    let value$209 = self$211.cap[1]
+    let struct$213 = Vector(value$209, value$212)
+    return return$40(struct$213)
+  
+  closure fn join$214(self$215, value$216) =
+    let init#3 = self$215.cap[0]
+    let length#2 = self$215.cap[1]
+    let return$42 = self$215.cap[2]
+    let return$43 = closure join$217(return$42, value$216)
+    let then$112 = closure join$220(init#3, return$43)
+    let apply$113 = closure join$229(length#2, then$112)
+    return malgo_new_vector(apply$113)
+  
+  closure fn join$217(self$218, value$219) =
+    let return$42 = self$218.cap[0]
+    let value$216 = self$218.cap[1]
+    return value$216(value$219, return$42)
+  
+  closure fn join$220(self$221, value$222) =
+    let init#3 = self$221.cap[0]
+    let return$43 = self$221.cap[1]
+    let return$44 = closure join$223(return$43, value$222)
+    let apply$110 = closure join$226(init#3, return$44)
+    return malgo_unsafe_cast(apply$110)
+  
+  closure fn join$223(self$224, value$225) =
+    let return$43 = self$224.cap[0]
+    let value$222 = self$224.cap[1]
+    return value$222(value$225, return$43)
+  
+  closure fn join$226(self$227, value$228) =
+    let init#3 = self$227.cap[0]
+    let return$44 = self$227.cap[1]
+    return value$228(init#3, return$44)
+  
+  closure fn join$229(self$230, value$231) =
+    let length#2 = self$230.cap[0]
+    let then$112 = self$230.cap[1]
+    return value$231(length#2, then$112)
+  
+  closure fn join$232(self$233, value$234) =
+    let length#2 = self$233.cap[0]
+    let return$41 = self$233.cap[1]
+    return value$234(length#2, return$41)
+  
+  toplevel fn main(return$45) =
+    let closure$307 = closure lambda$238()
+    return return$45(closure$307)
+  
+  closure fn lambda$238(self$239, param$20, return$46) =
+    if  then {
+-     let _#10 = param$20
+      let then$137 = closure join$240(return$46)
+      return newVector(then$137)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$240(self$241, value$242) =
+    let return$46 = self$241.cap[0]
+    let return$52 = closure join$243(return$46, value$242)
+    let apply$117 = closure join$303(return$52)
+    return Int64#(apply$117)
+  
+  closure fn join$243(self$244, value$245) =
+    let return$46 = self$244.cap[0]
+    let value$242 = self$244.cap[1]
+    let then$135 = closure join$246(return$46)
+    return value$242(value$245, then$135)
+  
+  closure fn join$246(self$247, value$248) =
+    let return$46 = self$247.cap[0]
+    let return$51 = closure join$249(return$46, value$248)
+    let apply$118 = closure join$299(return$51)
+    return Int32#(apply$118)
+  
+  closure fn join$249(self$250, value$251) =
+    let return$46 = self$250.cap[0]
+    let value$248 = self$250.cap[1]
+    let then$133 = closure join$252(return$46)
+    return value$248(value$251, then$133)
+  
+  closure fn join$252(self$253, value$254) =
+    let return$46 = self$253.cap[0]
+    let then$132 = closure join$255(return$46, value$254)
+    return readVector(then$132)
+  
+  closure fn join$255(self$256, value$257) =
+    let return$46 = self$256.cap[0]
+    let value$254 = self$256.cap[1]
+    let return$50 = closure join$258(return$46, value$254, value$257)
+    let apply$119 = closure join$295(return$50)
+    return Int64#(apply$119)
+  
+  closure fn join$258(self$259, value$260) =
+    let return$46 = self$259.cap[0]
+    let value$254 = self$259.cap[1]
+    let value$257 = self$259.cap[2]
+    let then$129 = closure join$261(return$46)
+    let apply$130 = closure join$292(then$129, value$254)
+    return value$257(value$260, apply$130)
+  
+  closure fn join$261(self$262, value$263) =
+    let return$46 = self$262.cap[0]
+    let apply$127 = closure join$264(return$46)
+    let apply$128 = closure join$289(apply$127, value$263)
+    return |>(apply$128)
+  
+  closure fn join$264(self$265, value$266) =
+    let return$46 = self$265.cap[0]
+    let closure$288 = closure lambda$267()
+    return value$266(closure$288, return$46)
+  
+  closure fn lambda$267(self$268, param$21, return$47) =
+    if param$21.tag == Nothing then {
+      let then$122 = closure join$269(return$47)
+      return putStrLn(then$122)
+    } else {
+      if param$21.tag == Tuple && param$21.0.tag == Just then {
+        let x#13 = param$21.1
+        let then$125 = closure join$279(return$47, x#13)
+        return putStrLn(then$125)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$269(self$270, value$271) =
+    let return$47 = self$270.cap[0]
+    let return$48 = closure join$272(return$47, value$271)
+    let apply$120 = closure join$275(return$48)
+    return String#(apply$120)
+  
+  closure fn join$272(self$273, value$274) =
+    let return$47 = self$273.cap[0]
+    let value$271 = self$273.cap[1]
+    return value$271(value$274, return$47)
+  
+  closure fn join$275(self$276, value$277) =
+    let return$48 = self$276.cap[0]
+    let lit$278 = "ERROR"
+    return value$277(lit$278, return$48)
+  
+  closure fn join$279(self$280, value$281) =
+    let return$47 = self$280.cap[0]
+    let x#13 = self$280.cap[1]
+    let return$49 = closure join$282(return$47, value$281)
+    let apply$123 = closure join$285(return$49, x#13)
+    return toStringInt32(apply$123)
+  
+  closure fn join$282(self$283, value$284) =
+    let return$47 = self$283.cap[0]
+    let value$281 = self$283.cap[1]
+    return value$281(value$284, return$47)
+  
+  closure fn join$285(self$286, value$287) =
+    let return$49 = self$286.cap[0]
+    let x#13 = self$286.cap[1]
+    return value$287(x#13, return$49)
+  
+  closure fn join$289(self$290, value$291) =
+    let apply$127 = self$290.cap[0]
+    let value$263 = self$290.cap[1]
+    return value$291(value$263, apply$127)
+  
+  closure fn join$292(self$293, value$294) =
+    let then$129 = self$293.cap[0]
+    let value$254 = self$293.cap[1]
+    return value$294(value$254, then$129)
+  
+  closure fn join$295(self$296, value$297) =
+    let return$50 = self$296.cap[0]
+    let lit$298 = 2L
+    return value$297(lit$298, return$50)
+  
+  closure fn join$299(self$300, value$301) =
+    let return$51 = self$300.cap[0]
+    let lit$302 = 5
+    return value$301(lit$302, return$51)
+  
+  closure fn join$303(self$304, value$305) =
+    let return$52 = self$304.cap[0]
+    let lit$306 = 10L
+    return value$305(lit$306, return$52)
+  
+  toplevel fn Vector(return$53) =
+    let closure$315 = closure lambda$309()
+    return return$53(closure$315)
+  
+  closure fn lambda$309(self$310, constructor$22, return$54) =
+    let closure$314 = closure lambda$311(constructor$22)
+    return return$54(closure$314)
+  
+  closure fn lambda$311(self$312, constructor$23, return$55) =
+    let constructor$22 = self$312.cap[0]
+    let struct$313 = Vector(constructor$22, constructor$23)
+    return return$55(struct$313)
+  
+  toplevel fn malgo_new_vector(return$56) =
+    let closure$323 = closure lambda$317()
+    return return$56(closure$323)
+  
+  closure fn lambda$317(self$318, primitive$24, return$57) =
+    let closure$322 = closure lambda$319(primitive$24)
+    return return$57(closure$322)
+  
+  closure fn lambda$319(self$320, primitive$25, return$58) =
+    let primitive$24 = self$320.cap[0]
+    let prim_result$321 = #malgo_new_vector(primitive$24, primitive$25)
+    return return$58(prim_result$321)
+  
+  toplevel fn malgo_read_vector(return$59) =
+    let closure$331 = closure lambda$325()
+    return return$59(closure$331)
+  
+  closure fn lambda$325(self$326, primitive$26, return$60) =
+    let closure$330 = closure lambda$327(primitive$26)
+    return return$60(closure$330)
+  
+  closure fn lambda$327(self$328, primitive$27, return$61) =
+    let primitive$26 = self$328.cap[0]
+    let prim_result$329 = #malgo_read_vector(primitive$26, primitive$27)
+    return return$61(prim_result$329)
+  
+  toplevel fn zig_main$334() =
+    let finish$332 = closure join$336()
+    let after_main$333 = closure join$339(finish$332)
+    return main(after_main$333)
+  
+  closure fn join$336(self$337, value$338) = return value$338
+  
+  closure fn join$339(self$340, value$341) =
+    let finish$332 = self$340.cap[0]
+    let struct$342 = Tuple()
+    return value$341(struct$342, finish$332)
+  
+  entry = zig_main$334
+
+
+=== Peephole -> Perceus ===
+  toplevel fn readVector(return$28) =
+    let closure$200 = closure lambda$140()
+    return return$28(closure$200)
+  
+  closure fn lambda$140(self$141, param$14, return$29) =
++   drop self$141
+    let closure$199 = closure lambda$142(param$14)
+    return return$29(closure$199)
+  
+  closure fn lambda$142(self$143, param$15, return$30) =
+    let param$14 = self$143.cap[0]
++   dup param$14
++   drop self$143
+    if param$14.tag == Int64# &&
+    param$15.tag == Vector &&
+    param$15.0.tag == Int64# then {
+      let index#5 = param$14.0
++     dup index#5
++     drop param$14
+      let length#6 = param$15.0.0
++     dup length#6
+      let ptr#7 = param$15.1
++     dup ptr#7
++     drop param$15
+      let then$107 = closure join$145(index#5, length#6, ptr#7, return$30)
+      return if(then$107)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$145(self$146, value$147) =
+    let index#5 = self$146.cap[0]
++   dup index#5
+    let length#6 = self$146.cap[1]
++   dup length#6
+    let ptr#7 = self$146.cap[2]
++   dup ptr#7
+    let return$30 = self$146.cap[3]
++   dup return$30
++   drop self$146
++   dup index#5
+    let return$36 = closure join$148(index#5, ptr#7, return$30, value$147)
+    let then$93 = closure join$187(index#5, length#6, return$36)
+    return isTrue#(then$93)
+  
+  closure fn join$148(self$149, value$150) =
+    let index#5 = self$149.cap[0]
++   dup index#5
+    let ptr#7 = self$149.cap[1]
++   dup ptr#7
+    let return$30 = self$149.cap[2]
++   dup return$30
+    let value$147 = self$149.cap[3]
++   dup value$147
++   drop self$149
+    let apply$104 = closure join$151(index#5, ptr#7, return$30)
+    let apply$105 = closure join$181(apply$104)
+    return value$147(value$150, apply$105)
+  
+  closure fn join$151(self$152, value$153) =
+    let index#5 = self$152.cap[0]
++   dup index#5
+    let ptr#7 = self$152.cap[1]
++   dup ptr#7
+    let return$30 = self$152.cap[2]
++   dup return$30
++   drop self$152
+    let closure$180 = closure lambda$154(index#5, ptr#7)
+    return value$153(closure$180, return$30)
+  
+  closure fn lambda$154(self$155, param$17, return$31) =
++   drop param$17
+    let index#5 = self$155.cap[0]
++   dup index#5
+    let ptr#7 = self$155.cap[1]
++   dup ptr#7
++   drop self$155
+    if  then {
+      let then$102 = closure join$156(index#5, ptr#7, return$31)
+      return Just(then$102)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$156(self$157, value$158) =
+    let index#5 = self$157.cap[0]
++   dup index#5
+    let ptr#7 = self$157.cap[1]
++   dup ptr#7
+    let return$31 = self$157.cap[2]
++   dup return$31
++   drop self$157
+    let return$32 = closure join$159(return$31, value$158)
+    let then$100 = closure join$162(index#5, ptr#7, return$32)
+    return malgo_unsafe_cast(then$100)
+  
+  closure fn join$159(self$160, value$161) =
+    let return$31 = self$160.cap[0]
++   dup return$31
+    let value$158 = self$160.cap[1]
++   dup value$158
++   drop self$160
+    return value$158(value$161, return$31)
+  
+  closure fn join$162(self$163, value$164) =
+    let index#5 = self$163.cap[0]
++   dup index#5
+    let ptr#7 = self$163.cap[1]
++   dup ptr#7
+    let return$32 = self$163.cap[2]
++   dup return$32
++   drop self$163
+    let return$33 = closure join$165(return$32, value$164)
+    let then$97 = closure join$168(ptr#7, return$33)
+    let apply$98 = closure join$177(index#5, then$97)
+    return malgo_read_vector(apply$98)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$32 = self$166.cap[0]
++   dup return$32
+    let value$164 = self$166.cap[1]
++   dup value$164
++   drop self$166
+    return value$164(value$167, return$32)
+  
+  closure fn join$168(self$169, value$170) =
+    let ptr#7 = self$169.cap[0]
++   dup ptr#7
+    let return$33 = self$169.cap[1]
++   dup return$33
++   drop self$169
+    let return$34 = closure join$171(return$33, value$170)
+    let apply$95 = closure join$174(ptr#7, return$34)
+    return malgo_unsafe_cast(apply$95)
+  
+  closure fn join$171(self$172, value$173) =
+    let return$33 = self$172.cap[0]
++   dup return$33
+    let value$170 = self$172.cap[1]
++   dup value$170
++   drop self$172
+    return value$170(value$173, return$33)
+  
+  closure fn join$174(self$175, value$176) =
+    let ptr#7 = self$175.cap[0]
++   dup ptr#7
+    let return$34 = self$175.cap[1]
++   dup return$34
++   drop self$175
+    return value$176(ptr#7, return$34)
+  
+  closure fn join$177(self$178, value$179) =
+    let index#5 = self$178.cap[0]
++   dup index#5
+    let then$97 = self$178.cap[1]
++   dup then$97
++   drop self$178
+    return value$179(index#5, then$97)
+  
+  closure fn join$181(self$182, value$183) =
+    let apply$104 = self$182.cap[0]
++   dup apply$104
++   drop self$182
+    let closure$186 = closure lambda$184()
+    return value$183(closure$186, apply$104)
+  
+  closure fn lambda$184(self$185, param$16, return$35) =
++   drop param$16
++   drop self$185
+    if  then {
+      return Nothing(return$35)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$187(self$188, value$189) =
+    let index#5 = self$188.cap[0]
++   dup index#5
+    let length#6 = self$188.cap[1]
++   dup length#6
+    let return$36 = self$188.cap[2]
++   dup return$36
++   drop self$188
+    let return$37 = closure join$190(return$36, value$189)
+    let apply$90 = closure join$193(length#6, return$37)
+    let apply$91 = closure join$196(apply$90, index#5)
+    return geInt64#(apply$91)
+  
+  closure fn join$190(self$191, value$192) =
+    let return$36 = self$191.cap[0]
++   dup return$36
+    let value$189 = self$191.cap[1]
++   dup value$189
++   drop self$191
+    return value$189(value$192, return$36)
+  
+  closure fn join$193(self$194, value$195) =
+    let length#6 = self$194.cap[0]
++   dup length#6
+    let return$37 = self$194.cap[1]
++   dup return$37
++   drop self$194
+    return value$195(length#6, return$37)
+  
+  closure fn join$196(self$197, value$198) =
+    let apply$90 = self$197.cap[0]
++   dup apply$90
+    let index#5 = self$197.cap[1]
++   dup index#5
++   drop self$197
+    return value$198(index#5, apply$90)
+  
+  toplevel fn newVector(return$38) =
+    let closure$236 = closure lambda$202()
+    return return$38(closure$236)
+  
+  closure fn lambda$202(self$203, param$18, return$39) =
++   drop self$203
+    let closure$235 = closure lambda$204(param$18)
+    return return$39(closure$235)
+  
+  closure fn lambda$204(self$205, param$19, return$40) =
+    let param$18 = self$205.cap[0]
++   dup param$18
++   drop self$205
+    if param$18.tag == Int64# then {
+      let length#2 = param$18.0
++     dup length#2
++     drop param$18
++     dup length#2
+      let return$41 = closure join$207(param$19, length#2, return$40)
+      let apply$109 = closure join$232(length#2, return$41)
+      return Int64#(apply$109)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$207(self$208, value$209) =
+    let init#3 = self$208.cap[0]
++   dup init#3
+    let length#2 = self$208.cap[1]
++   dup length#2
+    let return$40 = self$208.cap[2]
++   dup return$40
++   drop self$208
+    let return$42 = closure join$210(return$40, value$209)
+    let then$115 = closure join$214(init#3, length#2, return$42)
+    return malgo_unsafe_cast(then$115)
+  
+  closure fn join$210(self$211, value$212) =
+    let return$40 = self$211.cap[0]
++   dup return$40
+    let value$209 = self$211.cap[1]
++   dup value$209
++   drop self$211
+    let struct$213 = Vector(value$209, value$212)
+    return return$40(struct$213)
+  
+  closure fn join$214(self$215, value$216) =
+    let init#3 = self$215.cap[0]
++   dup init#3
+    let length#2 = self$215.cap[1]
++   dup length#2
+    let return$42 = self$215.cap[2]
++   dup return$42
++   drop self$215
+    let return$43 = closure join$217(return$42, value$216)
+    let then$112 = closure join$220(init#3, return$43)
+    let apply$113 = closure join$229(length#2, then$112)
+    return malgo_new_vector(apply$113)
+  
+  closure fn join$217(self$218, value$219) =
+    let return$42 = self$218.cap[0]
++   dup return$42
+    let value$216 = self$218.cap[1]
++   dup value$216
++   drop self$218
+    return value$216(value$219, return$42)
+  
+  closure fn join$220(self$221, value$222) =
+    let init#3 = self$221.cap[0]
++   dup init#3
+    let return$43 = self$221.cap[1]
++   dup return$43
++   drop self$221
+    let return$44 = closure join$223(return$43, value$222)
+    let apply$110 = closure join$226(init#3, return$44)
+    return malgo_unsafe_cast(apply$110)
+  
+  closure fn join$223(self$224, value$225) =
+    let return$43 = self$224.cap[0]
++   dup return$43
+    let value$222 = self$224.cap[1]
++   dup value$222
++   drop self$224
+    return value$222(value$225, return$43)
+  
+  closure fn join$226(self$227, value$228) =
+    let init#3 = self$227.cap[0]
++   dup init#3
+    let return$44 = self$227.cap[1]
++   dup return$44
++   drop self$227
+    return value$228(init#3, return$44)
+  
+  closure fn join$229(self$230, value$231) =
+    let length#2 = self$230.cap[0]
++   dup length#2
+    let then$112 = self$230.cap[1]
++   dup then$112
++   drop self$230
+    return value$231(length#2, then$112)
+  
+  closure fn join$232(self$233, value$234) =
+    let length#2 = self$233.cap[0]
++   dup length#2
+    let return$41 = self$233.cap[1]
++   dup return$41
++   drop self$233
+    return value$234(length#2, return$41)
+  
+  toplevel fn main(return$45) =
+    let closure$307 = closure lambda$238()
+    return return$45(closure$307)
+  
+  closure fn lambda$238(self$239, param$20, return$46) =
++   drop param$20
++   drop self$239
+    if  then {
+      let then$137 = closure join$240(return$46)
+      return newVector(then$137)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$240(self$241, value$242) =
+    let return$46 = self$241.cap[0]
++   dup return$46
++   drop self$241
+    let return$52 = closure join$243(return$46, value$242)
+    let apply$117 = closure join$303(return$52)
+    return Int64#(apply$117)
+  
+  closure fn join$243(self$244, value$245) =
+    let return$46 = self$244.cap[0]
++   dup return$46
+    let value$242 = self$244.cap[1]
++   dup value$242
++   drop self$244
+    let then$135 = closure join$246(return$46)
+    return value$242(value$245, then$135)
+  
+  closure fn join$246(self$247, value$248) =
+    let return$46 = self$247.cap[0]
++   dup return$46
++   drop self$247
+    let return$51 = closure join$249(return$46, value$248)
+    let apply$118 = closure join$299(return$51)
+    return Int32#(apply$118)
+  
+  closure fn join$249(self$250, value$251) =
+    let return$46 = self$250.cap[0]
++   dup return$46
+    let value$248 = self$250.cap[1]
++   dup value$248
++   drop self$250
+    let then$133 = closure join$252(return$46)
+    return value$248(value$251, then$133)
+  
+  closure fn join$252(self$253, value$254) =
+    let return$46 = self$253.cap[0]
++   dup return$46
++   drop self$253
+    let then$132 = closure join$255(return$46, value$254)
+    return readVector(then$132)
+  
+  closure fn join$255(self$256, value$257) =
+    let return$46 = self$256.cap[0]
++   dup return$46
+    let value$254 = self$256.cap[1]
++   dup value$254
++   drop self$256
+    let return$50 = closure join$258(return$46, value$254, value$257)
+    let apply$119 = closure join$295(return$50)
+    return Int64#(apply$119)
+  
+  closure fn join$258(self$259, value$260) =
+    let return$46 = self$259.cap[0]
++   dup return$46
+    let value$254 = self$259.cap[1]
++   dup value$254
+    let value$257 = self$259.cap[2]
++   dup value$257
++   drop self$259
+    let then$129 = closure join$261(return$46)
+    let apply$130 = closure join$292(then$129, value$254)
+    return value$257(value$260, apply$130)
+  
+  closure fn join$261(self$262, value$263) =
+    let return$46 = self$262.cap[0]
++   dup return$46
++   drop self$262
+    let apply$127 = closure join$264(return$46)
+    let apply$128 = closure join$289(apply$127, value$263)
+    return |>(apply$128)
+  
+  closure fn join$264(self$265, value$266) =
+    let return$46 = self$265.cap[0]
++   dup return$46
++   drop self$265
+    let closure$288 = closure lambda$267()
+    return value$266(closure$288, return$46)
+  
+  closure fn lambda$267(self$268, param$21, return$47) =
++   drop self$268
+    if param$21.tag == Nothing then {
++     drop param$21
+      let then$122 = closure join$269(return$47)
+      return putStrLn(then$122)
+    } else {
+      if param$21.tag == Tuple && param$21.0.tag == Just then {
+        let x#13 = param$21.1
++       dup x#13
++       drop param$21
+        let then$125 = closure join$279(return$47, x#13)
+        return putStrLn(then$125)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$269(self$270, value$271) =
+    let return$47 = self$270.cap[0]
++   dup return$47
++   drop self$270
+    let return$48 = closure join$272(return$47, value$271)
+    let apply$120 = closure join$275(return$48)
+    return String#(apply$120)
+  
+  closure fn join$272(self$273, value$274) =
+    let return$47 = self$273.cap[0]
++   dup return$47
+    let value$271 = self$273.cap[1]
++   dup value$271
++   drop self$273
+    return value$271(value$274, return$47)
+  
+  closure fn join$275(self$276, value$277) =
+    let return$48 = self$276.cap[0]
++   dup return$48
++   drop self$276
+    let lit$278 = "ERROR"
+    return value$277(lit$278, return$48)
+  
+  closure fn join$279(self$280, value$281) =
+    let return$47 = self$280.cap[0]
++   dup return$47
+    let x#13 = self$280.cap[1]
++   dup x#13
++   drop self$280
+    let return$49 = closure join$282(return$47, value$281)
+    let apply$123 = closure join$285(return$49, x#13)
+    return toStringInt32(apply$123)
+  
+  closure fn join$282(self$283, value$284) =
+    let return$47 = self$283.cap[0]
++   dup return$47
+    let value$281 = self$283.cap[1]
++   dup value$281
++   drop self$283
+    return value$281(value$284, return$47)
+  
+  closure fn join$285(self$286, value$287) =
+    let return$49 = self$286.cap[0]
++   dup return$49
+    let x#13 = self$286.cap[1]
++   dup x#13
++   drop self$286
+    return value$287(x#13, return$49)
+  
+  closure fn join$289(self$290, value$291) =
+    let apply$127 = self$290.cap[0]
++   dup apply$127
+    let value$263 = self$290.cap[1]
++   dup value$263
++   drop self$290
+    return value$291(value$263, apply$127)
+  
+  closure fn join$292(self$293, value$294) =
+    let then$129 = self$293.cap[0]
++   dup then$129
+    let value$254 = self$293.cap[1]
++   dup value$254
++   drop self$293
+    return value$294(value$254, then$129)
+  
+  closure fn join$295(self$296, value$297) =
+    let return$50 = self$296.cap[0]
++   dup return$50
++   drop self$296
+    let lit$298 = 2L
+    return value$297(lit$298, return$50)
+  
+  closure fn join$299(self$300, value$301) =
+    let return$51 = self$300.cap[0]
++   dup return$51
++   drop self$300
+    let lit$302 = 5
+    return value$301(lit$302, return$51)
+  
+  closure fn join$303(self$304, value$305) =
+    let return$52 = self$304.cap[0]
++   dup return$52
++   drop self$304
+    let lit$306 = 10L
+    return value$305(lit$306, return$52)
+  
+  toplevel fn Vector(return$53) =
+    let closure$315 = closure lambda$309()
+    return return$53(closure$315)
+  
+  closure fn lambda$309(self$310, constructor$22, return$54) =
++   drop self$310
+    let closure$314 = closure lambda$311(constructor$22)
+    return return$54(closure$314)
+  
+  closure fn lambda$311(self$312, constructor$23, return$55) =
+    let constructor$22 = self$312.cap[0]
++   dup constructor$22
++   drop self$312
+    let struct$313 = Vector(constructor$22, constructor$23)
+    return return$55(struct$313)
+  
+  toplevel fn malgo_new_vector(return$56) =
+    let closure$323 = closure lambda$317()
+    return return$56(closure$323)
+  
+  closure fn lambda$317(self$318, primitive$24, return$57) =
++   drop self$318
+    let closure$322 = closure lambda$319(primitive$24)
+    return return$57(closure$322)
+  
+  closure fn lambda$319(self$320, primitive$25, return$58) =
+    let primitive$24 = self$320.cap[0]
++   dup primitive$24
++   drop self$320
+    let prim_result$321 = #malgo_new_vector(primitive$24, primitive$25)
++   drop primitive$24
++   drop primitive$25
+    return return$58(prim_result$321)
+  
+  toplevel fn malgo_read_vector(return$59) =
+    let closure$331 = closure lambda$325()
+    return return$59(closure$331)
+  
+  closure fn lambda$325(self$326, primitive$26, return$60) =
++   drop self$326
+    let closure$330 = closure lambda$327(primitive$26)
+    return return$60(closure$330)
+  
+  closure fn lambda$327(self$328, primitive$27, return$61) =
+    let primitive$26 = self$328.cap[0]
++   dup primitive$26
++   drop self$328
+    let prim_result$329 = #malgo_read_vector(primitive$26, primitive$27)
++   drop primitive$26
++   drop primitive$27
+    return return$61(prim_result$329)
+  
+  toplevel fn zig_main$334() =
+    let finish$332 = closure join$336()
+    let after_main$333 = closure join$339(finish$332)
+    return main(after_main$333)
+  
+- closure fn join$336(self$337, value$338) = return value$338
++ closure fn join$336(self$337, value$338) =
++   drop self$337
++   return value$338
+  
+  closure fn join$339(self$340, value$341) =
+    let finish$332 = self$340.cap[0]
++   dup finish$332
++   drop self$340
+    let struct$342 = Tuple()
+    return value$341(struct$342, finish$332)
+  
+  entry = zig_main$334
+
+
+=== Perceus -> Reuse ===
+  toplevel fn readVector(return$28) =
+    let closure$200 = closure lambda$140()
+    return return$28(closure$200)
+  
+  closure fn lambda$140(self$141, param$14, return$29) =
+-   drop self$141
+    let closure$199 = closure lambda$142(param$14)
++   drop self$141
+    return return$29(closure$199)
+  
+  closure fn lambda$142(self$143, param$15, return$30) =
+    let param$14 = self$143.cap[0]
+    dup param$14
+    drop self$143
+    if param$14.tag == Int64# &&
+    param$15.tag == Vector &&
+    param$15.0.tag == Int64# then {
+      let index#5 = param$14.0
+      dup index#5
+-     drop param$14
+      let length#6 = param$15.0.0
+      dup length#6
+      let ptr#7 = param$15.1
+      dup ptr#7
+-     drop param$15
+      let then$107 = closure join$145(index#5, length#6, ptr#7, return$30)
++     drop param$14
++     drop param$15
+      return if(then$107)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$145(self$146, value$147) =
+    let index#5 = self$146.cap[0]
+    dup index#5
+    let length#6 = self$146.cap[1]
+    dup length#6
+    let ptr#7 = self$146.cap[2]
+    dup ptr#7
+    let return$30 = self$146.cap[3]
+    dup return$30
+-   drop self$146
+    dup index#5
+    let return$36 = closure join$148(index#5, ptr#7, return$30, value$147)
+    let then$93 = closure join$187(index#5, length#6, return$36)
++   drop self$146
+    return isTrue#(then$93)
+  
+  closure fn join$148(self$149, value$150) =
+    let index#5 = self$149.cap[0]
+    dup index#5
+    let ptr#7 = self$149.cap[1]
+    dup ptr#7
+    let return$30 = self$149.cap[2]
+    dup return$30
+    let value$147 = self$149.cap[3]
+    dup value$147
+-   drop self$149
+    let apply$104 = closure join$151(index#5, ptr#7, return$30)
+    let apply$105 = closure join$181(apply$104)
++   drop self$149
+    return value$147(value$150, apply$105)
+  
+  closure fn join$151(self$152, value$153) =
+    let index#5 = self$152.cap[0]
+    dup index#5
+    let ptr#7 = self$152.cap[1]
+    dup ptr#7
+    let return$30 = self$152.cap[2]
+    dup return$30
+-   drop self$152
+    let closure$180 = closure lambda$154(index#5, ptr#7)
++   drop self$152
+    return value$153(closure$180, return$30)
+  
+  closure fn lambda$154(self$155, param$17, return$31) =
+-   drop param$17
+    let index#5 = self$155.cap[0]
+    dup index#5
+    let ptr#7 = self$155.cap[1]
+    dup ptr#7
++   drop param$17
+    drop self$155
+    if  then {
+      let then$102 = closure join$156(index#5, ptr#7, return$31)
+      return Just(then$102)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$156(self$157, value$158) =
+    let index#5 = self$157.cap[0]
+    dup index#5
+    let ptr#7 = self$157.cap[1]
+    dup ptr#7
+    let return$31 = self$157.cap[2]
+    dup return$31
+-   drop self$157
+    let return$32 = closure join$159(return$31, value$158)
+    let then$100 = closure join$162(index#5, ptr#7, return$32)
++   drop self$157
+    return malgo_unsafe_cast(then$100)
+  
+  closure fn join$159(self$160, value$161) =
+    let return$31 = self$160.cap[0]
+    dup return$31
+    let value$158 = self$160.cap[1]
+    dup value$158
+    drop self$160
+    return value$158(value$161, return$31)
+  
+  closure fn join$162(self$163, value$164) =
+    let index#5 = self$163.cap[0]
+    dup index#5
+    let ptr#7 = self$163.cap[1]
+    dup ptr#7
+    let return$32 = self$163.cap[2]
+    dup return$32
+-   drop self$163
+    let return$33 = closure join$165(return$32, value$164)
+    let then$97 = closure join$168(ptr#7, return$33)
+    let apply$98 = closure join$177(index#5, then$97)
++   drop self$163
+    return malgo_read_vector(apply$98)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$32 = self$166.cap[0]
+    dup return$32
+    let value$164 = self$166.cap[1]
+    dup value$164
+    drop self$166
+    return value$164(value$167, return$32)
+  
+  closure fn join$168(self$169, value$170) =
+    let ptr#7 = self$169.cap[0]
+    dup ptr#7
+    let return$33 = self$169.cap[1]
+    dup return$33
+-   drop self$169
+    let return$34 = closure join$171(return$33, value$170)
+    let apply$95 = closure join$174(ptr#7, return$34)
++   drop self$169
+    return malgo_unsafe_cast(apply$95)
+  
+  closure fn join$171(self$172, value$173) =
+    let return$33 = self$172.cap[0]
+    dup return$33
+    let value$170 = self$172.cap[1]
+    dup value$170
+    drop self$172
+    return value$170(value$173, return$33)
+  
+  closure fn join$174(self$175, value$176) =
+    let ptr#7 = self$175.cap[0]
+    dup ptr#7
+    let return$34 = self$175.cap[1]
+    dup return$34
+    drop self$175
+    return value$176(ptr#7, return$34)
+  
+  closure fn join$177(self$178, value$179) =
+    let index#5 = self$178.cap[0]
+    dup index#5
+    let then$97 = self$178.cap[1]
+    dup then$97
+    drop self$178
+    return value$179(index#5, then$97)
+  
+  closure fn join$181(self$182, value$183) =
+    let apply$104 = self$182.cap[0]
+    dup apply$104
+-   drop self$182
+    let closure$186 = closure lambda$184()
++   drop self$182
+    return value$183(closure$186, apply$104)
+  
+  closure fn lambda$184(self$185, param$16, return$35) =
+    drop param$16
+    drop self$185
+    if  then {
+      return Nothing(return$35)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$187(self$188, value$189) =
+    let index#5 = self$188.cap[0]
+    dup index#5
+    let length#6 = self$188.cap[1]
+    dup length#6
+    let return$36 = self$188.cap[2]
+    dup return$36
+-   drop self$188
+    let return$37 = closure join$190(return$36, value$189)
+    let apply$90 = closure join$193(length#6, return$37)
+    let apply$91 = closure join$196(apply$90, index#5)
++   drop self$188
+    return geInt64#(apply$91)
+  
+  closure fn join$190(self$191, value$192) =
+    let return$36 = self$191.cap[0]
+    dup return$36
+    let value$189 = self$191.cap[1]
+    dup value$189
+    drop self$191
+    return value$189(value$192, return$36)
+  
+  closure fn join$193(self$194, value$195) =
+    let length#6 = self$194.cap[0]
+    dup length#6
+    let return$37 = self$194.cap[1]
+    dup return$37
+    drop self$194
+    return value$195(length#6, return$37)
+  
+  closure fn join$196(self$197, value$198) =
+    let apply$90 = self$197.cap[0]
+    dup apply$90
+    let index#5 = self$197.cap[1]
+    dup index#5
+    drop self$197
+    return value$198(index#5, apply$90)
+  
+  toplevel fn newVector(return$38) =
+    let closure$236 = closure lambda$202()
+    return return$38(closure$236)
+  
+  closure fn lambda$202(self$203, param$18, return$39) =
+-   drop self$203
+    let closure$235 = closure lambda$204(param$18)
++   drop self$203
+    return return$39(closure$235)
+  
+  closure fn lambda$204(self$205, param$19, return$40) =
+    let param$18 = self$205.cap[0]
+    dup param$18
+    drop self$205
+    if param$18.tag == Int64# then {
+      let length#2 = param$18.0
+      dup length#2
+-     drop param$18
+      dup length#2
+      let return$41 = closure join$207(param$19, length#2, return$40)
+      let apply$109 = closure join$232(length#2, return$41)
++     drop param$18
+      return Int64#(apply$109)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$207(self$208, value$209) =
+    let init#3 = self$208.cap[0]
+    dup init#3
+    let length#2 = self$208.cap[1]
+    dup length#2
+    let return$40 = self$208.cap[2]
+    dup return$40
+-   drop self$208
+    let return$42 = closure join$210(return$40, value$209)
+    let then$115 = closure join$214(init#3, length#2, return$42)
++   drop self$208
+    return malgo_unsafe_cast(then$115)
+  
+  closure fn join$210(self$211, value$212) =
+    let return$40 = self$211.cap[0]
+    dup return$40
+    let value$209 = self$211.cap[1]
+    dup value$209
+-   drop self$211
++   dropReuse reuse$343 = self$211 /2
+-   let struct$213 = Vector(value$209, value$212)
++   let struct$213 = reuse reuse$343 Vector(value$209, value$212)
+    return return$40(struct$213)
+  
+  closure fn join$214(self$215, value$216) =
+    let init#3 = self$215.cap[0]
+    dup init#3
+    let length#2 = self$215.cap[1]
+    dup length#2
+    let return$42 = self$215.cap[2]
+    dup return$42
+-   drop self$215
+    let return$43 = closure join$217(return$42, value$216)
+    let then$112 = closure join$220(init#3, return$43)
+    let apply$113 = closure join$229(length#2, then$112)
++   drop self$215
+    return malgo_new_vector(apply$113)
+  
+  closure fn join$217(self$218, value$219) =
+    let return$42 = self$218.cap[0]
+    dup return$42
+    let value$216 = self$218.cap[1]
+    dup value$216
+    drop self$218
+    return value$216(value$219, return$42)
+  
+  closure fn join$220(self$221, value$222) =
+    let init#3 = self$221.cap[0]
+    dup init#3
+    let return$43 = self$221.cap[1]
+    dup return$43
+-   drop self$221
+    let return$44 = closure join$223(return$43, value$222)
+    let apply$110 = closure join$226(init#3, return$44)
++   drop self$221
+    return malgo_unsafe_cast(apply$110)
+  
+  closure fn join$223(self$224, value$225) =
+    let return$43 = self$224.cap[0]
+    dup return$43
+    let value$222 = self$224.cap[1]
+    dup value$222
+    drop self$224
+    return value$222(value$225, return$43)
+  
+  closure fn join$226(self$227, value$228) =
+    let init#3 = self$227.cap[0]
+    dup init#3
+    let return$44 = self$227.cap[1]
+    dup return$44
+    drop self$227
+    return value$228(init#3, return$44)
+  
+  closure fn join$229(self$230, value$231) =
+    let length#2 = self$230.cap[0]
+    dup length#2
+    let then$112 = self$230.cap[1]
+    dup then$112
+    drop self$230
+    return value$231(length#2, then$112)
+  
+  closure fn join$232(self$233, value$234) =
+    let length#2 = self$233.cap[0]
+    dup length#2
+    let return$41 = self$233.cap[1]
+    dup return$41
+    drop self$233
+    return value$234(length#2, return$41)
+  
+  toplevel fn main(return$45) =
+    let closure$307 = closure lambda$238()
+    return return$45(closure$307)
+  
+  closure fn lambda$238(self$239, param$20, return$46) =
+    drop param$20
+    drop self$239
+    if  then {
+      let then$137 = closure join$240(return$46)
+      return newVector(then$137)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$240(self$241, value$242) =
+    let return$46 = self$241.cap[0]
+    dup return$46
+-   drop self$241
+    let return$52 = closure join$243(return$46, value$242)
+    let apply$117 = closure join$303(return$52)
++   drop self$241
+    return Int64#(apply$117)
+  
+  closure fn join$243(self$244, value$245) =
+    let return$46 = self$244.cap[0]
+    dup return$46
+    let value$242 = self$244.cap[1]
+    dup value$242
+-   drop self$244
+    let then$135 = closure join$246(return$46)
++   drop self$244
+    return value$242(value$245, then$135)
+  
+  closure fn join$246(self$247, value$248) =
+    let return$46 = self$247.cap[0]
+    dup return$46
+-   drop self$247
+    let return$51 = closure join$249(return$46, value$248)
+    let apply$118 = closure join$299(return$51)
++   drop self$247
+    return Int32#(apply$118)
+  
+  closure fn join$249(self$250, value$251) =
+    let return$46 = self$250.cap[0]
+    dup return$46
+    let value$248 = self$250.cap[1]
+    dup value$248
+-   drop self$250
+    let then$133 = closure join$252(return$46)
++   drop self$250
+    return value$248(value$251, then$133)
+  
+  closure fn join$252(self$253, value$254) =
+    let return$46 = self$253.cap[0]
+    dup return$46
+-   drop self$253
+    let then$132 = closure join$255(return$46, value$254)
++   drop self$253
+    return readVector(then$132)
+  
+  closure fn join$255(self$256, value$257) =
+    let return$46 = self$256.cap[0]
+    dup return$46
+    let value$254 = self$256.cap[1]
+    dup value$254
+-   drop self$256
+    let return$50 = closure join$258(return$46, value$254, value$257)
+    let apply$119 = closure join$295(return$50)
++   drop self$256
+    return Int64#(apply$119)
+  
+  closure fn join$258(self$259, value$260) =
+    let return$46 = self$259.cap[0]
+    dup return$46
+    let value$254 = self$259.cap[1]
+    dup value$254
+    let value$257 = self$259.cap[2]
+    dup value$257
+-   drop self$259
+    let then$129 = closure join$261(return$46)
+    let apply$130 = closure join$292(then$129, value$254)
++   drop self$259
+    return value$257(value$260, apply$130)
+  
+  closure fn join$261(self$262, value$263) =
+    let return$46 = self$262.cap[0]
+    dup return$46
+-   drop self$262
+    let apply$127 = closure join$264(return$46)
+    let apply$128 = closure join$289(apply$127, value$263)
++   drop self$262
+    return |>(apply$128)
+  
+  closure fn join$264(self$265, value$266) =
+    let return$46 = self$265.cap[0]
+    dup return$46
+-   drop self$265
+    let closure$288 = closure lambda$267()
++   drop self$265
+    return value$266(closure$288, return$46)
+  
+  closure fn lambda$267(self$268, param$21, return$47) =
+    drop self$268
+    if param$21.tag == Nothing then {
+-     drop param$21
+      let then$122 = closure join$269(return$47)
++     drop param$21
+      return putStrLn(then$122)
+    } else {
+      if param$21.tag == Tuple && param$21.0.tag == Just then {
+        let x#13 = param$21.1
+        dup x#13
+-       drop param$21
+        let then$125 = closure join$279(return$47, x#13)
++       drop param$21
+        return putStrLn(then$125)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$269(self$270, value$271) =
+    let return$47 = self$270.cap[0]
+    dup return$47
+-   drop self$270
+    let return$48 = closure join$272(return$47, value$271)
+    let apply$120 = closure join$275(return$48)
++   drop self$270
+    return String#(apply$120)
+  
+  closure fn join$272(self$273, value$274) =
+    let return$47 = self$273.cap[0]
+    dup return$47
+    let value$271 = self$273.cap[1]
+    dup value$271
+    drop self$273
+    return value$271(value$274, return$47)
+  
+  closure fn join$275(self$276, value$277) =
+    let return$48 = self$276.cap[0]
+    dup return$48
+-   drop self$276
+    let lit$278 = "ERROR"
++   drop self$276
+    return value$277(lit$278, return$48)
+  
+  closure fn join$279(self$280, value$281) =
+    let return$47 = self$280.cap[0]
+    dup return$47
+    let x#13 = self$280.cap[1]
+    dup x#13
+-   drop self$280
+    let return$49 = closure join$282(return$47, value$281)
+    let apply$123 = closure join$285(return$49, x#13)
++   drop self$280
+    return toStringInt32(apply$123)
+  
+  closure fn join$282(self$283, value$284) =
+    let return$47 = self$283.cap[0]
+    dup return$47
+    let value$281 = self$283.cap[1]
+    dup value$281
+    drop self$283
+    return value$281(value$284, return$47)
+  
+  closure fn join$285(self$286, value$287) =
+    let return$49 = self$286.cap[0]
+    dup return$49
+    let x#13 = self$286.cap[1]
+    dup x#13
+    drop self$286
+    return value$287(x#13, return$49)
+  
+  closure fn join$289(self$290, value$291) =
+    let apply$127 = self$290.cap[0]
+    dup apply$127
+    let value$263 = self$290.cap[1]
+    dup value$263
+    drop self$290
+    return value$291(value$263, apply$127)
+  
+  closure fn join$292(self$293, value$294) =
+    let then$129 = self$293.cap[0]
+    dup then$129
+    let value$254 = self$293.cap[1]
+    dup value$254
+    drop self$293
+    return value$294(value$254, then$129)
+  
+  closure fn join$295(self$296, value$297) =
+    let return$50 = self$296.cap[0]
+    dup return$50
+-   drop self$296
+    let lit$298 = 2L
++   drop self$296
+    return value$297(lit$298, return$50)
+  
+  closure fn join$299(self$300, value$301) =
+    let return$51 = self$300.cap[0]
+    dup return$51
+-   drop self$300
+    let lit$302 = 5
++   drop self$300
+    return value$301(lit$302, return$51)
+  
+  closure fn join$303(self$304, value$305) =
+    let return$52 = self$304.cap[0]
+    dup return$52
+-   drop self$304
+    let lit$306 = 10L
++   drop self$304
+    return value$305(lit$306, return$52)
+  
+  toplevel fn Vector(return$53) =
+    let closure$315 = closure lambda$309()
+    return return$53(closure$315)
+  
+  closure fn lambda$309(self$310, constructor$22, return$54) =
+-   drop self$310
+    let closure$314 = closure lambda$311(constructor$22)
++   drop self$310
+    return return$54(closure$314)
+  
+  closure fn lambda$311(self$312, constructor$23, return$55) =
+    let constructor$22 = self$312.cap[0]
+    dup constructor$22
+-   drop self$312
++   dropReuse reuse$344 = self$312 /2
+-   let struct$313 = Vector(constructor$22, constructor$23)
++   let struct$313 = reuse reuse$344 Vector(constructor$22, constructor$23)
+    return return$55(struct$313)
+  
+  toplevel fn malgo_new_vector(return$56) =
+    let closure$323 = closure lambda$317()
+    return return$56(closure$323)
+  
+  closure fn lambda$317(self$318, primitive$24, return$57) =
+-   drop self$318
+    let closure$322 = closure lambda$319(primitive$24)
++   drop self$318
+    return return$57(closure$322)
+  
+  closure fn lambda$319(self$320, primitive$25, return$58) =
+    let primitive$24 = self$320.cap[0]
+    dup primitive$24
+-   drop self$320
+    let prim_result$321 = #malgo_new_vector(primitive$24, primitive$25)
++   drop self$320
+    drop primitive$24
+    drop primitive$25
+    return return$58(prim_result$321)
+  
+  toplevel fn malgo_read_vector(return$59) =
+    let closure$331 = closure lambda$325()
+    return return$59(closure$331)
+  
+  closure fn lambda$325(self$326, primitive$26, return$60) =
+-   drop self$326
+    let closure$330 = closure lambda$327(primitive$26)
++   drop self$326
+    return return$60(closure$330)
+  
+  closure fn lambda$327(self$328, primitive$27, return$61) =
+    let primitive$26 = self$328.cap[0]
+    dup primitive$26
+-   drop self$328
+    let prim_result$329 = #malgo_read_vector(primitive$26, primitive$27)
++   drop self$328
+    drop primitive$26
+    drop primitive$27
+    return return$61(prim_result$329)
+  
+  toplevel fn zig_main$334() =
+    let finish$332 = closure join$336()
+    let after_main$333 = closure join$339(finish$332)
+    return main(after_main$333)
+  
+  closure fn join$336(self$337, value$338) =
+    drop self$337
+    return value$338
+  
+  closure fn join$339(self$340, value$341) =
+    let finish$332 = self$340.cap[0]
+    dup finish$332
+-   drop self$340
++   dropReuse reuse$345 = self$340 /0
+-   let struct$342 = Tuple()
++   let struct$342 = reuse reuse$345 Tuple()
+    return value$341(struct$342, finish$332)
+  
+  entry = zig_main$334

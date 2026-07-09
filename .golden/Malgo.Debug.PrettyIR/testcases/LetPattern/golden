@@ -1,0 +1,2165 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data Pair a b = Pair(a, b)
+
+def mkRec =
+  fn {
+    a b ->
+      {
+        {fst = a, snd = b}
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        let {fst = x, snd = y} = mkRec("hello")("world")
+        let Pair(p, q) = Pair(x)(y)
+        let _ = putStrLn(p)
+        putStrLn(q)
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data Pair a#0 b#1 = Pair(a#0, b#1)
+
+def mkRec =
+  fn {
+    a#2 b#3 ->
+      {
+        {fst = a#2, snd = b#3}
+      }
+  }
+
+def main =
+  fn {
+    _#4 ->
+      {
+        fn {
+          {fst = x#5, snd = y#6} ->
+            {
+              fn {
+                Pair(p#7, q#8) ->
+                  {
+                    let _#9 = putStrLn(p#7)
+                    putStrLn(q#8)
+                  }
+              }(Pair(x#5)(y#6))
+            }
+        }(mkRec(String#("hello"))(String#("world")))
+      }
+  }
+
+=== ToFun ===
+def mkRec =
+  \param$10 ->
+    \param$11 ->
+      case Tuple(param$10, param$11) of {
+        Tuple(a#2, b#3) -> {fst = a#2, snd = b#3}
+      }
+
+def main =
+  \param$12 ->
+    case param$12 of {
+      _#4 ->
+        \param$13 ->
+          case param$13 of {
+            {fst = x#5, snd = y#6} ->
+              \param$14 ->
+                case param$14 of {
+                  Pair(p#7, q#8) ->
+                    let _#9 = invoke putStrLn(p#7) in invoke putStrLn(q#8)
+                }(invoke Pair(x#5)(y#6))
+          }(invoke mkRec(invoke String#("hello"))(invoke String#("world")))
+    }
+
+def Pair =
+  \constructor$15 -> \constructor$16 -> Pair(constructor$15, constructor$16)
+
+=== SaturateCtor ===
+def mkRec =
+  \param$10 ->
+    \param$11 ->
+      case Tuple(param$10, param$11) of {
+        Tuple(a#2, b#3) -> {fst = a#2, snd = b#3}
+      }
+
+def main =
+  \param$12 ->
+    case param$12 of {
+      _#4 ->
+        \param$13 ->
+          case param$13 of {
+            {fst = x#5, snd = y#6} ->
+              \param$14 ->
+                case param$14 of {
+                  Pair(p#7, q#8) ->
+                    let _#9 = invoke putStrLn(p#7) in invoke putStrLn(q#8)
+                }(Pair(x#5, y#6))
+          }(invoke mkRec(invoke String#("hello"))(invoke String#("world")))
+    }
+
+def Pair =
+  \constructor$15 -> \constructor$16 -> Pair(constructor$15, constructor$16)
+
+=== ReuseSpecialize ===
+def mkRec =
+  \param$10 ->
+    \param$11 ->
+      case Tuple(param$10, param$11) of {
+        Tuple(a#2, b#3) -> {fst = a#2, snd = b#3}
+      }
+
+def main =
+  \param$12 ->
+    case param$12 of {
+      _#4 ->
+        \param$13 ->
+          case param$13 of {
+            {fst = x#5, snd = y#6} ->
+              \param$14 ->
+                case param$14 of {
+                  Pair(p#7, q#8) ->
+                    let _#9 = invoke putStrLn(p#7) in invoke putStrLn(q#8)
+                }(Pair(x#5, y#6))
+          }(invoke mkRec(invoke String#("hello"))(invoke String#("world")))
+    }
+
+def Pair =
+  \constructor$15 -> \constructor$16 -> Pair(constructor$15, constructor$16)
+
+=== ToCore ===
+def mkRec(return$17) =
+  \param$10 return$18 . {
+    \param$11 return$19 . {
+      Tuple(param$10, param$11) ~ select {
+        Tuple(a#2, b#3) ->
+          { fst(return$20) = {
+            a#2 ~ return$20
+          }
+          , snd(return$21) = {
+            b#3 ~ return$21
+          } } ~ return$19
+      }
+    } ~ return$18
+  } ~ return$17
+
+def main(return$22) =
+  \param$12 return$23 . {
+    param$12 ~ select {
+      _#4 ->
+        \param$13 return$27 . {
+          param$13 ~ select {
+            {fst = x#5, snd = y#6} ->
+              \param$14 return$28 . {
+                param$14 ~ select {
+                  Pair(p#7, q#8) ->
+                    invoke putStrLn ~ ( p#7
+                    , then _#9 -> {
+                      invoke putStrLn ~ (q#8, return$28)
+                    } )
+                }
+              } ~ (Pair(x#5, y#6), return$27)
+          }
+        } ~ ( do return$24 . {
+          invoke mkRec ~ ( do return$26 . {
+            invoke String# ~ ("hello", return$26)
+          }
+          , ( do return$25 . {
+            invoke String# ~ ("world", return$25)
+          }
+          , return$24 ) )
+        }
+        , return$23 )
+    }
+  } ~ return$22
+
+def Pair(return$29) =
+  \constructor$15 return$30 . {
+    \constructor$16 return$31 . {
+      Pair(constructor$15, constructor$16) ~ return$31
+    } ~ return$30
+  } ~ return$29
+
+=== Flat ===
+def mkRec(return$17) =
+  \param$10 return$18 . {
+    \param$11 return$19 . {
+      Tuple(param$10, param$11) ~ select {
+        Tuple(a#2, b#3) ->
+          { fst(return$20) = {
+            a#2 ~ return$20
+          }
+          , snd(return$21) = {
+            b#3 ~ return$21
+          } } ~ return$19
+      }
+    } ~ return$18
+  } ~ return$17
+
+def main(return$22) =
+  \param$12 return$23 . {
+    param$12 ~ select {
+      _#4 ->
+        \param$13 return$27 . {
+          param$13 ~ select {
+            {fst = x#5, snd = y#6} ->
+              \param$14 return$28 . {
+                param$14 ~ select {
+                  Pair(p#7, q#8) ->
+                    invoke putStrLn ~ ( p#7
+                    , then _#9 -> {
+                      invoke putStrLn ~ (q#8, return$28)
+                    } )
+                }
+              } ~ (Pair(x#5, y#6), return$27)
+          }
+        } ~ then outer$32 -> {
+          join return$24 = then inner$33 -> {
+            outer$32 ~ (inner$33, return$23)
+          }
+          in invoke mkRec ~ then outer$34 -> {
+            join return$26 = then inner$35 -> {
+              outer$34 ~ ( inner$35
+              , then outer$36 -> {
+                join return$25 = then inner$37 -> {
+                  outer$36 ~ (inner$37, return$24)
+                }
+                in invoke String# ~ ("world", return$25)
+              } )
+            }
+            in invoke String# ~ ("hello", return$26)
+          }
+        }
+    }
+  } ~ return$22
+
+def Pair(return$29) =
+  \constructor$15 return$30 . {
+    \constructor$16 return$31 . {
+      Pair(constructor$15, constructor$16) ~ return$31
+    } ~ return$30
+  } ~ return$29
+
+=== Join ===
+def mkRec(return$17) =
+  \param$10 return$18 . {
+    \param$11 return$19 . {
+      join select$38 = select {
+        Tuple(a#2, b#3) ->
+          { fst(return$20) = {
+            a#2 ~ return$20
+          }
+          , snd(return$21) = {
+            b#3 ~ return$21
+          } } ~ return$19
+      }
+      in Tuple(param$10, param$11) ~ select$38
+    } ~ return$18
+  } ~ return$17
+
+def main(return$22) =
+  \param$12 return$23 . {
+    join select$53 = select {
+      _#4 ->
+        join then$52 = then outer$32 -> {
+          join return$24 = then inner$33 -> {
+            join apply$51 = (inner$33, return$23)
+            in outer$32 ~ apply$51
+          }
+          in join then$50 = then outer$34 -> {
+            join return$26 = then inner$35 -> {
+              join then$48 = then outer$36 -> {
+                join return$25 = then inner$37 -> {
+                  join apply$47 = (inner$37, return$24)
+                  in outer$36 ~ apply$47
+                }
+                in join apply$46 = ("world", return$25)
+                in invoke String# ~ apply$46
+              }
+              in join apply$49 = (inner$35, then$48)
+              in outer$34 ~ apply$49
+            }
+            in join apply$45 = ("hello", return$26)
+            in invoke String# ~ apply$45
+          }
+          in invoke mkRec ~ then$50
+        }
+        in \param$13 return$27 . {
+          join select$44 = select {
+            {fst = x#5, snd = y#6} ->
+              join apply$43 = (Pair(x#5, y#6), return$27)
+              in \param$14 return$28 . {
+                join select$42 = select {
+                  Pair(p#7, q#8) ->
+                    join then$40 = then _#9 -> {
+                      join apply$39 = (q#8, return$28)
+                      in invoke putStrLn ~ apply$39
+                    }
+                    in join apply$41 = (p#7, then$40)
+                    in invoke putStrLn ~ apply$41
+                }
+                in param$14 ~ select$42
+              } ~ apply$43
+          }
+          in param$13 ~ select$44
+        } ~ then$52
+    }
+    in param$12 ~ select$53
+  } ~ return$22
+
+def Pair(return$29) =
+  \constructor$15 return$30 . {
+    \constructor$16 return$31 . {
+      Pair(constructor$15, constructor$16) ~ return$31
+    } ~ return$30
+  } ~ return$29
+
+=== ClosureConv ===
+toplevel fn mkRec(return$17) =
+  let closure$66 = closure lambda$55()
+  return return$17(closure$66)
+
+closure fn lambda$55(self$56, param$10, return$18) =
+  let closure$65 = closure lambda$57(param$10)
+  return return$18(closure$65)
+
+closure fn lambda$57(self$58, param$11, return$19) =
+  let param$10 = self$58.cap[0]
+  let struct$59 = Tuple(param$10, param$11)
+  if struct$59.tag == Tuple then {
+    let a#2 = struct$59.0
+    let b#3 = struct$59.1
+    let record$64 = record(fst = field$60, snd = field$62) captures(a#2, b#3)
+    return return$19(record$64)
+  } else {
+    panic "no matching branch"
+  }
+
+field fn field$60(self$61, return$20) =
+  let a#2 = self$61.cap[0]
+  return return$20(a#2)
+
+field fn field$62(self$63, return$21) =
+  let b#3 = self$63.cap[1]
+  return return$21(b#3)
+
+toplevel fn main(return$22) =
+  let closure$109 = closure lambda$68()
+  return return$22(closure$109)
+
+closure fn lambda$68(self$69, param$12, return$23) =
+  if  then {
+    let _#4 = param$12
+    let closure$85 = closure lambda$70()
+    let return$24 = closure join$86(closure$85, return$23)
+    let then$50 = closure join$89(return$24)
+    return mkRec(then$50)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$70(self$71, param$13, return$27) =
+  if param$13.kind == record then {
+    let x#5 = param$13!fst
+    let y#6 = param$13!snd
+    let closure$83 = closure lambda$72()
+    let struct$84 = Pair(x#5, y#6)
+    return closure$83(struct$84, return$27)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$72(self$73, param$14, return$28) =
+  if param$14.tag == Pair then {
+    let p#7 = param$14.0
+    let q#8 = param$14.1
+    let then$40 = closure join$74(q#8, return$28)
+    let apply$41 = closure join$80(p#7, then$40)
+    return putStrLn(apply$41)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$74(self$75, value$76) =
+  let q#8 = self$75.cap[0]
+  let return$28 = self$75.cap[1]
+  let apply$39 = closure join$77(q#8, return$28)
+  return putStrLn(apply$39)
+
+closure fn join$77(self$78, value$79) =
+  let q#8 = self$78.cap[0]
+  let return$28 = self$78.cap[1]
+  return value$79(q#8, return$28)
+
+closure fn join$80(self$81, value$82) =
+  let p#7 = self$81.cap[0]
+  let then$40 = self$81.cap[1]
+  return value$82(p#7, then$40)
+
+closure fn join$86(self$87, value$88) =
+  let closure$85 = self$87.cap[0]
+  let return$23 = self$87.cap[1]
+  return closure$85(value$88, return$23)
+
+closure fn join$89(self$90, value$91) =
+  let return$24 = self$90.cap[0]
+  let return$26 = closure join$92(return$24, value$91)
+  let apply$45 = closure join$105(return$26)
+  return String#(apply$45)
+
+closure fn join$92(self$93, value$94) =
+  let return$24 = self$93.cap[0]
+  let value$91 = self$93.cap[1]
+  let then$48 = closure join$95(return$24)
+  return value$91(value$94, then$48)
+
+closure fn join$95(self$96, value$97) =
+  let return$24 = self$96.cap[0]
+  let return$25 = closure join$98(return$24, value$97)
+  let apply$46 = closure join$101(return$25)
+  return String#(apply$46)
+
+closure fn join$98(self$99, value$100) =
+  let return$24 = self$99.cap[0]
+  let value$97 = self$99.cap[1]
+  return value$97(value$100, return$24)
+
+closure fn join$101(self$102, value$103) =
+  let return$25 = self$102.cap[0]
+  let lit$104 = "world"
+  return value$103(lit$104, return$25)
+
+closure fn join$105(self$106, value$107) =
+  let return$26 = self$106.cap[0]
+  let lit$108 = "hello"
+  return value$107(lit$108, return$26)
+
+toplevel fn Pair(return$29) =
+  let closure$117 = closure lambda$111()
+  return return$29(closure$117)
+
+closure fn lambda$111(self$112, constructor$15, return$30) =
+  let closure$116 = closure lambda$113(constructor$15)
+  return return$30(closure$116)
+
+closure fn lambda$113(self$114, constructor$16, return$31) =
+  let constructor$15 = self$114.cap[0]
+  let struct$115 = Pair(constructor$15, constructor$16)
+  return return$31(struct$115)
+
+toplevel fn zig_main$120() =
+  let finish$118 = closure join$122()
+  let after_main$119 = closure join$125(finish$118)
+  return main(after_main$119)
+
+closure fn join$122(self$123, value$124) = return value$124
+
+closure fn join$125(self$126, value$127) =
+  let finish$118 = self$126.cap[0]
+  let struct$128 = Tuple()
+  return value$127(struct$128, finish$118)
+
+entry = zig_main$120
+
+=== Peephole ===
+toplevel fn mkRec(return$17) =
+  let closure$66 = closure lambda$55()
+  return return$17(closure$66)
+
+closure fn lambda$55(self$56, param$10, return$18) =
+  let closure$65 = closure lambda$57(param$10)
+  return return$18(closure$65)
+
+closure fn lambda$57(self$58, param$11, return$19) =
+  let param$10 = self$58.cap[0]
+  if  then {
+    let record$64 = record(fst = field$60, snd = field$62) captures( param$10
+    , param$11 )
+    return return$19(record$64)
+  } else {
+    panic "no matching branch"
+  }
+
+field fn field$60(self$61, return$20) =
+  let a#2 = self$61.cap[0]
+  return return$20(a#2)
+
+field fn field$62(self$63, return$21) =
+  let b#3 = self$63.cap[1]
+  return return$21(b#3)
+
+toplevel fn main(return$22) =
+  let closure$109 = closure lambda$68()
+  return return$22(closure$109)
+
+closure fn lambda$68(self$69, param$12, return$23) =
+  if  then {
+    let closure$85 = closure lambda$70()
+    let return$24 = closure join$86(closure$85, return$23)
+    let then$50 = closure join$89(return$24)
+    return mkRec(then$50)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$70(self$71, param$13, return$27) =
+  if param$13.kind == record then {
+    let x#5 = param$13!fst
+    let y#6 = param$13!snd
+    let closure$83 = closure lambda$72()
+    let struct$84 = Pair(x#5, y#6)
+    return closure$83(struct$84, return$27)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$72(self$73, param$14, return$28) =
+  if param$14.tag == Pair then {
+    let p#7 = param$14.0
+    let q#8 = param$14.1
+    let then$40 = closure join$74(q#8, return$28)
+    let apply$41 = closure join$80(p#7, then$40)
+    return putStrLn(apply$41)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$74(self$75, value$76) =
+  let q#8 = self$75.cap[0]
+  let return$28 = self$75.cap[1]
+  let apply$39 = closure join$77(q#8, return$28)
+  return putStrLn(apply$39)
+
+closure fn join$77(self$78, value$79) =
+  let q#8 = self$78.cap[0]
+  let return$28 = self$78.cap[1]
+  return value$79(q#8, return$28)
+
+closure fn join$80(self$81, value$82) =
+  let p#7 = self$81.cap[0]
+  let then$40 = self$81.cap[1]
+  return value$82(p#7, then$40)
+
+closure fn join$86(self$87, value$88) =
+  let closure$85 = self$87.cap[0]
+  let return$23 = self$87.cap[1]
+  return closure$85(value$88, return$23)
+
+closure fn join$89(self$90, value$91) =
+  let return$24 = self$90.cap[0]
+  let return$26 = closure join$92(return$24, value$91)
+  let apply$45 = closure join$105(return$26)
+  return String#(apply$45)
+
+closure fn join$92(self$93, value$94) =
+  let return$24 = self$93.cap[0]
+  let value$91 = self$93.cap[1]
+  let then$48 = closure join$95(return$24)
+  return value$91(value$94, then$48)
+
+closure fn join$95(self$96, value$97) =
+  let return$24 = self$96.cap[0]
+  let return$25 = closure join$98(return$24, value$97)
+  let apply$46 = closure join$101(return$25)
+  return String#(apply$46)
+
+closure fn join$98(self$99, value$100) =
+  let return$24 = self$99.cap[0]
+  let value$97 = self$99.cap[1]
+  return value$97(value$100, return$24)
+
+closure fn join$101(self$102, value$103) =
+  let return$25 = self$102.cap[0]
+  let lit$104 = "world"
+  return value$103(lit$104, return$25)
+
+closure fn join$105(self$106, value$107) =
+  let return$26 = self$106.cap[0]
+  let lit$108 = "hello"
+  return value$107(lit$108, return$26)
+
+toplevel fn Pair(return$29) =
+  let closure$117 = closure lambda$111()
+  return return$29(closure$117)
+
+closure fn lambda$111(self$112, constructor$15, return$30) =
+  let closure$116 = closure lambda$113(constructor$15)
+  return return$30(closure$116)
+
+closure fn lambda$113(self$114, constructor$16, return$31) =
+  let constructor$15 = self$114.cap[0]
+  let struct$115 = Pair(constructor$15, constructor$16)
+  return return$31(struct$115)
+
+toplevel fn zig_main$120() =
+  let finish$118 = closure join$122()
+  let after_main$119 = closure join$125(finish$118)
+  return main(after_main$119)
+
+closure fn join$122(self$123, value$124) = return value$124
+
+closure fn join$125(self$126, value$127) =
+  let finish$118 = self$126.cap[0]
+  let struct$128 = Tuple()
+  return value$127(struct$128, finish$118)
+
+entry = zig_main$120
+
+=== Perceus ===
+toplevel fn mkRec(return$17) =
+  let closure$66 = closure lambda$55()
+  return return$17(closure$66)
+
+closure fn lambda$55(self$56, param$10, return$18) =
+  drop self$56
+  let closure$65 = closure lambda$57(param$10)
+  return return$18(closure$65)
+
+closure fn lambda$57(self$58, param$11, return$19) =
+  let param$10 = self$58.cap[0]
+  dup param$10
+  drop self$58
+  if  then {
+    let record$64 = record(fst = field$60, snd = field$62) captures( param$10
+    , param$11 )
+    return return$19(record$64)
+  } else {
+    panic "no matching branch"
+  }
+
+field fn field$60(self$61, return$20) =
+  let a#2 = self$61.cap[0]
+  dup a#2
+  drop self$61
+  return return$20(a#2)
+
+field fn field$62(self$63, return$21) =
+  let b#3 = self$63.cap[1]
+  dup b#3
+  drop self$63
+  return return$21(b#3)
+
+toplevel fn main(return$22) =
+  let closure$109 = closure lambda$68()
+  return return$22(closure$109)
+
+closure fn lambda$68(self$69, param$12, return$23) =
+  drop param$12
+  drop self$69
+  if  then {
+    let closure$85 = closure lambda$70()
+    let return$24 = closure join$86(closure$85, return$23)
+    let then$50 = closure join$89(return$24)
+    return mkRec(then$50)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$70(self$71, param$13, return$27) =
+  drop self$71
+  if param$13.kind == record then {
+    dup param$13
+    let x#5 = param$13!fst
+    let y#6 = param$13!snd
+    let closure$83 = closure lambda$72()
+    let struct$84 = Pair(x#5, y#6)
+    return closure$83(struct$84, return$27)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$72(self$73, param$14, return$28) =
+  drop self$73
+  if param$14.tag == Pair then {
+    let p#7 = param$14.0
+    dup p#7
+    let q#8 = param$14.1
+    dup q#8
+    drop param$14
+    let then$40 = closure join$74(q#8, return$28)
+    let apply$41 = closure join$80(p#7, then$40)
+    return putStrLn(apply$41)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$74(self$75, value$76) =
+  drop value$76
+  let q#8 = self$75.cap[0]
+  dup q#8
+  let return$28 = self$75.cap[1]
+  dup return$28
+  drop self$75
+  let apply$39 = closure join$77(q#8, return$28)
+  return putStrLn(apply$39)
+
+closure fn join$77(self$78, value$79) =
+  let q#8 = self$78.cap[0]
+  dup q#8
+  let return$28 = self$78.cap[1]
+  dup return$28
+  drop self$78
+  return value$79(q#8, return$28)
+
+closure fn join$80(self$81, value$82) =
+  let p#7 = self$81.cap[0]
+  dup p#7
+  let then$40 = self$81.cap[1]
+  dup then$40
+  drop self$81
+  return value$82(p#7, then$40)
+
+closure fn join$86(self$87, value$88) =
+  let closure$85 = self$87.cap[0]
+  dup closure$85
+  let return$23 = self$87.cap[1]
+  dup return$23
+  drop self$87
+  return closure$85(value$88, return$23)
+
+closure fn join$89(self$90, value$91) =
+  let return$24 = self$90.cap[0]
+  dup return$24
+  drop self$90
+  let return$26 = closure join$92(return$24, value$91)
+  let apply$45 = closure join$105(return$26)
+  return String#(apply$45)
+
+closure fn join$92(self$93, value$94) =
+  let return$24 = self$93.cap[0]
+  dup return$24
+  let value$91 = self$93.cap[1]
+  dup value$91
+  drop self$93
+  let then$48 = closure join$95(return$24)
+  return value$91(value$94, then$48)
+
+closure fn join$95(self$96, value$97) =
+  let return$24 = self$96.cap[0]
+  dup return$24
+  drop self$96
+  let return$25 = closure join$98(return$24, value$97)
+  let apply$46 = closure join$101(return$25)
+  return String#(apply$46)
+
+closure fn join$98(self$99, value$100) =
+  let return$24 = self$99.cap[0]
+  dup return$24
+  let value$97 = self$99.cap[1]
+  dup value$97
+  drop self$99
+  return value$97(value$100, return$24)
+
+closure fn join$101(self$102, value$103) =
+  let return$25 = self$102.cap[0]
+  dup return$25
+  drop self$102
+  let lit$104 = "world"
+  return value$103(lit$104, return$25)
+
+closure fn join$105(self$106, value$107) =
+  let return$26 = self$106.cap[0]
+  dup return$26
+  drop self$106
+  let lit$108 = "hello"
+  return value$107(lit$108, return$26)
+
+toplevel fn Pair(return$29) =
+  let closure$117 = closure lambda$111()
+  return return$29(closure$117)
+
+closure fn lambda$111(self$112, constructor$15, return$30) =
+  drop self$112
+  let closure$116 = closure lambda$113(constructor$15)
+  return return$30(closure$116)
+
+closure fn lambda$113(self$114, constructor$16, return$31) =
+  let constructor$15 = self$114.cap[0]
+  dup constructor$15
+  drop self$114
+  let struct$115 = Pair(constructor$15, constructor$16)
+  return return$31(struct$115)
+
+toplevel fn zig_main$120() =
+  let finish$118 = closure join$122()
+  let after_main$119 = closure join$125(finish$118)
+  return main(after_main$119)
+
+closure fn join$122(self$123, value$124) =
+  drop self$123
+  return value$124
+
+closure fn join$125(self$126, value$127) =
+  let finish$118 = self$126.cap[0]
+  dup finish$118
+  drop self$126
+  let struct$128 = Tuple()
+  return value$127(struct$128, finish$118)
+
+entry = zig_main$120
+
+=== Reuse ===
+toplevel fn mkRec(return$17) =
+  let closure$66 = closure lambda$55()
+  return return$17(closure$66)
+
+closure fn lambda$55(self$56, param$10, return$18) =
+  let closure$65 = closure lambda$57(param$10)
+  drop self$56
+  return return$18(closure$65)
+
+closure fn lambda$57(self$58, param$11, return$19) =
+  let param$10 = self$58.cap[0]
+  dup param$10
+  drop self$58
+  if  then {
+    let record$64 = record(fst = field$60, snd = field$62) captures( param$10
+    , param$11 )
+    return return$19(record$64)
+  } else {
+    panic "no matching branch"
+  }
+
+field fn field$60(self$61, return$20) =
+  let a#2 = self$61.cap[0]
+  dup a#2
+  drop self$61
+  return return$20(a#2)
+
+field fn field$62(self$63, return$21) =
+  let b#3 = self$63.cap[1]
+  dup b#3
+  drop self$63
+  return return$21(b#3)
+
+toplevel fn main(return$22) =
+  let closure$109 = closure lambda$68()
+  return return$22(closure$109)
+
+closure fn lambda$68(self$69, param$12, return$23) =
+  drop param$12
+  drop self$69
+  if  then {
+    let closure$85 = closure lambda$70()
+    let return$24 = closure join$86(closure$85, return$23)
+    let then$50 = closure join$89(return$24)
+    return mkRec(then$50)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$70(self$71, param$13, return$27) =
+  drop self$71
+  if param$13.kind == record then {
+    dup param$13
+    let x#5 = param$13!fst
+    let y#6 = param$13!snd
+    let closure$83 = closure lambda$72()
+    let struct$84 = Pair(x#5, y#6)
+    return closure$83(struct$84, return$27)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$72(self$73, param$14, return$28) =
+  drop self$73
+  if param$14.tag == Pair then {
+    let p#7 = param$14.0
+    dup p#7
+    let q#8 = param$14.1
+    dup q#8
+    let then$40 = closure join$74(q#8, return$28)
+    let apply$41 = closure join$80(p#7, then$40)
+    drop param$14
+    return putStrLn(apply$41)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$74(self$75, value$76) =
+  let q#8 = self$75.cap[0]
+  dup q#8
+  let return$28 = self$75.cap[1]
+  dup return$28
+  let apply$39 = closure join$77(q#8, return$28)
+  drop value$76
+  drop self$75
+  return putStrLn(apply$39)
+
+closure fn join$77(self$78, value$79) =
+  let q#8 = self$78.cap[0]
+  dup q#8
+  let return$28 = self$78.cap[1]
+  dup return$28
+  drop self$78
+  return value$79(q#8, return$28)
+
+closure fn join$80(self$81, value$82) =
+  let p#7 = self$81.cap[0]
+  dup p#7
+  let then$40 = self$81.cap[1]
+  dup then$40
+  drop self$81
+  return value$82(p#7, then$40)
+
+closure fn join$86(self$87, value$88) =
+  let closure$85 = self$87.cap[0]
+  dup closure$85
+  let return$23 = self$87.cap[1]
+  dup return$23
+  drop self$87
+  return closure$85(value$88, return$23)
+
+closure fn join$89(self$90, value$91) =
+  let return$24 = self$90.cap[0]
+  dup return$24
+  let return$26 = closure join$92(return$24, value$91)
+  let apply$45 = closure join$105(return$26)
+  drop self$90
+  return String#(apply$45)
+
+closure fn join$92(self$93, value$94) =
+  let return$24 = self$93.cap[0]
+  dup return$24
+  let value$91 = self$93.cap[1]
+  dup value$91
+  let then$48 = closure join$95(return$24)
+  drop self$93
+  return value$91(value$94, then$48)
+
+closure fn join$95(self$96, value$97) =
+  let return$24 = self$96.cap[0]
+  dup return$24
+  let return$25 = closure join$98(return$24, value$97)
+  let apply$46 = closure join$101(return$25)
+  drop self$96
+  return String#(apply$46)
+
+closure fn join$98(self$99, value$100) =
+  let return$24 = self$99.cap[0]
+  dup return$24
+  let value$97 = self$99.cap[1]
+  dup value$97
+  drop self$99
+  return value$97(value$100, return$24)
+
+closure fn join$101(self$102, value$103) =
+  let return$25 = self$102.cap[0]
+  dup return$25
+  let lit$104 = "world"
+  drop self$102
+  return value$103(lit$104, return$25)
+
+closure fn join$105(self$106, value$107) =
+  let return$26 = self$106.cap[0]
+  dup return$26
+  let lit$108 = "hello"
+  drop self$106
+  return value$107(lit$108, return$26)
+
+toplevel fn Pair(return$29) =
+  let closure$117 = closure lambda$111()
+  return return$29(closure$117)
+
+closure fn lambda$111(self$112, constructor$15, return$30) =
+  let closure$116 = closure lambda$113(constructor$15)
+  drop self$112
+  return return$30(closure$116)
+
+closure fn lambda$113(self$114, constructor$16, return$31) =
+  let constructor$15 = self$114.cap[0]
+  dup constructor$15
+  dropReuse reuse$129 = self$114 /2
+  let struct$115 = reuse reuse$129 Pair(constructor$15, constructor$16)
+  return return$31(struct$115)
+
+toplevel fn zig_main$120() =
+  let finish$118 = closure join$122()
+  let after_main$119 = closure join$125(finish$118)
+  return main(after_main$119)
+
+closure fn join$122(self$123, value$124) =
+  drop self$123
+  return value$124
+
+closure fn join$125(self$126, value$127) =
+  let finish$118 = self$126.cap[0]
+  dup finish$118
+  dropReuse reuse$130 = self$126 /0
+  let struct$128 = reuse reuse$130 Tuple()
+  return value$127(struct$128, finish$118)
+
+entry = zig_main$120
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+- data Pair a b = Pair(a, b)
++ data Pair a#0 b#1 = Pair(a#0, b#1)
+  
+  def mkRec =
+    fn {
+-     a b ->
++     a#2 b#3 ->
+        {
+-         {fst = a, snd = b}
++         {fst = a#2, snd = b#3}
+        }
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#4 ->
+        {
+-         let {fst = x, snd = y} = mkRec("hello")("world")
++         fn {
+-         let Pair(p, q) = Pair(x)(y)
++           {fst = x#5, snd = y#6} ->
+-         let _ = putStrLn(p)
++             {
+-         putStrLn(q)
++               fn {
++                 Pair(p#7, q#8) ->
++                   {
++                     let _#9 = putStrLn(p#7)
++                     putStrLn(q#8)
++                   }
++               }(Pair(x#5)(y#6))
++             }
++         }(mkRec(String#("hello"))(String#("world")))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- data Pair a#0 b#1 = Pair(a#0, b#1)
+- 
+  def mkRec =
+-   fn {
++   \param$10 ->
+-     a#2 b#3 ->
++     \param$11 ->
+-       {
++       case Tuple(param$10, param$11) of {
+-         {fst = a#2, snd = b#3}
++         Tuple(a#2, b#3) -> {fst = a#2, snd = b#3}
+        }
+-   }
+  
+  def main =
+-   fn {
++   \param$12 ->
+-     _#4 ->
++     case param$12 of {
+-       {
++       _#4 ->
+-         fn {
++         \param$13 ->
+-           {fst = x#5, snd = y#6} ->
++           case param$13 of {
+-             {
++             {fst = x#5, snd = y#6} ->
+-               fn {
++               \param$14 ->
+-                 Pair(p#7, q#8) ->
++                 case param$14 of {
+-                   {
++                   Pair(p#7, q#8) ->
+-                     let _#9 = putStrLn(p#7)
++                     let _#9 = invoke putStrLn(p#7) in invoke putStrLn(q#8)
+-                     putStrLn(q#8)
++                 }(invoke Pair(x#5)(y#6))
+-                   }
++           }(invoke mkRec(invoke String#("hello"))(invoke String#("world")))
+-               }(Pair(x#5)(y#6))
++     }
+-             }
++ 
+-         }(mkRec(String#("hello"))(String#("world")))
++ def Pair =
+-       }
++   \constructor$15 -> \constructor$16 -> Pair(constructor$15, constructor$16)
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def mkRec =
+    \param$10 ->
+      \param$11 ->
+        case Tuple(param$10, param$11) of {
+          Tuple(a#2, b#3) -> {fst = a#2, snd = b#3}
+        }
+  
+  def main =
+    \param$12 ->
+      case param$12 of {
+        _#4 ->
+          \param$13 ->
+            case param$13 of {
+              {fst = x#5, snd = y#6} ->
+                \param$14 ->
+                  case param$14 of {
+                    Pair(p#7, q#8) ->
+                      let _#9 = invoke putStrLn(p#7) in invoke putStrLn(q#8)
+-                 }(invoke Pair(x#5)(y#6))
++                 }(Pair(x#5, y#6))
+            }(invoke mkRec(invoke String#("hello"))(invoke String#("world")))
+      }
+  
+  def Pair =
+    \constructor$15 -> \constructor$16 -> Pair(constructor$15, constructor$16)
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def mkRec =
+    \param$10 ->
+      \param$11 ->
+        case Tuple(param$10, param$11) of {
+          Tuple(a#2, b#3) -> {fst = a#2, snd = b#3}
+        }
+  
+  def main =
+    \param$12 ->
+      case param$12 of {
+        _#4 ->
+          \param$13 ->
+            case param$13 of {
+              {fst = x#5, snd = y#6} ->
+                \param$14 ->
+                  case param$14 of {
+                    Pair(p#7, q#8) ->
+                      let _#9 = invoke putStrLn(p#7) in invoke putStrLn(q#8)
+                  }(Pair(x#5, y#6))
+            }(invoke mkRec(invoke String#("hello"))(invoke String#("world")))
+      }
+  
+  def Pair =
+    \constructor$15 -> \constructor$16 -> Pair(constructor$15, constructor$16)
+
+
+=== ReuseSpecialize -> ToCore ===
+- def mkRec =
++ def mkRec(return$17) =
+-   \param$10 ->
++   \param$10 return$18 . {
+-     \param$11 ->
++     \param$11 return$19 . {
+-       case Tuple(param$10, param$11) of {
++       Tuple(param$10, param$11) ~ select {
+-         Tuple(a#2, b#3) -> {fst = a#2, snd = b#3}
++         Tuple(a#2, b#3) ->
++           { fst(return$20) = {
++             a#2 ~ return$20
++           }
++           , snd(return$21) = {
++             b#3 ~ return$21
++           } } ~ return$19
+        }
++     } ~ return$18
++   } ~ return$17
+  
+- def main =
++ def main(return$22) =
+-   \param$12 ->
++   \param$12 return$23 . {
+-     case param$12 of {
++     param$12 ~ select {
+        _#4 ->
+-         \param$13 ->
++         \param$13 return$27 . {
+-           case param$13 of {
++           param$13 ~ select {
+              {fst = x#5, snd = y#6} ->
+-               \param$14 ->
++               \param$14 return$28 . {
+-                 case param$14 of {
++                 param$14 ~ select {
+                    Pair(p#7, q#8) ->
+-                     let _#9 = invoke putStrLn(p#7) in invoke putStrLn(q#8)
++                     invoke putStrLn ~ ( p#7
+-                 }(Pair(x#5, y#6))
++                     , then _#9 -> {
+-           }(invoke mkRec(invoke String#("hello"))(invoke String#("world")))
++                       invoke putStrLn ~ (q#8, return$28)
++                     } )
++                 }
++               } ~ (Pair(x#5, y#6), return$27)
++           }
++         } ~ ( do return$24 . {
++           invoke mkRec ~ ( do return$26 . {
++             invoke String# ~ ("hello", return$26)
++           }
++           , ( do return$25 . {
++             invoke String# ~ ("world", return$25)
++           }
++           , return$24 ) )
++         }
++         , return$23 )
+      }
++   } ~ return$22
+  
+- def Pair =
++ def Pair(return$29) =
+-   \constructor$15 -> \constructor$16 -> Pair(constructor$15, constructor$16)
++   \constructor$15 return$30 . {
++     \constructor$16 return$31 . {
++       Pair(constructor$15, constructor$16) ~ return$31
++     } ~ return$30
++   } ~ return$29
+
+
+=== ToCore -> Flat ===
+  def mkRec(return$17) =
+    \param$10 return$18 . {
+      \param$11 return$19 . {
+        Tuple(param$10, param$11) ~ select {
+          Tuple(a#2, b#3) ->
+            { fst(return$20) = {
+              a#2 ~ return$20
+            }
+            , snd(return$21) = {
+              b#3 ~ return$21
+            } } ~ return$19
+        }
+      } ~ return$18
+    } ~ return$17
+  
+  def main(return$22) =
+    \param$12 return$23 . {
+      param$12 ~ select {
+        _#4 ->
+          \param$13 return$27 . {
+            param$13 ~ select {
+              {fst = x#5, snd = y#6} ->
+                \param$14 return$28 . {
+                  param$14 ~ select {
+                    Pair(p#7, q#8) ->
+                      invoke putStrLn ~ ( p#7
+                      , then _#9 -> {
+                        invoke putStrLn ~ (q#8, return$28)
+                      } )
+                  }
+                } ~ (Pair(x#5, y#6), return$27)
+            }
+-         } ~ ( do return$24 . {
++         } ~ then outer$32 -> {
+-           invoke mkRec ~ ( do return$26 . {
++           join return$24 = then inner$33 -> {
+-             invoke String# ~ ("hello", return$26)
++             outer$32 ~ (inner$33, return$23)
+            }
+-           , ( do return$25 . {
++           in invoke mkRec ~ then outer$34 -> {
+-             invoke String# ~ ("world", return$25)
++             join return$26 = then inner$35 -> {
++               outer$34 ~ ( inner$35
++               , then outer$36 -> {
++                 join return$25 = then inner$37 -> {
++                   outer$36 ~ (inner$37, return$24)
++                 }
++                 in invoke String# ~ ("world", return$25)
++               } )
++             }
++             in invoke String# ~ ("hello", return$26)
+            }
+-           , return$24 ) )
+          }
+-         , return$23 )
+      }
+    } ~ return$22
+  
+  def Pair(return$29) =
+    \constructor$15 return$30 . {
+      \constructor$16 return$31 . {
+        Pair(constructor$15, constructor$16) ~ return$31
+      } ~ return$30
+    } ~ return$29
+
+
+=== Flat -> Join ===
+  def mkRec(return$17) =
+    \param$10 return$18 . {
+      \param$11 return$19 . {
+-       Tuple(param$10, param$11) ~ select {
++       join select$38 = select {
+          Tuple(a#2, b#3) ->
+            { fst(return$20) = {
+              a#2 ~ return$20
+            }
+            , snd(return$21) = {
+              b#3 ~ return$21
+            } } ~ return$19
+        }
++       in Tuple(param$10, param$11) ~ select$38
+      } ~ return$18
+    } ~ return$17
+  
+  def main(return$22) =
+    \param$12 return$23 . {
+-     param$12 ~ select {
++     join select$53 = select {
+        _#4 ->
+-         \param$13 return$27 . {
++         join then$52 = then outer$32 -> {
+-           param$13 ~ select {
+-             {fst = x#5, snd = y#6} ->
+-               \param$14 return$28 . {
+-                 param$14 ~ select {
+-                   Pair(p#7, q#8) ->
+-                     invoke putStrLn ~ ( p#7
+-                     , then _#9 -> {
+-                       invoke putStrLn ~ (q#8, return$28)
+-                     } )
+-                 }
+-               } ~ (Pair(x#5, y#6), return$27)
+-           }
+-         } ~ then outer$32 -> {
+            join return$24 = then inner$33 -> {
+-             outer$32 ~ (inner$33, return$23)
++             join apply$51 = (inner$33, return$23)
++             in outer$32 ~ apply$51
+            }
+-           in invoke mkRec ~ then outer$34 -> {
++           in join then$50 = then outer$34 -> {
+              join return$26 = then inner$35 -> {
+-               outer$34 ~ ( inner$35
++               join then$48 = then outer$36 -> {
+-               , then outer$36 -> {
+                  join return$25 = then inner$37 -> {
+-                   outer$36 ~ (inner$37, return$24)
++                   join apply$47 = (inner$37, return$24)
++                   in outer$36 ~ apply$47
+                  }
+-                 in invoke String# ~ ("world", return$25)
++                 in join apply$46 = ("world", return$25)
+-               } )
++                 in invoke String# ~ apply$46
++               }
++               in join apply$49 = (inner$35, then$48)
++               in outer$34 ~ apply$49
+              }
+-             in invoke String# ~ ("hello", return$26)
++             in join apply$45 = ("hello", return$26)
++             in invoke String# ~ apply$45
+            }
++           in invoke mkRec ~ then$50
+          }
++         in \param$13 return$27 . {
++           join select$44 = select {
++             {fst = x#5, snd = y#6} ->
++               join apply$43 = (Pair(x#5, y#6), return$27)
++               in \param$14 return$28 . {
++                 join select$42 = select {
++                   Pair(p#7, q#8) ->
++                     join then$40 = then _#9 -> {
++                       join apply$39 = (q#8, return$28)
++                       in invoke putStrLn ~ apply$39
++                     }
++                     in join apply$41 = (p#7, then$40)
++                     in invoke putStrLn ~ apply$41
++                 }
++                 in param$14 ~ select$42
++               } ~ apply$43
++           }
++           in param$13 ~ select$44
++         } ~ then$52
+      }
++     in param$12 ~ select$53
+    } ~ return$22
+  
+  def Pair(return$29) =
+    \constructor$15 return$30 . {
+      \constructor$16 return$31 . {
+        Pair(constructor$15, constructor$16) ~ return$31
+      } ~ return$30
+    } ~ return$29
+
+
+=== Join -> ClosureConv ===
+- def mkRec(return$17) =
++ toplevel fn mkRec(return$17) =
+-   \param$10 return$18 . {
++   let closure$66 = closure lambda$55()
+-     \param$11 return$19 . {
++   return return$17(closure$66)
+-       join select$38 = select {
+-         Tuple(a#2, b#3) ->
+-           { fst(return$20) = {
+-             a#2 ~ return$20
+-           }
+-           , snd(return$21) = {
+-             b#3 ~ return$21
+-           } } ~ return$19
+-       }
+-       in Tuple(param$10, param$11) ~ select$38
+-     } ~ return$18
+-   } ~ return$17
+  
+- def main(return$22) =
++ closure fn lambda$55(self$56, param$10, return$18) =
+-   \param$12 return$23 . {
++   let closure$65 = closure lambda$57(param$10)
+-     join select$53 = select {
++   return return$18(closure$65)
+-       _#4 ->
+-         join then$52 = then outer$32 -> {
+-           join return$24 = then inner$33 -> {
+-             join apply$51 = (inner$33, return$23)
+-             in outer$32 ~ apply$51
+-           }
+-           in join then$50 = then outer$34 -> {
+-             join return$26 = then inner$35 -> {
+-               join then$48 = then outer$36 -> {
+-                 join return$25 = then inner$37 -> {
+-                   join apply$47 = (inner$37, return$24)
+-                   in outer$36 ~ apply$47
+-                 }
+-                 in join apply$46 = ("world", return$25)
+-                 in invoke String# ~ apply$46
+-               }
+-               in join apply$49 = (inner$35, then$48)
+-               in outer$34 ~ apply$49
+-             }
+-             in join apply$45 = ("hello", return$26)
+-             in invoke String# ~ apply$45
+-           }
+-           in invoke mkRec ~ then$50
+-         }
+-         in \param$13 return$27 . {
+-           join select$44 = select {
+-             {fst = x#5, snd = y#6} ->
+-               join apply$43 = (Pair(x#5, y#6), return$27)
+-               in \param$14 return$28 . {
+-                 join select$42 = select {
+-                   Pair(p#7, q#8) ->
+-                     join then$40 = then _#9 -> {
+-                       join apply$39 = (q#8, return$28)
+-                       in invoke putStrLn ~ apply$39
+-                     }
+-                     in join apply$41 = (p#7, then$40)
+-                     in invoke putStrLn ~ apply$41
+-                 }
+-                 in param$14 ~ select$42
+-               } ~ apply$43
+-           }
+-           in param$13 ~ select$44
+-         } ~ then$52
+-     }
+-     in param$12 ~ select$53
+-   } ~ return$22
+  
+- def Pair(return$29) =
++ closure fn lambda$57(self$58, param$11, return$19) =
+-   \constructor$15 return$30 . {
++   let param$10 = self$58.cap[0]
+-     \constructor$16 return$31 . {
++   let struct$59 = Tuple(param$10, param$11)
+-       Pair(constructor$15, constructor$16) ~ return$31
++   if struct$59.tag == Tuple then {
+-     } ~ return$30
++     let a#2 = struct$59.0
+-   } ~ return$29
++     let b#3 = struct$59.1
++     let record$64 = record(fst = field$60, snd = field$62) captures(a#2, b#3)
++     return return$19(record$64)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ field fn field$60(self$61, return$20) =
++   let a#2 = self$61.cap[0]
++   return return$20(a#2)
++ 
++ field fn field$62(self$63, return$21) =
++   let b#3 = self$63.cap[1]
++   return return$21(b#3)
++ 
++ toplevel fn main(return$22) =
++   let closure$109 = closure lambda$68()
++   return return$22(closure$109)
++ 
++ closure fn lambda$68(self$69, param$12, return$23) =
++   if  then {
++     let _#4 = param$12
++     let closure$85 = closure lambda$70()
++     let return$24 = closure join$86(closure$85, return$23)
++     let then$50 = closure join$89(return$24)
++     return mkRec(then$50)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn lambda$70(self$71, param$13, return$27) =
++   if param$13.kind == record then {
++     let x#5 = param$13!fst
++     let y#6 = param$13!snd
++     let closure$83 = closure lambda$72()
++     let struct$84 = Pair(x#5, y#6)
++     return closure$83(struct$84, return$27)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn lambda$72(self$73, param$14, return$28) =
++   if param$14.tag == Pair then {
++     let p#7 = param$14.0
++     let q#8 = param$14.1
++     let then$40 = closure join$74(q#8, return$28)
++     let apply$41 = closure join$80(p#7, then$40)
++     return putStrLn(apply$41)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$74(self$75, value$76) =
++   let q#8 = self$75.cap[0]
++   let return$28 = self$75.cap[1]
++   let apply$39 = closure join$77(q#8, return$28)
++   return putStrLn(apply$39)
++ 
++ closure fn join$77(self$78, value$79) =
++   let q#8 = self$78.cap[0]
++   let return$28 = self$78.cap[1]
++   return value$79(q#8, return$28)
++ 
++ closure fn join$80(self$81, value$82) =
++   let p#7 = self$81.cap[0]
++   let then$40 = self$81.cap[1]
++   return value$82(p#7, then$40)
++ 
++ closure fn join$86(self$87, value$88) =
++   let closure$85 = self$87.cap[0]
++   let return$23 = self$87.cap[1]
++   return closure$85(value$88, return$23)
++ 
++ closure fn join$89(self$90, value$91) =
++   let return$24 = self$90.cap[0]
++   let return$26 = closure join$92(return$24, value$91)
++   let apply$45 = closure join$105(return$26)
++   return String#(apply$45)
++ 
++ closure fn join$92(self$93, value$94) =
++   let return$24 = self$93.cap[0]
++   let value$91 = self$93.cap[1]
++   let then$48 = closure join$95(return$24)
++   return value$91(value$94, then$48)
++ 
++ closure fn join$95(self$96, value$97) =
++   let return$24 = self$96.cap[0]
++   let return$25 = closure join$98(return$24, value$97)
++   let apply$46 = closure join$101(return$25)
++   return String#(apply$46)
++ 
++ closure fn join$98(self$99, value$100) =
++   let return$24 = self$99.cap[0]
++   let value$97 = self$99.cap[1]
++   return value$97(value$100, return$24)
++ 
++ closure fn join$101(self$102, value$103) =
++   let return$25 = self$102.cap[0]
++   let lit$104 = "world"
++   return value$103(lit$104, return$25)
++ 
++ closure fn join$105(self$106, value$107) =
++   let return$26 = self$106.cap[0]
++   let lit$108 = "hello"
++   return value$107(lit$108, return$26)
++ 
++ toplevel fn Pair(return$29) =
++   let closure$117 = closure lambda$111()
++   return return$29(closure$117)
++ 
++ closure fn lambda$111(self$112, constructor$15, return$30) =
++   let closure$116 = closure lambda$113(constructor$15)
++   return return$30(closure$116)
++ 
++ closure fn lambda$113(self$114, constructor$16, return$31) =
++   let constructor$15 = self$114.cap[0]
++   let struct$115 = Pair(constructor$15, constructor$16)
++   return return$31(struct$115)
++ 
++ toplevel fn zig_main$120() =
++   let finish$118 = closure join$122()
++   let after_main$119 = closure join$125(finish$118)
++   return main(after_main$119)
++ 
++ closure fn join$122(self$123, value$124) = return value$124
++ 
++ closure fn join$125(self$126, value$127) =
++   let finish$118 = self$126.cap[0]
++   let struct$128 = Tuple()
++   return value$127(struct$128, finish$118)
++ 
++ entry = zig_main$120
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn mkRec(return$17) =
+    let closure$66 = closure lambda$55()
+    return return$17(closure$66)
+  
+  closure fn lambda$55(self$56, param$10, return$18) =
+    let closure$65 = closure lambda$57(param$10)
+    return return$18(closure$65)
+  
+  closure fn lambda$57(self$58, param$11, return$19) =
+    let param$10 = self$58.cap[0]
+-   let struct$59 = Tuple(param$10, param$11)
++   if  then {
+-   if struct$59.tag == Tuple then {
++     let record$64 = record(fst = field$60, snd = field$62) captures( param$10
+-     let a#2 = struct$59.0
++     , param$11 )
+-     let b#3 = struct$59.1
+-     let record$64 = record(fst = field$60, snd = field$62) captures(a#2, b#3)
+      return return$19(record$64)
+    } else {
+      panic "no matching branch"
+    }
+  
+  field fn field$60(self$61, return$20) =
+    let a#2 = self$61.cap[0]
+    return return$20(a#2)
+  
+  field fn field$62(self$63, return$21) =
+    let b#3 = self$63.cap[1]
+    return return$21(b#3)
+  
+  toplevel fn main(return$22) =
+    let closure$109 = closure lambda$68()
+    return return$22(closure$109)
+  
+  closure fn lambda$68(self$69, param$12, return$23) =
+    if  then {
+-     let _#4 = param$12
+      let closure$85 = closure lambda$70()
+      let return$24 = closure join$86(closure$85, return$23)
+      let then$50 = closure join$89(return$24)
+      return mkRec(then$50)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$70(self$71, param$13, return$27) =
+    if param$13.kind == record then {
+      let x#5 = param$13!fst
+      let y#6 = param$13!snd
+      let closure$83 = closure lambda$72()
+      let struct$84 = Pair(x#5, y#6)
+      return closure$83(struct$84, return$27)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$72(self$73, param$14, return$28) =
+    if param$14.tag == Pair then {
+      let p#7 = param$14.0
+      let q#8 = param$14.1
+      let then$40 = closure join$74(q#8, return$28)
+      let apply$41 = closure join$80(p#7, then$40)
+      return putStrLn(apply$41)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$74(self$75, value$76) =
+    let q#8 = self$75.cap[0]
+    let return$28 = self$75.cap[1]
+    let apply$39 = closure join$77(q#8, return$28)
+    return putStrLn(apply$39)
+  
+  closure fn join$77(self$78, value$79) =
+    let q#8 = self$78.cap[0]
+    let return$28 = self$78.cap[1]
+    return value$79(q#8, return$28)
+  
+  closure fn join$80(self$81, value$82) =
+    let p#7 = self$81.cap[0]
+    let then$40 = self$81.cap[1]
+    return value$82(p#7, then$40)
+  
+  closure fn join$86(self$87, value$88) =
+    let closure$85 = self$87.cap[0]
+    let return$23 = self$87.cap[1]
+    return closure$85(value$88, return$23)
+  
+  closure fn join$89(self$90, value$91) =
+    let return$24 = self$90.cap[0]
+    let return$26 = closure join$92(return$24, value$91)
+    let apply$45 = closure join$105(return$26)
+    return String#(apply$45)
+  
+  closure fn join$92(self$93, value$94) =
+    let return$24 = self$93.cap[0]
+    let value$91 = self$93.cap[1]
+    let then$48 = closure join$95(return$24)
+    return value$91(value$94, then$48)
+  
+  closure fn join$95(self$96, value$97) =
+    let return$24 = self$96.cap[0]
+    let return$25 = closure join$98(return$24, value$97)
+    let apply$46 = closure join$101(return$25)
+    return String#(apply$46)
+  
+  closure fn join$98(self$99, value$100) =
+    let return$24 = self$99.cap[0]
+    let value$97 = self$99.cap[1]
+    return value$97(value$100, return$24)
+  
+  closure fn join$101(self$102, value$103) =
+    let return$25 = self$102.cap[0]
+    let lit$104 = "world"
+    return value$103(lit$104, return$25)
+  
+  closure fn join$105(self$106, value$107) =
+    let return$26 = self$106.cap[0]
+    let lit$108 = "hello"
+    return value$107(lit$108, return$26)
+  
+  toplevel fn Pair(return$29) =
+    let closure$117 = closure lambda$111()
+    return return$29(closure$117)
+  
+  closure fn lambda$111(self$112, constructor$15, return$30) =
+    let closure$116 = closure lambda$113(constructor$15)
+    return return$30(closure$116)
+  
+  closure fn lambda$113(self$114, constructor$16, return$31) =
+    let constructor$15 = self$114.cap[0]
+    let struct$115 = Pair(constructor$15, constructor$16)
+    return return$31(struct$115)
+  
+  toplevel fn zig_main$120() =
+    let finish$118 = closure join$122()
+    let after_main$119 = closure join$125(finish$118)
+    return main(after_main$119)
+  
+  closure fn join$122(self$123, value$124) = return value$124
+  
+  closure fn join$125(self$126, value$127) =
+    let finish$118 = self$126.cap[0]
+    let struct$128 = Tuple()
+    return value$127(struct$128, finish$118)
+  
+  entry = zig_main$120
+
+
+=== Peephole -> Perceus ===
+  toplevel fn mkRec(return$17) =
+    let closure$66 = closure lambda$55()
+    return return$17(closure$66)
+  
+  closure fn lambda$55(self$56, param$10, return$18) =
++   drop self$56
+    let closure$65 = closure lambda$57(param$10)
+    return return$18(closure$65)
+  
+  closure fn lambda$57(self$58, param$11, return$19) =
+    let param$10 = self$58.cap[0]
++   dup param$10
++   drop self$58
+    if  then {
+      let record$64 = record(fst = field$60, snd = field$62) captures( param$10
+      , param$11 )
+      return return$19(record$64)
+    } else {
+      panic "no matching branch"
+    }
+  
+  field fn field$60(self$61, return$20) =
+    let a#2 = self$61.cap[0]
++   dup a#2
++   drop self$61
+    return return$20(a#2)
+  
+  field fn field$62(self$63, return$21) =
+    let b#3 = self$63.cap[1]
++   dup b#3
++   drop self$63
+    return return$21(b#3)
+  
+  toplevel fn main(return$22) =
+    let closure$109 = closure lambda$68()
+    return return$22(closure$109)
+  
+  closure fn lambda$68(self$69, param$12, return$23) =
++   drop param$12
++   drop self$69
+    if  then {
+      let closure$85 = closure lambda$70()
+      let return$24 = closure join$86(closure$85, return$23)
+      let then$50 = closure join$89(return$24)
+      return mkRec(then$50)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$70(self$71, param$13, return$27) =
++   drop self$71
+    if param$13.kind == record then {
++     dup param$13
+      let x#5 = param$13!fst
+      let y#6 = param$13!snd
+      let closure$83 = closure lambda$72()
+      let struct$84 = Pair(x#5, y#6)
+      return closure$83(struct$84, return$27)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$72(self$73, param$14, return$28) =
++   drop self$73
+    if param$14.tag == Pair then {
+      let p#7 = param$14.0
++     dup p#7
+      let q#8 = param$14.1
++     dup q#8
++     drop param$14
+      let then$40 = closure join$74(q#8, return$28)
+      let apply$41 = closure join$80(p#7, then$40)
+      return putStrLn(apply$41)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$74(self$75, value$76) =
++   drop value$76
+    let q#8 = self$75.cap[0]
++   dup q#8
+    let return$28 = self$75.cap[1]
++   dup return$28
++   drop self$75
+    let apply$39 = closure join$77(q#8, return$28)
+    return putStrLn(apply$39)
+  
+  closure fn join$77(self$78, value$79) =
+    let q#8 = self$78.cap[0]
++   dup q#8
+    let return$28 = self$78.cap[1]
++   dup return$28
++   drop self$78
+    return value$79(q#8, return$28)
+  
+  closure fn join$80(self$81, value$82) =
+    let p#7 = self$81.cap[0]
++   dup p#7
+    let then$40 = self$81.cap[1]
++   dup then$40
++   drop self$81
+    return value$82(p#7, then$40)
+  
+  closure fn join$86(self$87, value$88) =
+    let closure$85 = self$87.cap[0]
++   dup closure$85
+    let return$23 = self$87.cap[1]
++   dup return$23
++   drop self$87
+    return closure$85(value$88, return$23)
+  
+  closure fn join$89(self$90, value$91) =
+    let return$24 = self$90.cap[0]
++   dup return$24
++   drop self$90
+    let return$26 = closure join$92(return$24, value$91)
+    let apply$45 = closure join$105(return$26)
+    return String#(apply$45)
+  
+  closure fn join$92(self$93, value$94) =
+    let return$24 = self$93.cap[0]
++   dup return$24
+    let value$91 = self$93.cap[1]
++   dup value$91
++   drop self$93
+    let then$48 = closure join$95(return$24)
+    return value$91(value$94, then$48)
+  
+  closure fn join$95(self$96, value$97) =
+    let return$24 = self$96.cap[0]
++   dup return$24
++   drop self$96
+    let return$25 = closure join$98(return$24, value$97)
+    let apply$46 = closure join$101(return$25)
+    return String#(apply$46)
+  
+  closure fn join$98(self$99, value$100) =
+    let return$24 = self$99.cap[0]
++   dup return$24
+    let value$97 = self$99.cap[1]
++   dup value$97
++   drop self$99
+    return value$97(value$100, return$24)
+  
+  closure fn join$101(self$102, value$103) =
+    let return$25 = self$102.cap[0]
++   dup return$25
++   drop self$102
+    let lit$104 = "world"
+    return value$103(lit$104, return$25)
+  
+  closure fn join$105(self$106, value$107) =
+    let return$26 = self$106.cap[0]
++   dup return$26
++   drop self$106
+    let lit$108 = "hello"
+    return value$107(lit$108, return$26)
+  
+  toplevel fn Pair(return$29) =
+    let closure$117 = closure lambda$111()
+    return return$29(closure$117)
+  
+  closure fn lambda$111(self$112, constructor$15, return$30) =
++   drop self$112
+    let closure$116 = closure lambda$113(constructor$15)
+    return return$30(closure$116)
+  
+  closure fn lambda$113(self$114, constructor$16, return$31) =
+    let constructor$15 = self$114.cap[0]
++   dup constructor$15
++   drop self$114
+    let struct$115 = Pair(constructor$15, constructor$16)
+    return return$31(struct$115)
+  
+  toplevel fn zig_main$120() =
+    let finish$118 = closure join$122()
+    let after_main$119 = closure join$125(finish$118)
+    return main(after_main$119)
+  
+- closure fn join$122(self$123, value$124) = return value$124
++ closure fn join$122(self$123, value$124) =
++   drop self$123
++   return value$124
+  
+  closure fn join$125(self$126, value$127) =
+    let finish$118 = self$126.cap[0]
++   dup finish$118
++   drop self$126
+    let struct$128 = Tuple()
+    return value$127(struct$128, finish$118)
+  
+  entry = zig_main$120
+
+
+=== Perceus -> Reuse ===
+  toplevel fn mkRec(return$17) =
+    let closure$66 = closure lambda$55()
+    return return$17(closure$66)
+  
+  closure fn lambda$55(self$56, param$10, return$18) =
+-   drop self$56
+    let closure$65 = closure lambda$57(param$10)
++   drop self$56
+    return return$18(closure$65)
+  
+  closure fn lambda$57(self$58, param$11, return$19) =
+    let param$10 = self$58.cap[0]
+    dup param$10
+    drop self$58
+    if  then {
+      let record$64 = record(fst = field$60, snd = field$62) captures( param$10
+      , param$11 )
+      return return$19(record$64)
+    } else {
+      panic "no matching branch"
+    }
+  
+  field fn field$60(self$61, return$20) =
+    let a#2 = self$61.cap[0]
+    dup a#2
+    drop self$61
+    return return$20(a#2)
+  
+  field fn field$62(self$63, return$21) =
+    let b#3 = self$63.cap[1]
+    dup b#3
+    drop self$63
+    return return$21(b#3)
+  
+  toplevel fn main(return$22) =
+    let closure$109 = closure lambda$68()
+    return return$22(closure$109)
+  
+  closure fn lambda$68(self$69, param$12, return$23) =
+    drop param$12
+    drop self$69
+    if  then {
+      let closure$85 = closure lambda$70()
+      let return$24 = closure join$86(closure$85, return$23)
+      let then$50 = closure join$89(return$24)
+      return mkRec(then$50)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$70(self$71, param$13, return$27) =
+    drop self$71
+    if param$13.kind == record then {
+      dup param$13
+      let x#5 = param$13!fst
+      let y#6 = param$13!snd
+      let closure$83 = closure lambda$72()
+      let struct$84 = Pair(x#5, y#6)
+      return closure$83(struct$84, return$27)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$72(self$73, param$14, return$28) =
+    drop self$73
+    if param$14.tag == Pair then {
+      let p#7 = param$14.0
+      dup p#7
+      let q#8 = param$14.1
+      dup q#8
+-     drop param$14
+      let then$40 = closure join$74(q#8, return$28)
+      let apply$41 = closure join$80(p#7, then$40)
++     drop param$14
+      return putStrLn(apply$41)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$74(self$75, value$76) =
+-   drop value$76
+    let q#8 = self$75.cap[0]
+    dup q#8
+    let return$28 = self$75.cap[1]
+    dup return$28
+-   drop self$75
+    let apply$39 = closure join$77(q#8, return$28)
++   drop value$76
++   drop self$75
+    return putStrLn(apply$39)
+  
+  closure fn join$77(self$78, value$79) =
+    let q#8 = self$78.cap[0]
+    dup q#8
+    let return$28 = self$78.cap[1]
+    dup return$28
+    drop self$78
+    return value$79(q#8, return$28)
+  
+  closure fn join$80(self$81, value$82) =
+    let p#7 = self$81.cap[0]
+    dup p#7
+    let then$40 = self$81.cap[1]
+    dup then$40
+    drop self$81
+    return value$82(p#7, then$40)
+  
+  closure fn join$86(self$87, value$88) =
+    let closure$85 = self$87.cap[0]
+    dup closure$85
+    let return$23 = self$87.cap[1]
+    dup return$23
+    drop self$87
+    return closure$85(value$88, return$23)
+  
+  closure fn join$89(self$90, value$91) =
+    let return$24 = self$90.cap[0]
+    dup return$24
+-   drop self$90
+    let return$26 = closure join$92(return$24, value$91)
+    let apply$45 = closure join$105(return$26)
++   drop self$90
+    return String#(apply$45)
+  
+  closure fn join$92(self$93, value$94) =
+    let return$24 = self$93.cap[0]
+    dup return$24
+    let value$91 = self$93.cap[1]
+    dup value$91
+-   drop self$93
+    let then$48 = closure join$95(return$24)
++   drop self$93
+    return value$91(value$94, then$48)
+  
+  closure fn join$95(self$96, value$97) =
+    let return$24 = self$96.cap[0]
+    dup return$24
+-   drop self$96
+    let return$25 = closure join$98(return$24, value$97)
+    let apply$46 = closure join$101(return$25)
++   drop self$96
+    return String#(apply$46)
+  
+  closure fn join$98(self$99, value$100) =
+    let return$24 = self$99.cap[0]
+    dup return$24
+    let value$97 = self$99.cap[1]
+    dup value$97
+    drop self$99
+    return value$97(value$100, return$24)
+  
+  closure fn join$101(self$102, value$103) =
+    let return$25 = self$102.cap[0]
+    dup return$25
+-   drop self$102
+    let lit$104 = "world"
++   drop self$102
+    return value$103(lit$104, return$25)
+  
+  closure fn join$105(self$106, value$107) =
+    let return$26 = self$106.cap[0]
+    dup return$26
+-   drop self$106
+    let lit$108 = "hello"
++   drop self$106
+    return value$107(lit$108, return$26)
+  
+  toplevel fn Pair(return$29) =
+    let closure$117 = closure lambda$111()
+    return return$29(closure$117)
+  
+  closure fn lambda$111(self$112, constructor$15, return$30) =
+-   drop self$112
+    let closure$116 = closure lambda$113(constructor$15)
++   drop self$112
+    return return$30(closure$116)
+  
+  closure fn lambda$113(self$114, constructor$16, return$31) =
+    let constructor$15 = self$114.cap[0]
+    dup constructor$15
+-   drop self$114
++   dropReuse reuse$129 = self$114 /2
+-   let struct$115 = Pair(constructor$15, constructor$16)
++   let struct$115 = reuse reuse$129 Pair(constructor$15, constructor$16)
+    return return$31(struct$115)
+  
+  toplevel fn zig_main$120() =
+    let finish$118 = closure join$122()
+    let after_main$119 = closure join$125(finish$118)
+    return main(after_main$119)
+  
+  closure fn join$122(self$123, value$124) =
+    drop self$123
+    return value$124
+  
+  closure fn join$125(self$126, value$127) =
+    let finish$118 = self$126.cap[0]
+    dup finish$118
+-   drop self$126
++   dropReuse reuse$130 = self$126 /0
+-   let struct$128 = Tuple()
++   let struct$128 = reuse reuse$130 Tuple()
+    return value$127(struct$128, finish$118)
+  
+  entry = zig_main$120

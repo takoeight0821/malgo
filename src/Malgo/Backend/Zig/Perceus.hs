@@ -65,17 +65,27 @@ goLive delta [] term = insertTerminator delta term
 goLive delta (stmt : rest) term = case stmt of
   Dup _ -> error "Malgo.Backend.Zig.Perceus: input already contains Dup"
   Drop _ -> error "Malgo.Backend.Zig.Perceus: input already contains Drop"
+  DropReuse {} -> error "Malgo.Backend.Zig.Perceus: input already contains DropReuse (Reuse runs after Perceus)"
   Let x e -> case e of
     -- noreturn: the rest of the block is unreachable, leave it untouched.
     PanicExpr _ -> (stmt : rest, term)
     ReadPath _ -> borrowedLet
     ReadCapture _ _ -> borrowedLet
     Lit _ -> owningLet []
+    -- reuseHint (inserted by Malgo.Sequent.ReuseSpecialize) is the one
+    -- primitive that consumes its operand rather than borrowing it: its
+    -- whole purpose is to mark its argument's last use right before a
+    -- reconstruction, so Malgo.Backend.Zig.Reuse can recognize the
+    -- (Let hint (Prim "reuseHint" [x]), Drop hint) pair it produces here
+    -- and redirect the reuse pairing to `x` instead of the immediately-dead
+    -- `hint` binding.
+    Prim "reuseHint" ops -> owningLet ops
     Prim _ _ -> owningLet []
     MkStruct _ ops -> owningLet ops
     MkClosure _ ops -> owningLet ops
     MkRecord _ ops -> owningLet ops
     Force v _ -> owningLet [v]
+    MkStructReuse {} -> error "Malgo.Backend.Zig.Perceus: input already contains MkStructReuse (Reuse runs after Perceus)"
     where
       liveAfter = freeVarsBlock (Block rest term)
       -- A borrowed read creates no reference: promote the binding to owned

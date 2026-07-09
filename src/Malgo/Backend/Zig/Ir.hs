@@ -34,6 +34,14 @@ module Malgo.Backend.Zig.Ir
   )
 where
 
+-- Note on 'DropReuse'\/'MkStructReuse' (inserted only by
+-- 'Malgo.Backend.Zig.Reuse'): a reuse token is an ordinary 'Name', not its
+-- own 'Expr', because 'rt.dropReuse' returns @?rt.Value@ while every other
+-- 'Expr' yields a plain @rt.Value@ -- keeping the two-instruction form
+-- (rather than folding the pairing into one node) is also what keeps a
+-- future interprocedural extension (threading a token through a closure's
+-- captures) possible without another IR change.
+
 import Data.Set qualified as Set
 import Malgo.Prelude
 import Malgo.Sequent.Fun (Literal, Name, Tag)
@@ -79,6 +87,12 @@ data Stmt
     Dup Name
   | -- | Inserted only by Perceus.
     Drop Name
+  | -- | @const tok = rt.dropReuse(x, arity);@ — inserted only by
+    -- 'Malgo.Backend.Zig.Reuse', replacing a plain 'Drop' whose value is
+    -- about to be rebuilt by a same-arity 'MkStructReuse' later in this
+    -- same statement list. Consumes @x@'s reference; binds @tok@ (an
+    -- @?rt.Value@, non-null when the runtime recycled @x@'s allocation).
+    DropReuse Name Name Int
   deriving stock (Eq, Show)
 
 -- | Every 'Expr' yields exactly one @rt.Value@.
@@ -111,6 +125,12 @@ data Expr
     -- printer truncates the rest of the block after it, and RcCheck treats
     -- it as terminating the path.
     PanicExpr Text
+  | -- | @rt.mkStructReuse(tok, tag, fields)@ — inserted only by
+    -- 'Malgo.Backend.Zig.Reuse'. Consumes the reuse token @tok@ (bound by
+    -- a matching 'DropReuse') exactly once, plus one reference per field
+    -- as usual; recycles @tok@'s allocation in place when the runtime
+    -- marked it reusable, else falls back to a fresh 'MkStruct'.
+    MkStructReuse Name Tag [Name]
   deriving stock (Eq, Show)
 
 data Path = PRoot Name | PField Path Int
@@ -164,11 +184,13 @@ freeVarsBlock (Block stmts terminator) = go stmts
     go (Let x e : rest) = freeVarsExpr e <> Set.delete x (go rest)
     go (Dup x : rest) = Set.insert x (go rest)
     go (Drop x : rest) = Set.insert x (go rest)
+    go (DropReuse tok x _ : rest) = Set.insert x (Set.delete tok (go rest))
 
 freeVarsStmt :: Stmt -> Set Name
 freeVarsStmt (Let _ e) = freeVarsExpr e
 freeVarsStmt (Dup x) = Set.singleton x
 freeVarsStmt (Drop x) = Set.singleton x
+freeVarsStmt (DropReuse _ x _) = Set.singleton x
 
 freeVarsExpr :: Expr -> Set Name
 freeVarsExpr (Lit _) = Set.empty
@@ -176,6 +198,7 @@ freeVarsExpr (MkStruct _ vs) = Set.fromList vs
 freeVarsExpr (MkClosure _ vs) = Set.fromList vs
 freeVarsExpr (MkRecord _ vs) = Set.fromList vs
 freeVarsExpr (Prim _ vs) = Set.fromList vs
+freeVarsExpr (MkStructReuse tok _ vs) = Set.fromList (tok : vs)
 freeVarsExpr (ReadPath p) = Set.singleton (pathRoot p)
 freeVarsExpr (ReadCapture self _) = Set.singleton self
 freeVarsExpr (Force v _) = Set.singleton v

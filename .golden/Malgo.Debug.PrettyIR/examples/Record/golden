@@ -1,0 +1,1569 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+type Person  = {name : String, age : Int32}
+
+def personAge =
+  fn {
+    {name = _, age = age} ->
+      {
+        age
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        personAge({name = "Hoge", age = 42}) |> toStringInt32 |> putStrLn
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+type Person  = {name : String, age : Int32}
+
+def personAge =
+  fn {
+    {name = _#0, age = age#1} ->
+      {
+        age#1
+      }
+  }
+
+def main =
+  fn {
+    _#2 ->
+      {
+        personAge( { name = String#("Hoge")
+        , age = Int32#(42) } ) |> toStringInt32 |> putStrLn
+      }
+  }
+
+=== ToFun ===
+def personAge =
+  \param$3 ->
+    case param$3 of {
+      {age = age#1, name = _#0} -> age#1
+    }
+
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#2 ->
+        invoke |>( invoke |>( invoke personAge( { age = invoke Int32#(42)
+        , name = invoke String#( "Hoge" ) } ) )( invoke toStringInt32 ) )( invoke putStrLn )
+    }
+
+=== SaturateCtor ===
+def personAge =
+  \param$3 ->
+    case param$3 of {
+      {age = age#1, name = _#0} -> age#1
+    }
+
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#2 ->
+        invoke |>( invoke |>( invoke personAge( { age = invoke Int32#(42)
+        , name = invoke String#( "Hoge" ) } ) )( invoke toStringInt32 ) )( invoke putStrLn )
+    }
+
+=== ReuseSpecialize ===
+def personAge =
+  \param$3 ->
+    case param$3 of {
+      {age = age#1, name = _#0} -> age#1
+    }
+
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#2 ->
+        invoke |>( invoke |>( invoke personAge( { age = invoke Int32#(42)
+        , name = invoke String#( "Hoge" ) } ) )( invoke toStringInt32 ) )( invoke putStrLn )
+    }
+
+=== ToCore ===
+def personAge(return$5) =
+  \param$3 return$6 . {
+    param$3 ~ select {
+      {age = age#1, name = _#0} -> age#1 ~ return$6
+    }
+  } ~ return$5
+
+def main(return$7) =
+  \param$4 return$8 . {
+    param$4 ~ select {
+      _#2 ->
+        invoke |> ~ ( do return$10 . {
+          invoke |> ~ ( do return$12 . {
+            invoke personAge ~ ( { age(return$13) = {
+              invoke Int32# ~ (42, return$13)
+            }
+            , name(return$14) = {
+              invoke String# ~ ("Hoge", return$14)
+            } }
+            , return$12 )
+          }
+          , ( do return$11 . {
+            invoke toStringInt32 ~ return$11
+          }
+          , return$10 ) )
+        }
+        , ( do return$9 . {
+          invoke putStrLn ~ return$9
+        }
+        , return$8 ) )
+    }
+  } ~ return$7
+
+=== Flat ===
+def personAge(return$5) =
+  \param$3 return$6 . {
+    param$3 ~ select {
+      {age = age#1, name = _#0} -> age#1 ~ return$6
+    }
+  } ~ return$5
+
+def main(return$7) =
+  \param$4 return$8 . {
+    param$4 ~ select {
+      _#2 ->
+        invoke |> ~ then outer$15 -> {
+          join return$10 = then inner$16 -> {
+            outer$15 ~ ( inner$16
+            , then outer$17 -> {
+              join return$9 = then inner$18 -> {
+                outer$17 ~ (inner$18, return$8)
+              }
+              in invoke putStrLn ~ return$9
+            } )
+          }
+          in invoke |> ~ then outer$19 -> {
+            join return$12 = then inner$20 -> {
+              outer$19 ~ ( inner$20
+              , then outer$21 -> {
+                join return$11 = then inner$22 -> {
+                  outer$21 ~ (inner$22, return$10)
+                }
+                in invoke toStringInt32 ~ return$11
+              } )
+            }
+            in invoke personAge ~ ( { age(return$13) = {
+              invoke Int32# ~ (42, return$13)
+            }
+            , name(return$14) = {
+              invoke String# ~ ("Hoge", return$14)
+            } }
+            , return$12 )
+          }
+        }
+    }
+  } ~ return$7
+
+=== Join ===
+def personAge(return$5) =
+  \param$3 return$6 . {
+    join select$23 = select {
+      {age = age#1, name = _#0} -> age#1 ~ return$6
+    }
+    in param$3 ~ select$23
+  } ~ return$5
+
+def main(return$7) =
+  \param$4 return$8 . {
+    join select$35 = select {
+      _#2 ->
+        join then$34 = then outer$15 -> {
+          join return$10 = then inner$16 -> {
+            join then$32 = then outer$17 -> {
+              join return$9 = then inner$18 -> {
+                join apply$31 = (inner$18, return$8)
+                in outer$17 ~ apply$31
+              }
+              in invoke putStrLn ~ return$9
+            }
+            in join apply$33 = (inner$16, then$32)
+            in outer$15 ~ apply$33
+          }
+          in join then$30 = then outer$19 -> {
+            join return$12 = then inner$20 -> {
+              join then$28 = then outer$21 -> {
+                join return$11 = then inner$22 -> {
+                  join apply$27 = (inner$22, return$10)
+                  in outer$21 ~ apply$27
+                }
+                in invoke toStringInt32 ~ return$11
+              }
+              in join apply$29 = (inner$20, then$28)
+              in outer$19 ~ apply$29
+            }
+            in join apply$26 = ( { age(return$13) = {
+              join apply$24 = (42, return$13)
+              in invoke Int32# ~ apply$24
+            }
+            , name(return$14) = {
+              join apply$25 = ("Hoge", return$14)
+              in invoke String# ~ apply$25
+            } }
+            , return$12 )
+            in invoke personAge ~ apply$26
+          }
+          in invoke |> ~ then$30
+        }
+        in invoke |> ~ then$34
+    }
+    in param$4 ~ select$35
+  } ~ return$7
+
+=== ClosureConv ===
+toplevel fn personAge(return$5) =
+  let closure$39 = closure lambda$37()
+  return return$5(closure$39)
+
+closure fn lambda$37(self$38, param$3, return$6) =
+  if param$3.kind == record then {
+    let age#1 = param$3!age
+    let _#0 = param$3!name
+    return return$6(age#1)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$7) =
+  let closure$83 = closure lambda$41()
+  return return$7(closure$83)
+
+closure fn lambda$41(self$42, param$4, return$8) =
+  if  then {
+    let _#2 = param$4
+    let then$34 = closure join$43(return$8)
+    return |>(then$34)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$43(self$44, value$45) =
+  let return$8 = self$44.cap[0]
+  let return$10 = closure join$46(return$8, value$45)
+  let then$30 = closure join$55(return$10)
+  return |>(then$30)
+
+closure fn join$46(self$47, value$48) =
+  let return$8 = self$47.cap[0]
+  let value$45 = self$47.cap[1]
+  let then$32 = closure join$49(return$8)
+  return value$45(value$48, then$32)
+
+closure fn join$49(self$50, value$51) =
+  let return$8 = self$50.cap[0]
+  let return$9 = closure join$52(return$8, value$51)
+  return putStrLn(return$9)
+
+closure fn join$52(self$53, value$54) =
+  let return$8 = self$53.cap[0]
+  let value$51 = self$53.cap[1]
+  return value$51(value$54, return$8)
+
+closure fn join$55(self$56, value$57) =
+  let return$10 = self$56.cap[0]
+  let return$12 = closure join$58(return$10, value$57)
+  let apply$26 = closure join$67(return$12)
+  return personAge(apply$26)
+
+closure fn join$58(self$59, value$60) =
+  let return$10 = self$59.cap[0]
+  let value$57 = self$59.cap[1]
+  let then$28 = closure join$61(return$10)
+  return value$57(value$60, then$28)
+
+closure fn join$61(self$62, value$63) =
+  let return$10 = self$62.cap[0]
+  let return$11 = closure join$64(return$10, value$63)
+  return toStringInt32(return$11)
+
+closure fn join$64(self$65, value$66) =
+  let return$10 = self$65.cap[0]
+  let value$63 = self$65.cap[1]
+  return value$63(value$66, return$10)
+
+closure fn join$67(self$68, value$69) =
+  let return$12 = self$68.cap[0]
+  let record$82 = record(age = field$70, name = field$76) captures()
+  return value$69(record$82, return$12)
+
+field fn field$70(self$71, return$13) =
+  let apply$24 = closure join$72(return$13)
+  return Int32#(apply$24)
+
+closure fn join$72(self$73, value$74) =
+  let return$13 = self$73.cap[0]
+  let lit$75 = 42
+  return value$74(lit$75, return$13)
+
+field fn field$76(self$77, return$14) =
+  let apply$25 = closure join$78(return$14)
+  return String#(apply$25)
+
+closure fn join$78(self$79, value$80) =
+  let return$14 = self$79.cap[0]
+  let lit$81 = "Hoge"
+  return value$80(lit$81, return$14)
+
+toplevel fn zig_main$86() =
+  let finish$84 = closure join$88()
+  let after_main$85 = closure join$91(finish$84)
+  return main(after_main$85)
+
+closure fn join$88(self$89, value$90) = return value$90
+
+closure fn join$91(self$92, value$93) =
+  let finish$84 = self$92.cap[0]
+  let struct$94 = Tuple()
+  return value$93(struct$94, finish$84)
+
+entry = zig_main$86
+
+=== Peephole ===
+toplevel fn personAge(return$5) =
+  let closure$39 = closure lambda$37()
+  return return$5(closure$39)
+
+closure fn lambda$37(self$38, param$3, return$6) =
+  if param$3.kind == record then {
+    let age#1 = param$3!age
+    let _#0 = param$3!name
+    return return$6(age#1)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$7) =
+  let closure$83 = closure lambda$41()
+  return return$7(closure$83)
+
+closure fn lambda$41(self$42, param$4, return$8) =
+  if  then {
+    let then$34 = closure join$43(return$8)
+    return |>(then$34)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$43(self$44, value$45) =
+  let return$8 = self$44.cap[0]
+  let return$10 = closure join$46(return$8, value$45)
+  let then$30 = closure join$55(return$10)
+  return |>(then$30)
+
+closure fn join$46(self$47, value$48) =
+  let return$8 = self$47.cap[0]
+  let value$45 = self$47.cap[1]
+  let then$32 = closure join$49(return$8)
+  return value$45(value$48, then$32)
+
+closure fn join$49(self$50, value$51) =
+  let return$8 = self$50.cap[0]
+  let return$9 = closure join$52(return$8, value$51)
+  return putStrLn(return$9)
+
+closure fn join$52(self$53, value$54) =
+  let return$8 = self$53.cap[0]
+  let value$51 = self$53.cap[1]
+  return value$51(value$54, return$8)
+
+closure fn join$55(self$56, value$57) =
+  let return$10 = self$56.cap[0]
+  let return$12 = closure join$58(return$10, value$57)
+  let apply$26 = closure join$67(return$12)
+  return personAge(apply$26)
+
+closure fn join$58(self$59, value$60) =
+  let return$10 = self$59.cap[0]
+  let value$57 = self$59.cap[1]
+  let then$28 = closure join$61(return$10)
+  return value$57(value$60, then$28)
+
+closure fn join$61(self$62, value$63) =
+  let return$10 = self$62.cap[0]
+  let return$11 = closure join$64(return$10, value$63)
+  return toStringInt32(return$11)
+
+closure fn join$64(self$65, value$66) =
+  let return$10 = self$65.cap[0]
+  let value$63 = self$65.cap[1]
+  return value$63(value$66, return$10)
+
+closure fn join$67(self$68, value$69) =
+  let return$12 = self$68.cap[0]
+  let record$82 = record(age = field$70, name = field$76) captures()
+  return value$69(record$82, return$12)
+
+field fn field$70(self$71, return$13) =
+  let apply$24 = closure join$72(return$13)
+  return Int32#(apply$24)
+
+closure fn join$72(self$73, value$74) =
+  let return$13 = self$73.cap[0]
+  let lit$75 = 42
+  return value$74(lit$75, return$13)
+
+field fn field$76(self$77, return$14) =
+  let apply$25 = closure join$78(return$14)
+  return String#(apply$25)
+
+closure fn join$78(self$79, value$80) =
+  let return$14 = self$79.cap[0]
+  let lit$81 = "Hoge"
+  return value$80(lit$81, return$14)
+
+toplevel fn zig_main$86() =
+  let finish$84 = closure join$88()
+  let after_main$85 = closure join$91(finish$84)
+  return main(after_main$85)
+
+closure fn join$88(self$89, value$90) = return value$90
+
+closure fn join$91(self$92, value$93) =
+  let finish$84 = self$92.cap[0]
+  let struct$94 = Tuple()
+  return value$93(struct$94, finish$84)
+
+entry = zig_main$86
+
+=== Perceus ===
+toplevel fn personAge(return$5) =
+  let closure$39 = closure lambda$37()
+  return return$5(closure$39)
+
+closure fn lambda$37(self$38, param$3, return$6) =
+  drop self$38
+  if param$3.kind == record then {
+    dup param$3
+    let age#1 = param$3!age
+    let _#0 = param$3!name
+    drop _#0
+    return return$6(age#1)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$7) =
+  let closure$83 = closure lambda$41()
+  return return$7(closure$83)
+
+closure fn lambda$41(self$42, param$4, return$8) =
+  drop param$4
+  drop self$42
+  if  then {
+    let then$34 = closure join$43(return$8)
+    return |>(then$34)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$43(self$44, value$45) =
+  let return$8 = self$44.cap[0]
+  dup return$8
+  drop self$44
+  let return$10 = closure join$46(return$8, value$45)
+  let then$30 = closure join$55(return$10)
+  return |>(then$30)
+
+closure fn join$46(self$47, value$48) =
+  let return$8 = self$47.cap[0]
+  dup return$8
+  let value$45 = self$47.cap[1]
+  dup value$45
+  drop self$47
+  let then$32 = closure join$49(return$8)
+  return value$45(value$48, then$32)
+
+closure fn join$49(self$50, value$51) =
+  let return$8 = self$50.cap[0]
+  dup return$8
+  drop self$50
+  let return$9 = closure join$52(return$8, value$51)
+  return putStrLn(return$9)
+
+closure fn join$52(self$53, value$54) =
+  let return$8 = self$53.cap[0]
+  dup return$8
+  let value$51 = self$53.cap[1]
+  dup value$51
+  drop self$53
+  return value$51(value$54, return$8)
+
+closure fn join$55(self$56, value$57) =
+  let return$10 = self$56.cap[0]
+  dup return$10
+  drop self$56
+  let return$12 = closure join$58(return$10, value$57)
+  let apply$26 = closure join$67(return$12)
+  return personAge(apply$26)
+
+closure fn join$58(self$59, value$60) =
+  let return$10 = self$59.cap[0]
+  dup return$10
+  let value$57 = self$59.cap[1]
+  dup value$57
+  drop self$59
+  let then$28 = closure join$61(return$10)
+  return value$57(value$60, then$28)
+
+closure fn join$61(self$62, value$63) =
+  let return$10 = self$62.cap[0]
+  dup return$10
+  drop self$62
+  let return$11 = closure join$64(return$10, value$63)
+  return toStringInt32(return$11)
+
+closure fn join$64(self$65, value$66) =
+  let return$10 = self$65.cap[0]
+  dup return$10
+  let value$63 = self$65.cap[1]
+  dup value$63
+  drop self$65
+  return value$63(value$66, return$10)
+
+closure fn join$67(self$68, value$69) =
+  let return$12 = self$68.cap[0]
+  dup return$12
+  drop self$68
+  let record$82 = record(age = field$70, name = field$76) captures()
+  return value$69(record$82, return$12)
+
+field fn field$70(self$71, return$13) =
+  drop self$71
+  let apply$24 = closure join$72(return$13)
+  return Int32#(apply$24)
+
+closure fn join$72(self$73, value$74) =
+  let return$13 = self$73.cap[0]
+  dup return$13
+  drop self$73
+  let lit$75 = 42
+  return value$74(lit$75, return$13)
+
+field fn field$76(self$77, return$14) =
+  drop self$77
+  let apply$25 = closure join$78(return$14)
+  return String#(apply$25)
+
+closure fn join$78(self$79, value$80) =
+  let return$14 = self$79.cap[0]
+  dup return$14
+  drop self$79
+  let lit$81 = "Hoge"
+  return value$80(lit$81, return$14)
+
+toplevel fn zig_main$86() =
+  let finish$84 = closure join$88()
+  let after_main$85 = closure join$91(finish$84)
+  return main(after_main$85)
+
+closure fn join$88(self$89, value$90) =
+  drop self$89
+  return value$90
+
+closure fn join$91(self$92, value$93) =
+  let finish$84 = self$92.cap[0]
+  dup finish$84
+  drop self$92
+  let struct$94 = Tuple()
+  return value$93(struct$94, finish$84)
+
+entry = zig_main$86
+
+=== Reuse ===
+toplevel fn personAge(return$5) =
+  let closure$39 = closure lambda$37()
+  return return$5(closure$39)
+
+closure fn lambda$37(self$38, param$3, return$6) =
+  drop self$38
+  if param$3.kind == record then {
+    dup param$3
+    let age#1 = param$3!age
+    let _#0 = param$3!name
+    drop _#0
+    return return$6(age#1)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$7) =
+  let closure$83 = closure lambda$41()
+  return return$7(closure$83)
+
+closure fn lambda$41(self$42, param$4, return$8) =
+  drop param$4
+  drop self$42
+  if  then {
+    let then$34 = closure join$43(return$8)
+    return |>(then$34)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$43(self$44, value$45) =
+  let return$8 = self$44.cap[0]
+  dup return$8
+  let return$10 = closure join$46(return$8, value$45)
+  let then$30 = closure join$55(return$10)
+  drop self$44
+  return |>(then$30)
+
+closure fn join$46(self$47, value$48) =
+  let return$8 = self$47.cap[0]
+  dup return$8
+  let value$45 = self$47.cap[1]
+  dup value$45
+  let then$32 = closure join$49(return$8)
+  drop self$47
+  return value$45(value$48, then$32)
+
+closure fn join$49(self$50, value$51) =
+  let return$8 = self$50.cap[0]
+  dup return$8
+  let return$9 = closure join$52(return$8, value$51)
+  drop self$50
+  return putStrLn(return$9)
+
+closure fn join$52(self$53, value$54) =
+  let return$8 = self$53.cap[0]
+  dup return$8
+  let value$51 = self$53.cap[1]
+  dup value$51
+  drop self$53
+  return value$51(value$54, return$8)
+
+closure fn join$55(self$56, value$57) =
+  let return$10 = self$56.cap[0]
+  dup return$10
+  let return$12 = closure join$58(return$10, value$57)
+  let apply$26 = closure join$67(return$12)
+  drop self$56
+  return personAge(apply$26)
+
+closure fn join$58(self$59, value$60) =
+  let return$10 = self$59.cap[0]
+  dup return$10
+  let value$57 = self$59.cap[1]
+  dup value$57
+  let then$28 = closure join$61(return$10)
+  drop self$59
+  return value$57(value$60, then$28)
+
+closure fn join$61(self$62, value$63) =
+  let return$10 = self$62.cap[0]
+  dup return$10
+  let return$11 = closure join$64(return$10, value$63)
+  drop self$62
+  return toStringInt32(return$11)
+
+closure fn join$64(self$65, value$66) =
+  let return$10 = self$65.cap[0]
+  dup return$10
+  let value$63 = self$65.cap[1]
+  dup value$63
+  drop self$65
+  return value$63(value$66, return$10)
+
+closure fn join$67(self$68, value$69) =
+  let return$12 = self$68.cap[0]
+  dup return$12
+  let record$82 = record(age = field$70, name = field$76) captures()
+  drop self$68
+  return value$69(record$82, return$12)
+
+field fn field$70(self$71, return$13) =
+  let apply$24 = closure join$72(return$13)
+  drop self$71
+  return Int32#(apply$24)
+
+closure fn join$72(self$73, value$74) =
+  let return$13 = self$73.cap[0]
+  dup return$13
+  let lit$75 = 42
+  drop self$73
+  return value$74(lit$75, return$13)
+
+field fn field$76(self$77, return$14) =
+  let apply$25 = closure join$78(return$14)
+  drop self$77
+  return String#(apply$25)
+
+closure fn join$78(self$79, value$80) =
+  let return$14 = self$79.cap[0]
+  dup return$14
+  let lit$81 = "Hoge"
+  drop self$79
+  return value$80(lit$81, return$14)
+
+toplevel fn zig_main$86() =
+  let finish$84 = closure join$88()
+  let after_main$85 = closure join$91(finish$84)
+  return main(after_main$85)
+
+closure fn join$88(self$89, value$90) =
+  drop self$89
+  return value$90
+
+closure fn join$91(self$92, value$93) =
+  let finish$84 = self$92.cap[0]
+  dup finish$84
+  dropReuse reuse$95 = self$92 /0
+  let struct$94 = reuse reuse$95 Tuple()
+  return value$93(struct$94, finish$84)
+
+entry = zig_main$86
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  type Person  = {name : String, age : Int32}
+  
+  def personAge =
+    fn {
+-     {name = _, age = age} ->
++     {name = _#0, age = age#1} ->
+        {
+-         age
++         age#1
+        }
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#2 ->
+        {
+-         personAge({name = "Hoge", age = 42}) |> toStringInt32 |> putStrLn
++         personAge( { name = String#("Hoge")
++         , age = Int32#(42) } ) |> toStringInt32 |> putStrLn
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- type Person  = {name : String, age : Int32}
+- 
+  def personAge =
+-   fn {
++   \param$3 ->
+-     {name = _#0, age = age#1} ->
++     case param$3 of {
+-       {
++       {age = age#1, name = _#0} -> age#1
+-         age#1
++     }
+-       }
+-   }
+  
+  def main =
+-   fn {
++   \param$4 ->
+-     _#2 ->
++     case param$4 of {
+-       {
++       _#2 ->
+-         personAge( { name = String#("Hoge")
++         invoke |>( invoke |>( invoke personAge( { age = invoke Int32#(42)
+-         , age = Int32#(42) } ) |> toStringInt32 |> putStrLn
++         , name = invoke String#( "Hoge" ) } ) )( invoke toStringInt32 ) )( invoke putStrLn )
+-       }
++     }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def personAge =
+    \param$3 ->
+      case param$3 of {
+        {age = age#1, name = _#0} -> age#1
+      }
+  
+  def main =
+    \param$4 ->
+      case param$4 of {
+        _#2 ->
+          invoke |>( invoke |>( invoke personAge( { age = invoke Int32#(42)
+          , name = invoke String#( "Hoge" ) } ) )( invoke toStringInt32 ) )( invoke putStrLn )
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def personAge =
+    \param$3 ->
+      case param$3 of {
+        {age = age#1, name = _#0} -> age#1
+      }
+  
+  def main =
+    \param$4 ->
+      case param$4 of {
+        _#2 ->
+          invoke |>( invoke |>( invoke personAge( { age = invoke Int32#(42)
+          , name = invoke String#( "Hoge" ) } ) )( invoke toStringInt32 ) )( invoke putStrLn )
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def personAge =
++ def personAge(return$5) =
+-   \param$3 ->
++   \param$3 return$6 . {
+-     case param$3 of {
++     param$3 ~ select {
+-       {age = age#1, name = _#0} -> age#1
++       {age = age#1, name = _#0} -> age#1 ~ return$6
+      }
++   } ~ return$5
+  
+- def main =
++ def main(return$7) =
+-   \param$4 ->
++   \param$4 return$8 . {
+-     case param$4 of {
++     param$4 ~ select {
+        _#2 ->
+-         invoke |>( invoke |>( invoke personAge( { age = invoke Int32#(42)
++         invoke |> ~ ( do return$10 . {
+-         , name = invoke String#( "Hoge" ) } ) )( invoke toStringInt32 ) )( invoke putStrLn )
++           invoke |> ~ ( do return$12 . {
++             invoke personAge ~ ( { age(return$13) = {
++               invoke Int32# ~ (42, return$13)
++             }
++             , name(return$14) = {
++               invoke String# ~ ("Hoge", return$14)
++             } }
++             , return$12 )
++           }
++           , ( do return$11 . {
++             invoke toStringInt32 ~ return$11
++           }
++           , return$10 ) )
++         }
++         , ( do return$9 . {
++           invoke putStrLn ~ return$9
++         }
++         , return$8 ) )
+      }
++   } ~ return$7
+
+
+=== ToCore -> Flat ===
+  def personAge(return$5) =
+    \param$3 return$6 . {
+      param$3 ~ select {
+        {age = age#1, name = _#0} -> age#1 ~ return$6
+      }
+    } ~ return$5
+  
+  def main(return$7) =
+    \param$4 return$8 . {
+      param$4 ~ select {
+        _#2 ->
+-         invoke |> ~ ( do return$10 . {
++         invoke |> ~ then outer$15 -> {
+-           invoke |> ~ ( do return$12 . {
++           join return$10 = then inner$16 -> {
+-             invoke personAge ~ ( { age(return$13) = {
++             outer$15 ~ ( inner$16
++             , then outer$17 -> {
++               join return$9 = then inner$18 -> {
++                 outer$17 ~ (inner$18, return$8)
++               }
++               in invoke putStrLn ~ return$9
++             } )
++           }
++           in invoke |> ~ then outer$19 -> {
++             join return$12 = then inner$20 -> {
++               outer$19 ~ ( inner$20
++               , then outer$21 -> {
++                 join return$11 = then inner$22 -> {
++                   outer$21 ~ (inner$22, return$10)
++                 }
++                 in invoke toStringInt32 ~ return$11
++               } )
++             }
++             in invoke personAge ~ ( { age(return$13) = {
+                invoke Int32# ~ (42, return$13)
+              }
+              , name(return$14) = {
+                invoke String# ~ ("Hoge", return$14)
+              } }
+              , return$12 )
+            }
+-           , ( do return$11 . {
+-             invoke toStringInt32 ~ return$11
+-           }
+-           , return$10 ) )
+          }
+-         , ( do return$9 . {
+-           invoke putStrLn ~ return$9
+-         }
+-         , return$8 ) )
+      }
+    } ~ return$7
+
+
+=== Flat -> Join ===
+  def personAge(return$5) =
+    \param$3 return$6 . {
+-     param$3 ~ select {
++     join select$23 = select {
+        {age = age#1, name = _#0} -> age#1 ~ return$6
+      }
++     in param$3 ~ select$23
+    } ~ return$5
+  
+  def main(return$7) =
+    \param$4 return$8 . {
+-     param$4 ~ select {
++     join select$35 = select {
+        _#2 ->
+-         invoke |> ~ then outer$15 -> {
++         join then$34 = then outer$15 -> {
+            join return$10 = then inner$16 -> {
+-             outer$15 ~ ( inner$16
++             join then$32 = then outer$17 -> {
+-             , then outer$17 -> {
+                join return$9 = then inner$18 -> {
+-                 outer$17 ~ (inner$18, return$8)
++                 join apply$31 = (inner$18, return$8)
++                 in outer$17 ~ apply$31
+                }
+                in invoke putStrLn ~ return$9
+-             } )
++             }
++             in join apply$33 = (inner$16, then$32)
++             in outer$15 ~ apply$33
+            }
+-           in invoke |> ~ then outer$19 -> {
++           in join then$30 = then outer$19 -> {
+              join return$12 = then inner$20 -> {
+-               outer$19 ~ ( inner$20
++               join then$28 = then outer$21 -> {
+-               , then outer$21 -> {
+                  join return$11 = then inner$22 -> {
+-                   outer$21 ~ (inner$22, return$10)
++                   join apply$27 = (inner$22, return$10)
++                   in outer$21 ~ apply$27
+                  }
+                  in invoke toStringInt32 ~ return$11
+-               } )
++               }
++               in join apply$29 = (inner$20, then$28)
++               in outer$19 ~ apply$29
+              }
+-             in invoke personAge ~ ( { age(return$13) = {
++             in join apply$26 = ( { age(return$13) = {
+-               invoke Int32# ~ (42, return$13)
++               join apply$24 = (42, return$13)
++               in invoke Int32# ~ apply$24
+              }
+              , name(return$14) = {
+-               invoke String# ~ ("Hoge", return$14)
++               join apply$25 = ("Hoge", return$14)
++               in invoke String# ~ apply$25
+              } }
+              , return$12 )
++             in invoke personAge ~ apply$26
+            }
++           in invoke |> ~ then$30
+          }
++         in invoke |> ~ then$34
+      }
++     in param$4 ~ select$35
+    } ~ return$7
+
+
+=== Join -> ClosureConv ===
+- def personAge(return$5) =
++ toplevel fn personAge(return$5) =
+-   \param$3 return$6 . {
++   let closure$39 = closure lambda$37()
+-     join select$23 = select {
++   return return$5(closure$39)
+-       {age = age#1, name = _#0} -> age#1 ~ return$6
+-     }
+-     in param$3 ~ select$23
+-   } ~ return$5
+  
+- def main(return$7) =
++ closure fn lambda$37(self$38, param$3, return$6) =
+-   \param$4 return$8 . {
++   if param$3.kind == record then {
+-     join select$35 = select {
++     let age#1 = param$3!age
+-       _#2 ->
++     let _#0 = param$3!name
+-         join then$34 = then outer$15 -> {
++     return return$6(age#1)
+-           join return$10 = then inner$16 -> {
++   } else {
+-             join then$32 = then outer$17 -> {
++     panic "no matching branch"
+-               join return$9 = then inner$18 -> {
++   }
+-                 join apply$31 = (inner$18, return$8)
++ 
+-                 in outer$17 ~ apply$31
++ toplevel fn main(return$7) =
+-               }
++   let closure$83 = closure lambda$41()
+-               in invoke putStrLn ~ return$9
++   return return$7(closure$83)
+-             }
++ 
+-             in join apply$33 = (inner$16, then$32)
++ closure fn lambda$41(self$42, param$4, return$8) =
+-             in outer$15 ~ apply$33
++   if  then {
+-           }
++     let _#2 = param$4
+-           in join then$30 = then outer$19 -> {
++     let then$34 = closure join$43(return$8)
+-             join return$12 = then inner$20 -> {
++     return |>(then$34)
+-               join then$28 = then outer$21 -> {
++   } else {
+-                 join return$11 = then inner$22 -> {
++     panic "no matching branch"
+-                   join apply$27 = (inner$22, return$10)
++   }
+-                   in outer$21 ~ apply$27
++ 
+-                 }
++ closure fn join$43(self$44, value$45) =
+-                 in invoke toStringInt32 ~ return$11
++   let return$8 = self$44.cap[0]
+-               }
++   let return$10 = closure join$46(return$8, value$45)
+-               in join apply$29 = (inner$20, then$28)
++   let then$30 = closure join$55(return$10)
+-               in outer$19 ~ apply$29
++   return |>(then$30)
+-             }
++ 
+-             in join apply$26 = ( { age(return$13) = {
++ closure fn join$46(self$47, value$48) =
+-               join apply$24 = (42, return$13)
++   let return$8 = self$47.cap[0]
+-               in invoke Int32# ~ apply$24
++   let value$45 = self$47.cap[1]
+-             }
++   let then$32 = closure join$49(return$8)
+-             , name(return$14) = {
++   return value$45(value$48, then$32)
+-               join apply$25 = ("Hoge", return$14)
++ 
+-               in invoke String# ~ apply$25
++ closure fn join$49(self$50, value$51) =
+-             } }
++   let return$8 = self$50.cap[0]
+-             , return$12 )
++   let return$9 = closure join$52(return$8, value$51)
+-             in invoke personAge ~ apply$26
++   return putStrLn(return$9)
+-           }
++ 
+-           in invoke |> ~ then$30
++ closure fn join$52(self$53, value$54) =
+-         }
++   let return$8 = self$53.cap[0]
+-         in invoke |> ~ then$34
++   let value$51 = self$53.cap[1]
+-     }
++   return value$51(value$54, return$8)
+-     in param$4 ~ select$35
++ 
+-   } ~ return$7
++ closure fn join$55(self$56, value$57) =
++   let return$10 = self$56.cap[0]
++   let return$12 = closure join$58(return$10, value$57)
++   let apply$26 = closure join$67(return$12)
++   return personAge(apply$26)
++ 
++ closure fn join$58(self$59, value$60) =
++   let return$10 = self$59.cap[0]
++   let value$57 = self$59.cap[1]
++   let then$28 = closure join$61(return$10)
++   return value$57(value$60, then$28)
++ 
++ closure fn join$61(self$62, value$63) =
++   let return$10 = self$62.cap[0]
++   let return$11 = closure join$64(return$10, value$63)
++   return toStringInt32(return$11)
++ 
++ closure fn join$64(self$65, value$66) =
++   let return$10 = self$65.cap[0]
++   let value$63 = self$65.cap[1]
++   return value$63(value$66, return$10)
++ 
++ closure fn join$67(self$68, value$69) =
++   let return$12 = self$68.cap[0]
++   let record$82 = record(age = field$70, name = field$76) captures()
++   return value$69(record$82, return$12)
++ 
++ field fn field$70(self$71, return$13) =
++   let apply$24 = closure join$72(return$13)
++   return Int32#(apply$24)
++ 
++ closure fn join$72(self$73, value$74) =
++   let return$13 = self$73.cap[0]
++   let lit$75 = 42
++   return value$74(lit$75, return$13)
++ 
++ field fn field$76(self$77, return$14) =
++   let apply$25 = closure join$78(return$14)
++   return String#(apply$25)
++ 
++ closure fn join$78(self$79, value$80) =
++   let return$14 = self$79.cap[0]
++   let lit$81 = "Hoge"
++   return value$80(lit$81, return$14)
++ 
++ toplevel fn zig_main$86() =
++   let finish$84 = closure join$88()
++   let after_main$85 = closure join$91(finish$84)
++   return main(after_main$85)
++ 
++ closure fn join$88(self$89, value$90) = return value$90
++ 
++ closure fn join$91(self$92, value$93) =
++   let finish$84 = self$92.cap[0]
++   let struct$94 = Tuple()
++   return value$93(struct$94, finish$84)
++ 
++ entry = zig_main$86
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn personAge(return$5) =
+    let closure$39 = closure lambda$37()
+    return return$5(closure$39)
+  
+  closure fn lambda$37(self$38, param$3, return$6) =
+    if param$3.kind == record then {
+      let age#1 = param$3!age
+      let _#0 = param$3!name
+      return return$6(age#1)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn main(return$7) =
+    let closure$83 = closure lambda$41()
+    return return$7(closure$83)
+  
+  closure fn lambda$41(self$42, param$4, return$8) =
+    if  then {
+-     let _#2 = param$4
+      let then$34 = closure join$43(return$8)
+      return |>(then$34)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$43(self$44, value$45) =
+    let return$8 = self$44.cap[0]
+    let return$10 = closure join$46(return$8, value$45)
+    let then$30 = closure join$55(return$10)
+    return |>(then$30)
+  
+  closure fn join$46(self$47, value$48) =
+    let return$8 = self$47.cap[0]
+    let value$45 = self$47.cap[1]
+    let then$32 = closure join$49(return$8)
+    return value$45(value$48, then$32)
+  
+  closure fn join$49(self$50, value$51) =
+    let return$8 = self$50.cap[0]
+    let return$9 = closure join$52(return$8, value$51)
+    return putStrLn(return$9)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$8 = self$53.cap[0]
+    let value$51 = self$53.cap[1]
+    return value$51(value$54, return$8)
+  
+  closure fn join$55(self$56, value$57) =
+    let return$10 = self$56.cap[0]
+    let return$12 = closure join$58(return$10, value$57)
+    let apply$26 = closure join$67(return$12)
+    return personAge(apply$26)
+  
+  closure fn join$58(self$59, value$60) =
+    let return$10 = self$59.cap[0]
+    let value$57 = self$59.cap[1]
+    let then$28 = closure join$61(return$10)
+    return value$57(value$60, then$28)
+  
+  closure fn join$61(self$62, value$63) =
+    let return$10 = self$62.cap[0]
+    let return$11 = closure join$64(return$10, value$63)
+    return toStringInt32(return$11)
+  
+  closure fn join$64(self$65, value$66) =
+    let return$10 = self$65.cap[0]
+    let value$63 = self$65.cap[1]
+    return value$63(value$66, return$10)
+  
+  closure fn join$67(self$68, value$69) =
+    let return$12 = self$68.cap[0]
+    let record$82 = record(age = field$70, name = field$76) captures()
+    return value$69(record$82, return$12)
+  
+  field fn field$70(self$71, return$13) =
+    let apply$24 = closure join$72(return$13)
+    return Int32#(apply$24)
+  
+  closure fn join$72(self$73, value$74) =
+    let return$13 = self$73.cap[0]
+    let lit$75 = 42
+    return value$74(lit$75, return$13)
+  
+  field fn field$76(self$77, return$14) =
+    let apply$25 = closure join$78(return$14)
+    return String#(apply$25)
+  
+  closure fn join$78(self$79, value$80) =
+    let return$14 = self$79.cap[0]
+    let lit$81 = "Hoge"
+    return value$80(lit$81, return$14)
+  
+  toplevel fn zig_main$86() =
+    let finish$84 = closure join$88()
+    let after_main$85 = closure join$91(finish$84)
+    return main(after_main$85)
+  
+  closure fn join$88(self$89, value$90) = return value$90
+  
+  closure fn join$91(self$92, value$93) =
+    let finish$84 = self$92.cap[0]
+    let struct$94 = Tuple()
+    return value$93(struct$94, finish$84)
+  
+  entry = zig_main$86
+
+
+=== Peephole -> Perceus ===
+  toplevel fn personAge(return$5) =
+    let closure$39 = closure lambda$37()
+    return return$5(closure$39)
+  
+  closure fn lambda$37(self$38, param$3, return$6) =
++   drop self$38
+    if param$3.kind == record then {
++     dup param$3
+      let age#1 = param$3!age
+      let _#0 = param$3!name
++     drop _#0
+      return return$6(age#1)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn main(return$7) =
+    let closure$83 = closure lambda$41()
+    return return$7(closure$83)
+  
+  closure fn lambda$41(self$42, param$4, return$8) =
++   drop param$4
++   drop self$42
+    if  then {
+      let then$34 = closure join$43(return$8)
+      return |>(then$34)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$43(self$44, value$45) =
+    let return$8 = self$44.cap[0]
++   dup return$8
++   drop self$44
+    let return$10 = closure join$46(return$8, value$45)
+    let then$30 = closure join$55(return$10)
+    return |>(then$30)
+  
+  closure fn join$46(self$47, value$48) =
+    let return$8 = self$47.cap[0]
++   dup return$8
+    let value$45 = self$47.cap[1]
++   dup value$45
++   drop self$47
+    let then$32 = closure join$49(return$8)
+    return value$45(value$48, then$32)
+  
+  closure fn join$49(self$50, value$51) =
+    let return$8 = self$50.cap[0]
++   dup return$8
++   drop self$50
+    let return$9 = closure join$52(return$8, value$51)
+    return putStrLn(return$9)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$8 = self$53.cap[0]
++   dup return$8
+    let value$51 = self$53.cap[1]
++   dup value$51
++   drop self$53
+    return value$51(value$54, return$8)
+  
+  closure fn join$55(self$56, value$57) =
+    let return$10 = self$56.cap[0]
++   dup return$10
++   drop self$56
+    let return$12 = closure join$58(return$10, value$57)
+    let apply$26 = closure join$67(return$12)
+    return personAge(apply$26)
+  
+  closure fn join$58(self$59, value$60) =
+    let return$10 = self$59.cap[0]
++   dup return$10
+    let value$57 = self$59.cap[1]
++   dup value$57
++   drop self$59
+    let then$28 = closure join$61(return$10)
+    return value$57(value$60, then$28)
+  
+  closure fn join$61(self$62, value$63) =
+    let return$10 = self$62.cap[0]
++   dup return$10
++   drop self$62
+    let return$11 = closure join$64(return$10, value$63)
+    return toStringInt32(return$11)
+  
+  closure fn join$64(self$65, value$66) =
+    let return$10 = self$65.cap[0]
++   dup return$10
+    let value$63 = self$65.cap[1]
++   dup value$63
++   drop self$65
+    return value$63(value$66, return$10)
+  
+  closure fn join$67(self$68, value$69) =
+    let return$12 = self$68.cap[0]
++   dup return$12
++   drop self$68
+    let record$82 = record(age = field$70, name = field$76) captures()
+    return value$69(record$82, return$12)
+  
+  field fn field$70(self$71, return$13) =
++   drop self$71
+    let apply$24 = closure join$72(return$13)
+    return Int32#(apply$24)
+  
+  closure fn join$72(self$73, value$74) =
+    let return$13 = self$73.cap[0]
++   dup return$13
++   drop self$73
+    let lit$75 = 42
+    return value$74(lit$75, return$13)
+  
+  field fn field$76(self$77, return$14) =
++   drop self$77
+    let apply$25 = closure join$78(return$14)
+    return String#(apply$25)
+  
+  closure fn join$78(self$79, value$80) =
+    let return$14 = self$79.cap[0]
++   dup return$14
++   drop self$79
+    let lit$81 = "Hoge"
+    return value$80(lit$81, return$14)
+  
+  toplevel fn zig_main$86() =
+    let finish$84 = closure join$88()
+    let after_main$85 = closure join$91(finish$84)
+    return main(after_main$85)
+  
+- closure fn join$88(self$89, value$90) = return value$90
++ closure fn join$88(self$89, value$90) =
++   drop self$89
++   return value$90
+  
+  closure fn join$91(self$92, value$93) =
+    let finish$84 = self$92.cap[0]
++   dup finish$84
++   drop self$92
+    let struct$94 = Tuple()
+    return value$93(struct$94, finish$84)
+  
+  entry = zig_main$86
+
+
+=== Perceus -> Reuse ===
+  toplevel fn personAge(return$5) =
+    let closure$39 = closure lambda$37()
+    return return$5(closure$39)
+  
+  closure fn lambda$37(self$38, param$3, return$6) =
+    drop self$38
+    if param$3.kind == record then {
+      dup param$3
+      let age#1 = param$3!age
+      let _#0 = param$3!name
+      drop _#0
+      return return$6(age#1)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn main(return$7) =
+    let closure$83 = closure lambda$41()
+    return return$7(closure$83)
+  
+  closure fn lambda$41(self$42, param$4, return$8) =
+    drop param$4
+    drop self$42
+    if  then {
+      let then$34 = closure join$43(return$8)
+      return |>(then$34)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$43(self$44, value$45) =
+    let return$8 = self$44.cap[0]
+    dup return$8
+-   drop self$44
+    let return$10 = closure join$46(return$8, value$45)
+    let then$30 = closure join$55(return$10)
++   drop self$44
+    return |>(then$30)
+  
+  closure fn join$46(self$47, value$48) =
+    let return$8 = self$47.cap[0]
+    dup return$8
+    let value$45 = self$47.cap[1]
+    dup value$45
+-   drop self$47
+    let then$32 = closure join$49(return$8)
++   drop self$47
+    return value$45(value$48, then$32)
+  
+  closure fn join$49(self$50, value$51) =
+    let return$8 = self$50.cap[0]
+    dup return$8
+-   drop self$50
+    let return$9 = closure join$52(return$8, value$51)
++   drop self$50
+    return putStrLn(return$9)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$8 = self$53.cap[0]
+    dup return$8
+    let value$51 = self$53.cap[1]
+    dup value$51
+    drop self$53
+    return value$51(value$54, return$8)
+  
+  closure fn join$55(self$56, value$57) =
+    let return$10 = self$56.cap[0]
+    dup return$10
+-   drop self$56
+    let return$12 = closure join$58(return$10, value$57)
+    let apply$26 = closure join$67(return$12)
++   drop self$56
+    return personAge(apply$26)
+  
+  closure fn join$58(self$59, value$60) =
+    let return$10 = self$59.cap[0]
+    dup return$10
+    let value$57 = self$59.cap[1]
+    dup value$57
+-   drop self$59
+    let then$28 = closure join$61(return$10)
++   drop self$59
+    return value$57(value$60, then$28)
+  
+  closure fn join$61(self$62, value$63) =
+    let return$10 = self$62.cap[0]
+    dup return$10
+-   drop self$62
+    let return$11 = closure join$64(return$10, value$63)
++   drop self$62
+    return toStringInt32(return$11)
+  
+  closure fn join$64(self$65, value$66) =
+    let return$10 = self$65.cap[0]
+    dup return$10
+    let value$63 = self$65.cap[1]
+    dup value$63
+    drop self$65
+    return value$63(value$66, return$10)
+  
+  closure fn join$67(self$68, value$69) =
+    let return$12 = self$68.cap[0]
+    dup return$12
+-   drop self$68
+    let record$82 = record(age = field$70, name = field$76) captures()
++   drop self$68
+    return value$69(record$82, return$12)
+  
+  field fn field$70(self$71, return$13) =
+-   drop self$71
+    let apply$24 = closure join$72(return$13)
++   drop self$71
+    return Int32#(apply$24)
+  
+  closure fn join$72(self$73, value$74) =
+    let return$13 = self$73.cap[0]
+    dup return$13
+-   drop self$73
+    let lit$75 = 42
++   drop self$73
+    return value$74(lit$75, return$13)
+  
+  field fn field$76(self$77, return$14) =
+-   drop self$77
+    let apply$25 = closure join$78(return$14)
++   drop self$77
+    return String#(apply$25)
+  
+  closure fn join$78(self$79, value$80) =
+    let return$14 = self$79.cap[0]
+    dup return$14
+-   drop self$79
+    let lit$81 = "Hoge"
++   drop self$79
+    return value$80(lit$81, return$14)
+  
+  toplevel fn zig_main$86() =
+    let finish$84 = closure join$88()
+    let after_main$85 = closure join$91(finish$84)
+    return main(after_main$85)
+  
+  closure fn join$88(self$89, value$90) =
+    drop self$89
+    return value$90
+  
+  closure fn join$91(self$92, value$93) =
+    let finish$84 = self$92.cap[0]
+    dup finish$84
+-   drop self$92
++   dropReuse reuse$95 = self$92 /0
+-   let struct$94 = Tuple()
++   let struct$94 = reuse reuse$95 Tuple()
+    return value$93(struct$94, finish$84)
+  
+  entry = zig_main$86

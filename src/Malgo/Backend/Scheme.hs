@@ -469,6 +469,12 @@ compilePrimitive name args ret = case name of
   -- Math
   "sqrt" -> unaryop "sqrt" args ret
   "sqrtf" -> unaryop "sqrt" args ret
+  -- Inserted by Malgo.Sequent.ReuseSpecialize for the Zig backend's
+  -- reference-counting reuse analysis; a no-op everywhere else.
+  "reuseHint" ->
+    case args of
+      [x] -> "(" <> ret <> " " <> x <> ")"
+      _ -> "(error 'prim \"reuseHint: wrong number of arguments\")"
   _ -> "(error 'prim \"unknown primitive: " <> name <> "\")"
   where
     binop :: Text -> [Text] -> Text -> Text

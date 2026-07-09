@@ -1,0 +1,1520 @@
+=== Parse ===
+data RGB  = R() | G() | B()
+
+def rtob =
+  fn {
+    R ->
+      {
+        B
+      } |
+    a ->
+      {
+        a
+      }
+  }
+
+foreign malgo_print_string : String# -> ()
+
+def main =
+  fn {
+    _ ->
+      {
+        fn {
+          B ->
+            {
+              malgo_print_string("OK")
+            } |
+          _ ->
+            {
+              malgo_print_string("WRONG")
+            }
+        }(rtob(R))
+      }
+  }
+
+=== Rename ===
+data RGB  = R() | G() | B()
+
+foreign malgo_print_string : String# -> ()
+
+def rtob =
+  fn {
+    R() ->
+      {
+        B
+      } |
+    a#0 ->
+      {
+        a#0
+      }
+  }
+
+def main =
+  fn {
+    _#1 ->
+      {
+        fn {
+          B() ->
+            {
+              malgo_print_string("OK")
+            } |
+          _#2 ->
+            {
+              malgo_print_string("WRONG")
+            }
+        }(rtob(R))
+      }
+  }
+
+=== ToFun ===
+def rtob =
+  \param$3 ->
+    case param$3 of {
+      R() -> invoke B
+      a#0 -> a#0
+    }
+
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#1 ->
+        \param$5 ->
+          case param$5 of {
+            B() -> invoke malgo_print_string("OK")
+            _#2 -> invoke malgo_print_string("WRONG")
+          }(invoke rtob(invoke R))
+    }
+
+def R = R()
+
+def G = G()
+
+def B = B()
+
+def malgo_print_string = \primitive$6 -> #malgo_print_string(primitive$6)
+
+=== SaturateCtor ===
+def rtob =
+  \param$3 ->
+    case param$3 of {
+      R() -> B()
+      a#0 -> a#0
+    }
+
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#1 ->
+        \param$5 ->
+          case param$5 of {
+            B() -> invoke malgo_print_string("OK")
+            _#2 -> invoke malgo_print_string("WRONG")
+          }(invoke rtob(R()))
+    }
+
+def R = R()
+
+def G = G()
+
+def B = B()
+
+def malgo_print_string = \primitive$6 -> #malgo_print_string(primitive$6)
+
+=== ReuseSpecialize ===
+def rtob =
+  \param$3 ->
+    case param$3 of {
+      R() -> B()
+      a#0 -> a#0
+    }
+
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#1 ->
+        \param$5 ->
+          case param$5 of {
+            B() -> invoke malgo_print_string("OK")
+            _#2 -> invoke malgo_print_string("WRONG")
+          }(invoke rtob(R()))
+    }
+
+def R = R()
+
+def G = G()
+
+def B = B()
+
+def malgo_print_string = \primitive$6 -> #malgo_print_string(primitive$6)
+
+=== ToCore ===
+def rtob(return$7) =
+  \param$3 return$8 . {
+    param$3 ~ select {
+      R() -> B() ~ return$8
+      a#0 -> a#0 ~ return$8
+    }
+  } ~ return$7
+
+def main(return$9) =
+  \param$4 return$10 . {
+    param$4 ~ select {
+      _#1 ->
+        \param$5 return$12 . {
+          param$5 ~ select {
+            B() -> invoke malgo_print_string ~ ("OK", return$12)
+            _#2 -> invoke malgo_print_string ~ ("WRONG", return$12)
+          }
+        } ~ ( do return$11 . {
+          invoke rtob ~ (R(), return$11)
+        }
+        , return$10 )
+    }
+  } ~ return$9
+
+def R(return$13) = R() ~ return$13
+
+def G(return$14) = G() ~ return$14
+
+def B(return$15) = B() ~ return$15
+
+def malgo_print_string(return$16) =
+  \primitive$6 return$17 . {
+    #malgo_print_string(primitive$6) ~ return$17
+  } ~ return$16
+
+=== Flat ===
+def rtob(return$7) =
+  \param$3 return$8 . {
+    param$3 ~ select {
+      R() -> B() ~ return$8
+      a#0 -> a#0 ~ return$8
+    }
+  } ~ return$7
+
+def main(return$9) =
+  \param$4 return$10 . {
+    param$4 ~ select {
+      _#1 ->
+        \param$5 return$12 . {
+          param$5 ~ select {
+            B() -> invoke malgo_print_string ~ ("OK", return$12)
+            _#2 -> invoke malgo_print_string ~ ("WRONG", return$12)
+          }
+        } ~ then outer$18 -> {
+          join return$11 = then inner$19 -> {
+            outer$18 ~ (inner$19, return$10)
+          }
+          in invoke rtob ~ (R(), return$11)
+        }
+    }
+  } ~ return$9
+
+def R(return$13) = R() ~ return$13
+
+def G(return$14) = G() ~ return$14
+
+def B(return$15) = B() ~ return$15
+
+def malgo_print_string(return$16) =
+  \primitive$6 return$17 . {
+    #malgo_print_string(primitive$6) ~ return$17
+  } ~ return$16
+
+=== Join ===
+def rtob(return$7) =
+  \param$3 return$8 . {
+    join select$20 = select {
+      R() -> B() ~ return$8
+      a#0 -> a#0 ~ return$8
+    }
+    in param$3 ~ select$20
+  } ~ return$7
+
+def main(return$9) =
+  \param$4 return$10 . {
+    join select$27 = select {
+      _#1 ->
+        join then$26 = then outer$18 -> {
+          join return$11 = then inner$19 -> {
+            join apply$25 = (inner$19, return$10)
+            in outer$18 ~ apply$25
+          }
+          in join apply$24 = (R(), return$11)
+          in invoke rtob ~ apply$24
+        }
+        in \param$5 return$12 . {
+          join select$23 = select {
+            B() ->
+              join apply$21 = ("OK", return$12)
+              in invoke malgo_print_string ~ apply$21
+            _#2 ->
+              join apply$22 = ("WRONG", return$12)
+              in invoke malgo_print_string ~ apply$22
+          }
+          in param$5 ~ select$23
+        } ~ then$26
+    }
+    in param$4 ~ select$27
+  } ~ return$9
+
+def R(return$13) = R() ~ return$13
+
+def G(return$14) = G() ~ return$14
+
+def B(return$15) = B() ~ return$15
+
+def malgo_print_string(return$16) =
+  \primitive$6 return$17 . {
+    #malgo_print_string(primitive$6) ~ return$17
+  } ~ return$16
+
+=== ClosureConv ===
+toplevel fn rtob(return$7) =
+  let closure$32 = closure lambda$29()
+  return return$7(closure$32)
+
+closure fn lambda$29(self$30, param$3, return$8) =
+  if param$3.tag == R then {
+    let struct$31 = B()
+    return return$8(struct$31)
+  } else {
+    if  then {
+      let a#0 = param$3
+      return return$8(a#0)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn main(return$9) =
+  let closure$54 = closure lambda$34()
+  return return$9(closure$54)
+
+closure fn lambda$34(self$35, param$4, return$10) =
+  if  then {
+    let _#1 = param$4
+    let closure$46 = closure lambda$36()
+    let return$11 = closure join$47(closure$46, return$10)
+    let apply$24 = closure join$50(return$11)
+    return rtob(apply$24)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$36(self$37, param$5, return$12) =
+  if param$5.tag == B then {
+    let apply$21 = closure join$38(return$12)
+    return malgo_print_string(apply$21)
+  } else {
+    if  then {
+      let _#2 = param$5
+      let apply$22 = closure join$42(return$12)
+      return malgo_print_string(apply$22)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$38(self$39, value$40) =
+  let return$12 = self$39.cap[0]
+  let lit$41 = "OK"
+  return value$40(lit$41, return$12)
+
+closure fn join$42(self$43, value$44) =
+  let return$12 = self$43.cap[0]
+  let lit$45 = "WRONG"
+  return value$44(lit$45, return$12)
+
+closure fn join$47(self$48, value$49) =
+  let closure$46 = self$48.cap[0]
+  let return$10 = self$48.cap[1]
+  return closure$46(value$49, return$10)
+
+closure fn join$50(self$51, value$52) =
+  let return$11 = self$51.cap[0]
+  let struct$53 = R()
+  return value$52(struct$53, return$11)
+
+toplevel fn R(return$13) =
+  let struct$56 = R()
+  return return$13(struct$56)
+
+toplevel fn G(return$14) =
+  let struct$58 = G()
+  return return$14(struct$58)
+
+toplevel fn B(return$15) =
+  let struct$60 = B()
+  return return$15(struct$60)
+
+toplevel fn malgo_print_string(return$16) =
+  let closure$65 = closure lambda$62()
+  return return$16(closure$65)
+
+closure fn lambda$62(self$63, primitive$6, return$17) =
+  let prim_result$64 = #malgo_print_string(primitive$6)
+  return return$17(prim_result$64)
+
+toplevel fn zig_main$68() =
+  let finish$66 = closure join$70()
+  let after_main$67 = closure join$73(finish$66)
+  return main(after_main$67)
+
+closure fn join$70(self$71, value$72) = return value$72
+
+closure fn join$73(self$74, value$75) =
+  let finish$66 = self$74.cap[0]
+  let struct$76 = Tuple()
+  return value$75(struct$76, finish$66)
+
+entry = zig_main$68
+
+=== Peephole ===
+toplevel fn rtob(return$7) =
+  let closure$32 = closure lambda$29()
+  return return$7(closure$32)
+
+closure fn lambda$29(self$30, param$3, return$8) =
+  if param$3.tag == R then {
+    let struct$31 = B()
+    return return$8(struct$31)
+  } else {
+    if  then {
+      return return$8(param$3)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn main(return$9) =
+  let closure$54 = closure lambda$34()
+  return return$9(closure$54)
+
+closure fn lambda$34(self$35, param$4, return$10) =
+  if  then {
+    let closure$46 = closure lambda$36()
+    let return$11 = closure join$47(closure$46, return$10)
+    let apply$24 = closure join$50(return$11)
+    return rtob(apply$24)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$36(self$37, param$5, return$12) =
+  if param$5.tag == B then {
+    let apply$21 = closure join$38(return$12)
+    return malgo_print_string(apply$21)
+  } else {
+    if  then {
+      let apply$22 = closure join$42(return$12)
+      return malgo_print_string(apply$22)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$38(self$39, value$40) =
+  let return$12 = self$39.cap[0]
+  let lit$41 = "OK"
+  return value$40(lit$41, return$12)
+
+closure fn join$42(self$43, value$44) =
+  let return$12 = self$43.cap[0]
+  let lit$45 = "WRONG"
+  return value$44(lit$45, return$12)
+
+closure fn join$47(self$48, value$49) =
+  let closure$46 = self$48.cap[0]
+  let return$10 = self$48.cap[1]
+  return closure$46(value$49, return$10)
+
+closure fn join$50(self$51, value$52) =
+  let return$11 = self$51.cap[0]
+  let struct$53 = R()
+  return value$52(struct$53, return$11)
+
+toplevel fn R(return$13) =
+  let struct$56 = R()
+  return return$13(struct$56)
+
+toplevel fn G(return$14) =
+  let struct$58 = G()
+  return return$14(struct$58)
+
+toplevel fn B(return$15) =
+  let struct$60 = B()
+  return return$15(struct$60)
+
+toplevel fn malgo_print_string(return$16) =
+  let closure$65 = closure lambda$62()
+  return return$16(closure$65)
+
+closure fn lambda$62(self$63, primitive$6, return$17) =
+  let prim_result$64 = #malgo_print_string(primitive$6)
+  return return$17(prim_result$64)
+
+toplevel fn zig_main$68() =
+  let finish$66 = closure join$70()
+  let after_main$67 = closure join$73(finish$66)
+  return main(after_main$67)
+
+closure fn join$70(self$71, value$72) = return value$72
+
+closure fn join$73(self$74, value$75) =
+  let finish$66 = self$74.cap[0]
+  let struct$76 = Tuple()
+  return value$75(struct$76, finish$66)
+
+entry = zig_main$68
+
+=== Perceus ===
+toplevel fn rtob(return$7) =
+  let closure$32 = closure lambda$29()
+  return return$7(closure$32)
+
+closure fn lambda$29(self$30, param$3, return$8) =
+  drop self$30
+  if param$3.tag == R then {
+    drop param$3
+    let struct$31 = B()
+    return return$8(struct$31)
+  } else {
+    if  then {
+      return return$8(param$3)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn main(return$9) =
+  let closure$54 = closure lambda$34()
+  return return$9(closure$54)
+
+closure fn lambda$34(self$35, param$4, return$10) =
+  drop param$4
+  drop self$35
+  if  then {
+    let closure$46 = closure lambda$36()
+    let return$11 = closure join$47(closure$46, return$10)
+    let apply$24 = closure join$50(return$11)
+    return rtob(apply$24)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$36(self$37, param$5, return$12) =
+  drop self$37
+  if param$5.tag == B then {
+    drop param$5
+    let apply$21 = closure join$38(return$12)
+    return malgo_print_string(apply$21)
+  } else {
+    drop param$5
+    if  then {
+      let apply$22 = closure join$42(return$12)
+      return malgo_print_string(apply$22)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$38(self$39, value$40) =
+  let return$12 = self$39.cap[0]
+  dup return$12
+  drop self$39
+  let lit$41 = "OK"
+  return value$40(lit$41, return$12)
+
+closure fn join$42(self$43, value$44) =
+  let return$12 = self$43.cap[0]
+  dup return$12
+  drop self$43
+  let lit$45 = "WRONG"
+  return value$44(lit$45, return$12)
+
+closure fn join$47(self$48, value$49) =
+  let closure$46 = self$48.cap[0]
+  dup closure$46
+  let return$10 = self$48.cap[1]
+  dup return$10
+  drop self$48
+  return closure$46(value$49, return$10)
+
+closure fn join$50(self$51, value$52) =
+  let return$11 = self$51.cap[0]
+  dup return$11
+  drop self$51
+  let struct$53 = R()
+  return value$52(struct$53, return$11)
+
+toplevel fn R(return$13) =
+  let struct$56 = R()
+  return return$13(struct$56)
+
+toplevel fn G(return$14) =
+  let struct$58 = G()
+  return return$14(struct$58)
+
+toplevel fn B(return$15) =
+  let struct$60 = B()
+  return return$15(struct$60)
+
+toplevel fn malgo_print_string(return$16) =
+  let closure$65 = closure lambda$62()
+  return return$16(closure$65)
+
+closure fn lambda$62(self$63, primitive$6, return$17) =
+  drop self$63
+  let prim_result$64 = #malgo_print_string(primitive$6)
+  drop primitive$6
+  return return$17(prim_result$64)
+
+toplevel fn zig_main$68() =
+  let finish$66 = closure join$70()
+  let after_main$67 = closure join$73(finish$66)
+  return main(after_main$67)
+
+closure fn join$70(self$71, value$72) =
+  drop self$71
+  return value$72
+
+closure fn join$73(self$74, value$75) =
+  let finish$66 = self$74.cap[0]
+  dup finish$66
+  drop self$74
+  let struct$76 = Tuple()
+  return value$75(struct$76, finish$66)
+
+entry = zig_main$68
+
+=== Reuse ===
+toplevel fn rtob(return$7) =
+  let closure$32 = closure lambda$29()
+  return return$7(closure$32)
+
+closure fn lambda$29(self$30, param$3, return$8) =
+  drop self$30
+  if param$3.tag == R then {
+    dropReuse reuse$77 = param$3 /0
+    let struct$31 = reuse reuse$77 B()
+    return return$8(struct$31)
+  } else {
+    if  then {
+      return return$8(param$3)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn main(return$9) =
+  let closure$54 = closure lambda$34()
+  return return$9(closure$54)
+
+closure fn lambda$34(self$35, param$4, return$10) =
+  drop param$4
+  drop self$35
+  if  then {
+    let closure$46 = closure lambda$36()
+    let return$11 = closure join$47(closure$46, return$10)
+    let apply$24 = closure join$50(return$11)
+    return rtob(apply$24)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$36(self$37, param$5, return$12) =
+  drop self$37
+  if param$5.tag == B then {
+    let apply$21 = closure join$38(return$12)
+    drop param$5
+    return malgo_print_string(apply$21)
+  } else {
+    drop param$5
+    if  then {
+      let apply$22 = closure join$42(return$12)
+      return malgo_print_string(apply$22)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$38(self$39, value$40) =
+  let return$12 = self$39.cap[0]
+  dup return$12
+  let lit$41 = "OK"
+  drop self$39
+  return value$40(lit$41, return$12)
+
+closure fn join$42(self$43, value$44) =
+  let return$12 = self$43.cap[0]
+  dup return$12
+  let lit$45 = "WRONG"
+  drop self$43
+  return value$44(lit$45, return$12)
+
+closure fn join$47(self$48, value$49) =
+  let closure$46 = self$48.cap[0]
+  dup closure$46
+  let return$10 = self$48.cap[1]
+  dup return$10
+  drop self$48
+  return closure$46(value$49, return$10)
+
+closure fn join$50(self$51, value$52) =
+  let return$11 = self$51.cap[0]
+  dup return$11
+  dropReuse reuse$78 = self$51 /0
+  let struct$53 = reuse reuse$78 R()
+  return value$52(struct$53, return$11)
+
+toplevel fn R(return$13) =
+  let struct$56 = R()
+  return return$13(struct$56)
+
+toplevel fn G(return$14) =
+  let struct$58 = G()
+  return return$14(struct$58)
+
+toplevel fn B(return$15) =
+  let struct$60 = B()
+  return return$15(struct$60)
+
+toplevel fn malgo_print_string(return$16) =
+  let closure$65 = closure lambda$62()
+  return return$16(closure$65)
+
+closure fn lambda$62(self$63, primitive$6, return$17) =
+  let prim_result$64 = #malgo_print_string(primitive$6)
+  drop self$63
+  drop primitive$6
+  return return$17(prim_result$64)
+
+toplevel fn zig_main$68() =
+  let finish$66 = closure join$70()
+  let after_main$67 = closure join$73(finish$66)
+  return main(after_main$67)
+
+closure fn join$70(self$71, value$72) =
+  drop self$71
+  return value$72
+
+closure fn join$73(self$74, value$75) =
+  let finish$66 = self$74.cap[0]
+  dup finish$66
+  dropReuse reuse$79 = self$74 /0
+  let struct$76 = reuse reuse$79 Tuple()
+  return value$75(struct$76, finish$66)
+
+entry = zig_main$68
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  data RGB  = R() | G() | B()
+  
++ foreign malgo_print_string : String# -> ()
++ 
+  def rtob =
+    fn {
+-     R ->
++     R() ->
+        {
+          B
+        } |
+-     a ->
++     a#0 ->
+        {
+-         a
++         a#0
+        }
+    }
+  
+- foreign malgo_print_string : String# -> ()
+- 
+  def main =
+    fn {
+-     _ ->
++     _#1 ->
+        {
+          fn {
+-           B ->
++           B() ->
+              {
+                malgo_print_string("OK")
+              } |
+-           _ ->
++           _#2 ->
+              {
+                malgo_print_string("WRONG")
+              }
+          }(rtob(R))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- data RGB  = R() | G() | B()
+- 
+- foreign malgo_print_string : String# -> ()
+- 
+  def rtob =
+-   fn {
++   \param$3 ->
+-     R() ->
++     case param$3 of {
+-       {
++       R() -> invoke B
+-         B
++       a#0 -> a#0
+-       } |
++     }
+-     a#0 ->
+-       {
+-         a#0
+-       }
+-   }
+  
+  def main =
+-   fn {
++   \param$4 ->
+-     _#1 ->
++     case param$4 of {
+-       {
++       _#1 ->
+-         fn {
++         \param$5 ->
+-           B() ->
++           case param$5 of {
+-             {
++             B() -> invoke malgo_print_string("OK")
+-               malgo_print_string("OK")
++             _#2 -> invoke malgo_print_string("WRONG")
+-             } |
++           }(invoke rtob(invoke R))
+-           _#2 ->
++     }
+-             {
++ 
+-               malgo_print_string("WRONG")
++ def R = R()
+-             }
++ 
+-         }(rtob(R))
++ def G = G()
+-       }
++ 
+-   }
++ def B = B()
++ 
++ def malgo_print_string = \primitive$6 -> #malgo_print_string(primitive$6)
+
+
+=== ToFun -> SaturateCtor ===
+  def rtob =
+    \param$3 ->
+      case param$3 of {
+-       R() -> invoke B
++       R() -> B()
+        a#0 -> a#0
+      }
+  
+  def main =
+    \param$4 ->
+      case param$4 of {
+        _#1 ->
+          \param$5 ->
+            case param$5 of {
+              B() -> invoke malgo_print_string("OK")
+              _#2 -> invoke malgo_print_string("WRONG")
+-           }(invoke rtob(invoke R))
++           }(invoke rtob(R()))
+      }
+  
+  def R = R()
+  
+  def G = G()
+  
+  def B = B()
+  
+  def malgo_print_string = \primitive$6 -> #malgo_print_string(primitive$6)
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def rtob =
+    \param$3 ->
+      case param$3 of {
+        R() -> B()
+        a#0 -> a#0
+      }
+  
+  def main =
+    \param$4 ->
+      case param$4 of {
+        _#1 ->
+          \param$5 ->
+            case param$5 of {
+              B() -> invoke malgo_print_string("OK")
+              _#2 -> invoke malgo_print_string("WRONG")
+            }(invoke rtob(R()))
+      }
+  
+  def R = R()
+  
+  def G = G()
+  
+  def B = B()
+  
+  def malgo_print_string = \primitive$6 -> #malgo_print_string(primitive$6)
+
+
+=== ReuseSpecialize -> ToCore ===
+- def rtob =
++ def rtob(return$7) =
+-   \param$3 ->
++   \param$3 return$8 . {
+-     case param$3 of {
++     param$3 ~ select {
+-       R() -> B()
++       R() -> B() ~ return$8
+-       a#0 -> a#0
++       a#0 -> a#0 ~ return$8
+      }
++   } ~ return$7
+  
+- def main =
++ def main(return$9) =
+-   \param$4 ->
++   \param$4 return$10 . {
+-     case param$4 of {
++     param$4 ~ select {
+        _#1 ->
+-         \param$5 ->
++         \param$5 return$12 . {
+-           case param$5 of {
++           param$5 ~ select {
+-             B() -> invoke malgo_print_string("OK")
++             B() -> invoke malgo_print_string ~ ("OK", return$12)
+-             _#2 -> invoke malgo_print_string("WRONG")
++             _#2 -> invoke malgo_print_string ~ ("WRONG", return$12)
+-           }(invoke rtob(R()))
++           }
++         } ~ ( do return$11 . {
++           invoke rtob ~ (R(), return$11)
++         }
++         , return$10 )
+      }
++   } ~ return$9
+  
+- def R = R()
++ def R(return$13) = R() ~ return$13
+  
+- def G = G()
++ def G(return$14) = G() ~ return$14
+  
+- def B = B()
++ def B(return$15) = B() ~ return$15
+  
+- def malgo_print_string = \primitive$6 -> #malgo_print_string(primitive$6)
++ def malgo_print_string(return$16) =
++   \primitive$6 return$17 . {
++     #malgo_print_string(primitive$6) ~ return$17
++   } ~ return$16
+
+
+=== ToCore -> Flat ===
+  def rtob(return$7) =
+    \param$3 return$8 . {
+      param$3 ~ select {
+        R() -> B() ~ return$8
+        a#0 -> a#0 ~ return$8
+      }
+    } ~ return$7
+  
+  def main(return$9) =
+    \param$4 return$10 . {
+      param$4 ~ select {
+        _#1 ->
+          \param$5 return$12 . {
+            param$5 ~ select {
+              B() -> invoke malgo_print_string ~ ("OK", return$12)
+              _#2 -> invoke malgo_print_string ~ ("WRONG", return$12)
+            }
+-         } ~ ( do return$11 . {
++         } ~ then outer$18 -> {
+-           invoke rtob ~ (R(), return$11)
++           join return$11 = then inner$19 -> {
++             outer$18 ~ (inner$19, return$10)
++           }
++           in invoke rtob ~ (R(), return$11)
+          }
+-         , return$10 )
+      }
+    } ~ return$9
+  
+  def R(return$13) = R() ~ return$13
+  
+  def G(return$14) = G() ~ return$14
+  
+  def B(return$15) = B() ~ return$15
+  
+  def malgo_print_string(return$16) =
+    \primitive$6 return$17 . {
+      #malgo_print_string(primitive$6) ~ return$17
+    } ~ return$16
+
+
+=== Flat -> Join ===
+  def rtob(return$7) =
+    \param$3 return$8 . {
+-     param$3 ~ select {
++     join select$20 = select {
+        R() -> B() ~ return$8
+        a#0 -> a#0 ~ return$8
+      }
++     in param$3 ~ select$20
+    } ~ return$7
+  
+  def main(return$9) =
+    \param$4 return$10 . {
+-     param$4 ~ select {
++     join select$27 = select {
+        _#1 ->
+-         \param$5 return$12 . {
++         join then$26 = then outer$18 -> {
+-           param$5 ~ select {
+-             B() -> invoke malgo_print_string ~ ("OK", return$12)
+-             _#2 -> invoke malgo_print_string ~ ("WRONG", return$12)
+-           }
+-         } ~ then outer$18 -> {
+            join return$11 = then inner$19 -> {
+-             outer$18 ~ (inner$19, return$10)
++             join apply$25 = (inner$19, return$10)
++             in outer$18 ~ apply$25
+            }
+-           in invoke rtob ~ (R(), return$11)
++           in join apply$24 = (R(), return$11)
++           in invoke rtob ~ apply$24
+          }
++         in \param$5 return$12 . {
++           join select$23 = select {
++             B() ->
++               join apply$21 = ("OK", return$12)
++               in invoke malgo_print_string ~ apply$21
++             _#2 ->
++               join apply$22 = ("WRONG", return$12)
++               in invoke malgo_print_string ~ apply$22
++           }
++           in param$5 ~ select$23
++         } ~ then$26
+      }
++     in param$4 ~ select$27
+    } ~ return$9
+  
+  def R(return$13) = R() ~ return$13
+  
+  def G(return$14) = G() ~ return$14
+  
+  def B(return$15) = B() ~ return$15
+  
+  def malgo_print_string(return$16) =
+    \primitive$6 return$17 . {
+      #malgo_print_string(primitive$6) ~ return$17
+    } ~ return$16
+
+
+=== Join -> ClosureConv ===
+- def rtob(return$7) =
++ toplevel fn rtob(return$7) =
+-   \param$3 return$8 . {
++   let closure$32 = closure lambda$29()
+-     join select$20 = select {
++   return return$7(closure$32)
+-       R() -> B() ~ return$8
++ 
+-       a#0 -> a#0 ~ return$8
++ closure fn lambda$29(self$30, param$3, return$8) =
++   if param$3.tag == R then {
++     let struct$31 = B()
++     return return$8(struct$31)
++   } else {
++     if  then {
++       let a#0 = param$3
++       return return$8(a#0)
++     } else {
++       panic "no matching branch"
+      }
+-     in param$3 ~ select$20
++   }
+-   } ~ return$7
+  
+- def main(return$9) =
++ toplevel fn main(return$9) =
+-   \param$4 return$10 . {
++   let closure$54 = closure lambda$34()
+-     join select$27 = select {
++   return return$9(closure$54)
+-       _#1 ->
++ 
+-         join then$26 = then outer$18 -> {
++ closure fn lambda$34(self$35, param$4, return$10) =
+-           join return$11 = then inner$19 -> {
++   if  then {
+-             join apply$25 = (inner$19, return$10)
++     let _#1 = param$4
+-             in outer$18 ~ apply$25
++     let closure$46 = closure lambda$36()
+-           }
++     let return$11 = closure join$47(closure$46, return$10)
+-           in join apply$24 = (R(), return$11)
++     let apply$24 = closure join$50(return$11)
+-           in invoke rtob ~ apply$24
++     return rtob(apply$24)
+-         }
++   } else {
+-         in \param$5 return$12 . {
++     panic "no matching branch"
+-           join select$23 = select {
++   }
+-             B() ->
++ 
+-               join apply$21 = ("OK", return$12)
++ closure fn lambda$36(self$37, param$5, return$12) =
+-               in invoke malgo_print_string ~ apply$21
++   if param$5.tag == B then {
+-             _#2 ->
++     let apply$21 = closure join$38(return$12)
+-               join apply$22 = ("WRONG", return$12)
++     return malgo_print_string(apply$21)
+-               in invoke malgo_print_string ~ apply$22
++   } else {
+-           }
++     if  then {
+-           in param$5 ~ select$23
++       let _#2 = param$5
+-         } ~ then$26
++       let apply$22 = closure join$42(return$12)
++       return malgo_print_string(apply$22)
++     } else {
++       panic "no matching branch"
+      }
+-     in param$4 ~ select$27
++   }
+-   } ~ return$9
+  
+- def R(return$13) = R() ~ return$13
++ closure fn join$38(self$39, value$40) =
++   let return$12 = self$39.cap[0]
++   let lit$41 = "OK"
++   return value$40(lit$41, return$12)
+  
+- def G(return$14) = G() ~ return$14
++ closure fn join$42(self$43, value$44) =
++   let return$12 = self$43.cap[0]
++   let lit$45 = "WRONG"
++   return value$44(lit$45, return$12)
+  
+- def B(return$15) = B() ~ return$15
++ closure fn join$47(self$48, value$49) =
++   let closure$46 = self$48.cap[0]
++   let return$10 = self$48.cap[1]
++   return closure$46(value$49, return$10)
+  
+- def malgo_print_string(return$16) =
++ closure fn join$50(self$51, value$52) =
+-   \primitive$6 return$17 . {
++   let return$11 = self$51.cap[0]
+-     #malgo_print_string(primitive$6) ~ return$17
++   let struct$53 = R()
+-   } ~ return$16
++   return value$52(struct$53, return$11)
++ 
++ toplevel fn R(return$13) =
++   let struct$56 = R()
++   return return$13(struct$56)
++ 
++ toplevel fn G(return$14) =
++   let struct$58 = G()
++   return return$14(struct$58)
++ 
++ toplevel fn B(return$15) =
++   let struct$60 = B()
++   return return$15(struct$60)
++ 
++ toplevel fn malgo_print_string(return$16) =
++   let closure$65 = closure lambda$62()
++   return return$16(closure$65)
++ 
++ closure fn lambda$62(self$63, primitive$6, return$17) =
++   let prim_result$64 = #malgo_print_string(primitive$6)
++   return return$17(prim_result$64)
++ 
++ toplevel fn zig_main$68() =
++   let finish$66 = closure join$70()
++   let after_main$67 = closure join$73(finish$66)
++   return main(after_main$67)
++ 
++ closure fn join$70(self$71, value$72) = return value$72
++ 
++ closure fn join$73(self$74, value$75) =
++   let finish$66 = self$74.cap[0]
++   let struct$76 = Tuple()
++   return value$75(struct$76, finish$66)
++ 
++ entry = zig_main$68
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn rtob(return$7) =
+    let closure$32 = closure lambda$29()
+    return return$7(closure$32)
+  
+  closure fn lambda$29(self$30, param$3, return$8) =
+    if param$3.tag == R then {
+      let struct$31 = B()
+      return return$8(struct$31)
+    } else {
+      if  then {
+-       let a#0 = param$3
++       return return$8(param$3)
+-       return return$8(a#0)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn main(return$9) =
+    let closure$54 = closure lambda$34()
+    return return$9(closure$54)
+  
+  closure fn lambda$34(self$35, param$4, return$10) =
+    if  then {
+-     let _#1 = param$4
+      let closure$46 = closure lambda$36()
+      let return$11 = closure join$47(closure$46, return$10)
+      let apply$24 = closure join$50(return$11)
+      return rtob(apply$24)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$36(self$37, param$5, return$12) =
+    if param$5.tag == B then {
+      let apply$21 = closure join$38(return$12)
+      return malgo_print_string(apply$21)
+    } else {
+      if  then {
+-       let _#2 = param$5
+        let apply$22 = closure join$42(return$12)
+        return malgo_print_string(apply$22)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$38(self$39, value$40) =
+    let return$12 = self$39.cap[0]
+    let lit$41 = "OK"
+    return value$40(lit$41, return$12)
+  
+  closure fn join$42(self$43, value$44) =
+    let return$12 = self$43.cap[0]
+    let lit$45 = "WRONG"
+    return value$44(lit$45, return$12)
+  
+  closure fn join$47(self$48, value$49) =
+    let closure$46 = self$48.cap[0]
+    let return$10 = self$48.cap[1]
+    return closure$46(value$49, return$10)
+  
+  closure fn join$50(self$51, value$52) =
+    let return$11 = self$51.cap[0]
+    let struct$53 = R()
+    return value$52(struct$53, return$11)
+  
+  toplevel fn R(return$13) =
+    let struct$56 = R()
+    return return$13(struct$56)
+  
+  toplevel fn G(return$14) =
+    let struct$58 = G()
+    return return$14(struct$58)
+  
+  toplevel fn B(return$15) =
+    let struct$60 = B()
+    return return$15(struct$60)
+  
+  toplevel fn malgo_print_string(return$16) =
+    let closure$65 = closure lambda$62()
+    return return$16(closure$65)
+  
+  closure fn lambda$62(self$63, primitive$6, return$17) =
+    let prim_result$64 = #malgo_print_string(primitive$6)
+    return return$17(prim_result$64)
+  
+  toplevel fn zig_main$68() =
+    let finish$66 = closure join$70()
+    let after_main$67 = closure join$73(finish$66)
+    return main(after_main$67)
+  
+  closure fn join$70(self$71, value$72) = return value$72
+  
+  closure fn join$73(self$74, value$75) =
+    let finish$66 = self$74.cap[0]
+    let struct$76 = Tuple()
+    return value$75(struct$76, finish$66)
+  
+  entry = zig_main$68
+
+
+=== Peephole -> Perceus ===
+  toplevel fn rtob(return$7) =
+    let closure$32 = closure lambda$29()
+    return return$7(closure$32)
+  
+  closure fn lambda$29(self$30, param$3, return$8) =
++   drop self$30
+    if param$3.tag == R then {
++     drop param$3
+      let struct$31 = B()
+      return return$8(struct$31)
+    } else {
+      if  then {
+        return return$8(param$3)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn main(return$9) =
+    let closure$54 = closure lambda$34()
+    return return$9(closure$54)
+  
+  closure fn lambda$34(self$35, param$4, return$10) =
++   drop param$4
++   drop self$35
+    if  then {
+      let closure$46 = closure lambda$36()
+      let return$11 = closure join$47(closure$46, return$10)
+      let apply$24 = closure join$50(return$11)
+      return rtob(apply$24)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$36(self$37, param$5, return$12) =
++   drop self$37
+    if param$5.tag == B then {
++     drop param$5
+      let apply$21 = closure join$38(return$12)
+      return malgo_print_string(apply$21)
+    } else {
++     drop param$5
+      if  then {
+        let apply$22 = closure join$42(return$12)
+        return malgo_print_string(apply$22)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$38(self$39, value$40) =
+    let return$12 = self$39.cap[0]
++   dup return$12
++   drop self$39
+    let lit$41 = "OK"
+    return value$40(lit$41, return$12)
+  
+  closure fn join$42(self$43, value$44) =
+    let return$12 = self$43.cap[0]
++   dup return$12
++   drop self$43
+    let lit$45 = "WRONG"
+    return value$44(lit$45, return$12)
+  
+  closure fn join$47(self$48, value$49) =
+    let closure$46 = self$48.cap[0]
++   dup closure$46
+    let return$10 = self$48.cap[1]
++   dup return$10
++   drop self$48
+    return closure$46(value$49, return$10)
+  
+  closure fn join$50(self$51, value$52) =
+    let return$11 = self$51.cap[0]
++   dup return$11
++   drop self$51
+    let struct$53 = R()
+    return value$52(struct$53, return$11)
+  
+  toplevel fn R(return$13) =
+    let struct$56 = R()
+    return return$13(struct$56)
+  
+  toplevel fn G(return$14) =
+    let struct$58 = G()
+    return return$14(struct$58)
+  
+  toplevel fn B(return$15) =
+    let struct$60 = B()
+    return return$15(struct$60)
+  
+  toplevel fn malgo_print_string(return$16) =
+    let closure$65 = closure lambda$62()
+    return return$16(closure$65)
+  
+  closure fn lambda$62(self$63, primitive$6, return$17) =
++   drop self$63
+    let prim_result$64 = #malgo_print_string(primitive$6)
++   drop primitive$6
+    return return$17(prim_result$64)
+  
+  toplevel fn zig_main$68() =
+    let finish$66 = closure join$70()
+    let after_main$67 = closure join$73(finish$66)
+    return main(after_main$67)
+  
+- closure fn join$70(self$71, value$72) = return value$72
++ closure fn join$70(self$71, value$72) =
++   drop self$71
++   return value$72
+  
+  closure fn join$73(self$74, value$75) =
+    let finish$66 = self$74.cap[0]
++   dup finish$66
++   drop self$74
+    let struct$76 = Tuple()
+    return value$75(struct$76, finish$66)
+  
+  entry = zig_main$68
+
+
+=== Perceus -> Reuse ===
+  toplevel fn rtob(return$7) =
+    let closure$32 = closure lambda$29()
+    return return$7(closure$32)
+  
+  closure fn lambda$29(self$30, param$3, return$8) =
+    drop self$30
+    if param$3.tag == R then {
+-     drop param$3
++     dropReuse reuse$77 = param$3 /0
+-     let struct$31 = B()
++     let struct$31 = reuse reuse$77 B()
+      return return$8(struct$31)
+    } else {
+      if  then {
+        return return$8(param$3)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn main(return$9) =
+    let closure$54 = closure lambda$34()
+    return return$9(closure$54)
+  
+  closure fn lambda$34(self$35, param$4, return$10) =
+    drop param$4
+    drop self$35
+    if  then {
+      let closure$46 = closure lambda$36()
+      let return$11 = closure join$47(closure$46, return$10)
+      let apply$24 = closure join$50(return$11)
+      return rtob(apply$24)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$36(self$37, param$5, return$12) =
+    drop self$37
+    if param$5.tag == B then {
+-     drop param$5
+      let apply$21 = closure join$38(return$12)
++     drop param$5
+      return malgo_print_string(apply$21)
+    } else {
+      drop param$5
+      if  then {
+        let apply$22 = closure join$42(return$12)
+        return malgo_print_string(apply$22)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$38(self$39, value$40) =
+    let return$12 = self$39.cap[0]
+    dup return$12
+-   drop self$39
+    let lit$41 = "OK"
++   drop self$39
+    return value$40(lit$41, return$12)
+  
+  closure fn join$42(self$43, value$44) =
+    let return$12 = self$43.cap[0]
+    dup return$12
+-   drop self$43
+    let lit$45 = "WRONG"
++   drop self$43
+    return value$44(lit$45, return$12)
+  
+  closure fn join$47(self$48, value$49) =
+    let closure$46 = self$48.cap[0]
+    dup closure$46
+    let return$10 = self$48.cap[1]
+    dup return$10
+    drop self$48
+    return closure$46(value$49, return$10)
+  
+  closure fn join$50(self$51, value$52) =
+    let return$11 = self$51.cap[0]
+    dup return$11
+-   drop self$51
++   dropReuse reuse$78 = self$51 /0
+-   let struct$53 = R()
++   let struct$53 = reuse reuse$78 R()
+    return value$52(struct$53, return$11)
+  
+  toplevel fn R(return$13) =
+    let struct$56 = R()
+    return return$13(struct$56)
+  
+  toplevel fn G(return$14) =
+    let struct$58 = G()
+    return return$14(struct$58)
+  
+  toplevel fn B(return$15) =
+    let struct$60 = B()
+    return return$15(struct$60)
+  
+  toplevel fn malgo_print_string(return$16) =
+    let closure$65 = closure lambda$62()
+    return return$16(closure$65)
+  
+  closure fn lambda$62(self$63, primitive$6, return$17) =
+-   drop self$63
+    let prim_result$64 = #malgo_print_string(primitive$6)
++   drop self$63
+    drop primitive$6
+    return return$17(prim_result$64)
+  
+  toplevel fn zig_main$68() =
+    let finish$66 = closure join$70()
+    let after_main$67 = closure join$73(finish$66)
+    return main(after_main$67)
+  
+  closure fn join$70(self$71, value$72) =
+    drop self$71
+    return value$72
+  
+  closure fn join$73(self$74, value$75) =
+    let finish$66 = self$74.cap[0]
+    dup finish$66
+-   drop self$74
++   dropReuse reuse$79 = self$74 /0
+-   let struct$76 = Tuple()
++   let struct$76 = reuse reuse$79 Tuple()
+    return value$75(struct$76, finish$66)
+  
+  entry = zig_main$68

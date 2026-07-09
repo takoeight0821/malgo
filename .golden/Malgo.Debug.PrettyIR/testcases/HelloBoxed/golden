@@ -1,0 +1,1636 @@
+=== Parse ===
+foreign malgo_print_string : String# -> ()
+
+foreign malgo_newline : () -> ()
+
+data String  = String#(String#)
+
+sig putStrLn : String -> ()
+
+def putStrLn =
+  fn {
+    String#(str) ->
+      {
+        malgo_print_string(str)
+        malgo_newline(())
+      }
+  }
+
+sig string# : String# -> String
+
+def string# =
+  fn {
+    x ->
+      {
+        String#(x)
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        putStrLn("Hello, world")
+      }
+  }
+
+=== Rename ===
+data String  = String#(String#)
+
+foreign malgo_print_string : String# -> ()
+
+foreign malgo_newline : () -> ()
+
+sig putStrLn : String -> ()
+
+sig string# : String# -> String
+
+def string# =
+  fn {
+    x#1 ->
+      {
+        String#(x#1)
+      }
+  }
+
+def putStrLn =
+  fn {
+    String#(str#0) ->
+      {
+        malgo_print_string(str#0)
+        malgo_newline(())
+      }
+  }
+
+def main =
+  fn {
+    _#2 ->
+      {
+        putStrLn(String#("Hello, world"))
+      }
+  }
+
+=== ToFun ===
+def string# =
+  \param$3 ->
+    case param$3 of {
+      x#1 -> invoke String#(x#1)
+    }
+
+def putStrLn =
+  \param$4 ->
+    case param$4 of {
+      String#(str#0) ->
+        \tmp$5 ->
+          invoke malgo_newline(Tuple())(invoke malgo_print_string(str#0))
+    }
+
+def main =
+  \param$6 ->
+    case param$6 of {
+      _#2 -> invoke putStrLn(invoke String#("Hello, world"))
+    }
+
+def String# = \constructor$7 -> String#(constructor$7)
+
+def malgo_print_string = \primitive$8 -> #malgo_print_string(primitive$8)
+
+def malgo_newline = \primitive$9 -> #malgo_newline(primitive$9)
+
+=== SaturateCtor ===
+def string# =
+  \param$3 ->
+    case param$3 of {
+      x#1 -> String#(x#1)
+    }
+
+def putStrLn =
+  \param$4 ->
+    case param$4 of {
+      String#(str#0) ->
+        \tmp$5 ->
+          invoke malgo_newline(Tuple())(invoke malgo_print_string(str#0))
+    }
+
+def main =
+  \param$6 ->
+    case param$6 of {
+      _#2 -> invoke putStrLn(String#("Hello, world"))
+    }
+
+def String# = \constructor$7 -> String#(constructor$7)
+
+def malgo_print_string = \primitive$8 -> #malgo_print_string(primitive$8)
+
+def malgo_newline = \primitive$9 -> #malgo_newline(primitive$9)
+
+=== ReuseSpecialize ===
+def string# =
+  \param$3 ->
+    case param$3 of {
+      x#1 -> String#(x#1)
+    }
+
+def putStrLn =
+  \param$4 ->
+    case param$4 of {
+      String#(str#0) ->
+        \tmp$5 ->
+          invoke malgo_newline(Tuple())(invoke malgo_print_string(str#0))
+    }
+
+def main =
+  \param$6 ->
+    case param$6 of {
+      _#2 -> invoke putStrLn(String#("Hello, world"))
+    }
+
+def String# = \constructor$7 -> String#(constructor$7)
+
+def malgo_print_string = \primitive$8 -> #malgo_print_string(primitive$8)
+
+def malgo_newline = \primitive$9 -> #malgo_newline(primitive$9)
+
+=== ToCore ===
+def string#(return$10) =
+  \param$3 return$11 . {
+    param$3 ~ select {
+      x#1 -> String#(x#1) ~ return$11
+    }
+  } ~ return$10
+
+def putStrLn(return$12) =
+  \param$4 return$13 . {
+    param$4 ~ select {
+      String#(str#0) ->
+        \tmp$5 return$15 . {
+          invoke malgo_newline ~ (Tuple(), return$15)
+        } ~ ( do return$14 . {
+          invoke malgo_print_string ~ (str#0, return$14)
+        }
+        , return$13 )
+    }
+  } ~ return$12
+
+def main(return$16) =
+  \param$6 return$17 . {
+    param$6 ~ select {
+      _#2 -> invoke putStrLn ~ (String#("Hello, world"), return$17)
+    }
+  } ~ return$16
+
+def String#(return$18) =
+  \constructor$7 return$19 . {
+    String#(constructor$7) ~ return$19
+  } ~ return$18
+
+def malgo_print_string(return$20) =
+  \primitive$8 return$21 . {
+    #malgo_print_string(primitive$8) ~ return$21
+  } ~ return$20
+
+def malgo_newline(return$22) =
+  \primitive$9 return$23 . {
+    #malgo_newline(primitive$9) ~ return$23
+  } ~ return$22
+
+=== Flat ===
+def string#(return$10) =
+  \param$3 return$11 . {
+    param$3 ~ select {
+      x#1 -> String#(x#1) ~ return$11
+    }
+  } ~ return$10
+
+def putStrLn(return$12) =
+  \param$4 return$13 . {
+    param$4 ~ select {
+      String#(str#0) ->
+        \tmp$5 return$15 . {
+          invoke malgo_newline ~ (Tuple(), return$15)
+        } ~ then outer$24 -> {
+          join return$14 = then inner$25 -> {
+            outer$24 ~ (inner$25, return$13)
+          }
+          in invoke malgo_print_string ~ (str#0, return$14)
+        }
+    }
+  } ~ return$12
+
+def main(return$16) =
+  \param$6 return$17 . {
+    param$6 ~ select {
+      _#2 -> invoke putStrLn ~ (String#("Hello, world"), return$17)
+    }
+  } ~ return$16
+
+def String#(return$18) =
+  \constructor$7 return$19 . {
+    String#(constructor$7) ~ return$19
+  } ~ return$18
+
+def malgo_print_string(return$20) =
+  \primitive$8 return$21 . {
+    #malgo_print_string(primitive$8) ~ return$21
+  } ~ return$20
+
+def malgo_newline(return$22) =
+  \primitive$9 return$23 . {
+    #malgo_newline(primitive$9) ~ return$23
+  } ~ return$22
+
+=== Join ===
+def string#(return$10) =
+  \param$3 return$11 . {
+    join select$26 = select {
+      x#1 -> String#(x#1) ~ return$11
+    }
+    in param$3 ~ select$26
+  } ~ return$10
+
+def putStrLn(return$12) =
+  \param$4 return$13 . {
+    join select$31 = select {
+      String#(str#0) ->
+        join then$30 = then outer$24 -> {
+          join return$14 = then inner$25 -> {
+            join apply$29 = (inner$25, return$13)
+            in outer$24 ~ apply$29
+          }
+          in join apply$28 = (str#0, return$14)
+          in invoke malgo_print_string ~ apply$28
+        }
+        in \tmp$5 return$15 . {
+          join apply$27 = (Tuple(), return$15)
+          in invoke malgo_newline ~ apply$27
+        } ~ then$30
+    }
+    in param$4 ~ select$31
+  } ~ return$12
+
+def main(return$16) =
+  \param$6 return$17 . {
+    join select$33 = select {
+      _#2 ->
+        join apply$32 = (String#("Hello, world"), return$17)
+        in invoke putStrLn ~ apply$32
+    }
+    in param$6 ~ select$33
+  } ~ return$16
+
+def String#(return$18) =
+  \constructor$7 return$19 . {
+    String#(constructor$7) ~ return$19
+  } ~ return$18
+
+def malgo_print_string(return$20) =
+  \primitive$8 return$21 . {
+    #malgo_print_string(primitive$8) ~ return$21
+  } ~ return$20
+
+def malgo_newline(return$22) =
+  \primitive$9 return$23 . {
+    #malgo_newline(primitive$9) ~ return$23
+  } ~ return$22
+
+=== ClosureConv ===
+toplevel fn string#(return$10) =
+  let closure$38 = closure lambda$35()
+  return return$10(closure$38)
+
+closure fn lambda$35(self$36, param$3, return$11) =
+  if  then {
+    let x#1 = param$3
+    let struct$37 = String#(x#1)
+    return return$11(struct$37)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn putStrLn(return$12) =
+  let closure$55 = closure lambda$40()
+  return return$12(closure$55)
+
+closure fn lambda$40(self$41, param$4, return$13) =
+  if param$4.tag == String# then {
+    let str#0 = param$4.0
+    let closure$48 = closure lambda$42()
+    let return$14 = closure join$49(closure$48, return$13)
+    let apply$28 = closure join$52(return$14, str#0)
+    return malgo_print_string(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$42(self$43, tmp$5, return$15) =
+  let apply$27 = closure join$44(return$15)
+  return malgo_newline(apply$27)
+
+closure fn join$44(self$45, value$46) =
+  let return$15 = self$45.cap[0]
+  let struct$47 = Tuple()
+  return value$46(struct$47, return$15)
+
+closure fn join$49(self$50, value$51) =
+  let closure$48 = self$50.cap[0]
+  let return$13 = self$50.cap[1]
+  return closure$48(value$51, return$13)
+
+closure fn join$52(self$53, value$54) =
+  let return$14 = self$53.cap[0]
+  let str#0 = self$53.cap[1]
+  return value$54(str#0, return$14)
+
+toplevel fn main(return$16) =
+  let closure$64 = closure lambda$57()
+  return return$16(closure$64)
+
+closure fn lambda$57(self$58, param$6, return$17) =
+  if  then {
+    let _#2 = param$6
+    let apply$32 = closure join$59(return$17)
+    return putStrLn(apply$32)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$59(self$60, value$61) =
+  let return$17 = self$60.cap[0]
+  let lit$62 = "Hello, world"
+  let struct$63 = String#(lit$62)
+  return value$61(struct$63, return$17)
+
+toplevel fn String#(return$18) =
+  let closure$69 = closure lambda$66()
+  return return$18(closure$69)
+
+closure fn lambda$66(self$67, constructor$7, return$19) =
+  let struct$68 = String#(constructor$7)
+  return return$19(struct$68)
+
+toplevel fn malgo_print_string(return$20) =
+  let closure$74 = closure lambda$71()
+  return return$20(closure$74)
+
+closure fn lambda$71(self$72, primitive$8, return$21) =
+  let prim_result$73 = #malgo_print_string(primitive$8)
+  return return$21(prim_result$73)
+
+toplevel fn malgo_newline(return$22) =
+  let closure$79 = closure lambda$76()
+  return return$22(closure$79)
+
+closure fn lambda$76(self$77, primitive$9, return$23) =
+  let prim_result$78 = #malgo_newline(primitive$9)
+  return return$23(prim_result$78)
+
+toplevel fn zig_main$82() =
+  let finish$80 = closure join$84()
+  let after_main$81 = closure join$87(finish$80)
+  return main(after_main$81)
+
+closure fn join$84(self$85, value$86) = return value$86
+
+closure fn join$87(self$88, value$89) =
+  let finish$80 = self$88.cap[0]
+  let struct$90 = Tuple()
+  return value$89(struct$90, finish$80)
+
+entry = zig_main$82
+
+=== Peephole ===
+toplevel fn string#(return$10) =
+  let closure$38 = closure lambda$35()
+  return return$10(closure$38)
+
+closure fn lambda$35(self$36, param$3, return$11) =
+  if  then {
+    let struct$37 = String#(param$3)
+    return return$11(struct$37)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn putStrLn(return$12) =
+  let closure$55 = closure lambda$40()
+  return return$12(closure$55)
+
+closure fn lambda$40(self$41, param$4, return$13) =
+  if param$4.tag == String# then {
+    let str#0 = param$4.0
+    let closure$48 = closure lambda$42()
+    let return$14 = closure join$49(closure$48, return$13)
+    let apply$28 = closure join$52(return$14, str#0)
+    return malgo_print_string(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$42(self$43, tmp$5, return$15) =
+  let apply$27 = closure join$44(return$15)
+  return malgo_newline(apply$27)
+
+closure fn join$44(self$45, value$46) =
+  let return$15 = self$45.cap[0]
+  let struct$47 = Tuple()
+  return value$46(struct$47, return$15)
+
+closure fn join$49(self$50, value$51) =
+  let closure$48 = self$50.cap[0]
+  let return$13 = self$50.cap[1]
+  return closure$48(value$51, return$13)
+
+closure fn join$52(self$53, value$54) =
+  let return$14 = self$53.cap[0]
+  let str#0 = self$53.cap[1]
+  return value$54(str#0, return$14)
+
+toplevel fn main(return$16) =
+  let closure$64 = closure lambda$57()
+  return return$16(closure$64)
+
+closure fn lambda$57(self$58, param$6, return$17) =
+  if  then {
+    let apply$32 = closure join$59(return$17)
+    return putStrLn(apply$32)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$59(self$60, value$61) =
+  let return$17 = self$60.cap[0]
+  let lit$62 = "Hello, world"
+  let struct$63 = String#(lit$62)
+  return value$61(struct$63, return$17)
+
+toplevel fn String#(return$18) =
+  let closure$69 = closure lambda$66()
+  return return$18(closure$69)
+
+closure fn lambda$66(self$67, constructor$7, return$19) =
+  let struct$68 = String#(constructor$7)
+  return return$19(struct$68)
+
+toplevel fn malgo_print_string(return$20) =
+  let closure$74 = closure lambda$71()
+  return return$20(closure$74)
+
+closure fn lambda$71(self$72, primitive$8, return$21) =
+  let prim_result$73 = #malgo_print_string(primitive$8)
+  return return$21(prim_result$73)
+
+toplevel fn malgo_newline(return$22) =
+  let closure$79 = closure lambda$76()
+  return return$22(closure$79)
+
+closure fn lambda$76(self$77, primitive$9, return$23) =
+  let prim_result$78 = #malgo_newline(primitive$9)
+  return return$23(prim_result$78)
+
+toplevel fn zig_main$82() =
+  let finish$80 = closure join$84()
+  let after_main$81 = closure join$87(finish$80)
+  return main(after_main$81)
+
+closure fn join$84(self$85, value$86) = return value$86
+
+closure fn join$87(self$88, value$89) =
+  let finish$80 = self$88.cap[0]
+  let struct$90 = Tuple()
+  return value$89(struct$90, finish$80)
+
+entry = zig_main$82
+
+=== Perceus ===
+toplevel fn string#(return$10) =
+  let closure$38 = closure lambda$35()
+  return return$10(closure$38)
+
+closure fn lambda$35(self$36, param$3, return$11) =
+  drop self$36
+  if  then {
+    let struct$37 = String#(param$3)
+    return return$11(struct$37)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn putStrLn(return$12) =
+  let closure$55 = closure lambda$40()
+  return return$12(closure$55)
+
+closure fn lambda$40(self$41, param$4, return$13) =
+  drop self$41
+  if param$4.tag == String# then {
+    let str#0 = param$4.0
+    dup str#0
+    drop param$4
+    let closure$48 = closure lambda$42()
+    let return$14 = closure join$49(closure$48, return$13)
+    let apply$28 = closure join$52(return$14, str#0)
+    return malgo_print_string(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$42(self$43, tmp$5, return$15) =
+  drop self$43
+  drop tmp$5
+  let apply$27 = closure join$44(return$15)
+  return malgo_newline(apply$27)
+
+closure fn join$44(self$45, value$46) =
+  let return$15 = self$45.cap[0]
+  dup return$15
+  drop self$45
+  let struct$47 = Tuple()
+  return value$46(struct$47, return$15)
+
+closure fn join$49(self$50, value$51) =
+  let closure$48 = self$50.cap[0]
+  dup closure$48
+  let return$13 = self$50.cap[1]
+  dup return$13
+  drop self$50
+  return closure$48(value$51, return$13)
+
+closure fn join$52(self$53, value$54) =
+  let return$14 = self$53.cap[0]
+  dup return$14
+  let str#0 = self$53.cap[1]
+  dup str#0
+  drop self$53
+  return value$54(str#0, return$14)
+
+toplevel fn main(return$16) =
+  let closure$64 = closure lambda$57()
+  return return$16(closure$64)
+
+closure fn lambda$57(self$58, param$6, return$17) =
+  drop param$6
+  drop self$58
+  if  then {
+    let apply$32 = closure join$59(return$17)
+    return putStrLn(apply$32)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$59(self$60, value$61) =
+  let return$17 = self$60.cap[0]
+  dup return$17
+  drop self$60
+  let lit$62 = "Hello, world"
+  let struct$63 = String#(lit$62)
+  return value$61(struct$63, return$17)
+
+toplevel fn String#(return$18) =
+  let closure$69 = closure lambda$66()
+  return return$18(closure$69)
+
+closure fn lambda$66(self$67, constructor$7, return$19) =
+  drop self$67
+  let struct$68 = String#(constructor$7)
+  return return$19(struct$68)
+
+toplevel fn malgo_print_string(return$20) =
+  let closure$74 = closure lambda$71()
+  return return$20(closure$74)
+
+closure fn lambda$71(self$72, primitive$8, return$21) =
+  drop self$72
+  let prim_result$73 = #malgo_print_string(primitive$8)
+  drop primitive$8
+  return return$21(prim_result$73)
+
+toplevel fn malgo_newline(return$22) =
+  let closure$79 = closure lambda$76()
+  return return$22(closure$79)
+
+closure fn lambda$76(self$77, primitive$9, return$23) =
+  drop self$77
+  let prim_result$78 = #malgo_newline(primitive$9)
+  drop primitive$9
+  return return$23(prim_result$78)
+
+toplevel fn zig_main$82() =
+  let finish$80 = closure join$84()
+  let after_main$81 = closure join$87(finish$80)
+  return main(after_main$81)
+
+closure fn join$84(self$85, value$86) =
+  drop self$85
+  return value$86
+
+closure fn join$87(self$88, value$89) =
+  let finish$80 = self$88.cap[0]
+  dup finish$80
+  drop self$88
+  let struct$90 = Tuple()
+  return value$89(struct$90, finish$80)
+
+entry = zig_main$82
+
+=== Reuse ===
+toplevel fn string#(return$10) =
+  let closure$38 = closure lambda$35()
+  return return$10(closure$38)
+
+closure fn lambda$35(self$36, param$3, return$11) =
+  drop self$36
+  if  then {
+    let struct$37 = String#(param$3)
+    return return$11(struct$37)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn putStrLn(return$12) =
+  let closure$55 = closure lambda$40()
+  return return$12(closure$55)
+
+closure fn lambda$40(self$41, param$4, return$13) =
+  drop self$41
+  if param$4.tag == String# then {
+    let str#0 = param$4.0
+    dup str#0
+    let closure$48 = closure lambda$42()
+    let return$14 = closure join$49(closure$48, return$13)
+    let apply$28 = closure join$52(return$14, str#0)
+    drop param$4
+    return malgo_print_string(apply$28)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$42(self$43, tmp$5, return$15) =
+  let apply$27 = closure join$44(return$15)
+  drop self$43
+  drop tmp$5
+  return malgo_newline(apply$27)
+
+closure fn join$44(self$45, value$46) =
+  let return$15 = self$45.cap[0]
+  dup return$15
+  dropReuse reuse$91 = self$45 /0
+  let struct$47 = reuse reuse$91 Tuple()
+  return value$46(struct$47, return$15)
+
+closure fn join$49(self$50, value$51) =
+  let closure$48 = self$50.cap[0]
+  dup closure$48
+  let return$13 = self$50.cap[1]
+  dup return$13
+  drop self$50
+  return closure$48(value$51, return$13)
+
+closure fn join$52(self$53, value$54) =
+  let return$14 = self$53.cap[0]
+  dup return$14
+  let str#0 = self$53.cap[1]
+  dup str#0
+  drop self$53
+  return value$54(str#0, return$14)
+
+toplevel fn main(return$16) =
+  let closure$64 = closure lambda$57()
+  return return$16(closure$64)
+
+closure fn lambda$57(self$58, param$6, return$17) =
+  drop param$6
+  drop self$58
+  if  then {
+    let apply$32 = closure join$59(return$17)
+    return putStrLn(apply$32)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$59(self$60, value$61) =
+  let return$17 = self$60.cap[0]
+  dup return$17
+  let lit$62 = "Hello, world"
+  dropReuse reuse$92 = self$60 /1
+  let struct$63 = reuse reuse$92 String#(lit$62)
+  return value$61(struct$63, return$17)
+
+toplevel fn String#(return$18) =
+  let closure$69 = closure lambda$66()
+  return return$18(closure$69)
+
+closure fn lambda$66(self$67, constructor$7, return$19) =
+  dropReuse reuse$93 = self$67 /1
+  let struct$68 = reuse reuse$93 String#(constructor$7)
+  return return$19(struct$68)
+
+toplevel fn malgo_print_string(return$20) =
+  let closure$74 = closure lambda$71()
+  return return$20(closure$74)
+
+closure fn lambda$71(self$72, primitive$8, return$21) =
+  let prim_result$73 = #malgo_print_string(primitive$8)
+  drop self$72
+  drop primitive$8
+  return return$21(prim_result$73)
+
+toplevel fn malgo_newline(return$22) =
+  let closure$79 = closure lambda$76()
+  return return$22(closure$79)
+
+closure fn lambda$76(self$77, primitive$9, return$23) =
+  let prim_result$78 = #malgo_newline(primitive$9)
+  drop self$77
+  drop primitive$9
+  return return$23(prim_result$78)
+
+toplevel fn zig_main$82() =
+  let finish$80 = closure join$84()
+  let after_main$81 = closure join$87(finish$80)
+  return main(after_main$81)
+
+closure fn join$84(self$85, value$86) =
+  drop self$85
+  return value$86
+
+closure fn join$87(self$88, value$89) =
+  let finish$80 = self$88.cap[0]
+  dup finish$80
+  dropReuse reuse$94 = self$88 /0
+  let struct$90 = reuse reuse$94 Tuple()
+  return value$89(struct$90, finish$80)
+
+entry = zig_main$82
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
++ data String  = String#(String#)
++ 
+  foreign malgo_print_string : String# -> ()
+  
+  foreign malgo_newline : () -> ()
+  
+- data String  = String#(String#)
+- 
+  sig putStrLn : String -> ()
+  
+- def putStrLn =
++ sig string# : String# -> String
++ 
++ def string# =
+    fn {
+-     String#(str) ->
++     x#1 ->
+        {
+-         malgo_print_string(str)
++         String#(x#1)
+-         malgo_newline(())
+        }
+    }
+  
+- sig string# : String# -> String
++ def putStrLn =
+- 
+- def string# =
+    fn {
+-     x ->
++     String#(str#0) ->
+        {
+-         String#(x)
++         malgo_print_string(str#0)
++         malgo_newline(())
+        }
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#2 ->
+        {
+-         putStrLn("Hello, world")
++         putStrLn(String#("Hello, world"))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- data String  = String#(String#)
+- 
+- foreign malgo_print_string : String# -> ()
+- 
+- foreign malgo_newline : () -> ()
+- 
+- sig putStrLn : String -> ()
+- 
+- sig string# : String# -> String
+- 
+  def string# =
+-   fn {
++   \param$3 ->
+-     x#1 ->
++     case param$3 of {
+-       {
++       x#1 -> invoke String#(x#1)
+-         String#(x#1)
++     }
+-       }
+-   }
+  
+  def putStrLn =
+-   fn {
++   \param$4 ->
+-     String#(str#0) ->
++     case param$4 of {
+-       {
++       String#(str#0) ->
+-         malgo_print_string(str#0)
++         \tmp$5 ->
+-         malgo_newline(())
++           invoke malgo_newline(Tuple())(invoke malgo_print_string(str#0))
+-       }
++     }
+-   }
+  
+  def main =
+-   fn {
++   \param$6 ->
+-     _#2 ->
++     case param$6 of {
+-       {
++       _#2 -> invoke putStrLn(invoke String#("Hello, world"))
+-         putStrLn(String#("Hello, world"))
++     }
+-       }
++ 
+-   }
++ def String# = \constructor$7 -> String#(constructor$7)
++ 
++ def malgo_print_string = \primitive$8 -> #malgo_print_string(primitive$8)
++ 
++ def malgo_newline = \primitive$9 -> #malgo_newline(primitive$9)
+
+
+=== ToFun -> SaturateCtor ===
+  def string# =
+    \param$3 ->
+      case param$3 of {
+-       x#1 -> invoke String#(x#1)
++       x#1 -> String#(x#1)
+      }
+  
+  def putStrLn =
+    \param$4 ->
+      case param$4 of {
+        String#(str#0) ->
+          \tmp$5 ->
+            invoke malgo_newline(Tuple())(invoke malgo_print_string(str#0))
+      }
+  
+  def main =
+    \param$6 ->
+      case param$6 of {
+-       _#2 -> invoke putStrLn(invoke String#("Hello, world"))
++       _#2 -> invoke putStrLn(String#("Hello, world"))
+      }
+  
+  def String# = \constructor$7 -> String#(constructor$7)
+  
+  def malgo_print_string = \primitive$8 -> #malgo_print_string(primitive$8)
+  
+  def malgo_newline = \primitive$9 -> #malgo_newline(primitive$9)
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def string# =
+    \param$3 ->
+      case param$3 of {
+        x#1 -> String#(x#1)
+      }
+  
+  def putStrLn =
+    \param$4 ->
+      case param$4 of {
+        String#(str#0) ->
+          \tmp$5 ->
+            invoke malgo_newline(Tuple())(invoke malgo_print_string(str#0))
+      }
+  
+  def main =
+    \param$6 ->
+      case param$6 of {
+        _#2 -> invoke putStrLn(String#("Hello, world"))
+      }
+  
+  def String# = \constructor$7 -> String#(constructor$7)
+  
+  def malgo_print_string = \primitive$8 -> #malgo_print_string(primitive$8)
+  
+  def malgo_newline = \primitive$9 -> #malgo_newline(primitive$9)
+
+
+=== ReuseSpecialize -> ToCore ===
+- def string# =
++ def string#(return$10) =
+-   \param$3 ->
++   \param$3 return$11 . {
+-     case param$3 of {
++     param$3 ~ select {
+-       x#1 -> String#(x#1)
++       x#1 -> String#(x#1) ~ return$11
+      }
++   } ~ return$10
+  
+- def putStrLn =
++ def putStrLn(return$12) =
+-   \param$4 ->
++   \param$4 return$13 . {
+-     case param$4 of {
++     param$4 ~ select {
+        String#(str#0) ->
+-         \tmp$5 ->
++         \tmp$5 return$15 . {
+-           invoke malgo_newline(Tuple())(invoke malgo_print_string(str#0))
++           invoke malgo_newline ~ (Tuple(), return$15)
++         } ~ ( do return$14 . {
++           invoke malgo_print_string ~ (str#0, return$14)
++         }
++         , return$13 )
+      }
++   } ~ return$12
+  
+- def main =
++ def main(return$16) =
+-   \param$6 ->
++   \param$6 return$17 . {
+-     case param$6 of {
++     param$6 ~ select {
+-       _#2 -> invoke putStrLn(String#("Hello, world"))
++       _#2 -> invoke putStrLn ~ (String#("Hello, world"), return$17)
+      }
++   } ~ return$16
+  
+- def String# = \constructor$7 -> String#(constructor$7)
++ def String#(return$18) =
++   \constructor$7 return$19 . {
++     String#(constructor$7) ~ return$19
++   } ~ return$18
+  
+- def malgo_print_string = \primitive$8 -> #malgo_print_string(primitive$8)
++ def malgo_print_string(return$20) =
++   \primitive$8 return$21 . {
++     #malgo_print_string(primitive$8) ~ return$21
++   } ~ return$20
+  
+- def malgo_newline = \primitive$9 -> #malgo_newline(primitive$9)
++ def malgo_newline(return$22) =
++   \primitive$9 return$23 . {
++     #malgo_newline(primitive$9) ~ return$23
++   } ~ return$22
+
+
+=== ToCore -> Flat ===
+  def string#(return$10) =
+    \param$3 return$11 . {
+      param$3 ~ select {
+        x#1 -> String#(x#1) ~ return$11
+      }
+    } ~ return$10
+  
+  def putStrLn(return$12) =
+    \param$4 return$13 . {
+      param$4 ~ select {
+        String#(str#0) ->
+          \tmp$5 return$15 . {
+            invoke malgo_newline ~ (Tuple(), return$15)
+-         } ~ ( do return$14 . {
++         } ~ then outer$24 -> {
+-           invoke malgo_print_string ~ (str#0, return$14)
++           join return$14 = then inner$25 -> {
++             outer$24 ~ (inner$25, return$13)
++           }
++           in invoke malgo_print_string ~ (str#0, return$14)
+          }
+-         , return$13 )
+      }
+    } ~ return$12
+  
+  def main(return$16) =
+    \param$6 return$17 . {
+      param$6 ~ select {
+        _#2 -> invoke putStrLn ~ (String#("Hello, world"), return$17)
+      }
+    } ~ return$16
+  
+  def String#(return$18) =
+    \constructor$7 return$19 . {
+      String#(constructor$7) ~ return$19
+    } ~ return$18
+  
+  def malgo_print_string(return$20) =
+    \primitive$8 return$21 . {
+      #malgo_print_string(primitive$8) ~ return$21
+    } ~ return$20
+  
+  def malgo_newline(return$22) =
+    \primitive$9 return$23 . {
+      #malgo_newline(primitive$9) ~ return$23
+    } ~ return$22
+
+
+=== Flat -> Join ===
+  def string#(return$10) =
+    \param$3 return$11 . {
+-     param$3 ~ select {
++     join select$26 = select {
+        x#1 -> String#(x#1) ~ return$11
+      }
++     in param$3 ~ select$26
+    } ~ return$10
+  
+  def putStrLn(return$12) =
+    \param$4 return$13 . {
+-     param$4 ~ select {
++     join select$31 = select {
+        String#(str#0) ->
+-         \tmp$5 return$15 . {
++         join then$30 = then outer$24 -> {
+-           invoke malgo_newline ~ (Tuple(), return$15)
+-         } ~ then outer$24 -> {
+            join return$14 = then inner$25 -> {
+-             outer$24 ~ (inner$25, return$13)
++             join apply$29 = (inner$25, return$13)
++             in outer$24 ~ apply$29
+            }
+-           in invoke malgo_print_string ~ (str#0, return$14)
++           in join apply$28 = (str#0, return$14)
++           in invoke malgo_print_string ~ apply$28
+          }
++         in \tmp$5 return$15 . {
++           join apply$27 = (Tuple(), return$15)
++           in invoke malgo_newline ~ apply$27
++         } ~ then$30
+      }
++     in param$4 ~ select$31
+    } ~ return$12
+  
+  def main(return$16) =
+    \param$6 return$17 . {
+-     param$6 ~ select {
++     join select$33 = select {
+-       _#2 -> invoke putStrLn ~ (String#("Hello, world"), return$17)
++       _#2 ->
++         join apply$32 = (String#("Hello, world"), return$17)
++         in invoke putStrLn ~ apply$32
+      }
++     in param$6 ~ select$33
+    } ~ return$16
+  
+  def String#(return$18) =
+    \constructor$7 return$19 . {
+      String#(constructor$7) ~ return$19
+    } ~ return$18
+  
+  def malgo_print_string(return$20) =
+    \primitive$8 return$21 . {
+      #malgo_print_string(primitive$8) ~ return$21
+    } ~ return$20
+  
+  def malgo_newline(return$22) =
+    \primitive$9 return$23 . {
+      #malgo_newline(primitive$9) ~ return$23
+    } ~ return$22
+
+
+=== Join -> ClosureConv ===
+- def string#(return$10) =
++ toplevel fn string#(return$10) =
+-   \param$3 return$11 . {
++   let closure$38 = closure lambda$35()
+-     join select$26 = select {
++   return return$10(closure$38)
+-       x#1 -> String#(x#1) ~ return$11
+-     }
+-     in param$3 ~ select$26
+-   } ~ return$10
+  
+- def putStrLn(return$12) =
++ closure fn lambda$35(self$36, param$3, return$11) =
+-   \param$4 return$13 . {
++   if  then {
+-     join select$31 = select {
++     let x#1 = param$3
+-       String#(str#0) ->
++     let struct$37 = String#(x#1)
+-         join then$30 = then outer$24 -> {
++     return return$11(struct$37)
+-           join return$14 = then inner$25 -> {
++   } else {
+-             join apply$29 = (inner$25, return$13)
++     panic "no matching branch"
+-             in outer$24 ~ apply$29
++   }
+-           }
+-           in join apply$28 = (str#0, return$14)
+-           in invoke malgo_print_string ~ apply$28
+-         }
+-         in \tmp$5 return$15 . {
+-           join apply$27 = (Tuple(), return$15)
+-           in invoke malgo_newline ~ apply$27
+-         } ~ then$30
+-     }
+-     in param$4 ~ select$31
+-   } ~ return$12
+  
+- def main(return$16) =
++ toplevel fn putStrLn(return$12) =
+-   \param$6 return$17 . {
++   let closure$55 = closure lambda$40()
+-     join select$33 = select {
++   return return$12(closure$55)
+-       _#2 ->
+-         join apply$32 = (String#("Hello, world"), return$17)
+-         in invoke putStrLn ~ apply$32
+-     }
+-     in param$6 ~ select$33
+-   } ~ return$16
+  
+- def String#(return$18) =
++ closure fn lambda$40(self$41, param$4, return$13) =
+-   \constructor$7 return$19 . {
++   if param$4.tag == String# then {
+-     String#(constructor$7) ~ return$19
++     let str#0 = param$4.0
+-   } ~ return$18
++     let closure$48 = closure lambda$42()
++     let return$14 = closure join$49(closure$48, return$13)
++     let apply$28 = closure join$52(return$14, str#0)
++     return malgo_print_string(apply$28)
++   } else {
++     panic "no matching branch"
++   }
+  
+- def malgo_print_string(return$20) =
++ closure fn lambda$42(self$43, tmp$5, return$15) =
+-   \primitive$8 return$21 . {
++   let apply$27 = closure join$44(return$15)
+-     #malgo_print_string(primitive$8) ~ return$21
++   return malgo_newline(apply$27)
+-   } ~ return$20
+  
+- def malgo_newline(return$22) =
++ closure fn join$44(self$45, value$46) =
+-   \primitive$9 return$23 . {
++   let return$15 = self$45.cap[0]
+-     #malgo_newline(primitive$9) ~ return$23
++   let struct$47 = Tuple()
+-   } ~ return$22
++   return value$46(struct$47, return$15)
++ 
++ closure fn join$49(self$50, value$51) =
++   let closure$48 = self$50.cap[0]
++   let return$13 = self$50.cap[1]
++   return closure$48(value$51, return$13)
++ 
++ closure fn join$52(self$53, value$54) =
++   let return$14 = self$53.cap[0]
++   let str#0 = self$53.cap[1]
++   return value$54(str#0, return$14)
++ 
++ toplevel fn main(return$16) =
++   let closure$64 = closure lambda$57()
++   return return$16(closure$64)
++ 
++ closure fn lambda$57(self$58, param$6, return$17) =
++   if  then {
++     let _#2 = param$6
++     let apply$32 = closure join$59(return$17)
++     return putStrLn(apply$32)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$59(self$60, value$61) =
++   let return$17 = self$60.cap[0]
++   let lit$62 = "Hello, world"
++   let struct$63 = String#(lit$62)
++   return value$61(struct$63, return$17)
++ 
++ toplevel fn String#(return$18) =
++   let closure$69 = closure lambda$66()
++   return return$18(closure$69)
++ 
++ closure fn lambda$66(self$67, constructor$7, return$19) =
++   let struct$68 = String#(constructor$7)
++   return return$19(struct$68)
++ 
++ toplevel fn malgo_print_string(return$20) =
++   let closure$74 = closure lambda$71()
++   return return$20(closure$74)
++ 
++ closure fn lambda$71(self$72, primitive$8, return$21) =
++   let prim_result$73 = #malgo_print_string(primitive$8)
++   return return$21(prim_result$73)
++ 
++ toplevel fn malgo_newline(return$22) =
++   let closure$79 = closure lambda$76()
++   return return$22(closure$79)
++ 
++ closure fn lambda$76(self$77, primitive$9, return$23) =
++   let prim_result$78 = #malgo_newline(primitive$9)
++   return return$23(prim_result$78)
++ 
++ toplevel fn zig_main$82() =
++   let finish$80 = closure join$84()
++   let after_main$81 = closure join$87(finish$80)
++   return main(after_main$81)
++ 
++ closure fn join$84(self$85, value$86) = return value$86
++ 
++ closure fn join$87(self$88, value$89) =
++   let finish$80 = self$88.cap[0]
++   let struct$90 = Tuple()
++   return value$89(struct$90, finish$80)
++ 
++ entry = zig_main$82
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn string#(return$10) =
+    let closure$38 = closure lambda$35()
+    return return$10(closure$38)
+  
+  closure fn lambda$35(self$36, param$3, return$11) =
+    if  then {
+-     let x#1 = param$3
++     let struct$37 = String#(param$3)
+-     let struct$37 = String#(x#1)
+      return return$11(struct$37)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn putStrLn(return$12) =
+    let closure$55 = closure lambda$40()
+    return return$12(closure$55)
+  
+  closure fn lambda$40(self$41, param$4, return$13) =
+    if param$4.tag == String# then {
+      let str#0 = param$4.0
+      let closure$48 = closure lambda$42()
+      let return$14 = closure join$49(closure$48, return$13)
+      let apply$28 = closure join$52(return$14, str#0)
+      return malgo_print_string(apply$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$42(self$43, tmp$5, return$15) =
+    let apply$27 = closure join$44(return$15)
+    return malgo_newline(apply$27)
+  
+  closure fn join$44(self$45, value$46) =
+    let return$15 = self$45.cap[0]
+    let struct$47 = Tuple()
+    return value$46(struct$47, return$15)
+  
+  closure fn join$49(self$50, value$51) =
+    let closure$48 = self$50.cap[0]
+    let return$13 = self$50.cap[1]
+    return closure$48(value$51, return$13)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$14 = self$53.cap[0]
+    let str#0 = self$53.cap[1]
+    return value$54(str#0, return$14)
+  
+  toplevel fn main(return$16) =
+    let closure$64 = closure lambda$57()
+    return return$16(closure$64)
+  
+  closure fn lambda$57(self$58, param$6, return$17) =
+    if  then {
+-     let _#2 = param$6
+      let apply$32 = closure join$59(return$17)
+      return putStrLn(apply$32)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$59(self$60, value$61) =
+    let return$17 = self$60.cap[0]
+    let lit$62 = "Hello, world"
+    let struct$63 = String#(lit$62)
+    return value$61(struct$63, return$17)
+  
+  toplevel fn String#(return$18) =
+    let closure$69 = closure lambda$66()
+    return return$18(closure$69)
+  
+  closure fn lambda$66(self$67, constructor$7, return$19) =
+    let struct$68 = String#(constructor$7)
+    return return$19(struct$68)
+  
+  toplevel fn malgo_print_string(return$20) =
+    let closure$74 = closure lambda$71()
+    return return$20(closure$74)
+  
+  closure fn lambda$71(self$72, primitive$8, return$21) =
+    let prim_result$73 = #malgo_print_string(primitive$8)
+    return return$21(prim_result$73)
+  
+  toplevel fn malgo_newline(return$22) =
+    let closure$79 = closure lambda$76()
+    return return$22(closure$79)
+  
+  closure fn lambda$76(self$77, primitive$9, return$23) =
+    let prim_result$78 = #malgo_newline(primitive$9)
+    return return$23(prim_result$78)
+  
+  toplevel fn zig_main$82() =
+    let finish$80 = closure join$84()
+    let after_main$81 = closure join$87(finish$80)
+    return main(after_main$81)
+  
+  closure fn join$84(self$85, value$86) = return value$86
+  
+  closure fn join$87(self$88, value$89) =
+    let finish$80 = self$88.cap[0]
+    let struct$90 = Tuple()
+    return value$89(struct$90, finish$80)
+  
+  entry = zig_main$82
+
+
+=== Peephole -> Perceus ===
+  toplevel fn string#(return$10) =
+    let closure$38 = closure lambda$35()
+    return return$10(closure$38)
+  
+  closure fn lambda$35(self$36, param$3, return$11) =
++   drop self$36
+    if  then {
+      let struct$37 = String#(param$3)
+      return return$11(struct$37)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn putStrLn(return$12) =
+    let closure$55 = closure lambda$40()
+    return return$12(closure$55)
+  
+  closure fn lambda$40(self$41, param$4, return$13) =
++   drop self$41
+    if param$4.tag == String# then {
+      let str#0 = param$4.0
++     dup str#0
++     drop param$4
+      let closure$48 = closure lambda$42()
+      let return$14 = closure join$49(closure$48, return$13)
+      let apply$28 = closure join$52(return$14, str#0)
+      return malgo_print_string(apply$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$42(self$43, tmp$5, return$15) =
++   drop self$43
++   drop tmp$5
+    let apply$27 = closure join$44(return$15)
+    return malgo_newline(apply$27)
+  
+  closure fn join$44(self$45, value$46) =
+    let return$15 = self$45.cap[0]
++   dup return$15
++   drop self$45
+    let struct$47 = Tuple()
+    return value$46(struct$47, return$15)
+  
+  closure fn join$49(self$50, value$51) =
+    let closure$48 = self$50.cap[0]
++   dup closure$48
+    let return$13 = self$50.cap[1]
++   dup return$13
++   drop self$50
+    return closure$48(value$51, return$13)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$14 = self$53.cap[0]
++   dup return$14
+    let str#0 = self$53.cap[1]
++   dup str#0
++   drop self$53
+    return value$54(str#0, return$14)
+  
+  toplevel fn main(return$16) =
+    let closure$64 = closure lambda$57()
+    return return$16(closure$64)
+  
+  closure fn lambda$57(self$58, param$6, return$17) =
++   drop param$6
++   drop self$58
+    if  then {
+      let apply$32 = closure join$59(return$17)
+      return putStrLn(apply$32)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$59(self$60, value$61) =
+    let return$17 = self$60.cap[0]
++   dup return$17
++   drop self$60
+    let lit$62 = "Hello, world"
+    let struct$63 = String#(lit$62)
+    return value$61(struct$63, return$17)
+  
+  toplevel fn String#(return$18) =
+    let closure$69 = closure lambda$66()
+    return return$18(closure$69)
+  
+  closure fn lambda$66(self$67, constructor$7, return$19) =
++   drop self$67
+    let struct$68 = String#(constructor$7)
+    return return$19(struct$68)
+  
+  toplevel fn malgo_print_string(return$20) =
+    let closure$74 = closure lambda$71()
+    return return$20(closure$74)
+  
+  closure fn lambda$71(self$72, primitive$8, return$21) =
++   drop self$72
+    let prim_result$73 = #malgo_print_string(primitive$8)
++   drop primitive$8
+    return return$21(prim_result$73)
+  
+  toplevel fn malgo_newline(return$22) =
+    let closure$79 = closure lambda$76()
+    return return$22(closure$79)
+  
+  closure fn lambda$76(self$77, primitive$9, return$23) =
++   drop self$77
+    let prim_result$78 = #malgo_newline(primitive$9)
++   drop primitive$9
+    return return$23(prim_result$78)
+  
+  toplevel fn zig_main$82() =
+    let finish$80 = closure join$84()
+    let after_main$81 = closure join$87(finish$80)
+    return main(after_main$81)
+  
+- closure fn join$84(self$85, value$86) = return value$86
++ closure fn join$84(self$85, value$86) =
++   drop self$85
++   return value$86
+  
+  closure fn join$87(self$88, value$89) =
+    let finish$80 = self$88.cap[0]
++   dup finish$80
++   drop self$88
+    let struct$90 = Tuple()
+    return value$89(struct$90, finish$80)
+  
+  entry = zig_main$82
+
+
+=== Perceus -> Reuse ===
+  toplevel fn string#(return$10) =
+    let closure$38 = closure lambda$35()
+    return return$10(closure$38)
+  
+  closure fn lambda$35(self$36, param$3, return$11) =
+    drop self$36
+    if  then {
+      let struct$37 = String#(param$3)
+      return return$11(struct$37)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn putStrLn(return$12) =
+    let closure$55 = closure lambda$40()
+    return return$12(closure$55)
+  
+  closure fn lambda$40(self$41, param$4, return$13) =
+    drop self$41
+    if param$4.tag == String# then {
+      let str#0 = param$4.0
+      dup str#0
+-     drop param$4
+      let closure$48 = closure lambda$42()
+      let return$14 = closure join$49(closure$48, return$13)
+      let apply$28 = closure join$52(return$14, str#0)
++     drop param$4
+      return malgo_print_string(apply$28)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$42(self$43, tmp$5, return$15) =
++   let apply$27 = closure join$44(return$15)
+    drop self$43
+    drop tmp$5
+-   let apply$27 = closure join$44(return$15)
+    return malgo_newline(apply$27)
+  
+  closure fn join$44(self$45, value$46) =
+    let return$15 = self$45.cap[0]
+    dup return$15
+-   drop self$45
++   dropReuse reuse$91 = self$45 /0
+-   let struct$47 = Tuple()
++   let struct$47 = reuse reuse$91 Tuple()
+    return value$46(struct$47, return$15)
+  
+  closure fn join$49(self$50, value$51) =
+    let closure$48 = self$50.cap[0]
+    dup closure$48
+    let return$13 = self$50.cap[1]
+    dup return$13
+    drop self$50
+    return closure$48(value$51, return$13)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$14 = self$53.cap[0]
+    dup return$14
+    let str#0 = self$53.cap[1]
+    dup str#0
+    drop self$53
+    return value$54(str#0, return$14)
+  
+  toplevel fn main(return$16) =
+    let closure$64 = closure lambda$57()
+    return return$16(closure$64)
+  
+  closure fn lambda$57(self$58, param$6, return$17) =
+    drop param$6
+    drop self$58
+    if  then {
+      let apply$32 = closure join$59(return$17)
+      return putStrLn(apply$32)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$59(self$60, value$61) =
+    let return$17 = self$60.cap[0]
+    dup return$17
+-   drop self$60
+    let lit$62 = "Hello, world"
+-   let struct$63 = String#(lit$62)
++   dropReuse reuse$92 = self$60 /1
++   let struct$63 = reuse reuse$92 String#(lit$62)
+    return value$61(struct$63, return$17)
+  
+  toplevel fn String#(return$18) =
+    let closure$69 = closure lambda$66()
+    return return$18(closure$69)
+  
+  closure fn lambda$66(self$67, constructor$7, return$19) =
+-   drop self$67
++   dropReuse reuse$93 = self$67 /1
+-   let struct$68 = String#(constructor$7)
++   let struct$68 = reuse reuse$93 String#(constructor$7)
+    return return$19(struct$68)
+  
+  toplevel fn malgo_print_string(return$20) =
+    let closure$74 = closure lambda$71()
+    return return$20(closure$74)
+  
+  closure fn lambda$71(self$72, primitive$8, return$21) =
+-   drop self$72
+    let prim_result$73 = #malgo_print_string(primitive$8)
++   drop self$72
+    drop primitive$8
+    return return$21(prim_result$73)
+  
+  toplevel fn malgo_newline(return$22) =
+    let closure$79 = closure lambda$76()
+    return return$22(closure$79)
+  
+  closure fn lambda$76(self$77, primitive$9, return$23) =
+-   drop self$77
+    let prim_result$78 = #malgo_newline(primitive$9)
++   drop self$77
+    drop primitive$9
+    return return$23(prim_result$78)
+  
+  toplevel fn zig_main$82() =
+    let finish$80 = closure join$84()
+    let after_main$81 = closure join$87(finish$80)
+    return main(after_main$81)
+  
+  closure fn join$84(self$85, value$86) =
+    drop self$85
+    return value$86
+  
+  closure fn join$87(self$88, value$89) =
+    let finish$80 = self$88.cap[0]
+    dup finish$80
+-   drop self$88
++   dropReuse reuse$94 = self$88 /0
+-   let struct$90 = Tuple()
++   let struct$90 = reuse reuse$94 Tuple()
+    return value$89(struct$90, finish$80)
+  
+  entry = zig_main$82

@@ -1,0 +1,1363 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data T  = A() | B() | C()
+
+sig main : {
+  ()
+}
+
+def main =
+  fn {
+    _ ->
+      {
+        (A, B) |> fn {
+          A rest ->
+            {
+              printString("A")
+            } |
+          B rest ->
+            {
+              ()
+            } |
+          C rest ->
+            {
+              ()
+            }
+        }
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data T  = A() | B() | C()
+
+sig main : () -> ()
+
+def main =
+  fn {
+    _#0 ->
+      {
+        (A, B) |> fn {
+          A() rest#1 ->
+            {
+              printString(String#("A"))
+            } |
+          B() rest#2 ->
+            {
+              ()
+            } |
+          C() rest#3 ->
+            {
+              ()
+            }
+        }
+      }
+  }
+
+=== ToFun ===
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#0 ->
+        invoke |>(Tuple(invoke A, invoke B))( \param$5 ->
+          \param$6 ->
+            case Tuple(param$5, param$6) of {
+              Tuple(A(), rest#1) -> invoke printString(invoke String#("A"))
+              Tuple(B(), rest#2) -> Tuple()
+              Tuple(C(), rest#3) -> Tuple()
+            } )
+    }
+
+def A = A()
+
+def B = B()
+
+def C = C()
+
+=== SaturateCtor ===
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#0 ->
+        invoke |>(Tuple(A(), B()))( \param$5 ->
+          \param$6 ->
+            case Tuple(param$5, param$6) of {
+              Tuple(A(), rest#1) -> invoke printString(invoke String#("A"))
+              Tuple(B(), rest#2) -> Tuple()
+              Tuple(C(), rest#3) -> Tuple()
+            } )
+    }
+
+def A = A()
+
+def B = B()
+
+def C = C()
+
+=== ReuseSpecialize ===
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#0 ->
+        invoke |>(Tuple(A(), B()))( \param$5 ->
+          \param$6 ->
+            case Tuple(param$5, param$6) of {
+              Tuple(A(), rest#1) -> invoke printString(invoke String#("A"))
+              Tuple(B(), rest#2) -> Tuple()
+              Tuple(C(), rest#3) -> Tuple()
+            } )
+    }
+
+def A = A()
+
+def B = B()
+
+def C = C()
+
+=== ToCore ===
+def main(return$7) =
+  \param$4 return$8 . {
+    param$4 ~ select {
+      _#0 ->
+        invoke |> ~ ( Tuple(A(), B())
+        , ( \param$5 return$9 . {
+          \param$6 return$10 . {
+            Tuple(param$5, param$6) ~ select {
+              Tuple(A(), rest#1) ->
+                invoke printString ~ ( do return$11 . {
+                  invoke String# ~ ("A", return$11)
+                }
+                , return$10 )
+              Tuple(B(), rest#2) -> Tuple() ~ return$10
+              Tuple(C(), rest#3) -> Tuple() ~ return$10
+            }
+          } ~ return$9
+        }
+        , return$8 ) )
+    }
+  } ~ return$7
+
+def A(return$12) = A() ~ return$12
+
+def B(return$13) = B() ~ return$13
+
+def C(return$14) = C() ~ return$14
+
+=== Flat ===
+def main(return$7) =
+  \param$4 return$8 . {
+    param$4 ~ select {
+      _#0 ->
+        invoke |> ~ ( Tuple(A(), B())
+        , ( \param$5 return$9 . {
+          \param$6 return$10 . {
+            Tuple(param$5, param$6) ~ select {
+              Tuple(A(), rest#1) ->
+                invoke printString ~ then outer$15 -> {
+                  join return$11 = then inner$16 -> {
+                    outer$15 ~ (inner$16, return$10)
+                  }
+                  in invoke String# ~ ("A", return$11)
+                }
+              Tuple(B(), rest#2) -> Tuple() ~ return$10
+              Tuple(C(), rest#3) -> Tuple() ~ return$10
+            }
+          } ~ return$9
+        }
+        , return$8 ) )
+    }
+  } ~ return$7
+
+def A(return$12) = A() ~ return$12
+
+def B(return$13) = B() ~ return$13
+
+def C(return$14) = C() ~ return$14
+
+=== Join ===
+def main(return$7) =
+  \param$4 return$8 . {
+    join select$23 = select {
+      _#0 ->
+        join apply$21 = ( \param$5 return$9 . {
+          \param$6 return$10 . {
+            join select$20 = select {
+              Tuple(A(), rest#1) ->
+                join then$19 = then outer$15 -> {
+                  join return$11 = then inner$16 -> {
+                    join apply$18 = (inner$16, return$10)
+                    in outer$15 ~ apply$18
+                  }
+                  in join apply$17 = ("A", return$11)
+                  in invoke String# ~ apply$17
+                }
+                in invoke printString ~ then$19
+              Tuple(B(), rest#2) -> Tuple() ~ return$10
+              Tuple(C(), rest#3) -> Tuple() ~ return$10
+            }
+            in Tuple(param$5, param$6) ~ select$20
+          } ~ return$9
+        }
+        , return$8 )
+        in join apply$22 = (Tuple(A(), B()), apply$21)
+        in invoke |> ~ apply$22
+    }
+    in param$4 ~ select$23
+  } ~ return$7
+
+def A(return$12) = A() ~ return$12
+
+def B(return$13) = B() ~ return$13
+
+def C(return$14) = C() ~ return$14
+
+=== ClosureConv ===
+toplevel fn main(return$7) =
+  let closure$55 = closure lambda$25()
+  return return$7(closure$55)
+
+closure fn lambda$25(self$26, param$4, return$8) =
+  if  then {
+    let _#0 = param$4
+    let apply$21 = closure join$27(return$8)
+    let apply$22 = closure join$49(apply$21)
+    return |>(apply$22)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$27(self$28, value$29) =
+  let return$8 = self$28.cap[0]
+  let closure$48 = closure lambda$30()
+  return value$29(closure$48, return$8)
+
+closure fn lambda$30(self$31, param$5, return$9) =
+  let closure$47 = closure lambda$32(param$5)
+  return return$9(closure$47)
+
+closure fn lambda$32(self$33, param$6, return$10) =
+  let param$5 = self$33.cap[0]
+  let struct$34 = Tuple(param$5, param$6)
+  if struct$34.tag == Tuple && struct$34.0.tag == A then {
+    let rest#1 = struct$34.1
+    let then$19 = closure join$35(return$10)
+    return printString(then$19)
+  } else {
+    if struct$34.tag == Tuple && struct$34.0.tag == B then {
+      let rest#2 = struct$34.1
+      let struct$45 = Tuple()
+      return return$10(struct$45)
+    } else {
+      if struct$34.tag == Tuple && struct$34.0.tag == C then {
+        let rest#3 = struct$34.1
+        let struct$46 = Tuple()
+        return return$10(struct$46)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  }
+
+closure fn join$35(self$36, value$37) =
+  let return$10 = self$36.cap[0]
+  let return$11 = closure join$38(return$10, value$37)
+  let apply$17 = closure join$41(return$11)
+  return String#(apply$17)
+
+closure fn join$38(self$39, value$40) =
+  let return$10 = self$39.cap[0]
+  let value$37 = self$39.cap[1]
+  return value$37(value$40, return$10)
+
+closure fn join$41(self$42, value$43) =
+  let return$11 = self$42.cap[0]
+  let lit$44 = "A"
+  return value$43(lit$44, return$11)
+
+closure fn join$49(self$50, value$51) =
+  let apply$21 = self$50.cap[0]
+  let struct$52 = A()
+  let struct$53 = B()
+  let struct$54 = Tuple(struct$52, struct$53)
+  return value$51(struct$54, apply$21)
+
+toplevel fn A(return$12) =
+  let struct$57 = A()
+  return return$12(struct$57)
+
+toplevel fn B(return$13) =
+  let struct$59 = B()
+  return return$13(struct$59)
+
+toplevel fn C(return$14) =
+  let struct$61 = C()
+  return return$14(struct$61)
+
+toplevel fn zig_main$64() =
+  let finish$62 = closure join$66()
+  let after_main$63 = closure join$69(finish$62)
+  return main(after_main$63)
+
+closure fn join$66(self$67, value$68) = return value$68
+
+closure fn join$69(self$70, value$71) =
+  let finish$62 = self$70.cap[0]
+  let struct$72 = Tuple()
+  return value$71(struct$72, finish$62)
+
+entry = zig_main$64
+
+=== Peephole ===
+toplevel fn main(return$7) =
+  let closure$55 = closure lambda$25()
+  return return$7(closure$55)
+
+closure fn lambda$25(self$26, param$4, return$8) =
+  if  then {
+    let apply$21 = closure join$27(return$8)
+    let apply$22 = closure join$49(apply$21)
+    return |>(apply$22)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$27(self$28, value$29) =
+  let return$8 = self$28.cap[0]
+  let closure$48 = closure lambda$30()
+  return value$29(closure$48, return$8)
+
+closure fn lambda$30(self$31, param$5, return$9) =
+  let closure$47 = closure lambda$32(param$5)
+  return return$9(closure$47)
+
+closure fn lambda$32(self$33, param$6, return$10) =
+  let param$5 = self$33.cap[0]
+  if param$5.tag == A then {
+    let then$19 = closure join$35(return$10)
+    return printString(then$19)
+  } else {
+    if param$5.tag == B then {
+      let struct$45 = Tuple()
+      return return$10(struct$45)
+    } else {
+      if param$5.tag == C then {
+        let struct$46 = Tuple()
+        return return$10(struct$46)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  }
+
+closure fn join$35(self$36, value$37) =
+  let return$10 = self$36.cap[0]
+  let return$11 = closure join$38(return$10, value$37)
+  let apply$17 = closure join$41(return$11)
+  return String#(apply$17)
+
+closure fn join$38(self$39, value$40) =
+  let return$10 = self$39.cap[0]
+  let value$37 = self$39.cap[1]
+  return value$37(value$40, return$10)
+
+closure fn join$41(self$42, value$43) =
+  let return$11 = self$42.cap[0]
+  let lit$44 = "A"
+  return value$43(lit$44, return$11)
+
+closure fn join$49(self$50, value$51) =
+  let apply$21 = self$50.cap[0]
+  let struct$52 = A()
+  let struct$53 = B()
+  let struct$54 = Tuple(struct$52, struct$53)
+  return value$51(struct$54, apply$21)
+
+toplevel fn A(return$12) =
+  let struct$57 = A()
+  return return$12(struct$57)
+
+toplevel fn B(return$13) =
+  let struct$59 = B()
+  return return$13(struct$59)
+
+toplevel fn C(return$14) =
+  let struct$61 = C()
+  return return$14(struct$61)
+
+toplevel fn zig_main$64() =
+  let finish$62 = closure join$66()
+  let after_main$63 = closure join$69(finish$62)
+  return main(after_main$63)
+
+closure fn join$66(self$67, value$68) = return value$68
+
+closure fn join$69(self$70, value$71) =
+  let finish$62 = self$70.cap[0]
+  let struct$72 = Tuple()
+  return value$71(struct$72, finish$62)
+
+entry = zig_main$64
+
+=== Perceus ===
+toplevel fn main(return$7) =
+  let closure$55 = closure lambda$25()
+  return return$7(closure$55)
+
+closure fn lambda$25(self$26, param$4, return$8) =
+  drop param$4
+  drop self$26
+  if  then {
+    let apply$21 = closure join$27(return$8)
+    let apply$22 = closure join$49(apply$21)
+    return |>(apply$22)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$27(self$28, value$29) =
+  let return$8 = self$28.cap[0]
+  dup return$8
+  drop self$28
+  let closure$48 = closure lambda$30()
+  return value$29(closure$48, return$8)
+
+closure fn lambda$30(self$31, param$5, return$9) =
+  drop self$31
+  let closure$47 = closure lambda$32(param$5)
+  return return$9(closure$47)
+
+closure fn lambda$32(self$33, param$6, return$10) =
+  drop param$6
+  let param$5 = self$33.cap[0]
+  dup param$5
+  drop self$33
+  if param$5.tag == A then {
+    drop param$5
+    let then$19 = closure join$35(return$10)
+    return printString(then$19)
+  } else {
+    if param$5.tag == B then {
+      drop param$5
+      let struct$45 = Tuple()
+      return return$10(struct$45)
+    } else {
+      if param$5.tag == C then {
+        drop param$5
+        let struct$46 = Tuple()
+        return return$10(struct$46)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  }
+
+closure fn join$35(self$36, value$37) =
+  let return$10 = self$36.cap[0]
+  dup return$10
+  drop self$36
+  let return$11 = closure join$38(return$10, value$37)
+  let apply$17 = closure join$41(return$11)
+  return String#(apply$17)
+
+closure fn join$38(self$39, value$40) =
+  let return$10 = self$39.cap[0]
+  dup return$10
+  let value$37 = self$39.cap[1]
+  dup value$37
+  drop self$39
+  return value$37(value$40, return$10)
+
+closure fn join$41(self$42, value$43) =
+  let return$11 = self$42.cap[0]
+  dup return$11
+  drop self$42
+  let lit$44 = "A"
+  return value$43(lit$44, return$11)
+
+closure fn join$49(self$50, value$51) =
+  let apply$21 = self$50.cap[0]
+  dup apply$21
+  drop self$50
+  let struct$52 = A()
+  let struct$53 = B()
+  let struct$54 = Tuple(struct$52, struct$53)
+  return value$51(struct$54, apply$21)
+
+toplevel fn A(return$12) =
+  let struct$57 = A()
+  return return$12(struct$57)
+
+toplevel fn B(return$13) =
+  let struct$59 = B()
+  return return$13(struct$59)
+
+toplevel fn C(return$14) =
+  let struct$61 = C()
+  return return$14(struct$61)
+
+toplevel fn zig_main$64() =
+  let finish$62 = closure join$66()
+  let after_main$63 = closure join$69(finish$62)
+  return main(after_main$63)
+
+closure fn join$66(self$67, value$68) =
+  drop self$67
+  return value$68
+
+closure fn join$69(self$70, value$71) =
+  let finish$62 = self$70.cap[0]
+  dup finish$62
+  drop self$70
+  let struct$72 = Tuple()
+  return value$71(struct$72, finish$62)
+
+entry = zig_main$64
+
+=== Reuse ===
+toplevel fn main(return$7) =
+  let closure$55 = closure lambda$25()
+  return return$7(closure$55)
+
+closure fn lambda$25(self$26, param$4, return$8) =
+  drop param$4
+  drop self$26
+  if  then {
+    let apply$21 = closure join$27(return$8)
+    let apply$22 = closure join$49(apply$21)
+    return |>(apply$22)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$27(self$28, value$29) =
+  let return$8 = self$28.cap[0]
+  dup return$8
+  let closure$48 = closure lambda$30()
+  drop self$28
+  return value$29(closure$48, return$8)
+
+closure fn lambda$30(self$31, param$5, return$9) =
+  let closure$47 = closure lambda$32(param$5)
+  drop self$31
+  return return$9(closure$47)
+
+closure fn lambda$32(self$33, param$6, return$10) =
+  let param$5 = self$33.cap[0]
+  dup param$5
+  drop param$6
+  drop self$33
+  if param$5.tag == A then {
+    let then$19 = closure join$35(return$10)
+    drop param$5
+    return printString(then$19)
+  } else {
+    if param$5.tag == B then {
+      dropReuse reuse$73 = param$5 /0
+      let struct$45 = reuse reuse$73 Tuple()
+      return return$10(struct$45)
+    } else {
+      if param$5.tag == C then {
+        dropReuse reuse$74 = param$5 /0
+        let struct$46 = reuse reuse$74 Tuple()
+        return return$10(struct$46)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  }
+
+closure fn join$35(self$36, value$37) =
+  let return$10 = self$36.cap[0]
+  dup return$10
+  let return$11 = closure join$38(return$10, value$37)
+  let apply$17 = closure join$41(return$11)
+  drop self$36
+  return String#(apply$17)
+
+closure fn join$38(self$39, value$40) =
+  let return$10 = self$39.cap[0]
+  dup return$10
+  let value$37 = self$39.cap[1]
+  dup value$37
+  drop self$39
+  return value$37(value$40, return$10)
+
+closure fn join$41(self$42, value$43) =
+  let return$11 = self$42.cap[0]
+  dup return$11
+  let lit$44 = "A"
+  drop self$42
+  return value$43(lit$44, return$11)
+
+closure fn join$49(self$50, value$51) =
+  let apply$21 = self$50.cap[0]
+  dup apply$21
+  dropReuse reuse$75 = self$50 /0
+  let struct$52 = reuse reuse$75 A()
+  let struct$53 = B()
+  let struct$54 = Tuple(struct$52, struct$53)
+  return value$51(struct$54, apply$21)
+
+toplevel fn A(return$12) =
+  let struct$57 = A()
+  return return$12(struct$57)
+
+toplevel fn B(return$13) =
+  let struct$59 = B()
+  return return$13(struct$59)
+
+toplevel fn C(return$14) =
+  let struct$61 = C()
+  return return$14(struct$61)
+
+toplevel fn zig_main$64() =
+  let finish$62 = closure join$66()
+  let after_main$63 = closure join$69(finish$62)
+  return main(after_main$63)
+
+closure fn join$66(self$67, value$68) =
+  drop self$67
+  return value$68
+
+closure fn join$69(self$70, value$71) =
+  let finish$62 = self$70.cap[0]
+  dup finish$62
+  dropReuse reuse$76 = self$70 /0
+  let struct$72 = reuse reuse$76 Tuple()
+  return value$71(struct$72, finish$62)
+
+entry = zig_main$64
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  data T  = A() | B() | C()
+  
+- sig main : {
++ sig main : () -> ()
+-   ()
+- }
+  
+  def main =
+    fn {
+-     _ ->
++     _#0 ->
+        {
+          (A, B) |> fn {
+-           A rest ->
++           A() rest#1 ->
+              {
+-               printString("A")
++               printString(String#("A"))
+              } |
+-           B rest ->
++           B() rest#2 ->
+              {
+                ()
+              } |
+-           C rest ->
++           C() rest#3 ->
+              {
+                ()
+              }
+          }
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
++ def main =
+- 
++   \param$4 ->
+- import runtime/malgo/Prelude.mlg 
++     case param$4 of {
++       _#0 ->
++         invoke |>(Tuple(invoke A, invoke B))( \param$5 ->
++           \param$6 ->
++             case Tuple(param$5, param$6) of {
++               Tuple(A(), rest#1) -> invoke printString(invoke String#("A"))
++               Tuple(B(), rest#2) -> Tuple()
++               Tuple(C(), rest#3) -> Tuple()
++             } )
++     }
+  
+- data T  = A() | B() | C()
++ def A = A()
+  
+- sig main : () -> ()
++ def B = B()
+  
+- def main =
++ def C = C()
+-   fn {
+-     _#0 ->
+-       {
+-         (A, B) |> fn {
+-           A() rest#1 ->
+-             {
+-               printString(String#("A"))
+-             } |
+-           B() rest#2 ->
+-             {
+-               ()
+-             } |
+-           C() rest#3 ->
+-             {
+-               ()
+-             }
+-         }
+-       }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def main =
+    \param$4 ->
+      case param$4 of {
+        _#0 ->
+-         invoke |>(Tuple(invoke A, invoke B))( \param$5 ->
++         invoke |>(Tuple(A(), B()))( \param$5 ->
+            \param$6 ->
+              case Tuple(param$5, param$6) of {
+                Tuple(A(), rest#1) -> invoke printString(invoke String#("A"))
+                Tuple(B(), rest#2) -> Tuple()
+                Tuple(C(), rest#3) -> Tuple()
+              } )
+      }
+  
+  def A = A()
+  
+  def B = B()
+  
+  def C = C()
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def main =
+    \param$4 ->
+      case param$4 of {
+        _#0 ->
+          invoke |>(Tuple(A(), B()))( \param$5 ->
+            \param$6 ->
+              case Tuple(param$5, param$6) of {
+                Tuple(A(), rest#1) -> invoke printString(invoke String#("A"))
+                Tuple(B(), rest#2) -> Tuple()
+                Tuple(C(), rest#3) -> Tuple()
+              } )
+      }
+  
+  def A = A()
+  
+  def B = B()
+  
+  def C = C()
+
+
+=== ReuseSpecialize -> ToCore ===
+- def main =
++ def main(return$7) =
+-   \param$4 ->
++   \param$4 return$8 . {
+-     case param$4 of {
++     param$4 ~ select {
+        _#0 ->
+-         invoke |>(Tuple(A(), B()))( \param$5 ->
++         invoke |> ~ ( Tuple(A(), B())
+-           \param$6 ->
++         , ( \param$5 return$9 . {
+-             case Tuple(param$5, param$6) of {
++           \param$6 return$10 . {
+-               Tuple(A(), rest#1) -> invoke printString(invoke String#("A"))
++             Tuple(param$5, param$6) ~ select {
+-               Tuple(B(), rest#2) -> Tuple()
++               Tuple(A(), rest#1) ->
+-               Tuple(C(), rest#3) -> Tuple()
++                 invoke printString ~ ( do return$11 . {
+-             } )
++                   invoke String# ~ ("A", return$11)
++                 }
++                 , return$10 )
++               Tuple(B(), rest#2) -> Tuple() ~ return$10
++               Tuple(C(), rest#3) -> Tuple() ~ return$10
++             }
++           } ~ return$9
++         }
++         , return$8 ) )
+      }
++   } ~ return$7
+  
+- def A = A()
++ def A(return$12) = A() ~ return$12
+  
+- def B = B()
++ def B(return$13) = B() ~ return$13
+  
+- def C = C()
++ def C(return$14) = C() ~ return$14
+
+
+=== ToCore -> Flat ===
+  def main(return$7) =
+    \param$4 return$8 . {
+      param$4 ~ select {
+        _#0 ->
+          invoke |> ~ ( Tuple(A(), B())
+          , ( \param$5 return$9 . {
+            \param$6 return$10 . {
+              Tuple(param$5, param$6) ~ select {
+                Tuple(A(), rest#1) ->
+-                 invoke printString ~ ( do return$11 . {
++                 invoke printString ~ then outer$15 -> {
+-                   invoke String# ~ ("A", return$11)
++                   join return$11 = then inner$16 -> {
++                     outer$15 ~ (inner$16, return$10)
++                   }
++                   in invoke String# ~ ("A", return$11)
+                  }
+-                 , return$10 )
+                Tuple(B(), rest#2) -> Tuple() ~ return$10
+                Tuple(C(), rest#3) -> Tuple() ~ return$10
+              }
+            } ~ return$9
+          }
+          , return$8 ) )
+      }
+    } ~ return$7
+  
+  def A(return$12) = A() ~ return$12
+  
+  def B(return$13) = B() ~ return$13
+  
+  def C(return$14) = C() ~ return$14
+
+
+=== Flat -> Join ===
+  def main(return$7) =
+    \param$4 return$8 . {
+-     param$4 ~ select {
++     join select$23 = select {
+        _#0 ->
+-         invoke |> ~ ( Tuple(A(), B())
++         join apply$21 = ( \param$5 return$9 . {
+-         , ( \param$5 return$9 . {
+            \param$6 return$10 . {
+-             Tuple(param$5, param$6) ~ select {
++             join select$20 = select {
+                Tuple(A(), rest#1) ->
+-                 invoke printString ~ then outer$15 -> {
++                 join then$19 = then outer$15 -> {
+                    join return$11 = then inner$16 -> {
+-                     outer$15 ~ (inner$16, return$10)
++                     join apply$18 = (inner$16, return$10)
++                     in outer$15 ~ apply$18
+                    }
+-                   in invoke String# ~ ("A", return$11)
++                   in join apply$17 = ("A", return$11)
++                   in invoke String# ~ apply$17
+                  }
++                 in invoke printString ~ then$19
+                Tuple(B(), rest#2) -> Tuple() ~ return$10
+                Tuple(C(), rest#3) -> Tuple() ~ return$10
+              }
++             in Tuple(param$5, param$6) ~ select$20
+            } ~ return$9
+          }
+-         , return$8 ) )
++         , return$8 )
++         in join apply$22 = (Tuple(A(), B()), apply$21)
++         in invoke |> ~ apply$22
+      }
++     in param$4 ~ select$23
+    } ~ return$7
+  
+  def A(return$12) = A() ~ return$12
+  
+  def B(return$13) = B() ~ return$13
+  
+  def C(return$14) = C() ~ return$14
+
+
+=== Join -> ClosureConv ===
+- def main(return$7) =
++ toplevel fn main(return$7) =
+-   \param$4 return$8 . {
++   let closure$55 = closure lambda$25()
+-     join select$23 = select {
++   return return$7(closure$55)
+-       _#0 ->
++ 
+-         join apply$21 = ( \param$5 return$9 . {
++ closure fn lambda$25(self$26, param$4, return$8) =
+-           \param$6 return$10 . {
++   if  then {
+-             join select$20 = select {
++     let _#0 = param$4
+-               Tuple(A(), rest#1) ->
++     let apply$21 = closure join$27(return$8)
+-                 join then$19 = then outer$15 -> {
++     let apply$22 = closure join$49(apply$21)
+-                   join return$11 = then inner$16 -> {
++     return |>(apply$22)
+-                     join apply$18 = (inner$16, return$10)
++   } else {
+-                     in outer$15 ~ apply$18
++     panic "no matching branch"
+-                   }
++   }
+-                   in join apply$17 = ("A", return$11)
++ 
+-                   in invoke String# ~ apply$17
++ closure fn join$27(self$28, value$29) =
+-                 }
++   let return$8 = self$28.cap[0]
+-                 in invoke printString ~ then$19
++   let closure$48 = closure lambda$30()
+-               Tuple(B(), rest#2) -> Tuple() ~ return$10
++   return value$29(closure$48, return$8)
+-               Tuple(C(), rest#3) -> Tuple() ~ return$10
++ 
+-             }
++ closure fn lambda$30(self$31, param$5, return$9) =
+-             in Tuple(param$5, param$6) ~ select$20
++   let closure$47 = closure lambda$32(param$5)
+-           } ~ return$9
++   return return$9(closure$47)
+-         }
++ 
+-         , return$8 )
++ closure fn lambda$32(self$33, param$6, return$10) =
+-         in join apply$22 = (Tuple(A(), B()), apply$21)
++   let param$5 = self$33.cap[0]
+-         in invoke |> ~ apply$22
++   let struct$34 = Tuple(param$5, param$6)
++   if struct$34.tag == Tuple && struct$34.0.tag == A then {
++     let rest#1 = struct$34.1
++     let then$19 = closure join$35(return$10)
++     return printString(then$19)
++   } else {
++     if struct$34.tag == Tuple && struct$34.0.tag == B then {
++       let rest#2 = struct$34.1
++       let struct$45 = Tuple()
++       return return$10(struct$45)
++     } else {
++       if struct$34.tag == Tuple && struct$34.0.tag == C then {
++         let rest#3 = struct$34.1
++         let struct$46 = Tuple()
++         return return$10(struct$46)
++       } else {
++         panic "no matching branch"
++       }
+      }
+-     in param$4 ~ select$23
++   }
+-   } ~ return$7
+  
+- def A(return$12) = A() ~ return$12
++ closure fn join$35(self$36, value$37) =
++   let return$10 = self$36.cap[0]
++   let return$11 = closure join$38(return$10, value$37)
++   let apply$17 = closure join$41(return$11)
++   return String#(apply$17)
+  
+- def B(return$13) = B() ~ return$13
++ closure fn join$38(self$39, value$40) =
++   let return$10 = self$39.cap[0]
++   let value$37 = self$39.cap[1]
++   return value$37(value$40, return$10)
+  
+- def C(return$14) = C() ~ return$14
++ closure fn join$41(self$42, value$43) =
++   let return$11 = self$42.cap[0]
++   let lit$44 = "A"
++   return value$43(lit$44, return$11)
++ 
++ closure fn join$49(self$50, value$51) =
++   let apply$21 = self$50.cap[0]
++   let struct$52 = A()
++   let struct$53 = B()
++   let struct$54 = Tuple(struct$52, struct$53)
++   return value$51(struct$54, apply$21)
++ 
++ toplevel fn A(return$12) =
++   let struct$57 = A()
++   return return$12(struct$57)
++ 
++ toplevel fn B(return$13) =
++   let struct$59 = B()
++   return return$13(struct$59)
++ 
++ toplevel fn C(return$14) =
++   let struct$61 = C()
++   return return$14(struct$61)
++ 
++ toplevel fn zig_main$64() =
++   let finish$62 = closure join$66()
++   let after_main$63 = closure join$69(finish$62)
++   return main(after_main$63)
++ 
++ closure fn join$66(self$67, value$68) = return value$68
++ 
++ closure fn join$69(self$70, value$71) =
++   let finish$62 = self$70.cap[0]
++   let struct$72 = Tuple()
++   return value$71(struct$72, finish$62)
++ 
++ entry = zig_main$64
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn main(return$7) =
+    let closure$55 = closure lambda$25()
+    return return$7(closure$55)
+  
+  closure fn lambda$25(self$26, param$4, return$8) =
+    if  then {
+-     let _#0 = param$4
+      let apply$21 = closure join$27(return$8)
+      let apply$22 = closure join$49(apply$21)
+      return |>(apply$22)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$27(self$28, value$29) =
+    let return$8 = self$28.cap[0]
+    let closure$48 = closure lambda$30()
+    return value$29(closure$48, return$8)
+  
+  closure fn lambda$30(self$31, param$5, return$9) =
+    let closure$47 = closure lambda$32(param$5)
+    return return$9(closure$47)
+  
+  closure fn lambda$32(self$33, param$6, return$10) =
+    let param$5 = self$33.cap[0]
+-   let struct$34 = Tuple(param$5, param$6)
++   if param$5.tag == A then {
+-   if struct$34.tag == Tuple && struct$34.0.tag == A then {
+-     let rest#1 = struct$34.1
+      let then$19 = closure join$35(return$10)
+      return printString(then$19)
+    } else {
+-     if struct$34.tag == Tuple && struct$34.0.tag == B then {
++     if param$5.tag == B then {
+-       let rest#2 = struct$34.1
+        let struct$45 = Tuple()
+        return return$10(struct$45)
+      } else {
+-       if struct$34.tag == Tuple && struct$34.0.tag == C then {
++       if param$5.tag == C then {
+-         let rest#3 = struct$34.1
+          let struct$46 = Tuple()
+          return return$10(struct$46)
+        } else {
+          panic "no matching branch"
+        }
+      }
+    }
+  
+  closure fn join$35(self$36, value$37) =
+    let return$10 = self$36.cap[0]
+    let return$11 = closure join$38(return$10, value$37)
+    let apply$17 = closure join$41(return$11)
+    return String#(apply$17)
+  
+  closure fn join$38(self$39, value$40) =
+    let return$10 = self$39.cap[0]
+    let value$37 = self$39.cap[1]
+    return value$37(value$40, return$10)
+  
+  closure fn join$41(self$42, value$43) =
+    let return$11 = self$42.cap[0]
+    let lit$44 = "A"
+    return value$43(lit$44, return$11)
+  
+  closure fn join$49(self$50, value$51) =
+    let apply$21 = self$50.cap[0]
+    let struct$52 = A()
+    let struct$53 = B()
+    let struct$54 = Tuple(struct$52, struct$53)
+    return value$51(struct$54, apply$21)
+  
+  toplevel fn A(return$12) =
+    let struct$57 = A()
+    return return$12(struct$57)
+  
+  toplevel fn B(return$13) =
+    let struct$59 = B()
+    return return$13(struct$59)
+  
+  toplevel fn C(return$14) =
+    let struct$61 = C()
+    return return$14(struct$61)
+  
+  toplevel fn zig_main$64() =
+    let finish$62 = closure join$66()
+    let after_main$63 = closure join$69(finish$62)
+    return main(after_main$63)
+  
+  closure fn join$66(self$67, value$68) = return value$68
+  
+  closure fn join$69(self$70, value$71) =
+    let finish$62 = self$70.cap[0]
+    let struct$72 = Tuple()
+    return value$71(struct$72, finish$62)
+  
+  entry = zig_main$64
+
+
+=== Peephole -> Perceus ===
+  toplevel fn main(return$7) =
+    let closure$55 = closure lambda$25()
+    return return$7(closure$55)
+  
+  closure fn lambda$25(self$26, param$4, return$8) =
++   drop param$4
++   drop self$26
+    if  then {
+      let apply$21 = closure join$27(return$8)
+      let apply$22 = closure join$49(apply$21)
+      return |>(apply$22)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$27(self$28, value$29) =
+    let return$8 = self$28.cap[0]
++   dup return$8
++   drop self$28
+    let closure$48 = closure lambda$30()
+    return value$29(closure$48, return$8)
+  
+  closure fn lambda$30(self$31, param$5, return$9) =
++   drop self$31
+    let closure$47 = closure lambda$32(param$5)
+    return return$9(closure$47)
+  
+  closure fn lambda$32(self$33, param$6, return$10) =
++   drop param$6
+    let param$5 = self$33.cap[0]
++   dup param$5
++   drop self$33
+    if param$5.tag == A then {
++     drop param$5
+      let then$19 = closure join$35(return$10)
+      return printString(then$19)
+    } else {
+      if param$5.tag == B then {
++       drop param$5
+        let struct$45 = Tuple()
+        return return$10(struct$45)
+      } else {
+        if param$5.tag == C then {
++         drop param$5
+          let struct$46 = Tuple()
+          return return$10(struct$46)
+        } else {
+          panic "no matching branch"
+        }
+      }
+    }
+  
+  closure fn join$35(self$36, value$37) =
+    let return$10 = self$36.cap[0]
++   dup return$10
++   drop self$36
+    let return$11 = closure join$38(return$10, value$37)
+    let apply$17 = closure join$41(return$11)
+    return String#(apply$17)
+  
+  closure fn join$38(self$39, value$40) =
+    let return$10 = self$39.cap[0]
++   dup return$10
+    let value$37 = self$39.cap[1]
++   dup value$37
++   drop self$39
+    return value$37(value$40, return$10)
+  
+  closure fn join$41(self$42, value$43) =
+    let return$11 = self$42.cap[0]
++   dup return$11
++   drop self$42
+    let lit$44 = "A"
+    return value$43(lit$44, return$11)
+  
+  closure fn join$49(self$50, value$51) =
+    let apply$21 = self$50.cap[0]
++   dup apply$21
++   drop self$50
+    let struct$52 = A()
+    let struct$53 = B()
+    let struct$54 = Tuple(struct$52, struct$53)
+    return value$51(struct$54, apply$21)
+  
+  toplevel fn A(return$12) =
+    let struct$57 = A()
+    return return$12(struct$57)
+  
+  toplevel fn B(return$13) =
+    let struct$59 = B()
+    return return$13(struct$59)
+  
+  toplevel fn C(return$14) =
+    let struct$61 = C()
+    return return$14(struct$61)
+  
+  toplevel fn zig_main$64() =
+    let finish$62 = closure join$66()
+    let after_main$63 = closure join$69(finish$62)
+    return main(after_main$63)
+  
+- closure fn join$66(self$67, value$68) = return value$68
++ closure fn join$66(self$67, value$68) =
++   drop self$67
++   return value$68
+  
+  closure fn join$69(self$70, value$71) =
+    let finish$62 = self$70.cap[0]
++   dup finish$62
++   drop self$70
+    let struct$72 = Tuple()
+    return value$71(struct$72, finish$62)
+  
+  entry = zig_main$64
+
+
+=== Perceus -> Reuse ===
+  toplevel fn main(return$7) =
+    let closure$55 = closure lambda$25()
+    return return$7(closure$55)
+  
+  closure fn lambda$25(self$26, param$4, return$8) =
+    drop param$4
+    drop self$26
+    if  then {
+      let apply$21 = closure join$27(return$8)
+      let apply$22 = closure join$49(apply$21)
+      return |>(apply$22)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$27(self$28, value$29) =
+    let return$8 = self$28.cap[0]
+    dup return$8
+-   drop self$28
+    let closure$48 = closure lambda$30()
++   drop self$28
+    return value$29(closure$48, return$8)
+  
+  closure fn lambda$30(self$31, param$5, return$9) =
+-   drop self$31
+    let closure$47 = closure lambda$32(param$5)
++   drop self$31
+    return return$9(closure$47)
+  
+  closure fn lambda$32(self$33, param$6, return$10) =
+-   drop param$6
+    let param$5 = self$33.cap[0]
+    dup param$5
++   drop param$6
+    drop self$33
+    if param$5.tag == A then {
+-     drop param$5
+      let then$19 = closure join$35(return$10)
++     drop param$5
+      return printString(then$19)
+    } else {
+      if param$5.tag == B then {
+-       drop param$5
++       dropReuse reuse$73 = param$5 /0
+-       let struct$45 = Tuple()
++       let struct$45 = reuse reuse$73 Tuple()
+        return return$10(struct$45)
+      } else {
+        if param$5.tag == C then {
+-         drop param$5
++         dropReuse reuse$74 = param$5 /0
+-         let struct$46 = Tuple()
++         let struct$46 = reuse reuse$74 Tuple()
+          return return$10(struct$46)
+        } else {
+          panic "no matching branch"
+        }
+      }
+    }
+  
+  closure fn join$35(self$36, value$37) =
+    let return$10 = self$36.cap[0]
+    dup return$10
+-   drop self$36
+    let return$11 = closure join$38(return$10, value$37)
+    let apply$17 = closure join$41(return$11)
++   drop self$36
+    return String#(apply$17)
+  
+  closure fn join$38(self$39, value$40) =
+    let return$10 = self$39.cap[0]
+    dup return$10
+    let value$37 = self$39.cap[1]
+    dup value$37
+    drop self$39
+    return value$37(value$40, return$10)
+  
+  closure fn join$41(self$42, value$43) =
+    let return$11 = self$42.cap[0]
+    dup return$11
+-   drop self$42
+    let lit$44 = "A"
++   drop self$42
+    return value$43(lit$44, return$11)
+  
+  closure fn join$49(self$50, value$51) =
+    let apply$21 = self$50.cap[0]
+    dup apply$21
+-   drop self$50
++   dropReuse reuse$75 = self$50 /0
+-   let struct$52 = A()
++   let struct$52 = reuse reuse$75 A()
+    let struct$53 = B()
+    let struct$54 = Tuple(struct$52, struct$53)
+    return value$51(struct$54, apply$21)
+  
+  toplevel fn A(return$12) =
+    let struct$57 = A()
+    return return$12(struct$57)
+  
+  toplevel fn B(return$13) =
+    let struct$59 = B()
+    return return$13(struct$59)
+  
+  toplevel fn C(return$14) =
+    let struct$61 = C()
+    return return$14(struct$61)
+  
+  toplevel fn zig_main$64() =
+    let finish$62 = closure join$66()
+    let after_main$63 = closure join$69(finish$62)
+    return main(after_main$63)
+  
+  closure fn join$66(self$67, value$68) =
+    drop self$67
+    return value$68
+  
+  closure fn join$69(self$70, value$71) =
+    let finish$62 = self$70.cap[0]
+    dup finish$62
+-   drop self$70
++   dropReuse reuse$76 = self$70 /0
+-   let struct$72 = Tuple()
++   let struct$72 = reuse reuse$76 Tuple()
+    return value$71(struct$72, finish$62)
+  
+  entry = zig_main$64

@@ -64,10 +64,14 @@ emitFunc fn =
     <> discardSelf
     <> discardArgs
     <> paramBinds
-    <> emitBlock pv fn.body
+    <> emitBlock pv funcNameLit fn.body
     <> "}"
   where
     pv n = if n == fn.selfVar then "self" else mangleId n
+    -- Passed through to every 'rt.*Named' RC-tracing call in this Func's
+    -- body (see "Named RC tracing" in runtime.zig), identifying which
+    -- Zig-IR Func an event came from.
+    funcNameLit = zigStringLit (idToText fn.name)
     bodyFree = Ir.freeVarsBlock fn.body
     discardSelf = if fn.selfVar `Set.member` bodyFree then "" else "_ = self;\n"
     discardArgs = if null fn.params then "_ = args;\n" else ""
@@ -82,10 +86,10 @@ emitFunc fn =
         | (i, p) <- zip [0 :: Int ..] fn.params
         ]
 
-emitBlock :: (Name -> Text) -> Ir.Block -> Text
-emitBlock pv (Ir.Block stmts0 terminator) = go stmts0
+emitBlock :: (Name -> Text) -> Text -> Ir.Block -> Text
+emitBlock pv funcName (Ir.Block stmts0 terminator) = go stmts0
   where
-    go [] = emitTerminator pv terminator
+    go [] = emitTerminator pv funcName terminator
     -- 'Ir.PanicExpr' is noreturn: nothing after it in this block is
     -- reachable, and Zig rejects unreachable statements, so printing
     -- truncates here.
@@ -93,12 +97,28 @@ emitBlock pv (Ir.Block stmts0 terminator) = go stmts0
     go (Ir.Let x e : rest) =
       let usedLater = x `Set.member` Ir.freeVarsBlock (Ir.Block rest terminator)
           discard = if usedLater then "" else "_ = " <> pv x <> ";\n"
-       in "const " <> pv x <> " = " <> emitExpr pv e <> ";\n" <> discard <> go rest
-    go (Ir.Dup x : rest) = "rt.dup(" <> pv x <> ");\n" <> go rest
-    go (Ir.Drop x : rest) = "rt.drop(" <> pv x <> ");\n" <> go rest
+       in "const " <> pv x <> " = " <> emitExpr pv funcName e <> ";\n" <> discard <> go rest
+    go (Ir.Dup x : rest) = "rt.dupNamed(" <> pv x <> ", " <> nameLit x <> ", " <> funcName <> ");\n" <> go rest
+    go (Ir.Drop x : rest) = "rt.dropNamed(" <> pv x <> ", " <> nameLit x <> ", " <> funcName <> ");\n" <> go rest
+    go (Ir.DropReuse tok x arity : rest) =
+      let usedLater = tok `Set.member` Ir.freeVarsBlock (Ir.Block rest terminator)
+          discard = if usedLater then "" else "_ = " <> pv tok <> ";\n"
+       in "const "
+            <> pv tok
+            <> " = rt.dropReuseNamed("
+            <> pv x
+            <> ", "
+            <> convertString (show arity)
+            <> ", "
+            <> nameLit x
+            <> ", "
+            <> funcName
+            <> ");\n"
+            <> discard
+            <> go rest
 
-emitTerminator :: (Name -> Text) -> Ir.Terminator -> Text
-emitTerminator pv = \case
+emitTerminator :: (Name -> Text) -> Text -> Ir.Terminator -> Text
+emitTerminator pv funcName = \case
   Ir.TApplyCo k v -> "return rt.applyCovalue(" <> pv k <> ", " <> pv v <> ");\n"
   Ir.TCallClosure f args -> "return rt.callClosure(" <> pv f <> ", " <> valueSlice pv args <> ");\n"
   Ir.TStaticCall fn args -> "return " <> mangleId fn <> "(rt.no_self, " <> valueSlice pv args <> ");\n"
@@ -109,9 +129,9 @@ emitTerminator pv = \case
     "if ("
       <> emitGuard pv guard
       <> ") {\n"
-      <> emitBlock pv t
+      <> emitBlock pv funcName t
       <> "} else {\n"
-      <> emitBlock pv e
+      <> emitBlock pv funcName e
       <> "}\n"
   Ir.TPanic msg -> "rt.panic(" <> zigStringLit msg <> ");\n"
 
@@ -133,11 +153,12 @@ emitPath :: (Name -> Text) -> Ir.Path -> Text
 emitPath pv (Ir.PRoot v) = pv v
 emitPath pv (Ir.PField p i) = emitPath pv p <> ".payload.strukt.fields[" <> convertString (show i) <> "]"
 
-emitExpr :: (Name -> Text) -> Ir.Expr -> Text
-emitExpr pv = \case
+emitExpr :: (Name -> Text) -> Text -> Ir.Expr -> Text
+emitExpr pv funcName = \case
   Ir.Lit lit -> compileLiteral lit
-  Ir.MkStruct tag vs -> "rt.mkStruct(" <> compileTag tag <> ", " <> valueSlice pv vs <> ")"
-  Ir.MkClosure fn vs -> "rt.mkClosure(&" <> mangleId fn <> ", " <> valueSlice pv vs <> ")"
+  Ir.MkStruct tag vs -> "rt.mkStructNamed(" <> compileTag tag <> ", " <> valueSlice pv vs <> ", " <> nameSlice vs <> ", " <> funcName <> ")"
+  Ir.MkStructReuse tok tag vs -> "rt.mkStructReuseNamed(" <> pv tok <> ", " <> compileTag tag <> ", " <> valueSlice pv vs <> ", " <> nameSlice vs <> ", " <> funcName <> ")"
+  Ir.MkClosure fn vs -> "rt.mkClosureNamed(&" <> mangleId fn <> ", " <> valueSlice pv vs <> ", " <> nameSlice vs <> ", " <> funcName <> ")"
   Ir.MkRecord fields vs ->
     "rt.mkRecord(&[_]rt.NamedField{"
       <> T.intercalate ", " [".{ .name = " <> zigStringLit fieldName <> ", .code = &" <> mangleId fn <> " }" | (fieldName, fn) <- fields]
@@ -160,6 +181,18 @@ emitExpr pv = \case
 
 valueSlice :: (Name -> Text) -> [Name] -> Text
 valueSlice pv vs = "&[_]rt.Value{" <> T.intercalate ", " (map pv vs) <> "}"
+
+-- | A Zig string-literal slice of `vs`'s symbolic (compile-time) names, in
+-- the same order as the matching 'valueSlice' -- passed alongside it to a
+-- `rt.*Named` RC-tracing wrapper (see runtime.zig's "Named RC tracing") so
+-- a construction event's slots can be attributed back to source names.
+nameSlice :: [Name] -> Text
+nameSlice vs = "&[_][]const u8{" <> T.intercalate ", " (map nameLit vs) <> "}"
+
+-- | A single value's symbolic name as a Zig string literal (as opposed to
+-- 'mangleId', which renders it as a raw identifier).
+nameLit :: Name -> Text
+nameLit = zigStringLit . idToText
 
 literalEqExpr :: Text -> Literal -> Text
 literalEqExpr scrutinee = \case

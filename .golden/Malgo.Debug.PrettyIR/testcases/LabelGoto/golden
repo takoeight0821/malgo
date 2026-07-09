@@ -1,0 +1,2896 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+def printI64 =
+  fn {
+    x ->
+      {
+        printString#(toStringInt64#(x))
+      }
+  }
+
+def captureContinuationShape =
+  fn {
+    x ->
+      {
+        label k . goto x k
+      }
+  }
+
+def nestedNonLocalShape =
+  fn {
+    x ->
+      {
+        label exit . (label inner . (goto x exit))
+      }
+  }
+
+def viaFunctionGoto =
+  fn {
+    x ->
+      {
+        goto x fn {
+          y ->
+            {
+              y
+            }
+        }
+      }
+  }
+
+def passThroughLabel =
+  fn {
+    x ->
+      {
+        label k . x
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        printI64(passThroughLabel(6L))
+        printI64(viaFunctionGoto(7L))
+        printI64(label k . 8L)
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+def viaFunctionGoto =
+  fn {
+    x#6 ->
+      {
+        goto x#6 fn {
+          y#7 ->
+            {
+              y#7
+            }
+        }
+      }
+  }
+
+def printI64 =
+  fn {
+    x#0 ->
+      {
+        printString#(toStringInt64#(x#0))
+      }
+  }
+
+def passThroughLabel =
+  fn {
+    x#8 ->
+      {
+        label k#9 . x#8
+      }
+  }
+
+def nestedNonLocalShape =
+  fn {
+    x#3 ->
+      {
+        label exit#4 . (label inner#5 . (goto x#3 exit#4))
+      }
+  }
+
+def main =
+  fn {
+    _#10 ->
+      {
+        printI64(passThroughLabel(6L))
+        printI64(viaFunctionGoto(7L))
+        printI64(label k#11 . 8L)
+      }
+  }
+
+def captureContinuationShape =
+  fn {
+    x#1 ->
+      {
+        label k#2 . goto x#1 k#2
+      }
+  }
+
+=== ToFun ===
+def viaFunctionGoto =
+  \param$12 ->
+    case param$12 of {
+      x#6 ->
+        \param$13 ->
+          case param$13 of {
+            y#7 -> y#7
+          }(x#6)
+    }
+
+def printI64 =
+  \param$14 ->
+    case param$14 of {
+      x#0 -> invoke printString#(invoke toStringInt64#(x#0))
+    }
+
+def passThroughLabel =
+  \param$15 ->
+    case param$15 of {
+      x#8 -> fix k#9 = x#8
+    }
+
+def nestedNonLocalShape =
+  \param$16 ->
+    case param$16 of {
+      x#3 -> fix exit#4 = fix inner#5 = exit#4(x#3)
+    }
+
+def main =
+  \param$17 ->
+    case param$17 of {
+      _#10 ->
+        \tmp$18 ->
+          \tmp$19 ->
+            invoke printI64( fix k#11 =
+              8L )( invoke printI64( invoke viaFunctionGoto( 7L ) ) )( invoke printI64( invoke passThroughLabel( 6L ) ) )
+    }
+
+def captureContinuationShape =
+  \param$20 ->
+    case param$20 of {
+      x#1 -> fix k#2 = k#2(x#1)
+    }
+
+=== SaturateCtor ===
+def viaFunctionGoto =
+  \param$12 ->
+    case param$12 of {
+      x#6 ->
+        \param$13 ->
+          case param$13 of {
+            y#7 -> y#7
+          }(x#6)
+    }
+
+def printI64 =
+  \param$14 ->
+    case param$14 of {
+      x#0 -> invoke printString#(invoke toStringInt64#(x#0))
+    }
+
+def passThroughLabel =
+  \param$15 ->
+    case param$15 of {
+      x#8 -> fix k#9 = x#8
+    }
+
+def nestedNonLocalShape =
+  \param$16 ->
+    case param$16 of {
+      x#3 -> fix exit#4 = fix inner#5 = exit#4(x#3)
+    }
+
+def main =
+  \param$17 ->
+    case param$17 of {
+      _#10 ->
+        \tmp$18 ->
+          \tmp$19 ->
+            invoke printI64( fix k#11 =
+              8L )( invoke printI64( invoke viaFunctionGoto( 7L ) ) )( invoke printI64( invoke passThroughLabel( 6L ) ) )
+    }
+
+def captureContinuationShape =
+  \param$20 ->
+    case param$20 of {
+      x#1 -> fix k#2 = k#2(x#1)
+    }
+
+=== ReuseSpecialize ===
+def viaFunctionGoto =
+  \param$12 ->
+    case param$12 of {
+      x#6 ->
+        \param$13 ->
+          case param$13 of {
+            y#7 -> y#7
+          }(x#6)
+    }
+
+def printI64 =
+  \param$14 ->
+    case param$14 of {
+      x#0 -> invoke printString#(invoke toStringInt64#(x#0))
+    }
+
+def passThroughLabel =
+  \param$15 ->
+    case param$15 of {
+      x#8 -> fix k#9 = x#8
+    }
+
+def nestedNonLocalShape =
+  \param$16 ->
+    case param$16 of {
+      x#3 -> fix exit#4 = fix inner#5 = exit#4(x#3)
+    }
+
+def main =
+  \param$17 ->
+    case param$17 of {
+      _#10 ->
+        \tmp$18 ->
+          \tmp$19 ->
+            invoke printI64( fix k#11 =
+              8L )( invoke printI64( invoke viaFunctionGoto( 7L ) ) )( invoke printI64( invoke passThroughLabel( 6L ) ) )
+    }
+
+def captureContinuationShape =
+  \param$20 ->
+    case param$20 of {
+      x#1 -> fix k#2 = k#2(x#1)
+    }
+
+=== ToCore ===
+def viaFunctionGoto(return$21) =
+  \param$12 return$22 . {
+    param$12 ~ select {
+      x#6 ->
+        \param$13 return$23 . {
+          param$13 ~ select {
+            y#7 -> y#7 ~ return$23
+          }
+        } ~ (x#6, return$22)
+    }
+  } ~ return$21
+
+def printI64(return$24) =
+  \param$14 return$25 . {
+    param$14 ~ select {
+      x#0 ->
+        invoke printString# ~ ( do return$26 . {
+          invoke toStringInt64# ~ (x#0, return$26)
+        }
+        , return$25 )
+    }
+  } ~ return$24
+
+def passThroughLabel(return$27) =
+  \param$15 return$28 . {
+    param$15 ~ select {
+      x#8 ->
+        mu k#9 . {
+          x#8 ~ k#9
+        } ~ return$28
+    }
+  } ~ return$27
+
+def nestedNonLocalShape(return$29) =
+  \param$16 return$30 . {
+    param$16 ~ select {
+      x#3 ->
+        mu exit#4 . {
+          mu inner#5 . {
+            exit#4 ~ (x#3, inner#5)
+          } ~ exit#4
+        } ~ return$30
+    }
+  } ~ return$29
+
+def main(return$31) =
+  \param$17 return$32 . {
+    param$17 ~ select {
+      _#10 ->
+        \tmp$18 return$35 . {
+          \tmp$19 return$38 . {
+            invoke printI64 ~ ( mu k#11 . {
+              8L ~ k#11
+            }
+            , return$38 )
+          } ~ ( do return$36 . {
+            invoke printI64 ~ ( do return$37 . {
+              invoke viaFunctionGoto ~ (7L, return$37)
+            }
+            , return$36 )
+          }
+          , return$35 )
+        } ~ ( do return$33 . {
+          invoke printI64 ~ ( do return$34 . {
+            invoke passThroughLabel ~ (6L, return$34)
+          }
+          , return$33 )
+        }
+        , return$32 )
+    }
+  } ~ return$31
+
+def captureContinuationShape(return$39) =
+  \param$20 return$40 . {
+    param$20 ~ select {
+      x#1 ->
+        mu k#2 . {
+          k#2 ~ (x#1, k#2)
+        } ~ return$40
+    }
+  } ~ return$39
+
+=== Flat ===
+def viaFunctionGoto(return$21) =
+  \param$12 return$22 . {
+    param$12 ~ select {
+      x#6 ->
+        \param$13 return$23 . {
+          param$13 ~ select {
+            y#7 -> y#7 ~ return$23
+          }
+        } ~ (x#6, return$22)
+    }
+  } ~ return$21
+
+def printI64(return$24) =
+  \param$14 return$25 . {
+    param$14 ~ select {
+      x#0 ->
+        invoke printString# ~ then outer$41 -> {
+          join return$26 = then inner$42 -> {
+            outer$41 ~ (inner$42, return$25)
+          }
+          in invoke toStringInt64# ~ (x#0, return$26)
+        }
+    }
+  } ~ return$24
+
+def passThroughLabel(return$27) =
+  \param$15 return$28 . {
+    param$15 ~ select {
+      x#8 ->
+        mu k#9 . {
+          x#8 ~ k#9
+        } ~ return$28
+    }
+  } ~ return$27
+
+def nestedNonLocalShape(return$29) =
+  \param$16 return$30 . {
+    param$16 ~ select {
+      x#3 ->
+        mu exit#4 . {
+          mu inner#5 . {
+            exit#4 ~ (x#3, inner#5)
+          } ~ exit#4
+        } ~ return$30
+    }
+  } ~ return$29
+
+def main(return$31) =
+  \param$17 return$32 . {
+    param$17 ~ select {
+      _#10 ->
+        \tmp$18 return$35 . {
+          \tmp$19 return$38 . {
+            invoke printI64 ~ then outer$43 -> {
+              mu k#11 . {
+                8L ~ k#11
+              } ~ then inner$44 -> {
+                outer$43 ~ (inner$44, return$38)
+              }
+            }
+          } ~ then outer$45 -> {
+            join return$36 = then inner$46 -> {
+              outer$45 ~ (inner$46, return$35)
+            }
+            in invoke printI64 ~ then outer$47 -> {
+              join return$37 = then inner$48 -> {
+                outer$47 ~ (inner$48, return$36)
+              }
+              in invoke viaFunctionGoto ~ (7L, return$37)
+            }
+          }
+        } ~ then outer$49 -> {
+          join return$33 = then inner$50 -> {
+            outer$49 ~ (inner$50, return$32)
+          }
+          in invoke printI64 ~ then outer$51 -> {
+            join return$34 = then inner$52 -> {
+              outer$51 ~ (inner$52, return$33)
+            }
+            in invoke passThroughLabel ~ (6L, return$34)
+          }
+        }
+    }
+  } ~ return$31
+
+def captureContinuationShape(return$39) =
+  \param$20 return$40 . {
+    param$20 ~ select {
+      x#1 ->
+        mu k#2 . {
+          k#2 ~ (x#1, k#2)
+        } ~ return$40
+    }
+  } ~ return$39
+
+=== Join ===
+def viaFunctionGoto(return$21) =
+  \param$12 return$22 . {
+    join select$55 = select {
+      x#6 ->
+        join apply$54 = (x#6, return$22)
+        in \param$13 return$23 . {
+          join select$53 = select {
+            y#7 -> y#7 ~ return$23
+          }
+          in param$13 ~ select$53
+        } ~ apply$54
+    }
+    in param$12 ~ select$55
+  } ~ return$21
+
+def printI64(return$24) =
+  \param$14 return$25 . {
+    join select$59 = select {
+      x#0 ->
+        join then$58 = then outer$41 -> {
+          join return$26 = then inner$42 -> {
+            join apply$57 = (inner$42, return$25)
+            in outer$41 ~ apply$57
+          }
+          in join apply$56 = (x#0, return$26)
+          in invoke toStringInt64# ~ apply$56
+        }
+        in invoke printString# ~ then$58
+    }
+    in param$14 ~ select$59
+  } ~ return$24
+
+def passThroughLabel(return$27) =
+  \param$15 return$28 . {
+    join select$60 = select {
+      x#8 ->
+        mu k#9 . {
+          x#8 ~ k#9
+        } ~ return$28
+    }
+    in param$15 ~ select$60
+  } ~ return$27
+
+def nestedNonLocalShape(return$29) =
+  \param$16 return$30 . {
+    join select$62 = select {
+      x#3 ->
+        mu exit#4 . {
+          mu inner#5 . {
+            join apply$61 = (x#3, inner#5)
+            in exit#4 ~ apply$61
+          } ~ exit#4
+        } ~ return$30
+    }
+    in param$16 ~ select$62
+  } ~ return$29
+
+def main(return$31) =
+  \param$17 return$32 . {
+    join select$76 = select {
+      _#10 ->
+        join then$75 = then outer$49 -> {
+          join return$33 = then inner$50 -> {
+            join apply$74 = (inner$50, return$32)
+            in outer$49 ~ apply$74
+          }
+          in join then$73 = then outer$51 -> {
+            join return$34 = then inner$52 -> {
+              join apply$72 = (inner$52, return$33)
+              in outer$51 ~ apply$72
+            }
+            in join apply$71 = (6L, return$34)
+            in invoke passThroughLabel ~ apply$71
+          }
+          in invoke printI64 ~ then$73
+        }
+        in \tmp$18 return$35 . {
+          join then$70 = then outer$45 -> {
+            join return$36 = then inner$46 -> {
+              join apply$69 = (inner$46, return$35)
+              in outer$45 ~ apply$69
+            }
+            in join then$68 = then outer$47 -> {
+              join return$37 = then inner$48 -> {
+                join apply$67 = (inner$48, return$36)
+                in outer$47 ~ apply$67
+              }
+              in join apply$66 = (7L, return$37)
+              in invoke viaFunctionGoto ~ apply$66
+            }
+            in invoke printI64 ~ then$68
+          }
+          in \tmp$19 return$38 . {
+            join then$65 = then outer$43 -> {
+              join then$64 = then inner$44 -> {
+                join apply$63 = (inner$44, return$38)
+                in outer$43 ~ apply$63
+              }
+              in mu k#11 . {
+                8L ~ k#11
+              } ~ then$64
+            }
+            in invoke printI64 ~ then$65
+          } ~ then$70
+        } ~ then$75
+    }
+    in param$17 ~ select$76
+  } ~ return$31
+
+def captureContinuationShape(return$39) =
+  \param$20 return$40 . {
+    join select$78 = select {
+      x#1 ->
+        mu k#2 . {
+          join apply$77 = (x#1, k#2)
+          in k#2 ~ apply$77
+        } ~ return$40
+    }
+    in param$20 ~ select$78
+  } ~ return$39
+
+=== ClosureConv ===
+toplevel fn viaFunctionGoto(return$21) =
+  let closure$85 = closure lambda$80()
+  return return$21(closure$85)
+
+closure fn lambda$80(self$81, param$12, return$22) =
+  if  then {
+    let x#6 = param$12
+    let closure$84 = closure lambda$82()
+    return closure$84(x#6, return$22)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$82(self$83, param$13, return$23) =
+  if  then {
+    let y#7 = param$13
+    return return$23(y#7)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn printI64(return$24) =
+  let closure$98 = closure lambda$87()
+  return return$24(closure$98)
+
+closure fn lambda$87(self$88, param$14, return$25) =
+  if  then {
+    let x#0 = param$14
+    let then$58 = closure join$89(return$25, x#0)
+    return printString#(then$58)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$89(self$90, value$91) =
+  let return$25 = self$90.cap[0]
+  let x#0 = self$90.cap[1]
+  let return$26 = closure join$92(return$25, value$91)
+  let apply$56 = closure join$95(return$26, x#0)
+  return toStringInt64#(apply$56)
+
+closure fn join$92(self$93, value$94) =
+  let return$25 = self$93.cap[0]
+  let value$91 = self$93.cap[1]
+  return value$91(value$94, return$25)
+
+closure fn join$95(self$96, value$97) =
+  let return$26 = self$96.cap[0]
+  let x#0 = self$96.cap[1]
+  return value$97(x#0, return$26)
+
+toplevel fn passThroughLabel(return$27) =
+  let closure$102 = closure lambda$100()
+  return return$27(closure$102)
+
+closure fn lambda$100(self$101, param$15, return$28) =
+  if  then {
+    let x#8 = param$15
+    return return$28(x#8)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn nestedNonLocalShape(return$29) =
+  let closure$106 = closure lambda$104()
+  return return$29(closure$106)
+
+closure fn lambda$104(self$105, param$16, return$30) =
+  if  then {
+    let x#3 = param$16
+    return return$30(x#3, return$30)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$31) =
+  let closure$146 = closure lambda$108()
+  return return$31(closure$146)
+
+closure fn lambda$108(self$109, param$17, return$32) =
+  if  then {
+    let _#10 = param$17
+    let closure$132 = closure lambda$110()
+    let return$33 = closure join$133(closure$132, return$32)
+    let then$73 = closure join$136(return$33)
+    return printI64(then$73)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$110(self$111, tmp$18, return$35) =
+  let closure$118 = closure lambda$112()
+  let return$36 = closure join$119(closure$118, return$35)
+  let then$68 = closure join$122(return$36)
+  return printI64(then$68)
+
+closure fn lambda$112(self$113, tmp$19, return$38) =
+  let then$65 = closure join$114(return$38)
+  return printI64(then$65)
+
+closure fn join$114(self$115, value$116) =
+  let return$38 = self$115.cap[0]
+  let lit$117 = 8L
+  return value$116(lit$117, return$38)
+
+closure fn join$119(self$120, value$121) =
+  let closure$118 = self$120.cap[0]
+  let return$35 = self$120.cap[1]
+  return closure$118(value$121, return$35)
+
+closure fn join$122(self$123, value$124) =
+  let return$36 = self$123.cap[0]
+  let return$37 = closure join$125(return$36, value$124)
+  let apply$66 = closure join$128(return$37)
+  return viaFunctionGoto(apply$66)
+
+closure fn join$125(self$126, value$127) =
+  let return$36 = self$126.cap[0]
+  let value$124 = self$126.cap[1]
+  return value$124(value$127, return$36)
+
+closure fn join$128(self$129, value$130) =
+  let return$37 = self$129.cap[0]
+  let lit$131 = 7L
+  return value$130(lit$131, return$37)
+
+closure fn join$133(self$134, value$135) =
+  let closure$132 = self$134.cap[0]
+  let return$32 = self$134.cap[1]
+  return closure$132(value$135, return$32)
+
+closure fn join$136(self$137, value$138) =
+  let return$33 = self$137.cap[0]
+  let return$34 = closure join$139(return$33, value$138)
+  let apply$71 = closure join$142(return$34)
+  return passThroughLabel(apply$71)
+
+closure fn join$139(self$140, value$141) =
+  let return$33 = self$140.cap[0]
+  let value$138 = self$140.cap[1]
+  return value$138(value$141, return$33)
+
+closure fn join$142(self$143, value$144) =
+  let return$34 = self$143.cap[0]
+  let lit$145 = 6L
+  return value$144(lit$145, return$34)
+
+toplevel fn captureContinuationShape(return$39) =
+  let closure$150 = closure lambda$148()
+  return return$39(closure$150)
+
+closure fn lambda$148(self$149, param$20, return$40) =
+  if  then {
+    let x#1 = param$20
+    return return$40(x#1, return$40)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn zig_main$153() =
+  let finish$151 = closure join$155()
+  let after_main$152 = closure join$158(finish$151)
+  return main(after_main$152)
+
+closure fn join$155(self$156, value$157) = return value$157
+
+closure fn join$158(self$159, value$160) =
+  let finish$151 = self$159.cap[0]
+  let struct$161 = Tuple()
+  return value$160(struct$161, finish$151)
+
+entry = zig_main$153
+
+=== Peephole ===
+toplevel fn viaFunctionGoto(return$21) =
+  let closure$85 = closure lambda$80()
+  return return$21(closure$85)
+
+closure fn lambda$80(self$81, param$12, return$22) =
+  if  then {
+    let closure$84 = closure lambda$82()
+    return closure$84(param$12, return$22)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$82(self$83, param$13, return$23) =
+  if  then {
+    return return$23(param$13)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn printI64(return$24) =
+  let closure$98 = closure lambda$87()
+  return return$24(closure$98)
+
+closure fn lambda$87(self$88, param$14, return$25) =
+  if  then {
+    let then$58 = closure join$89(return$25, param$14)
+    return printString#(then$58)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$89(self$90, value$91) =
+  let return$25 = self$90.cap[0]
+  let x#0 = self$90.cap[1]
+  let return$26 = closure join$92(return$25, value$91)
+  let apply$56 = closure join$95(return$26, x#0)
+  return toStringInt64#(apply$56)
+
+closure fn join$92(self$93, value$94) =
+  let return$25 = self$93.cap[0]
+  let value$91 = self$93.cap[1]
+  return value$91(value$94, return$25)
+
+closure fn join$95(self$96, value$97) =
+  let return$26 = self$96.cap[0]
+  let x#0 = self$96.cap[1]
+  return value$97(x#0, return$26)
+
+toplevel fn passThroughLabel(return$27) =
+  let closure$102 = closure lambda$100()
+  return return$27(closure$102)
+
+closure fn lambda$100(self$101, param$15, return$28) =
+  if  then {
+    return return$28(param$15)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn nestedNonLocalShape(return$29) =
+  let closure$106 = closure lambda$104()
+  return return$29(closure$106)
+
+closure fn lambda$104(self$105, param$16, return$30) =
+  if  then {
+    return return$30(param$16, return$30)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$31) =
+  let closure$146 = closure lambda$108()
+  return return$31(closure$146)
+
+closure fn lambda$108(self$109, param$17, return$32) =
+  if  then {
+    let closure$132 = closure lambda$110()
+    let return$33 = closure join$133(closure$132, return$32)
+    let then$73 = closure join$136(return$33)
+    return printI64(then$73)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$110(self$111, tmp$18, return$35) =
+  let closure$118 = closure lambda$112()
+  let return$36 = closure join$119(closure$118, return$35)
+  let then$68 = closure join$122(return$36)
+  return printI64(then$68)
+
+closure fn lambda$112(self$113, tmp$19, return$38) =
+  let then$65 = closure join$114(return$38)
+  return printI64(then$65)
+
+closure fn join$114(self$115, value$116) =
+  let return$38 = self$115.cap[0]
+  let lit$117 = 8L
+  return value$116(lit$117, return$38)
+
+closure fn join$119(self$120, value$121) =
+  let closure$118 = self$120.cap[0]
+  let return$35 = self$120.cap[1]
+  return closure$118(value$121, return$35)
+
+closure fn join$122(self$123, value$124) =
+  let return$36 = self$123.cap[0]
+  let return$37 = closure join$125(return$36, value$124)
+  let apply$66 = closure join$128(return$37)
+  return viaFunctionGoto(apply$66)
+
+closure fn join$125(self$126, value$127) =
+  let return$36 = self$126.cap[0]
+  let value$124 = self$126.cap[1]
+  return value$124(value$127, return$36)
+
+closure fn join$128(self$129, value$130) =
+  let return$37 = self$129.cap[0]
+  let lit$131 = 7L
+  return value$130(lit$131, return$37)
+
+closure fn join$133(self$134, value$135) =
+  let closure$132 = self$134.cap[0]
+  let return$32 = self$134.cap[1]
+  return closure$132(value$135, return$32)
+
+closure fn join$136(self$137, value$138) =
+  let return$33 = self$137.cap[0]
+  let return$34 = closure join$139(return$33, value$138)
+  let apply$71 = closure join$142(return$34)
+  return passThroughLabel(apply$71)
+
+closure fn join$139(self$140, value$141) =
+  let return$33 = self$140.cap[0]
+  let value$138 = self$140.cap[1]
+  return value$138(value$141, return$33)
+
+closure fn join$142(self$143, value$144) =
+  let return$34 = self$143.cap[0]
+  let lit$145 = 6L
+  return value$144(lit$145, return$34)
+
+toplevel fn captureContinuationShape(return$39) =
+  let closure$150 = closure lambda$148()
+  return return$39(closure$150)
+
+closure fn lambda$148(self$149, param$20, return$40) =
+  if  then {
+    return return$40(param$20, return$40)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn zig_main$153() =
+  let finish$151 = closure join$155()
+  let after_main$152 = closure join$158(finish$151)
+  return main(after_main$152)
+
+closure fn join$155(self$156, value$157) = return value$157
+
+closure fn join$158(self$159, value$160) =
+  let finish$151 = self$159.cap[0]
+  let struct$161 = Tuple()
+  return value$160(struct$161, finish$151)
+
+entry = zig_main$153
+
+=== Perceus ===
+toplevel fn viaFunctionGoto(return$21) =
+  let closure$85 = closure lambda$80()
+  return return$21(closure$85)
+
+closure fn lambda$80(self$81, param$12, return$22) =
+  drop self$81
+  if  then {
+    let closure$84 = closure lambda$82()
+    return closure$84(param$12, return$22)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$82(self$83, param$13, return$23) =
+  drop self$83
+  if  then {
+    return return$23(param$13)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn printI64(return$24) =
+  let closure$98 = closure lambda$87()
+  return return$24(closure$98)
+
+closure fn lambda$87(self$88, param$14, return$25) =
+  drop self$88
+  if  then {
+    let then$58 = closure join$89(return$25, param$14)
+    return printString#(then$58)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$89(self$90, value$91) =
+  let return$25 = self$90.cap[0]
+  dup return$25
+  let x#0 = self$90.cap[1]
+  dup x#0
+  drop self$90
+  let return$26 = closure join$92(return$25, value$91)
+  let apply$56 = closure join$95(return$26, x#0)
+  return toStringInt64#(apply$56)
+
+closure fn join$92(self$93, value$94) =
+  let return$25 = self$93.cap[0]
+  dup return$25
+  let value$91 = self$93.cap[1]
+  dup value$91
+  drop self$93
+  return value$91(value$94, return$25)
+
+closure fn join$95(self$96, value$97) =
+  let return$26 = self$96.cap[0]
+  dup return$26
+  let x#0 = self$96.cap[1]
+  dup x#0
+  drop self$96
+  return value$97(x#0, return$26)
+
+toplevel fn passThroughLabel(return$27) =
+  let closure$102 = closure lambda$100()
+  return return$27(closure$102)
+
+closure fn lambda$100(self$101, param$15, return$28) =
+  drop self$101
+  if  then {
+    return return$28(param$15)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn nestedNonLocalShape(return$29) =
+  let closure$106 = closure lambda$104()
+  return return$29(closure$106)
+
+closure fn lambda$104(self$105, param$16, return$30) =
+  drop self$105
+  if  then {
+    dup return$30
+    return return$30(param$16, return$30)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$31) =
+  let closure$146 = closure lambda$108()
+  return return$31(closure$146)
+
+closure fn lambda$108(self$109, param$17, return$32) =
+  drop param$17
+  drop self$109
+  if  then {
+    let closure$132 = closure lambda$110()
+    let return$33 = closure join$133(closure$132, return$32)
+    let then$73 = closure join$136(return$33)
+    return printI64(then$73)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$110(self$111, tmp$18, return$35) =
+  drop self$111
+  drop tmp$18
+  let closure$118 = closure lambda$112()
+  let return$36 = closure join$119(closure$118, return$35)
+  let then$68 = closure join$122(return$36)
+  return printI64(then$68)
+
+closure fn lambda$112(self$113, tmp$19, return$38) =
+  drop self$113
+  drop tmp$19
+  let then$65 = closure join$114(return$38)
+  return printI64(then$65)
+
+closure fn join$114(self$115, value$116) =
+  let return$38 = self$115.cap[0]
+  dup return$38
+  drop self$115
+  let lit$117 = 8L
+  return value$116(lit$117, return$38)
+
+closure fn join$119(self$120, value$121) =
+  let closure$118 = self$120.cap[0]
+  dup closure$118
+  let return$35 = self$120.cap[1]
+  dup return$35
+  drop self$120
+  return closure$118(value$121, return$35)
+
+closure fn join$122(self$123, value$124) =
+  let return$36 = self$123.cap[0]
+  dup return$36
+  drop self$123
+  let return$37 = closure join$125(return$36, value$124)
+  let apply$66 = closure join$128(return$37)
+  return viaFunctionGoto(apply$66)
+
+closure fn join$125(self$126, value$127) =
+  let return$36 = self$126.cap[0]
+  dup return$36
+  let value$124 = self$126.cap[1]
+  dup value$124
+  drop self$126
+  return value$124(value$127, return$36)
+
+closure fn join$128(self$129, value$130) =
+  let return$37 = self$129.cap[0]
+  dup return$37
+  drop self$129
+  let lit$131 = 7L
+  return value$130(lit$131, return$37)
+
+closure fn join$133(self$134, value$135) =
+  let closure$132 = self$134.cap[0]
+  dup closure$132
+  let return$32 = self$134.cap[1]
+  dup return$32
+  drop self$134
+  return closure$132(value$135, return$32)
+
+closure fn join$136(self$137, value$138) =
+  let return$33 = self$137.cap[0]
+  dup return$33
+  drop self$137
+  let return$34 = closure join$139(return$33, value$138)
+  let apply$71 = closure join$142(return$34)
+  return passThroughLabel(apply$71)
+
+closure fn join$139(self$140, value$141) =
+  let return$33 = self$140.cap[0]
+  dup return$33
+  let value$138 = self$140.cap[1]
+  dup value$138
+  drop self$140
+  return value$138(value$141, return$33)
+
+closure fn join$142(self$143, value$144) =
+  let return$34 = self$143.cap[0]
+  dup return$34
+  drop self$143
+  let lit$145 = 6L
+  return value$144(lit$145, return$34)
+
+toplevel fn captureContinuationShape(return$39) =
+  let closure$150 = closure lambda$148()
+  return return$39(closure$150)
+
+closure fn lambda$148(self$149, param$20, return$40) =
+  drop self$149
+  if  then {
+    dup return$40
+    return return$40(param$20, return$40)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn zig_main$153() =
+  let finish$151 = closure join$155()
+  let after_main$152 = closure join$158(finish$151)
+  return main(after_main$152)
+
+closure fn join$155(self$156, value$157) =
+  drop self$156
+  return value$157
+
+closure fn join$158(self$159, value$160) =
+  let finish$151 = self$159.cap[0]
+  dup finish$151
+  drop self$159
+  let struct$161 = Tuple()
+  return value$160(struct$161, finish$151)
+
+entry = zig_main$153
+
+=== Reuse ===
+toplevel fn viaFunctionGoto(return$21) =
+  let closure$85 = closure lambda$80()
+  return return$21(closure$85)
+
+closure fn lambda$80(self$81, param$12, return$22) =
+  drop self$81
+  if  then {
+    let closure$84 = closure lambda$82()
+    return closure$84(param$12, return$22)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$82(self$83, param$13, return$23) =
+  drop self$83
+  if  then {
+    return return$23(param$13)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn printI64(return$24) =
+  let closure$98 = closure lambda$87()
+  return return$24(closure$98)
+
+closure fn lambda$87(self$88, param$14, return$25) =
+  drop self$88
+  if  then {
+    let then$58 = closure join$89(return$25, param$14)
+    return printString#(then$58)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$89(self$90, value$91) =
+  let return$25 = self$90.cap[0]
+  dup return$25
+  let x#0 = self$90.cap[1]
+  dup x#0
+  let return$26 = closure join$92(return$25, value$91)
+  let apply$56 = closure join$95(return$26, x#0)
+  drop self$90
+  return toStringInt64#(apply$56)
+
+closure fn join$92(self$93, value$94) =
+  let return$25 = self$93.cap[0]
+  dup return$25
+  let value$91 = self$93.cap[1]
+  dup value$91
+  drop self$93
+  return value$91(value$94, return$25)
+
+closure fn join$95(self$96, value$97) =
+  let return$26 = self$96.cap[0]
+  dup return$26
+  let x#0 = self$96.cap[1]
+  dup x#0
+  drop self$96
+  return value$97(x#0, return$26)
+
+toplevel fn passThroughLabel(return$27) =
+  let closure$102 = closure lambda$100()
+  return return$27(closure$102)
+
+closure fn lambda$100(self$101, param$15, return$28) =
+  drop self$101
+  if  then {
+    return return$28(param$15)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn nestedNonLocalShape(return$29) =
+  let closure$106 = closure lambda$104()
+  return return$29(closure$106)
+
+closure fn lambda$104(self$105, param$16, return$30) =
+  drop self$105
+  if  then {
+    dup return$30
+    return return$30(param$16, return$30)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn main(return$31) =
+  let closure$146 = closure lambda$108()
+  return return$31(closure$146)
+
+closure fn lambda$108(self$109, param$17, return$32) =
+  drop param$17
+  drop self$109
+  if  then {
+    let closure$132 = closure lambda$110()
+    let return$33 = closure join$133(closure$132, return$32)
+    let then$73 = closure join$136(return$33)
+    return printI64(then$73)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$110(self$111, tmp$18, return$35) =
+  let closure$118 = closure lambda$112()
+  let return$36 = closure join$119(closure$118, return$35)
+  let then$68 = closure join$122(return$36)
+  drop self$111
+  drop tmp$18
+  return printI64(then$68)
+
+closure fn lambda$112(self$113, tmp$19, return$38) =
+  let then$65 = closure join$114(return$38)
+  drop self$113
+  drop tmp$19
+  return printI64(then$65)
+
+closure fn join$114(self$115, value$116) =
+  let return$38 = self$115.cap[0]
+  dup return$38
+  let lit$117 = 8L
+  drop self$115
+  return value$116(lit$117, return$38)
+
+closure fn join$119(self$120, value$121) =
+  let closure$118 = self$120.cap[0]
+  dup closure$118
+  let return$35 = self$120.cap[1]
+  dup return$35
+  drop self$120
+  return closure$118(value$121, return$35)
+
+closure fn join$122(self$123, value$124) =
+  let return$36 = self$123.cap[0]
+  dup return$36
+  let return$37 = closure join$125(return$36, value$124)
+  let apply$66 = closure join$128(return$37)
+  drop self$123
+  return viaFunctionGoto(apply$66)
+
+closure fn join$125(self$126, value$127) =
+  let return$36 = self$126.cap[0]
+  dup return$36
+  let value$124 = self$126.cap[1]
+  dup value$124
+  drop self$126
+  return value$124(value$127, return$36)
+
+closure fn join$128(self$129, value$130) =
+  let return$37 = self$129.cap[0]
+  dup return$37
+  let lit$131 = 7L
+  drop self$129
+  return value$130(lit$131, return$37)
+
+closure fn join$133(self$134, value$135) =
+  let closure$132 = self$134.cap[0]
+  dup closure$132
+  let return$32 = self$134.cap[1]
+  dup return$32
+  drop self$134
+  return closure$132(value$135, return$32)
+
+closure fn join$136(self$137, value$138) =
+  let return$33 = self$137.cap[0]
+  dup return$33
+  let return$34 = closure join$139(return$33, value$138)
+  let apply$71 = closure join$142(return$34)
+  drop self$137
+  return passThroughLabel(apply$71)
+
+closure fn join$139(self$140, value$141) =
+  let return$33 = self$140.cap[0]
+  dup return$33
+  let value$138 = self$140.cap[1]
+  dup value$138
+  drop self$140
+  return value$138(value$141, return$33)
+
+closure fn join$142(self$143, value$144) =
+  let return$34 = self$143.cap[0]
+  dup return$34
+  let lit$145 = 6L
+  drop self$143
+  return value$144(lit$145, return$34)
+
+toplevel fn captureContinuationShape(return$39) =
+  let closure$150 = closure lambda$148()
+  return return$39(closure$150)
+
+closure fn lambda$148(self$149, param$20, return$40) =
+  drop self$149
+  if  then {
+    dup return$40
+    return return$40(param$20, return$40)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn zig_main$153() =
+  let finish$151 = closure join$155()
+  let after_main$152 = closure join$158(finish$151)
+  return main(after_main$152)
+
+closure fn join$155(self$156, value$157) =
+  drop self$156
+  return value$157
+
+closure fn join$158(self$159, value$160) =
+  let finish$151 = self$159.cap[0]
+  dup finish$151
+  dropReuse reuse$162 = self$159 /0
+  let struct$161 = reuse reuse$162 Tuple()
+  return value$160(struct$161, finish$151)
+
+entry = zig_main$153
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+- def printI64 =
++ def viaFunctionGoto =
+    fn {
+-     x ->
++     x#6 ->
+        {
+-         printString#(toStringInt64#(x))
++         goto x#6 fn {
++           y#7 ->
++             {
++               y#7
++             }
++         }
+        }
+    }
+  
+- def captureContinuationShape =
++ def printI64 =
+    fn {
+-     x ->
++     x#0 ->
+        {
+-         label k . goto x k
++         printString#(toStringInt64#(x#0))
+        }
+    }
+  
+- def nestedNonLocalShape =
++ def passThroughLabel =
+    fn {
+-     x ->
++     x#8 ->
+        {
+-         label exit . (label inner . (goto x exit))
++         label k#9 . x#8
+        }
+    }
+  
+- def viaFunctionGoto =
++ def nestedNonLocalShape =
+    fn {
+-     x ->
++     x#3 ->
+        {
+-         goto x fn {
++         label exit#4 . (label inner#5 . (goto x#3 exit#4))
+-           y ->
+-             {
+-               y
+-             }
+-         }
+        }
+    }
+  
+- def passThroughLabel =
++ def main =
+    fn {
+-     x ->
++     _#10 ->
+        {
+-         label k . x
++         printI64(passThroughLabel(6L))
++         printI64(viaFunctionGoto(7L))
++         printI64(label k#11 . 8L)
+        }
+    }
+  
+- def main =
++ def captureContinuationShape =
+    fn {
+-     _ ->
++     x#1 ->
+        {
+-         printI64(passThroughLabel(6L))
++         label k#2 . goto x#1 k#2
+-         printI64(viaFunctionGoto(7L))
+-         printI64(label k . 8L)
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+  def viaFunctionGoto =
+-   fn {
++   \param$12 ->
+-     x#6 ->
++     case param$12 of {
+-       {
++       x#6 ->
+-         goto x#6 fn {
++         \param$13 ->
+-           y#7 ->
++           case param$13 of {
+-             {
++             y#7 -> y#7
+-               y#7
++           }(x#6)
+-             }
++     }
+-         }
+-       }
+-   }
+  
+  def printI64 =
+-   fn {
++   \param$14 ->
+-     x#0 ->
++     case param$14 of {
+-       {
++       x#0 -> invoke printString#(invoke toStringInt64#(x#0))
+-         printString#(toStringInt64#(x#0))
++     }
+-       }
+-   }
+  
+  def passThroughLabel =
+-   fn {
++   \param$15 ->
+-     x#8 ->
++     case param$15 of {
+-       {
++       x#8 -> fix k#9 = x#8
+-         label k#9 . x#8
++     }
+-       }
+-   }
+  
+  def nestedNonLocalShape =
+-   fn {
++   \param$16 ->
+-     x#3 ->
++     case param$16 of {
+-       {
++       x#3 -> fix exit#4 = fix inner#5 = exit#4(x#3)
+-         label exit#4 . (label inner#5 . (goto x#3 exit#4))
++     }
+-       }
+-   }
+  
+  def main =
+-   fn {
++   \param$17 ->
+-     _#10 ->
++     case param$17 of {
+-       {
++       _#10 ->
+-         printI64(passThroughLabel(6L))
++         \tmp$18 ->
+-         printI64(viaFunctionGoto(7L))
++           \tmp$19 ->
+-         printI64(label k#11 . 8L)
++             invoke printI64( fix k#11 =
+-       }
++               8L )( invoke printI64( invoke viaFunctionGoto( 7L ) ) )( invoke printI64( invoke passThroughLabel( 6L ) ) )
+-   }
++     }
+  
+  def captureContinuationShape =
+-   fn {
++   \param$20 ->
+-     x#1 ->
++     case param$20 of {
+-       {
++       x#1 -> fix k#2 = k#2(x#1)
+-         label k#2 . goto x#1 k#2
++     }
+-       }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def viaFunctionGoto =
+    \param$12 ->
+      case param$12 of {
+        x#6 ->
+          \param$13 ->
+            case param$13 of {
+              y#7 -> y#7
+            }(x#6)
+      }
+  
+  def printI64 =
+    \param$14 ->
+      case param$14 of {
+        x#0 -> invoke printString#(invoke toStringInt64#(x#0))
+      }
+  
+  def passThroughLabel =
+    \param$15 ->
+      case param$15 of {
+        x#8 -> fix k#9 = x#8
+      }
+  
+  def nestedNonLocalShape =
+    \param$16 ->
+      case param$16 of {
+        x#3 -> fix exit#4 = fix inner#5 = exit#4(x#3)
+      }
+  
+  def main =
+    \param$17 ->
+      case param$17 of {
+        _#10 ->
+          \tmp$18 ->
+            \tmp$19 ->
+              invoke printI64( fix k#11 =
+                8L )( invoke printI64( invoke viaFunctionGoto( 7L ) ) )( invoke printI64( invoke passThroughLabel( 6L ) ) )
+      }
+  
+  def captureContinuationShape =
+    \param$20 ->
+      case param$20 of {
+        x#1 -> fix k#2 = k#2(x#1)
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def viaFunctionGoto =
+    \param$12 ->
+      case param$12 of {
+        x#6 ->
+          \param$13 ->
+            case param$13 of {
+              y#7 -> y#7
+            }(x#6)
+      }
+  
+  def printI64 =
+    \param$14 ->
+      case param$14 of {
+        x#0 -> invoke printString#(invoke toStringInt64#(x#0))
+      }
+  
+  def passThroughLabel =
+    \param$15 ->
+      case param$15 of {
+        x#8 -> fix k#9 = x#8
+      }
+  
+  def nestedNonLocalShape =
+    \param$16 ->
+      case param$16 of {
+        x#3 -> fix exit#4 = fix inner#5 = exit#4(x#3)
+      }
+  
+  def main =
+    \param$17 ->
+      case param$17 of {
+        _#10 ->
+          \tmp$18 ->
+            \tmp$19 ->
+              invoke printI64( fix k#11 =
+                8L )( invoke printI64( invoke viaFunctionGoto( 7L ) ) )( invoke printI64( invoke passThroughLabel( 6L ) ) )
+      }
+  
+  def captureContinuationShape =
+    \param$20 ->
+      case param$20 of {
+        x#1 -> fix k#2 = k#2(x#1)
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def viaFunctionGoto =
++ def viaFunctionGoto(return$21) =
+-   \param$12 ->
++   \param$12 return$22 . {
+-     case param$12 of {
++     param$12 ~ select {
+        x#6 ->
+-         \param$13 ->
++         \param$13 return$23 . {
+-           case param$13 of {
++           param$13 ~ select {
+-             y#7 -> y#7
++             y#7 -> y#7 ~ return$23
+-           }(x#6)
++           }
++         } ~ (x#6, return$22)
+      }
++   } ~ return$21
+  
+- def printI64 =
++ def printI64(return$24) =
+-   \param$14 ->
++   \param$14 return$25 . {
+-     case param$14 of {
++     param$14 ~ select {
+-       x#0 -> invoke printString#(invoke toStringInt64#(x#0))
++       x#0 ->
++         invoke printString# ~ ( do return$26 . {
++           invoke toStringInt64# ~ (x#0, return$26)
++         }
++         , return$25 )
+      }
++   } ~ return$24
+  
+- def passThroughLabel =
++ def passThroughLabel(return$27) =
+-   \param$15 ->
++   \param$15 return$28 . {
+-     case param$15 of {
++     param$15 ~ select {
+-       x#8 -> fix k#9 = x#8
++       x#8 ->
++         mu k#9 . {
++           x#8 ~ k#9
++         } ~ return$28
+      }
++   } ~ return$27
+  
+- def nestedNonLocalShape =
++ def nestedNonLocalShape(return$29) =
+-   \param$16 ->
++   \param$16 return$30 . {
+-     case param$16 of {
++     param$16 ~ select {
+-       x#3 -> fix exit#4 = fix inner#5 = exit#4(x#3)
++       x#3 ->
++         mu exit#4 . {
++           mu inner#5 . {
++             exit#4 ~ (x#3, inner#5)
++           } ~ exit#4
++         } ~ return$30
+      }
++   } ~ return$29
+  
+- def main =
++ def main(return$31) =
+-   \param$17 ->
++   \param$17 return$32 . {
+-     case param$17 of {
++     param$17 ~ select {
+        _#10 ->
+-         \tmp$18 ->
++         \tmp$18 return$35 . {
+-           \tmp$19 ->
++           \tmp$19 return$38 . {
+-             invoke printI64( fix k#11 =
++             invoke printI64 ~ ( mu k#11 . {
+-               8L )( invoke printI64( invoke viaFunctionGoto( 7L ) ) )( invoke printI64( invoke passThroughLabel( 6L ) ) )
++               8L ~ k#11
++             }
++             , return$38 )
++           } ~ ( do return$36 . {
++             invoke printI64 ~ ( do return$37 . {
++               invoke viaFunctionGoto ~ (7L, return$37)
++             }
++             , return$36 )
++           }
++           , return$35 )
++         } ~ ( do return$33 . {
++           invoke printI64 ~ ( do return$34 . {
++             invoke passThroughLabel ~ (6L, return$34)
++           }
++           , return$33 )
++         }
++         , return$32 )
+      }
++   } ~ return$31
+  
+- def captureContinuationShape =
++ def captureContinuationShape(return$39) =
+-   \param$20 ->
++   \param$20 return$40 . {
+-     case param$20 of {
++     param$20 ~ select {
+-       x#1 -> fix k#2 = k#2(x#1)
++       x#1 ->
++         mu k#2 . {
++           k#2 ~ (x#1, k#2)
++         } ~ return$40
+      }
++   } ~ return$39
+
+
+=== ToCore -> Flat ===
+  def viaFunctionGoto(return$21) =
+    \param$12 return$22 . {
+      param$12 ~ select {
+        x#6 ->
+          \param$13 return$23 . {
+            param$13 ~ select {
+              y#7 -> y#7 ~ return$23
+            }
+          } ~ (x#6, return$22)
+      }
+    } ~ return$21
+  
+  def printI64(return$24) =
+    \param$14 return$25 . {
+      param$14 ~ select {
+        x#0 ->
+-         invoke printString# ~ ( do return$26 . {
++         invoke printString# ~ then outer$41 -> {
+-           invoke toStringInt64# ~ (x#0, return$26)
++           join return$26 = then inner$42 -> {
++             outer$41 ~ (inner$42, return$25)
++           }
++           in invoke toStringInt64# ~ (x#0, return$26)
+          }
+-         , return$25 )
+      }
+    } ~ return$24
+  
+  def passThroughLabel(return$27) =
+    \param$15 return$28 . {
+      param$15 ~ select {
+        x#8 ->
+          mu k#9 . {
+            x#8 ~ k#9
+          } ~ return$28
+      }
+    } ~ return$27
+  
+  def nestedNonLocalShape(return$29) =
+    \param$16 return$30 . {
+      param$16 ~ select {
+        x#3 ->
+          mu exit#4 . {
+            mu inner#5 . {
+              exit#4 ~ (x#3, inner#5)
+            } ~ exit#4
+          } ~ return$30
+      }
+    } ~ return$29
+  
+  def main(return$31) =
+    \param$17 return$32 . {
+      param$17 ~ select {
+        _#10 ->
+          \tmp$18 return$35 . {
+            \tmp$19 return$38 . {
+-             invoke printI64 ~ ( mu k#11 . {
++             invoke printI64 ~ then outer$43 -> {
+-               8L ~ k#11
++               mu k#11 . {
++                 8L ~ k#11
++               } ~ then inner$44 -> {
++                 outer$43 ~ (inner$44, return$38)
++               }
+              }
+-             , return$38 )
++           } ~ then outer$45 -> {
+-           } ~ ( do return$36 . {
++             join return$36 = then inner$46 -> {
+-             invoke printI64 ~ ( do return$37 . {
++               outer$45 ~ (inner$46, return$35)
+-               invoke viaFunctionGoto ~ (7L, return$37)
+              }
+-             , return$36 )
++             in invoke printI64 ~ then outer$47 -> {
++               join return$37 = then inner$48 -> {
++                 outer$47 ~ (inner$48, return$36)
++               }
++               in invoke viaFunctionGoto ~ (7L, return$37)
++             }
+            }
+-           , return$35 )
++         } ~ then outer$49 -> {
+-         } ~ ( do return$33 . {
++           join return$33 = then inner$50 -> {
+-           invoke printI64 ~ ( do return$34 . {
++             outer$49 ~ (inner$50, return$32)
+-             invoke passThroughLabel ~ (6L, return$34)
+            }
+-           , return$33 )
++           in invoke printI64 ~ then outer$51 -> {
++             join return$34 = then inner$52 -> {
++               outer$51 ~ (inner$52, return$33)
++             }
++             in invoke passThroughLabel ~ (6L, return$34)
++           }
+          }
+-         , return$32 )
+      }
+    } ~ return$31
+  
+  def captureContinuationShape(return$39) =
+    \param$20 return$40 . {
+      param$20 ~ select {
+        x#1 ->
+          mu k#2 . {
+            k#2 ~ (x#1, k#2)
+          } ~ return$40
+      }
+    } ~ return$39
+
+
+=== Flat -> Join ===
+  def viaFunctionGoto(return$21) =
+    \param$12 return$22 . {
+-     param$12 ~ select {
++     join select$55 = select {
+        x#6 ->
+-         \param$13 return$23 . {
++         join apply$54 = (x#6, return$22)
+-           param$13 ~ select {
++         in \param$13 return$23 . {
++           join select$53 = select {
+              y#7 -> y#7 ~ return$23
+            }
+-         } ~ (x#6, return$22)
++           in param$13 ~ select$53
++         } ~ apply$54
+      }
++     in param$12 ~ select$55
+    } ~ return$21
+  
+  def printI64(return$24) =
+    \param$14 return$25 . {
+-     param$14 ~ select {
++     join select$59 = select {
+        x#0 ->
+-         invoke printString# ~ then outer$41 -> {
++         join then$58 = then outer$41 -> {
+            join return$26 = then inner$42 -> {
+-             outer$41 ~ (inner$42, return$25)
++             join apply$57 = (inner$42, return$25)
++             in outer$41 ~ apply$57
+            }
+-           in invoke toStringInt64# ~ (x#0, return$26)
++           in join apply$56 = (x#0, return$26)
++           in invoke toStringInt64# ~ apply$56
+          }
++         in invoke printString# ~ then$58
+      }
++     in param$14 ~ select$59
+    } ~ return$24
+  
+  def passThroughLabel(return$27) =
+    \param$15 return$28 . {
+-     param$15 ~ select {
++     join select$60 = select {
+        x#8 ->
+          mu k#9 . {
+            x#8 ~ k#9
+          } ~ return$28
+      }
++     in param$15 ~ select$60
+    } ~ return$27
+  
+  def nestedNonLocalShape(return$29) =
+    \param$16 return$30 . {
+-     param$16 ~ select {
++     join select$62 = select {
+        x#3 ->
+          mu exit#4 . {
+            mu inner#5 . {
+-             exit#4 ~ (x#3, inner#5)
++             join apply$61 = (x#3, inner#5)
++             in exit#4 ~ apply$61
+            } ~ exit#4
+          } ~ return$30
+      }
++     in param$16 ~ select$62
+    } ~ return$29
+  
+  def main(return$31) =
+    \param$17 return$32 . {
+-     param$17 ~ select {
++     join select$76 = select {
+        _#10 ->
+-         \tmp$18 return$35 . {
++         join then$75 = then outer$49 -> {
+-           \tmp$19 return$38 . {
++           join return$33 = then inner$50 -> {
+-             invoke printI64 ~ then outer$43 -> {
++             join apply$74 = (inner$50, return$32)
+-               mu k#11 . {
++             in outer$49 ~ apply$74
+-                 8L ~ k#11
++           }
+-               } ~ then inner$44 -> {
++           in join then$73 = then outer$51 -> {
+-                 outer$43 ~ (inner$44, return$38)
++             join return$34 = then inner$52 -> {
+-               }
++               join apply$72 = (inner$52, return$33)
++               in outer$51 ~ apply$72
+              }
+-           } ~ then outer$45 -> {
++             in join apply$71 = (6L, return$34)
++             in invoke passThroughLabel ~ apply$71
++           }
++           in invoke printI64 ~ then$73
++         }
++         in \tmp$18 return$35 . {
++           join then$70 = then outer$45 -> {
+              join return$36 = then inner$46 -> {
+-               outer$45 ~ (inner$46, return$35)
++               join apply$69 = (inner$46, return$35)
++               in outer$45 ~ apply$69
+              }
+-             in invoke printI64 ~ then outer$47 -> {
++             in join then$68 = then outer$47 -> {
+                join return$37 = then inner$48 -> {
+-                 outer$47 ~ (inner$48, return$36)
++                 join apply$67 = (inner$48, return$36)
++                 in outer$47 ~ apply$67
+                }
+-               in invoke viaFunctionGoto ~ (7L, return$37)
++               in join apply$66 = (7L, return$37)
++               in invoke viaFunctionGoto ~ apply$66
+              }
+-           }
++             in invoke printI64 ~ then$68
+-         } ~ then outer$49 -> {
+-           join return$33 = then inner$50 -> {
+-             outer$49 ~ (inner$50, return$32)
+            }
+-           in invoke printI64 ~ then outer$51 -> {
++           in \tmp$19 return$38 . {
+-             join return$34 = then inner$52 -> {
++             join then$65 = then outer$43 -> {
+-               outer$51 ~ (inner$52, return$33)
++               join then$64 = then inner$44 -> {
++                 join apply$63 = (inner$44, return$38)
++                 in outer$43 ~ apply$63
++               }
++               in mu k#11 . {
++                 8L ~ k#11
++               } ~ then$64
+              }
+-             in invoke passThroughLabel ~ (6L, return$34)
++             in invoke printI64 ~ then$65
+-           }
++           } ~ then$70
+-         }
++         } ~ then$75
+      }
++     in param$17 ~ select$76
+    } ~ return$31
+  
+  def captureContinuationShape(return$39) =
+    \param$20 return$40 . {
+-     param$20 ~ select {
++     join select$78 = select {
+        x#1 ->
+          mu k#2 . {
+-           k#2 ~ (x#1, k#2)
++           join apply$77 = (x#1, k#2)
++           in k#2 ~ apply$77
+          } ~ return$40
+      }
++     in param$20 ~ select$78
+    } ~ return$39
+
+
+=== Join -> ClosureConv ===
+- def viaFunctionGoto(return$21) =
++ toplevel fn viaFunctionGoto(return$21) =
+-   \param$12 return$22 . {
++   let closure$85 = closure lambda$80()
+-     join select$55 = select {
++   return return$21(closure$85)
+-       x#6 ->
+-         join apply$54 = (x#6, return$22)
+-         in \param$13 return$23 . {
+-           join select$53 = select {
+-             y#7 -> y#7 ~ return$23
+-           }
+-           in param$13 ~ select$53
+-         } ~ apply$54
+-     }
+-     in param$12 ~ select$55
+-   } ~ return$21
+  
+- def printI64(return$24) =
++ closure fn lambda$80(self$81, param$12, return$22) =
+-   \param$14 return$25 . {
++   if  then {
+-     join select$59 = select {
++     let x#6 = param$12
+-       x#0 ->
++     let closure$84 = closure lambda$82()
+-         join then$58 = then outer$41 -> {
++     return closure$84(x#6, return$22)
+-           join return$26 = then inner$42 -> {
++   } else {
+-             join apply$57 = (inner$42, return$25)
++     panic "no matching branch"
+-             in outer$41 ~ apply$57
++   }
+-           }
+-           in join apply$56 = (x#0, return$26)
+-           in invoke toStringInt64# ~ apply$56
+-         }
+-         in invoke printString# ~ then$58
+-     }
+-     in param$14 ~ select$59
+-   } ~ return$24
+  
+- def passThroughLabel(return$27) =
++ closure fn lambda$82(self$83, param$13, return$23) =
+-   \param$15 return$28 . {
++   if  then {
+-     join select$60 = select {
++     let y#7 = param$13
+-       x#8 ->
++     return return$23(y#7)
+-         mu k#9 . {
++   } else {
+-           x#8 ~ k#9
++     panic "no matching branch"
+-         } ~ return$28
++   }
+-     }
+-     in param$15 ~ select$60
+-   } ~ return$27
+  
+- def nestedNonLocalShape(return$29) =
++ toplevel fn printI64(return$24) =
+-   \param$16 return$30 . {
++   let closure$98 = closure lambda$87()
+-     join select$62 = select {
++   return return$24(closure$98)
+-       x#3 ->
+-         mu exit#4 . {
+-           mu inner#5 . {
+-             join apply$61 = (x#3, inner#5)
+-             in exit#4 ~ apply$61
+-           } ~ exit#4
+-         } ~ return$30
+-     }
+-     in param$16 ~ select$62
+-   } ~ return$29
+  
+- def main(return$31) =
++ closure fn lambda$87(self$88, param$14, return$25) =
+-   \param$17 return$32 . {
++   if  then {
+-     join select$76 = select {
++     let x#0 = param$14
+-       _#10 ->
++     let then$58 = closure join$89(return$25, x#0)
+-         join then$75 = then outer$49 -> {
++     return printString#(then$58)
+-           join return$33 = then inner$50 -> {
++   } else {
+-             join apply$74 = (inner$50, return$32)
++     panic "no matching branch"
+-             in outer$49 ~ apply$74
++   }
+-           }
+-           in join then$73 = then outer$51 -> {
+-             join return$34 = then inner$52 -> {
+-               join apply$72 = (inner$52, return$33)
+-               in outer$51 ~ apply$72
+-             }
+-             in join apply$71 = (6L, return$34)
+-             in invoke passThroughLabel ~ apply$71
+-           }
+-           in invoke printI64 ~ then$73
+-         }
+-         in \tmp$18 return$35 . {
+-           join then$70 = then outer$45 -> {
+-             join return$36 = then inner$46 -> {
+-               join apply$69 = (inner$46, return$35)
+-               in outer$45 ~ apply$69
+-             }
+-             in join then$68 = then outer$47 -> {
+-               join return$37 = then inner$48 -> {
+-                 join apply$67 = (inner$48, return$36)
+-                 in outer$47 ~ apply$67
+-               }
+-               in join apply$66 = (7L, return$37)
+-               in invoke viaFunctionGoto ~ apply$66
+-             }
+-             in invoke printI64 ~ then$68
+-           }
+-           in \tmp$19 return$38 . {
+-             join then$65 = then outer$43 -> {
+-               join then$64 = then inner$44 -> {
+-                 join apply$63 = (inner$44, return$38)
+-                 in outer$43 ~ apply$63
+-               }
+-               in mu k#11 . {
+-                 8L ~ k#11
+-               } ~ then$64
+-             }
+-             in invoke printI64 ~ then$65
+-           } ~ then$70
+-         } ~ then$75
+-     }
+-     in param$17 ~ select$76
+-   } ~ return$31
+  
+- def captureContinuationShape(return$39) =
++ closure fn join$89(self$90, value$91) =
+-   \param$20 return$40 . {
++   let return$25 = self$90.cap[0]
+-     join select$78 = select {
++   let x#0 = self$90.cap[1]
+-       x#1 ->
++   let return$26 = closure join$92(return$25, value$91)
+-         mu k#2 . {
++   let apply$56 = closure join$95(return$26, x#0)
+-           join apply$77 = (x#1, k#2)
++   return toStringInt64#(apply$56)
+-           in k#2 ~ apply$77
++ 
+-         } ~ return$40
++ closure fn join$92(self$93, value$94) =
+-     }
++   let return$25 = self$93.cap[0]
+-     in param$20 ~ select$78
++   let value$91 = self$93.cap[1]
+-   } ~ return$39
++   return value$91(value$94, return$25)
++ 
++ closure fn join$95(self$96, value$97) =
++   let return$26 = self$96.cap[0]
++   let x#0 = self$96.cap[1]
++   return value$97(x#0, return$26)
++ 
++ toplevel fn passThroughLabel(return$27) =
++   let closure$102 = closure lambda$100()
++   return return$27(closure$102)
++ 
++ closure fn lambda$100(self$101, param$15, return$28) =
++   if  then {
++     let x#8 = param$15
++     return return$28(x#8)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ toplevel fn nestedNonLocalShape(return$29) =
++   let closure$106 = closure lambda$104()
++   return return$29(closure$106)
++ 
++ closure fn lambda$104(self$105, param$16, return$30) =
++   if  then {
++     let x#3 = param$16
++     return return$30(x#3, return$30)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ toplevel fn main(return$31) =
++   let closure$146 = closure lambda$108()
++   return return$31(closure$146)
++ 
++ closure fn lambda$108(self$109, param$17, return$32) =
++   if  then {
++     let _#10 = param$17
++     let closure$132 = closure lambda$110()
++     let return$33 = closure join$133(closure$132, return$32)
++     let then$73 = closure join$136(return$33)
++     return printI64(then$73)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn lambda$110(self$111, tmp$18, return$35) =
++   let closure$118 = closure lambda$112()
++   let return$36 = closure join$119(closure$118, return$35)
++   let then$68 = closure join$122(return$36)
++   return printI64(then$68)
++ 
++ closure fn lambda$112(self$113, tmp$19, return$38) =
++   let then$65 = closure join$114(return$38)
++   return printI64(then$65)
++ 
++ closure fn join$114(self$115, value$116) =
++   let return$38 = self$115.cap[0]
++   let lit$117 = 8L
++   return value$116(lit$117, return$38)
++ 
++ closure fn join$119(self$120, value$121) =
++   let closure$118 = self$120.cap[0]
++   let return$35 = self$120.cap[1]
++   return closure$118(value$121, return$35)
++ 
++ closure fn join$122(self$123, value$124) =
++   let return$36 = self$123.cap[0]
++   let return$37 = closure join$125(return$36, value$124)
++   let apply$66 = closure join$128(return$37)
++   return viaFunctionGoto(apply$66)
++ 
++ closure fn join$125(self$126, value$127) =
++   let return$36 = self$126.cap[0]
++   let value$124 = self$126.cap[1]
++   return value$124(value$127, return$36)
++ 
++ closure fn join$128(self$129, value$130) =
++   let return$37 = self$129.cap[0]
++   let lit$131 = 7L
++   return value$130(lit$131, return$37)
++ 
++ closure fn join$133(self$134, value$135) =
++   let closure$132 = self$134.cap[0]
++   let return$32 = self$134.cap[1]
++   return closure$132(value$135, return$32)
++ 
++ closure fn join$136(self$137, value$138) =
++   let return$33 = self$137.cap[0]
++   let return$34 = closure join$139(return$33, value$138)
++   let apply$71 = closure join$142(return$34)
++   return passThroughLabel(apply$71)
++ 
++ closure fn join$139(self$140, value$141) =
++   let return$33 = self$140.cap[0]
++   let value$138 = self$140.cap[1]
++   return value$138(value$141, return$33)
++ 
++ closure fn join$142(self$143, value$144) =
++   let return$34 = self$143.cap[0]
++   let lit$145 = 6L
++   return value$144(lit$145, return$34)
++ 
++ toplevel fn captureContinuationShape(return$39) =
++   let closure$150 = closure lambda$148()
++   return return$39(closure$150)
++ 
++ closure fn lambda$148(self$149, param$20, return$40) =
++   if  then {
++     let x#1 = param$20
++     return return$40(x#1, return$40)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ toplevel fn zig_main$153() =
++   let finish$151 = closure join$155()
++   let after_main$152 = closure join$158(finish$151)
++   return main(after_main$152)
++ 
++ closure fn join$155(self$156, value$157) = return value$157
++ 
++ closure fn join$158(self$159, value$160) =
++   let finish$151 = self$159.cap[0]
++   let struct$161 = Tuple()
++   return value$160(struct$161, finish$151)
++ 
++ entry = zig_main$153
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn viaFunctionGoto(return$21) =
+    let closure$85 = closure lambda$80()
+    return return$21(closure$85)
+  
+  closure fn lambda$80(self$81, param$12, return$22) =
+    if  then {
+-     let x#6 = param$12
+      let closure$84 = closure lambda$82()
+-     return closure$84(x#6, return$22)
++     return closure$84(param$12, return$22)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$82(self$83, param$13, return$23) =
+    if  then {
+-     let y#7 = param$13
++     return return$23(param$13)
+-     return return$23(y#7)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn printI64(return$24) =
+    let closure$98 = closure lambda$87()
+    return return$24(closure$98)
+  
+  closure fn lambda$87(self$88, param$14, return$25) =
+    if  then {
+-     let x#0 = param$14
++     let then$58 = closure join$89(return$25, param$14)
+-     let then$58 = closure join$89(return$25, x#0)
+      return printString#(then$58)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$89(self$90, value$91) =
+    let return$25 = self$90.cap[0]
+    let x#0 = self$90.cap[1]
+    let return$26 = closure join$92(return$25, value$91)
+    let apply$56 = closure join$95(return$26, x#0)
+    return toStringInt64#(apply$56)
+  
+  closure fn join$92(self$93, value$94) =
+    let return$25 = self$93.cap[0]
+    let value$91 = self$93.cap[1]
+    return value$91(value$94, return$25)
+  
+  closure fn join$95(self$96, value$97) =
+    let return$26 = self$96.cap[0]
+    let x#0 = self$96.cap[1]
+    return value$97(x#0, return$26)
+  
+  toplevel fn passThroughLabel(return$27) =
+    let closure$102 = closure lambda$100()
+    return return$27(closure$102)
+  
+  closure fn lambda$100(self$101, param$15, return$28) =
+    if  then {
+-     let x#8 = param$15
++     return return$28(param$15)
+-     return return$28(x#8)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn nestedNonLocalShape(return$29) =
+    let closure$106 = closure lambda$104()
+    return return$29(closure$106)
+  
+  closure fn lambda$104(self$105, param$16, return$30) =
+    if  then {
+-     let x#3 = param$16
++     return return$30(param$16, return$30)
+-     return return$30(x#3, return$30)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn main(return$31) =
+    let closure$146 = closure lambda$108()
+    return return$31(closure$146)
+  
+  closure fn lambda$108(self$109, param$17, return$32) =
+    if  then {
+-     let _#10 = param$17
+      let closure$132 = closure lambda$110()
+      let return$33 = closure join$133(closure$132, return$32)
+      let then$73 = closure join$136(return$33)
+      return printI64(then$73)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$110(self$111, tmp$18, return$35) =
+    let closure$118 = closure lambda$112()
+    let return$36 = closure join$119(closure$118, return$35)
+    let then$68 = closure join$122(return$36)
+    return printI64(then$68)
+  
+  closure fn lambda$112(self$113, tmp$19, return$38) =
+    let then$65 = closure join$114(return$38)
+    return printI64(then$65)
+  
+  closure fn join$114(self$115, value$116) =
+    let return$38 = self$115.cap[0]
+    let lit$117 = 8L
+    return value$116(lit$117, return$38)
+  
+  closure fn join$119(self$120, value$121) =
+    let closure$118 = self$120.cap[0]
+    let return$35 = self$120.cap[1]
+    return closure$118(value$121, return$35)
+  
+  closure fn join$122(self$123, value$124) =
+    let return$36 = self$123.cap[0]
+    let return$37 = closure join$125(return$36, value$124)
+    let apply$66 = closure join$128(return$37)
+    return viaFunctionGoto(apply$66)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$36 = self$126.cap[0]
+    let value$124 = self$126.cap[1]
+    return value$124(value$127, return$36)
+  
+  closure fn join$128(self$129, value$130) =
+    let return$37 = self$129.cap[0]
+    let lit$131 = 7L
+    return value$130(lit$131, return$37)
+  
+  closure fn join$133(self$134, value$135) =
+    let closure$132 = self$134.cap[0]
+    let return$32 = self$134.cap[1]
+    return closure$132(value$135, return$32)
+  
+  closure fn join$136(self$137, value$138) =
+    let return$33 = self$137.cap[0]
+    let return$34 = closure join$139(return$33, value$138)
+    let apply$71 = closure join$142(return$34)
+    return passThroughLabel(apply$71)
+  
+  closure fn join$139(self$140, value$141) =
+    let return$33 = self$140.cap[0]
+    let value$138 = self$140.cap[1]
+    return value$138(value$141, return$33)
+  
+  closure fn join$142(self$143, value$144) =
+    let return$34 = self$143.cap[0]
+    let lit$145 = 6L
+    return value$144(lit$145, return$34)
+  
+  toplevel fn captureContinuationShape(return$39) =
+    let closure$150 = closure lambda$148()
+    return return$39(closure$150)
+  
+  closure fn lambda$148(self$149, param$20, return$40) =
+    if  then {
+-     let x#1 = param$20
++     return return$40(param$20, return$40)
+-     return return$40(x#1, return$40)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn zig_main$153() =
+    let finish$151 = closure join$155()
+    let after_main$152 = closure join$158(finish$151)
+    return main(after_main$152)
+  
+  closure fn join$155(self$156, value$157) = return value$157
+  
+  closure fn join$158(self$159, value$160) =
+    let finish$151 = self$159.cap[0]
+    let struct$161 = Tuple()
+    return value$160(struct$161, finish$151)
+  
+  entry = zig_main$153
+
+
+=== Peephole -> Perceus ===
+  toplevel fn viaFunctionGoto(return$21) =
+    let closure$85 = closure lambda$80()
+    return return$21(closure$85)
+  
+  closure fn lambda$80(self$81, param$12, return$22) =
++   drop self$81
+    if  then {
+      let closure$84 = closure lambda$82()
+      return closure$84(param$12, return$22)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$82(self$83, param$13, return$23) =
++   drop self$83
+    if  then {
+      return return$23(param$13)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn printI64(return$24) =
+    let closure$98 = closure lambda$87()
+    return return$24(closure$98)
+  
+  closure fn lambda$87(self$88, param$14, return$25) =
++   drop self$88
+    if  then {
+      let then$58 = closure join$89(return$25, param$14)
+      return printString#(then$58)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$89(self$90, value$91) =
+    let return$25 = self$90.cap[0]
++   dup return$25
+    let x#0 = self$90.cap[1]
++   dup x#0
++   drop self$90
+    let return$26 = closure join$92(return$25, value$91)
+    let apply$56 = closure join$95(return$26, x#0)
+    return toStringInt64#(apply$56)
+  
+  closure fn join$92(self$93, value$94) =
+    let return$25 = self$93.cap[0]
++   dup return$25
+    let value$91 = self$93.cap[1]
++   dup value$91
++   drop self$93
+    return value$91(value$94, return$25)
+  
+  closure fn join$95(self$96, value$97) =
+    let return$26 = self$96.cap[0]
++   dup return$26
+    let x#0 = self$96.cap[1]
++   dup x#0
++   drop self$96
+    return value$97(x#0, return$26)
+  
+  toplevel fn passThroughLabel(return$27) =
+    let closure$102 = closure lambda$100()
+    return return$27(closure$102)
+  
+  closure fn lambda$100(self$101, param$15, return$28) =
++   drop self$101
+    if  then {
+      return return$28(param$15)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn nestedNonLocalShape(return$29) =
+    let closure$106 = closure lambda$104()
+    return return$29(closure$106)
+  
+  closure fn lambda$104(self$105, param$16, return$30) =
++   drop self$105
+    if  then {
++     dup return$30
+      return return$30(param$16, return$30)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn main(return$31) =
+    let closure$146 = closure lambda$108()
+    return return$31(closure$146)
+  
+  closure fn lambda$108(self$109, param$17, return$32) =
++   drop param$17
++   drop self$109
+    if  then {
+      let closure$132 = closure lambda$110()
+      let return$33 = closure join$133(closure$132, return$32)
+      let then$73 = closure join$136(return$33)
+      return printI64(then$73)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$110(self$111, tmp$18, return$35) =
++   drop self$111
++   drop tmp$18
+    let closure$118 = closure lambda$112()
+    let return$36 = closure join$119(closure$118, return$35)
+    let then$68 = closure join$122(return$36)
+    return printI64(then$68)
+  
+  closure fn lambda$112(self$113, tmp$19, return$38) =
++   drop self$113
++   drop tmp$19
+    let then$65 = closure join$114(return$38)
+    return printI64(then$65)
+  
+  closure fn join$114(self$115, value$116) =
+    let return$38 = self$115.cap[0]
++   dup return$38
++   drop self$115
+    let lit$117 = 8L
+    return value$116(lit$117, return$38)
+  
+  closure fn join$119(self$120, value$121) =
+    let closure$118 = self$120.cap[0]
++   dup closure$118
+    let return$35 = self$120.cap[1]
++   dup return$35
++   drop self$120
+    return closure$118(value$121, return$35)
+  
+  closure fn join$122(self$123, value$124) =
+    let return$36 = self$123.cap[0]
++   dup return$36
++   drop self$123
+    let return$37 = closure join$125(return$36, value$124)
+    let apply$66 = closure join$128(return$37)
+    return viaFunctionGoto(apply$66)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$36 = self$126.cap[0]
++   dup return$36
+    let value$124 = self$126.cap[1]
++   dup value$124
++   drop self$126
+    return value$124(value$127, return$36)
+  
+  closure fn join$128(self$129, value$130) =
+    let return$37 = self$129.cap[0]
++   dup return$37
++   drop self$129
+    let lit$131 = 7L
+    return value$130(lit$131, return$37)
+  
+  closure fn join$133(self$134, value$135) =
+    let closure$132 = self$134.cap[0]
++   dup closure$132
+    let return$32 = self$134.cap[1]
++   dup return$32
++   drop self$134
+    return closure$132(value$135, return$32)
+  
+  closure fn join$136(self$137, value$138) =
+    let return$33 = self$137.cap[0]
++   dup return$33
++   drop self$137
+    let return$34 = closure join$139(return$33, value$138)
+    let apply$71 = closure join$142(return$34)
+    return passThroughLabel(apply$71)
+  
+  closure fn join$139(self$140, value$141) =
+    let return$33 = self$140.cap[0]
++   dup return$33
+    let value$138 = self$140.cap[1]
++   dup value$138
++   drop self$140
+    return value$138(value$141, return$33)
+  
+  closure fn join$142(self$143, value$144) =
+    let return$34 = self$143.cap[0]
++   dup return$34
++   drop self$143
+    let lit$145 = 6L
+    return value$144(lit$145, return$34)
+  
+  toplevel fn captureContinuationShape(return$39) =
+    let closure$150 = closure lambda$148()
+    return return$39(closure$150)
+  
+  closure fn lambda$148(self$149, param$20, return$40) =
++   drop self$149
+    if  then {
++     dup return$40
+      return return$40(param$20, return$40)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn zig_main$153() =
+    let finish$151 = closure join$155()
+    let after_main$152 = closure join$158(finish$151)
+    return main(after_main$152)
+  
+- closure fn join$155(self$156, value$157) = return value$157
++ closure fn join$155(self$156, value$157) =
++   drop self$156
++   return value$157
+  
+  closure fn join$158(self$159, value$160) =
+    let finish$151 = self$159.cap[0]
++   dup finish$151
++   drop self$159
+    let struct$161 = Tuple()
+    return value$160(struct$161, finish$151)
+  
+  entry = zig_main$153
+
+
+=== Perceus -> Reuse ===
+  toplevel fn viaFunctionGoto(return$21) =
+    let closure$85 = closure lambda$80()
+    return return$21(closure$85)
+  
+  closure fn lambda$80(self$81, param$12, return$22) =
+    drop self$81
+    if  then {
+      let closure$84 = closure lambda$82()
+      return closure$84(param$12, return$22)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$82(self$83, param$13, return$23) =
+    drop self$83
+    if  then {
+      return return$23(param$13)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn printI64(return$24) =
+    let closure$98 = closure lambda$87()
+    return return$24(closure$98)
+  
+  closure fn lambda$87(self$88, param$14, return$25) =
+    drop self$88
+    if  then {
+      let then$58 = closure join$89(return$25, param$14)
+      return printString#(then$58)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$89(self$90, value$91) =
+    let return$25 = self$90.cap[0]
+    dup return$25
+    let x#0 = self$90.cap[1]
+    dup x#0
+-   drop self$90
+    let return$26 = closure join$92(return$25, value$91)
+    let apply$56 = closure join$95(return$26, x#0)
++   drop self$90
+    return toStringInt64#(apply$56)
+  
+  closure fn join$92(self$93, value$94) =
+    let return$25 = self$93.cap[0]
+    dup return$25
+    let value$91 = self$93.cap[1]
+    dup value$91
+    drop self$93
+    return value$91(value$94, return$25)
+  
+  closure fn join$95(self$96, value$97) =
+    let return$26 = self$96.cap[0]
+    dup return$26
+    let x#0 = self$96.cap[1]
+    dup x#0
+    drop self$96
+    return value$97(x#0, return$26)
+  
+  toplevel fn passThroughLabel(return$27) =
+    let closure$102 = closure lambda$100()
+    return return$27(closure$102)
+  
+  closure fn lambda$100(self$101, param$15, return$28) =
+    drop self$101
+    if  then {
+      return return$28(param$15)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn nestedNonLocalShape(return$29) =
+    let closure$106 = closure lambda$104()
+    return return$29(closure$106)
+  
+  closure fn lambda$104(self$105, param$16, return$30) =
+    drop self$105
+    if  then {
+      dup return$30
+      return return$30(param$16, return$30)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn main(return$31) =
+    let closure$146 = closure lambda$108()
+    return return$31(closure$146)
+  
+  closure fn lambda$108(self$109, param$17, return$32) =
+    drop param$17
+    drop self$109
+    if  then {
+      let closure$132 = closure lambda$110()
+      let return$33 = closure join$133(closure$132, return$32)
+      let then$73 = closure join$136(return$33)
+      return printI64(then$73)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$110(self$111, tmp$18, return$35) =
+-   drop self$111
+-   drop tmp$18
+    let closure$118 = closure lambda$112()
+    let return$36 = closure join$119(closure$118, return$35)
+    let then$68 = closure join$122(return$36)
++   drop self$111
++   drop tmp$18
+    return printI64(then$68)
+  
+  closure fn lambda$112(self$113, tmp$19, return$38) =
++   let then$65 = closure join$114(return$38)
+    drop self$113
+    drop tmp$19
+-   let then$65 = closure join$114(return$38)
+    return printI64(then$65)
+  
+  closure fn join$114(self$115, value$116) =
+    let return$38 = self$115.cap[0]
+    dup return$38
+-   drop self$115
+    let lit$117 = 8L
++   drop self$115
+    return value$116(lit$117, return$38)
+  
+  closure fn join$119(self$120, value$121) =
+    let closure$118 = self$120.cap[0]
+    dup closure$118
+    let return$35 = self$120.cap[1]
+    dup return$35
+    drop self$120
+    return closure$118(value$121, return$35)
+  
+  closure fn join$122(self$123, value$124) =
+    let return$36 = self$123.cap[0]
+    dup return$36
+-   drop self$123
+    let return$37 = closure join$125(return$36, value$124)
+    let apply$66 = closure join$128(return$37)
++   drop self$123
+    return viaFunctionGoto(apply$66)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$36 = self$126.cap[0]
+    dup return$36
+    let value$124 = self$126.cap[1]
+    dup value$124
+    drop self$126
+    return value$124(value$127, return$36)
+  
+  closure fn join$128(self$129, value$130) =
+    let return$37 = self$129.cap[0]
+    dup return$37
+-   drop self$129
+    let lit$131 = 7L
++   drop self$129
+    return value$130(lit$131, return$37)
+  
+  closure fn join$133(self$134, value$135) =
+    let closure$132 = self$134.cap[0]
+    dup closure$132
+    let return$32 = self$134.cap[1]
+    dup return$32
+    drop self$134
+    return closure$132(value$135, return$32)
+  
+  closure fn join$136(self$137, value$138) =
+    let return$33 = self$137.cap[0]
+    dup return$33
+-   drop self$137
+    let return$34 = closure join$139(return$33, value$138)
+    let apply$71 = closure join$142(return$34)
++   drop self$137
+    return passThroughLabel(apply$71)
+  
+  closure fn join$139(self$140, value$141) =
+    let return$33 = self$140.cap[0]
+    dup return$33
+    let value$138 = self$140.cap[1]
+    dup value$138
+    drop self$140
+    return value$138(value$141, return$33)
+  
+  closure fn join$142(self$143, value$144) =
+    let return$34 = self$143.cap[0]
+    dup return$34
+-   drop self$143
+    let lit$145 = 6L
++   drop self$143
+    return value$144(lit$145, return$34)
+  
+  toplevel fn captureContinuationShape(return$39) =
+    let closure$150 = closure lambda$148()
+    return return$39(closure$150)
+  
+  closure fn lambda$148(self$149, param$20, return$40) =
+    drop self$149
+    if  then {
+      dup return$40
+      return return$40(param$20, return$40)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn zig_main$153() =
+    let finish$151 = closure join$155()
+    let after_main$152 = closure join$158(finish$151)
+    return main(after_main$152)
+  
+  closure fn join$155(self$156, value$157) =
+    drop self$156
+    return value$157
+  
+  closure fn join$158(self$159, value$160) =
+    let finish$151 = self$159.cap[0]
+    dup finish$151
+-   drop self$159
++   dropReuse reuse$162 = self$159 /0
+-   let struct$161 = Tuple()
++   let struct$161 = reuse reuse$162 Tuple()
+    return value$160(struct$161, finish$151)
+  
+  entry = zig_main$153

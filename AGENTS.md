@@ -46,6 +46,13 @@ EvalPass (Interpreter) | SchemePass (--target scheme) | ZigPass (--target zig / 
 
 **Note**: InferPass and RefinePass can be skipped for fast evaluation without type checking.
 
+`ToCorePass` runs `Malgo.Sequent.SaturateCtor.saturateProgram` first thing, before CPS
+conversion: it inlines a fully(-or-over-)saturated call of a data constructor
+(`Cons x xs`, or `Cons (f x) (mapList f xs)` — arguments need not be
+immediate) directly into `Fun.Construct`, instead of invoking the
+constructor's own curried closure. This is shared by every backend
+(Eval/Scheme/Zig) and every direct caller of `toCore`, not Zig-specific.
+
 ### Zig Backend (native executables)
 
 `malgo compile SOURCE [-o OUT] [--opt debug|release-safe|release-fast]` compiles
@@ -53,19 +60,32 @@ via Zig to a native executable (Zig 0.16 pinned in `mise.toml`). Pipeline inside
 `ZigPass` (`src/Malgo/Backend/Zig/`):
 
 ```
-Join IR → Normalize (Mu/Label elimination) → ClosureConv.convertProgram (ANF Ir,
-closure conversion) → Perceus (dup/drop insertion) → RcCheck (linearity assert)
-→ Emit (Zig text, runtime embedded via file-embed from runtime/zig/runtime.zig)
+Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label elimination)
+        → ClosureConv.convertProgram (ANF Ir, closure conversion)
+        → Peephole (scrutinee-tuple elimination)
+        → Perceus (dup/drop insertion) → Reuse (Drop/MkStruct → reuse-token pairing)
+        → RcCheck (linearity + reuse-token assert)
+        → Emit (Zig text, runtime embedded via file-embed from runtime/zig/runtime.zig)
 ```
 
 - Memory: Perceus reference counting. Every produced binary leak-checks itself
   at exit (`MALGO-LEAK` on stderr + exit 83 on failure).
 - Calling convention is self-passing: `fn(self, args)`; the callee dups its
   captures then drops `self`.
+- Allocation-reduction passes (M10/M11): `Peephole` removes the scrutinee
+  tuple a multi-parameter clause match otherwise allocates. `Reuse` pairs a
+  Perceus `Drop` with a later `MkStruct` in the same block into
+  `DropReuse`/`MkStructReuse`, letting the runtime (`rt.dropReuse`/
+  `rt.mkStructReuse`) recycle a uniquely-referenced Object in place (Koka-style
+  FBIP, generalized to any same-arity payload, not just literal cell reuse).
+  Set `MALGO_RC_STATS=1` when running a compiled binary to print
+  `MALGO-STATS: total_allocs=<N> reuse_hits=<N>` to stderr.
 - Golden parity harness: `bash scripts/zig-golden.sh` (CI job `zig-golden`)
   compiles every golden testcase and diffs stdout byte-for-byte against the
   interpreter's goldens, failing on any leak.
-- Runtime unit tests: `zig test runtime/zig/runtime.zig`.
+- Runtime unit tests: `zig test -lc runtime/zig/runtime.zig` (`-lc` is required on
+  Linux since the runtime calls `std.c.write`/`std.c.getenv` directly; macOS
+  masks this because it always links libc via libSystem).
 - The interpreter (`Malgo.Sequent.Eval`) is the semantic oracle: any observable
   divergence in the Zig backend is a bug, matched against Eval.hs, not Scheme.
 

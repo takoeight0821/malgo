@@ -11,6 +11,8 @@ import Malgo.Prelude
 import Malgo.Sequent.Core.Full (Producer (Do), Statement (Cut))
 import Malgo.Sequent.Core.Full qualified as C
 import Malgo.Sequent.Fun
+import Malgo.Sequent.ReuseSpecialize (specializeProgram)
+import Malgo.Sequent.SaturateCtor (saturateProgram)
 
 data ToCorePass = ToCorePass
 
@@ -22,8 +24,14 @@ instance Pass ToCorePass where
 
   runPassImpl _ = toCore
 
+-- | Runs 'saturateProgram' then 'specializeProgram' first (shared by every
+-- caller — Eval, Scheme, Zig, and every test helper that calls 'toCore'
+-- directly): saturated constructor applications never reach CPS conversion
+-- in their curried form, and self-recursive match-then-rebuild functions
+-- carry a @reuseHint@ marking their about-to-be-discarded scrutinee.
 toCore :: (State Uniq :> es, Reader ModuleName :> es) => Program -> Eff es C.Program
-toCore (Program {..}) = do
+toCore program = do
+  Program {..} <- specializeProgram (saturateProgram program)
   definitions <- traverse convertDefinition definitions
   pure C.Program {definitions, dependencies}
 

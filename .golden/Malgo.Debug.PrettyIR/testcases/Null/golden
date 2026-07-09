@@ -1,0 +1,3322 @@
+=== Parse ===
+data Maybe a = Nothing() | Just(a)
+
+data Bool  = False() | True()
+
+data List a = Nil() | Cons(a, List(a))
+
+sig isNothing : Maybe(a) -> Bool
+
+def isNothing =
+  fn {
+    Nothing ->
+      {
+        True
+      } |
+    Just(_) ->
+      {
+        False
+      }
+  }
+
+sig mHead : List(a) -> Maybe(a)
+
+def mHead =
+  fn {
+    Nil ->
+      {
+        Nothing
+      } |
+    Cons(p, _) ->
+      {
+        Just(p)
+      }
+  }
+
+sig null : List(a) -> Bool
+
+def null =
+  fn {
+    as ->
+      {
+        isNothing(mHead(as))
+      }
+  }
+
+infix infixl 0 |>
+
+sig |> : a -> a -> b -> b
+
+def |> =
+  fn {
+    x f ->
+      {
+        f(x)
+      }
+  }
+
+foreign malgo_print_string : String# -> ()
+
+foreign malgo_exit_failure : () -> a
+
+def main =
+  fn {
+    _ ->
+      {
+        (null(Cons(True)(Cons(True)(Nil)))) |> fn {
+          False ->
+            {
+              malgo_print_string("OK")
+            } |
+          True ->
+            {
+              malgo_exit_failure(())
+            }
+        }
+      }
+  }
+
+=== Rename ===
+data Maybe a#0 = Nothing() | Just(a#0)
+
+data Bool  = False() | True()
+
+data List a#1 = Nil() | Cons(a#1, List(a#1))
+
+foreign malgo_print_string : String# -> ()
+
+foreign malgo_exit_failure : () -> a#13
+
+sig isNothing : Maybe(a#2) -> Bool
+
+sig mHead : List(a#4) -> Maybe(a#4)
+
+sig null : List(a#7) -> Bool
+
+sig |> : a#9 -> a#9 -> b#10 -> b#10
+
+def |> =
+  fn {
+    x#11 f#12 ->
+      {
+        f#12(x#11)
+      }
+  }
+
+def mHead =
+  fn {
+    Nil() ->
+      {
+        Nothing
+      } |
+    Cons(p#5, _#6) ->
+      {
+        Just(p#5)
+      }
+  }
+
+def isNothing =
+  fn {
+    Nothing() ->
+      {
+        True
+      } |
+    Just(_#3) ->
+      {
+        False
+      }
+  }
+
+def null =
+  fn {
+    as#8 ->
+      {
+        isNothing(mHead(as#8))
+      }
+  }
+
+def main =
+  fn {
+    _#14 ->
+      {
+        (null(Cons(True)(Cons(True)(Nil)))) |> fn {
+          False() ->
+            {
+              malgo_print_string("OK")
+            } |
+          True() ->
+            {
+              malgo_exit_failure(())
+            }
+        }
+      }
+  }
+
+=== ToFun ===
+def |> =
+  \param$15 ->
+    \param$16 ->
+      case Tuple(param$15, param$16) of {
+        Tuple(x#11, f#12) -> f#12(x#11)
+      }
+
+def mHead =
+  \param$17 ->
+    case param$17 of {
+      Nil() -> invoke Nothing
+      Cons(p#5, _#6) -> invoke Just(p#5)
+    }
+
+def isNothing =
+  \param$18 ->
+    case param$18 of {
+      Nothing() -> invoke True
+      Just(_#3) -> invoke False
+    }
+
+def null =
+  \param$19 ->
+    case param$19 of {
+      as#8 -> invoke isNothing(invoke mHead(as#8))
+    }
+
+def main =
+  \param$20 ->
+    case param$20 of {
+      _#14 ->
+        invoke |>( invoke null( invoke Cons( invoke True )( invoke Cons( invoke True )( invoke Nil ) ) ) )( \param$21 ->
+          case param$21 of {
+            False() -> invoke malgo_print_string("OK")
+            True() -> invoke malgo_exit_failure(Tuple())
+          } )
+    }
+
+def Nothing = Nothing()
+
+def Just = \constructor$22 -> Just(constructor$22)
+
+def False = False()
+
+def True = True()
+
+def Nil = Nil()
+
+def Cons =
+  \constructor$23 -> \constructor$24 -> Cons(constructor$23, constructor$24)
+
+def malgo_print_string = \primitive$25 -> #malgo_print_string(primitive$25)
+
+def malgo_exit_failure = \primitive$26 -> #malgo_exit_failure(primitive$26)
+
+=== SaturateCtor ===
+def |> =
+  \param$15 ->
+    \param$16 ->
+      case Tuple(param$15, param$16) of {
+        Tuple(x#11, f#12) -> f#12(x#11)
+      }
+
+def mHead =
+  \param$17 ->
+    case param$17 of {
+      Nil() -> Nothing()
+      Cons(p#5, _#6) -> Just(p#5)
+    }
+
+def isNothing =
+  \param$18 ->
+    case param$18 of {
+      Nothing() -> True()
+      Just(_#3) -> False()
+    }
+
+def null =
+  \param$19 ->
+    case param$19 of {
+      as#8 -> invoke isNothing(invoke mHead(as#8))
+    }
+
+def main =
+  \param$20 ->
+    case param$20 of {
+      _#14 ->
+        invoke |>(invoke null(Cons(True(), Cons(True(), Nil()))))( \param$21 ->
+          case param$21 of {
+            False() -> invoke malgo_print_string("OK")
+            True() -> invoke malgo_exit_failure(Tuple())
+          } )
+    }
+
+def Nothing = Nothing()
+
+def Just = \constructor$22 -> Just(constructor$22)
+
+def False = False()
+
+def True = True()
+
+def Nil = Nil()
+
+def Cons =
+  \constructor$23 -> \constructor$24 -> Cons(constructor$23, constructor$24)
+
+def malgo_print_string = \primitive$25 -> #malgo_print_string(primitive$25)
+
+def malgo_exit_failure = \primitive$26 -> #malgo_exit_failure(primitive$26)
+
+=== ReuseSpecialize ===
+def |> =
+  \param$15 ->
+    \param$16 ->
+      case Tuple(param$15, param$16) of {
+        Tuple(x#11, f#12) -> f#12(x#11)
+      }
+
+def mHead =
+  \param$17 ->
+    case param$17 of {
+      Nil() -> Nothing()
+      Cons(p#5, _#6) -> Just(p#5)
+    }
+
+def isNothing =
+  \param$18 ->
+    case param$18 of {
+      Nothing() -> True()
+      Just(_#3) -> False()
+    }
+
+def null =
+  \param$19 ->
+    case param$19 of {
+      as#8 -> invoke isNothing(invoke mHead(as#8))
+    }
+
+def main =
+  \param$20 ->
+    case param$20 of {
+      _#14 ->
+        invoke |>(invoke null(Cons(True(), Cons(True(), Nil()))))( \param$21 ->
+          case param$21 of {
+            False() -> invoke malgo_print_string("OK")
+            True() -> invoke malgo_exit_failure(Tuple())
+          } )
+    }
+
+def Nothing = Nothing()
+
+def Just = \constructor$22 -> Just(constructor$22)
+
+def False = False()
+
+def True = True()
+
+def Nil = Nil()
+
+def Cons =
+  \constructor$23 -> \constructor$24 -> Cons(constructor$23, constructor$24)
+
+def malgo_print_string = \primitive$25 -> #malgo_print_string(primitive$25)
+
+def malgo_exit_failure = \primitive$26 -> #malgo_exit_failure(primitive$26)
+
+=== ToCore ===
+def |>(return$27) =
+  \param$15 return$28 . {
+    \param$16 return$29 . {
+      Tuple(param$15, param$16) ~ select {
+        Tuple(x#11, f#12) -> f#12 ~ (x#11, return$29)
+      }
+    } ~ return$28
+  } ~ return$27
+
+def mHead(return$30) =
+  \param$17 return$31 . {
+    param$17 ~ select {
+      Nil() -> Nothing() ~ return$31
+      Cons(p#5, _#6) -> Just(p#5) ~ return$31
+    }
+  } ~ return$30
+
+def isNothing(return$32) =
+  \param$18 return$33 . {
+    param$18 ~ select {
+      Nothing() -> True() ~ return$33
+      Just(_#3) -> False() ~ return$33
+    }
+  } ~ return$32
+
+def null(return$34) =
+  \param$19 return$35 . {
+    param$19 ~ select {
+      as#8 ->
+        invoke isNothing ~ ( do return$36 . {
+          invoke mHead ~ (as#8, return$36)
+        }
+        , return$35 )
+    }
+  } ~ return$34
+
+def main(return$37) =
+  \param$20 return$38 . {
+    param$20 ~ select {
+      _#14 ->
+        invoke |> ~ ( do return$40 . {
+          invoke null ~ (Cons(True(), Cons(True(), Nil())), return$40)
+        }
+        , ( \param$21 return$39 . {
+          param$21 ~ select {
+            False() -> invoke malgo_print_string ~ ("OK", return$39)
+            True() -> invoke malgo_exit_failure ~ (Tuple(), return$39)
+          }
+        }
+        , return$38 ) )
+    }
+  } ~ return$37
+
+def Nothing(return$41) = Nothing() ~ return$41
+
+def Just(return$42) =
+  \constructor$22 return$43 . {
+    Just(constructor$22) ~ return$43
+  } ~ return$42
+
+def False(return$44) = False() ~ return$44
+
+def True(return$45) = True() ~ return$45
+
+def Nil(return$46) = Nil() ~ return$46
+
+def Cons(return$47) =
+  \constructor$23 return$48 . {
+    \constructor$24 return$49 . {
+      Cons(constructor$23, constructor$24) ~ return$49
+    } ~ return$48
+  } ~ return$47
+
+def malgo_print_string(return$50) =
+  \primitive$25 return$51 . {
+    #malgo_print_string(primitive$25) ~ return$51
+  } ~ return$50
+
+def malgo_exit_failure(return$52) =
+  \primitive$26 return$53 . {
+    #malgo_exit_failure(primitive$26) ~ return$53
+  } ~ return$52
+
+=== Flat ===
+def |>(return$27) =
+  \param$15 return$28 . {
+    \param$16 return$29 . {
+      Tuple(param$15, param$16) ~ select {
+        Tuple(x#11, f#12) -> f#12 ~ (x#11, return$29)
+      }
+    } ~ return$28
+  } ~ return$27
+
+def mHead(return$30) =
+  \param$17 return$31 . {
+    param$17 ~ select {
+      Nil() -> Nothing() ~ return$31
+      Cons(p#5, _#6) -> Just(p#5) ~ return$31
+    }
+  } ~ return$30
+
+def isNothing(return$32) =
+  \param$18 return$33 . {
+    param$18 ~ select {
+      Nothing() -> True() ~ return$33
+      Just(_#3) -> False() ~ return$33
+    }
+  } ~ return$32
+
+def null(return$34) =
+  \param$19 return$35 . {
+    param$19 ~ select {
+      as#8 ->
+        invoke isNothing ~ then outer$54 -> {
+          join return$36 = then inner$55 -> {
+            outer$54 ~ (inner$55, return$35)
+          }
+          in invoke mHead ~ (as#8, return$36)
+        }
+    }
+  } ~ return$34
+
+def main(return$37) =
+  \param$20 return$38 . {
+    param$20 ~ select {
+      _#14 ->
+        invoke |> ~ then outer$56 -> {
+          join return$40 = then inner$57 -> {
+            outer$56 ~ ( inner$57
+            , ( \param$21 return$39 . {
+              param$21 ~ select {
+                False() -> invoke malgo_print_string ~ ("OK", return$39)
+                True() -> invoke malgo_exit_failure ~ (Tuple(), return$39)
+              }
+            }
+            , return$38 ) )
+          }
+          in invoke null ~ (Cons(True(), Cons(True(), Nil())), return$40)
+        }
+    }
+  } ~ return$37
+
+def Nothing(return$41) = Nothing() ~ return$41
+
+def Just(return$42) =
+  \constructor$22 return$43 . {
+    Just(constructor$22) ~ return$43
+  } ~ return$42
+
+def False(return$44) = False() ~ return$44
+
+def True(return$45) = True() ~ return$45
+
+def Nil(return$46) = Nil() ~ return$46
+
+def Cons(return$47) =
+  \constructor$23 return$48 . {
+    \constructor$24 return$49 . {
+      Cons(constructor$23, constructor$24) ~ return$49
+    } ~ return$48
+  } ~ return$47
+
+def malgo_print_string(return$50) =
+  \primitive$25 return$51 . {
+    #malgo_print_string(primitive$25) ~ return$51
+  } ~ return$50
+
+def malgo_exit_failure(return$52) =
+  \primitive$26 return$53 . {
+    #malgo_exit_failure(primitive$26) ~ return$53
+  } ~ return$52
+
+=== Join ===
+def |>(return$27) =
+  \param$15 return$28 . {
+    \param$16 return$29 . {
+      join select$59 = select {
+        Tuple(x#11, f#12) ->
+          join apply$58 = (x#11, return$29)
+          in f#12 ~ apply$58
+      }
+      in Tuple(param$15, param$16) ~ select$59
+    } ~ return$28
+  } ~ return$27
+
+def mHead(return$30) =
+  \param$17 return$31 . {
+    join select$60 = select {
+      Nil() -> Nothing() ~ return$31
+      Cons(p#5, _#6) -> Just(p#5) ~ return$31
+    }
+    in param$17 ~ select$60
+  } ~ return$30
+
+def isNothing(return$32) =
+  \param$18 return$33 . {
+    join select$61 = select {
+      Nothing() -> True() ~ return$33
+      Just(_#3) -> False() ~ return$33
+    }
+    in param$18 ~ select$61
+  } ~ return$32
+
+def null(return$34) =
+  \param$19 return$35 . {
+    join select$65 = select {
+      as#8 ->
+        join then$64 = then outer$54 -> {
+          join return$36 = then inner$55 -> {
+            join apply$63 = (inner$55, return$35)
+            in outer$54 ~ apply$63
+          }
+          in join apply$62 = (as#8, return$36)
+          in invoke mHead ~ apply$62
+        }
+        in invoke isNothing ~ then$64
+    }
+    in param$19 ~ select$65
+  } ~ return$34
+
+def main(return$37) =
+  \param$20 return$38 . {
+    join select$73 = select {
+      _#14 ->
+        join then$72 = then outer$56 -> {
+          join return$40 = then inner$57 -> {
+            join apply$70 = ( \param$21 return$39 . {
+              join select$69 = select {
+                False() ->
+                  join apply$67 = ("OK", return$39)
+                  in invoke malgo_print_string ~ apply$67
+                True() ->
+                  join apply$68 = (Tuple(), return$39)
+                  in invoke malgo_exit_failure ~ apply$68
+              }
+              in param$21 ~ select$69
+            }
+            , return$38 )
+            in join apply$71 = (inner$57, apply$70)
+            in outer$56 ~ apply$71
+          }
+          in join apply$66 = (Cons(True(), Cons(True(), Nil())), return$40)
+          in invoke null ~ apply$66
+        }
+        in invoke |> ~ then$72
+    }
+    in param$20 ~ select$73
+  } ~ return$37
+
+def Nothing(return$41) = Nothing() ~ return$41
+
+def Just(return$42) =
+  \constructor$22 return$43 . {
+    Just(constructor$22) ~ return$43
+  } ~ return$42
+
+def False(return$44) = False() ~ return$44
+
+def True(return$45) = True() ~ return$45
+
+def Nil(return$46) = Nil() ~ return$46
+
+def Cons(return$47) =
+  \constructor$23 return$48 . {
+    \constructor$24 return$49 . {
+      Cons(constructor$23, constructor$24) ~ return$49
+    } ~ return$48
+  } ~ return$47
+
+def malgo_print_string(return$50) =
+  \primitive$25 return$51 . {
+    #malgo_print_string(primitive$25) ~ return$51
+  } ~ return$50
+
+def malgo_exit_failure(return$52) =
+  \primitive$26 return$53 . {
+    #malgo_exit_failure(primitive$26) ~ return$53
+  } ~ return$52
+
+=== ClosureConv ===
+toplevel fn |>(return$27) =
+  let closure$81 = closure lambda$75()
+  return return$27(closure$81)
+
+closure fn lambda$75(self$76, param$15, return$28) =
+  let closure$80 = closure lambda$77(param$15)
+  return return$28(closure$80)
+
+closure fn lambda$77(self$78, param$16, return$29) =
+  let param$15 = self$78.cap[0]
+  let struct$79 = Tuple(param$15, param$16)
+  if struct$79.tag == Tuple then {
+    let x#11 = struct$79.0
+    let f#12 = struct$79.1
+    return f#12(x#11, return$29)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn mHead(return$30) =
+  let closure$87 = closure lambda$83()
+  return return$30(closure$87)
+
+closure fn lambda$83(self$84, param$17, return$31) =
+  if param$17.tag == Nil then {
+    let struct$85 = Nothing()
+    return return$31(struct$85)
+  } else {
+    if param$17.tag == Cons then {
+      let p#5 = param$17.0
+      let _#6 = param$17.1
+      let struct$86 = Just(p#5)
+      return return$31(struct$86)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn isNothing(return$32) =
+  let closure$93 = closure lambda$89()
+  return return$32(closure$93)
+
+closure fn lambda$89(self$90, param$18, return$33) =
+  if param$18.tag == Nothing then {
+    let struct$91 = True()
+    return return$33(struct$91)
+  } else {
+    if param$18.tag == Just then {
+      let _#3 = param$18.0
+      let struct$92 = False()
+      return return$33(struct$92)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn null(return$34) =
+  let closure$106 = closure lambda$95()
+  return return$34(closure$106)
+
+closure fn lambda$95(self$96, param$19, return$35) =
+  if  then {
+    let as#8 = param$19
+    let then$64 = closure join$97(as#8, return$35)
+    return isNothing(then$64)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$97(self$98, value$99) =
+  let as#8 = self$98.cap[0]
+  let return$35 = self$98.cap[1]
+  let return$36 = closure join$100(return$35, value$99)
+  let apply$62 = closure join$103(as#8, return$36)
+  return mHead(apply$62)
+
+closure fn join$100(self$101, value$102) =
+  let return$35 = self$101.cap[0]
+  let value$99 = self$101.cap[1]
+  return value$99(value$102, return$35)
+
+closure fn join$103(self$104, value$105) =
+  let as#8 = self$104.cap[0]
+  let return$36 = self$104.cap[1]
+  return value$105(as#8, return$36)
+
+toplevel fn main(return$37) =
+  let closure$138 = closure lambda$108()
+  return return$37(closure$138)
+
+closure fn lambda$108(self$109, param$20, return$38) =
+  if  then {
+    let _#14 = param$20
+    let then$72 = closure join$110(return$38)
+    return |>(then$72)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$110(self$111, value$112) =
+  let return$38 = self$111.cap[0]
+  let return$40 = closure join$113(return$38, value$112)
+  let apply$66 = closure join$130(return$40)
+  return null(apply$66)
+
+closure fn join$113(self$114, value$115) =
+  let return$38 = self$114.cap[0]
+  let value$112 = self$114.cap[1]
+  let apply$70 = closure join$116(return$38)
+  return value$112(value$115, apply$70)
+
+closure fn join$116(self$117, value$118) =
+  let return$38 = self$117.cap[0]
+  let closure$129 = closure lambda$119()
+  return value$118(closure$129, return$38)
+
+closure fn lambda$119(self$120, param$21, return$39) =
+  if param$21.tag == False then {
+    let apply$67 = closure join$121(return$39)
+    return malgo_print_string(apply$67)
+  } else {
+    if param$21.tag == True then {
+      let apply$68 = closure join$125(return$39)
+      return malgo_exit_failure(apply$68)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$121(self$122, value$123) =
+  let return$39 = self$122.cap[0]
+  let lit$124 = "OK"
+  return value$123(lit$124, return$39)
+
+closure fn join$125(self$126, value$127) =
+  let return$39 = self$126.cap[0]
+  let struct$128 = Tuple()
+  return value$127(struct$128, return$39)
+
+closure fn join$130(self$131, value$132) =
+  let return$40 = self$131.cap[0]
+  let struct$133 = True()
+  let struct$134 = True()
+  let struct$135 = Nil()
+  let struct$136 = Cons(struct$134, struct$135)
+  let struct$137 = Cons(struct$133, struct$136)
+  return value$132(struct$137, return$40)
+
+toplevel fn Nothing(return$41) =
+  let struct$140 = Nothing()
+  return return$41(struct$140)
+
+toplevel fn Just(return$42) =
+  let closure$145 = closure lambda$142()
+  return return$42(closure$145)
+
+closure fn lambda$142(self$143, constructor$22, return$43) =
+  let struct$144 = Just(constructor$22)
+  return return$43(struct$144)
+
+toplevel fn False(return$44) =
+  let struct$147 = False()
+  return return$44(struct$147)
+
+toplevel fn True(return$45) =
+  let struct$149 = True()
+  return return$45(struct$149)
+
+toplevel fn Nil(return$46) =
+  let struct$151 = Nil()
+  return return$46(struct$151)
+
+toplevel fn Cons(return$47) =
+  let closure$159 = closure lambda$153()
+  return return$47(closure$159)
+
+closure fn lambda$153(self$154, constructor$23, return$48) =
+  let closure$158 = closure lambda$155(constructor$23)
+  return return$48(closure$158)
+
+closure fn lambda$155(self$156, constructor$24, return$49) =
+  let constructor$23 = self$156.cap[0]
+  let struct$157 = Cons(constructor$23, constructor$24)
+  return return$49(struct$157)
+
+toplevel fn malgo_print_string(return$50) =
+  let closure$164 = closure lambda$161()
+  return return$50(closure$164)
+
+closure fn lambda$161(self$162, primitive$25, return$51) =
+  let prim_result$163 = #malgo_print_string(primitive$25)
+  return return$51(prim_result$163)
+
+toplevel fn malgo_exit_failure(return$52) =
+  let closure$169 = closure lambda$166()
+  return return$52(closure$169)
+
+closure fn lambda$166(self$167, primitive$26, return$53) =
+  let prim_result$168 = #malgo_exit_failure(primitive$26)
+  return return$53(prim_result$168)
+
+toplevel fn zig_main$172() =
+  let finish$170 = closure join$174()
+  let after_main$171 = closure join$177(finish$170)
+  return main(after_main$171)
+
+closure fn join$174(self$175, value$176) = return value$176
+
+closure fn join$177(self$178, value$179) =
+  let finish$170 = self$178.cap[0]
+  let struct$180 = Tuple()
+  return value$179(struct$180, finish$170)
+
+entry = zig_main$172
+
+=== Peephole ===
+toplevel fn |>(return$27) =
+  let closure$81 = closure lambda$75()
+  return return$27(closure$81)
+
+closure fn lambda$75(self$76, param$15, return$28) =
+  let closure$80 = closure lambda$77(param$15)
+  return return$28(closure$80)
+
+closure fn lambda$77(self$78, param$16, return$29) =
+  let param$15 = self$78.cap[0]
+  if  then {
+    return param$16(param$15, return$29)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn mHead(return$30) =
+  let closure$87 = closure lambda$83()
+  return return$30(closure$87)
+
+closure fn lambda$83(self$84, param$17, return$31) =
+  if param$17.tag == Nil then {
+    let struct$85 = Nothing()
+    return return$31(struct$85)
+  } else {
+    if param$17.tag == Cons then {
+      let p#5 = param$17.0
+      let _#6 = param$17.1
+      let struct$86 = Just(p#5)
+      return return$31(struct$86)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn isNothing(return$32) =
+  let closure$93 = closure lambda$89()
+  return return$32(closure$93)
+
+closure fn lambda$89(self$90, param$18, return$33) =
+  if param$18.tag == Nothing then {
+    let struct$91 = True()
+    return return$33(struct$91)
+  } else {
+    if param$18.tag == Just then {
+      let _#3 = param$18.0
+      let struct$92 = False()
+      return return$33(struct$92)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn null(return$34) =
+  let closure$106 = closure lambda$95()
+  return return$34(closure$106)
+
+closure fn lambda$95(self$96, param$19, return$35) =
+  if  then {
+    let then$64 = closure join$97(param$19, return$35)
+    return isNothing(then$64)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$97(self$98, value$99) =
+  let as#8 = self$98.cap[0]
+  let return$35 = self$98.cap[1]
+  let return$36 = closure join$100(return$35, value$99)
+  let apply$62 = closure join$103(as#8, return$36)
+  return mHead(apply$62)
+
+closure fn join$100(self$101, value$102) =
+  let return$35 = self$101.cap[0]
+  let value$99 = self$101.cap[1]
+  return value$99(value$102, return$35)
+
+closure fn join$103(self$104, value$105) =
+  let as#8 = self$104.cap[0]
+  let return$36 = self$104.cap[1]
+  return value$105(as#8, return$36)
+
+toplevel fn main(return$37) =
+  let closure$138 = closure lambda$108()
+  return return$37(closure$138)
+
+closure fn lambda$108(self$109, param$20, return$38) =
+  if  then {
+    let then$72 = closure join$110(return$38)
+    return |>(then$72)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$110(self$111, value$112) =
+  let return$38 = self$111.cap[0]
+  let return$40 = closure join$113(return$38, value$112)
+  let apply$66 = closure join$130(return$40)
+  return null(apply$66)
+
+closure fn join$113(self$114, value$115) =
+  let return$38 = self$114.cap[0]
+  let value$112 = self$114.cap[1]
+  let apply$70 = closure join$116(return$38)
+  return value$112(value$115, apply$70)
+
+closure fn join$116(self$117, value$118) =
+  let return$38 = self$117.cap[0]
+  let closure$129 = closure lambda$119()
+  return value$118(closure$129, return$38)
+
+closure fn lambda$119(self$120, param$21, return$39) =
+  if param$21.tag == False then {
+    let apply$67 = closure join$121(return$39)
+    return malgo_print_string(apply$67)
+  } else {
+    if param$21.tag == True then {
+      let apply$68 = closure join$125(return$39)
+      return malgo_exit_failure(apply$68)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$121(self$122, value$123) =
+  let return$39 = self$122.cap[0]
+  let lit$124 = "OK"
+  return value$123(lit$124, return$39)
+
+closure fn join$125(self$126, value$127) =
+  let return$39 = self$126.cap[0]
+  let struct$128 = Tuple()
+  return value$127(struct$128, return$39)
+
+closure fn join$130(self$131, value$132) =
+  let return$40 = self$131.cap[0]
+  let struct$133 = True()
+  let struct$134 = True()
+  let struct$135 = Nil()
+  let struct$136 = Cons(struct$134, struct$135)
+  let struct$137 = Cons(struct$133, struct$136)
+  return value$132(struct$137, return$40)
+
+toplevel fn Nothing(return$41) =
+  let struct$140 = Nothing()
+  return return$41(struct$140)
+
+toplevel fn Just(return$42) =
+  let closure$145 = closure lambda$142()
+  return return$42(closure$145)
+
+closure fn lambda$142(self$143, constructor$22, return$43) =
+  let struct$144 = Just(constructor$22)
+  return return$43(struct$144)
+
+toplevel fn False(return$44) =
+  let struct$147 = False()
+  return return$44(struct$147)
+
+toplevel fn True(return$45) =
+  let struct$149 = True()
+  return return$45(struct$149)
+
+toplevel fn Nil(return$46) =
+  let struct$151 = Nil()
+  return return$46(struct$151)
+
+toplevel fn Cons(return$47) =
+  let closure$159 = closure lambda$153()
+  return return$47(closure$159)
+
+closure fn lambda$153(self$154, constructor$23, return$48) =
+  let closure$158 = closure lambda$155(constructor$23)
+  return return$48(closure$158)
+
+closure fn lambda$155(self$156, constructor$24, return$49) =
+  let constructor$23 = self$156.cap[0]
+  let struct$157 = Cons(constructor$23, constructor$24)
+  return return$49(struct$157)
+
+toplevel fn malgo_print_string(return$50) =
+  let closure$164 = closure lambda$161()
+  return return$50(closure$164)
+
+closure fn lambda$161(self$162, primitive$25, return$51) =
+  let prim_result$163 = #malgo_print_string(primitive$25)
+  return return$51(prim_result$163)
+
+toplevel fn malgo_exit_failure(return$52) =
+  let closure$169 = closure lambda$166()
+  return return$52(closure$169)
+
+closure fn lambda$166(self$167, primitive$26, return$53) =
+  let prim_result$168 = #malgo_exit_failure(primitive$26)
+  return return$53(prim_result$168)
+
+toplevel fn zig_main$172() =
+  let finish$170 = closure join$174()
+  let after_main$171 = closure join$177(finish$170)
+  return main(after_main$171)
+
+closure fn join$174(self$175, value$176) = return value$176
+
+closure fn join$177(self$178, value$179) =
+  let finish$170 = self$178.cap[0]
+  let struct$180 = Tuple()
+  return value$179(struct$180, finish$170)
+
+entry = zig_main$172
+
+=== Perceus ===
+toplevel fn |>(return$27) =
+  let closure$81 = closure lambda$75()
+  return return$27(closure$81)
+
+closure fn lambda$75(self$76, param$15, return$28) =
+  drop self$76
+  let closure$80 = closure lambda$77(param$15)
+  return return$28(closure$80)
+
+closure fn lambda$77(self$78, param$16, return$29) =
+  let param$15 = self$78.cap[0]
+  dup param$15
+  drop self$78
+  if  then {
+    return param$16(param$15, return$29)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn mHead(return$30) =
+  let closure$87 = closure lambda$83()
+  return return$30(closure$87)
+
+closure fn lambda$83(self$84, param$17, return$31) =
+  drop self$84
+  if param$17.tag == Nil then {
+    drop param$17
+    let struct$85 = Nothing()
+    return return$31(struct$85)
+  } else {
+    if param$17.tag == Cons then {
+      let p#5 = param$17.0
+      dup p#5
+      drop param$17
+      let struct$86 = Just(p#5)
+      return return$31(struct$86)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn isNothing(return$32) =
+  let closure$93 = closure lambda$89()
+  return return$32(closure$93)
+
+closure fn lambda$89(self$90, param$18, return$33) =
+  drop self$90
+  if param$18.tag == Nothing then {
+    drop param$18
+    let struct$91 = True()
+    return return$33(struct$91)
+  } else {
+    if param$18.tag == Just then {
+      drop param$18
+      let struct$92 = False()
+      return return$33(struct$92)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn null(return$34) =
+  let closure$106 = closure lambda$95()
+  return return$34(closure$106)
+
+closure fn lambda$95(self$96, param$19, return$35) =
+  drop self$96
+  if  then {
+    let then$64 = closure join$97(param$19, return$35)
+    return isNothing(then$64)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$97(self$98, value$99) =
+  let as#8 = self$98.cap[0]
+  dup as#8
+  let return$35 = self$98.cap[1]
+  dup return$35
+  drop self$98
+  let return$36 = closure join$100(return$35, value$99)
+  let apply$62 = closure join$103(as#8, return$36)
+  return mHead(apply$62)
+
+closure fn join$100(self$101, value$102) =
+  let return$35 = self$101.cap[0]
+  dup return$35
+  let value$99 = self$101.cap[1]
+  dup value$99
+  drop self$101
+  return value$99(value$102, return$35)
+
+closure fn join$103(self$104, value$105) =
+  let as#8 = self$104.cap[0]
+  dup as#8
+  let return$36 = self$104.cap[1]
+  dup return$36
+  drop self$104
+  return value$105(as#8, return$36)
+
+toplevel fn main(return$37) =
+  let closure$138 = closure lambda$108()
+  return return$37(closure$138)
+
+closure fn lambda$108(self$109, param$20, return$38) =
+  drop param$20
+  drop self$109
+  if  then {
+    let then$72 = closure join$110(return$38)
+    return |>(then$72)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$110(self$111, value$112) =
+  let return$38 = self$111.cap[0]
+  dup return$38
+  drop self$111
+  let return$40 = closure join$113(return$38, value$112)
+  let apply$66 = closure join$130(return$40)
+  return null(apply$66)
+
+closure fn join$113(self$114, value$115) =
+  let return$38 = self$114.cap[0]
+  dup return$38
+  let value$112 = self$114.cap[1]
+  dup value$112
+  drop self$114
+  let apply$70 = closure join$116(return$38)
+  return value$112(value$115, apply$70)
+
+closure fn join$116(self$117, value$118) =
+  let return$38 = self$117.cap[0]
+  dup return$38
+  drop self$117
+  let closure$129 = closure lambda$119()
+  return value$118(closure$129, return$38)
+
+closure fn lambda$119(self$120, param$21, return$39) =
+  drop self$120
+  if param$21.tag == False then {
+    drop param$21
+    let apply$67 = closure join$121(return$39)
+    return malgo_print_string(apply$67)
+  } else {
+    if param$21.tag == True then {
+      drop param$21
+      let apply$68 = closure join$125(return$39)
+      return malgo_exit_failure(apply$68)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$121(self$122, value$123) =
+  let return$39 = self$122.cap[0]
+  dup return$39
+  drop self$122
+  let lit$124 = "OK"
+  return value$123(lit$124, return$39)
+
+closure fn join$125(self$126, value$127) =
+  let return$39 = self$126.cap[0]
+  dup return$39
+  drop self$126
+  let struct$128 = Tuple()
+  return value$127(struct$128, return$39)
+
+closure fn join$130(self$131, value$132) =
+  let return$40 = self$131.cap[0]
+  dup return$40
+  drop self$131
+  let struct$133 = True()
+  let struct$134 = True()
+  let struct$135 = Nil()
+  let struct$136 = Cons(struct$134, struct$135)
+  let struct$137 = Cons(struct$133, struct$136)
+  return value$132(struct$137, return$40)
+
+toplevel fn Nothing(return$41) =
+  let struct$140 = Nothing()
+  return return$41(struct$140)
+
+toplevel fn Just(return$42) =
+  let closure$145 = closure lambda$142()
+  return return$42(closure$145)
+
+closure fn lambda$142(self$143, constructor$22, return$43) =
+  drop self$143
+  let struct$144 = Just(constructor$22)
+  return return$43(struct$144)
+
+toplevel fn False(return$44) =
+  let struct$147 = False()
+  return return$44(struct$147)
+
+toplevel fn True(return$45) =
+  let struct$149 = True()
+  return return$45(struct$149)
+
+toplevel fn Nil(return$46) =
+  let struct$151 = Nil()
+  return return$46(struct$151)
+
+toplevel fn Cons(return$47) =
+  let closure$159 = closure lambda$153()
+  return return$47(closure$159)
+
+closure fn lambda$153(self$154, constructor$23, return$48) =
+  drop self$154
+  let closure$158 = closure lambda$155(constructor$23)
+  return return$48(closure$158)
+
+closure fn lambda$155(self$156, constructor$24, return$49) =
+  let constructor$23 = self$156.cap[0]
+  dup constructor$23
+  drop self$156
+  let struct$157 = Cons(constructor$23, constructor$24)
+  return return$49(struct$157)
+
+toplevel fn malgo_print_string(return$50) =
+  let closure$164 = closure lambda$161()
+  return return$50(closure$164)
+
+closure fn lambda$161(self$162, primitive$25, return$51) =
+  drop self$162
+  let prim_result$163 = #malgo_print_string(primitive$25)
+  drop primitive$25
+  return return$51(prim_result$163)
+
+toplevel fn malgo_exit_failure(return$52) =
+  let closure$169 = closure lambda$166()
+  return return$52(closure$169)
+
+closure fn lambda$166(self$167, primitive$26, return$53) =
+  drop self$167
+  let prim_result$168 = #malgo_exit_failure(primitive$26)
+  drop primitive$26
+  return return$53(prim_result$168)
+
+toplevel fn zig_main$172() =
+  let finish$170 = closure join$174()
+  let after_main$171 = closure join$177(finish$170)
+  return main(after_main$171)
+
+closure fn join$174(self$175, value$176) =
+  drop self$175
+  return value$176
+
+closure fn join$177(self$178, value$179) =
+  let finish$170 = self$178.cap[0]
+  dup finish$170
+  drop self$178
+  let struct$180 = Tuple()
+  return value$179(struct$180, finish$170)
+
+entry = zig_main$172
+
+=== Reuse ===
+toplevel fn |>(return$27) =
+  let closure$81 = closure lambda$75()
+  return return$27(closure$81)
+
+closure fn lambda$75(self$76, param$15, return$28) =
+  let closure$80 = closure lambda$77(param$15)
+  drop self$76
+  return return$28(closure$80)
+
+closure fn lambda$77(self$78, param$16, return$29) =
+  let param$15 = self$78.cap[0]
+  dup param$15
+  drop self$78
+  if  then {
+    return param$16(param$15, return$29)
+  } else {
+    panic "no matching branch"
+  }
+
+toplevel fn mHead(return$30) =
+  let closure$87 = closure lambda$83()
+  return return$30(closure$87)
+
+closure fn lambda$83(self$84, param$17, return$31) =
+  drop self$84
+  if param$17.tag == Nil then {
+    dropReuse reuse$181 = param$17 /0
+    let struct$85 = reuse reuse$181 Nothing()
+    return return$31(struct$85)
+  } else {
+    if param$17.tag == Cons then {
+      let p#5 = param$17.0
+      dup p#5
+      dropReuse reuse$182 = param$17 /1
+      let struct$86 = reuse reuse$182 Just(p#5)
+      return return$31(struct$86)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn isNothing(return$32) =
+  let closure$93 = closure lambda$89()
+  return return$32(closure$93)
+
+closure fn lambda$89(self$90, param$18, return$33) =
+  drop self$90
+  if param$18.tag == Nothing then {
+    dropReuse reuse$183 = param$18 /0
+    let struct$91 = reuse reuse$183 True()
+    return return$33(struct$91)
+  } else {
+    if param$18.tag == Just then {
+      dropReuse reuse$184 = param$18 /0
+      let struct$92 = reuse reuse$184 False()
+      return return$33(struct$92)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+toplevel fn null(return$34) =
+  let closure$106 = closure lambda$95()
+  return return$34(closure$106)
+
+closure fn lambda$95(self$96, param$19, return$35) =
+  drop self$96
+  if  then {
+    let then$64 = closure join$97(param$19, return$35)
+    return isNothing(then$64)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$97(self$98, value$99) =
+  let as#8 = self$98.cap[0]
+  dup as#8
+  let return$35 = self$98.cap[1]
+  dup return$35
+  let return$36 = closure join$100(return$35, value$99)
+  let apply$62 = closure join$103(as#8, return$36)
+  drop self$98
+  return mHead(apply$62)
+
+closure fn join$100(self$101, value$102) =
+  let return$35 = self$101.cap[0]
+  dup return$35
+  let value$99 = self$101.cap[1]
+  dup value$99
+  drop self$101
+  return value$99(value$102, return$35)
+
+closure fn join$103(self$104, value$105) =
+  let as#8 = self$104.cap[0]
+  dup as#8
+  let return$36 = self$104.cap[1]
+  dup return$36
+  drop self$104
+  return value$105(as#8, return$36)
+
+toplevel fn main(return$37) =
+  let closure$138 = closure lambda$108()
+  return return$37(closure$138)
+
+closure fn lambda$108(self$109, param$20, return$38) =
+  drop param$20
+  drop self$109
+  if  then {
+    let then$72 = closure join$110(return$38)
+    return |>(then$72)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$110(self$111, value$112) =
+  let return$38 = self$111.cap[0]
+  dup return$38
+  let return$40 = closure join$113(return$38, value$112)
+  let apply$66 = closure join$130(return$40)
+  drop self$111
+  return null(apply$66)
+
+closure fn join$113(self$114, value$115) =
+  let return$38 = self$114.cap[0]
+  dup return$38
+  let value$112 = self$114.cap[1]
+  dup value$112
+  let apply$70 = closure join$116(return$38)
+  drop self$114
+  return value$112(value$115, apply$70)
+
+closure fn join$116(self$117, value$118) =
+  let return$38 = self$117.cap[0]
+  dup return$38
+  let closure$129 = closure lambda$119()
+  drop self$117
+  return value$118(closure$129, return$38)
+
+closure fn lambda$119(self$120, param$21, return$39) =
+  drop self$120
+  if param$21.tag == False then {
+    let apply$67 = closure join$121(return$39)
+    drop param$21
+    return malgo_print_string(apply$67)
+  } else {
+    if param$21.tag == True then {
+      let apply$68 = closure join$125(return$39)
+      drop param$21
+      return malgo_exit_failure(apply$68)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$121(self$122, value$123) =
+  let return$39 = self$122.cap[0]
+  dup return$39
+  let lit$124 = "OK"
+  drop self$122
+  return value$123(lit$124, return$39)
+
+closure fn join$125(self$126, value$127) =
+  let return$39 = self$126.cap[0]
+  dup return$39
+  dropReuse reuse$185 = self$126 /0
+  let struct$128 = reuse reuse$185 Tuple()
+  return value$127(struct$128, return$39)
+
+closure fn join$130(self$131, value$132) =
+  let return$40 = self$131.cap[0]
+  dup return$40
+  dropReuse reuse$186 = self$131 /0
+  let struct$133 = reuse reuse$186 True()
+  let struct$134 = True()
+  let struct$135 = Nil()
+  let struct$136 = Cons(struct$134, struct$135)
+  let struct$137 = Cons(struct$133, struct$136)
+  return value$132(struct$137, return$40)
+
+toplevel fn Nothing(return$41) =
+  let struct$140 = Nothing()
+  return return$41(struct$140)
+
+toplevel fn Just(return$42) =
+  let closure$145 = closure lambda$142()
+  return return$42(closure$145)
+
+closure fn lambda$142(self$143, constructor$22, return$43) =
+  dropReuse reuse$187 = self$143 /1
+  let struct$144 = reuse reuse$187 Just(constructor$22)
+  return return$43(struct$144)
+
+toplevel fn False(return$44) =
+  let struct$147 = False()
+  return return$44(struct$147)
+
+toplevel fn True(return$45) =
+  let struct$149 = True()
+  return return$45(struct$149)
+
+toplevel fn Nil(return$46) =
+  let struct$151 = Nil()
+  return return$46(struct$151)
+
+toplevel fn Cons(return$47) =
+  let closure$159 = closure lambda$153()
+  return return$47(closure$159)
+
+closure fn lambda$153(self$154, constructor$23, return$48) =
+  let closure$158 = closure lambda$155(constructor$23)
+  drop self$154
+  return return$48(closure$158)
+
+closure fn lambda$155(self$156, constructor$24, return$49) =
+  let constructor$23 = self$156.cap[0]
+  dup constructor$23
+  dropReuse reuse$188 = self$156 /2
+  let struct$157 = reuse reuse$188 Cons(constructor$23, constructor$24)
+  return return$49(struct$157)
+
+toplevel fn malgo_print_string(return$50) =
+  let closure$164 = closure lambda$161()
+  return return$50(closure$164)
+
+closure fn lambda$161(self$162, primitive$25, return$51) =
+  let prim_result$163 = #malgo_print_string(primitive$25)
+  drop self$162
+  drop primitive$25
+  return return$51(prim_result$163)
+
+toplevel fn malgo_exit_failure(return$52) =
+  let closure$169 = closure lambda$166()
+  return return$52(closure$169)
+
+closure fn lambda$166(self$167, primitive$26, return$53) =
+  let prim_result$168 = #malgo_exit_failure(primitive$26)
+  drop self$167
+  drop primitive$26
+  return return$53(prim_result$168)
+
+toplevel fn zig_main$172() =
+  let finish$170 = closure join$174()
+  let after_main$171 = closure join$177(finish$170)
+  return main(after_main$171)
+
+closure fn join$174(self$175, value$176) =
+  drop self$175
+  return value$176
+
+closure fn join$177(self$178, value$179) =
+  let finish$170 = self$178.cap[0]
+  dup finish$170
+  dropReuse reuse$189 = self$178 /0
+  let struct$180 = reuse reuse$189 Tuple()
+  return value$179(struct$180, finish$170)
+
+entry = zig_main$172
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+- data Maybe a = Nothing() | Just(a)
++ data Maybe a#0 = Nothing() | Just(a#0)
+  
+  data Bool  = False() | True()
+  
+- data List a = Nil() | Cons(a, List(a))
++ data List a#1 = Nil() | Cons(a#1, List(a#1))
+  
+- sig isNothing : Maybe(a) -> Bool
++ foreign malgo_print_string : String# -> ()
+  
+- def isNothing =
++ foreign malgo_exit_failure : () -> a#13
++ 
++ sig isNothing : Maybe(a#2) -> Bool
++ 
++ sig mHead : List(a#4) -> Maybe(a#4)
++ 
++ sig null : List(a#7) -> Bool
++ 
++ sig |> : a#9 -> a#9 -> b#10 -> b#10
++ 
++ def |> =
+    fn {
+-     Nothing ->
++     x#11 f#12 ->
+-       {
+-         True
+-       } |
+-     Just(_) ->
+        {
+-         False
++         f#12(x#11)
+        }
+    }
+  
+- sig mHead : List(a) -> Maybe(a)
+- 
+  def mHead =
+    fn {
+-     Nil ->
++     Nil() ->
+        {
+          Nothing
+        } |
+-     Cons(p, _) ->
++     Cons(p#5, _#6) ->
+        {
+-         Just(p)
++         Just(p#5)
+        }
+    }
+  
+- sig null : List(a) -> Bool
++ def isNothing =
+- 
+- def null =
+    fn {
+-     as ->
++     Nothing() ->
+        {
+-         isNothing(mHead(as))
++         True
++       } |
++     Just(_#3) ->
++       {
++         False
+        }
+    }
+  
+- infix infixl 0 |>
++ def null =
+- 
+- sig |> : a -> a -> b -> b
+- 
+- def |> =
+    fn {
+-     x f ->
++     as#8 ->
+        {
+-         f(x)
++         isNothing(mHead(as#8))
+        }
+    }
+  
+- foreign malgo_print_string : String# -> ()
+- 
+- foreign malgo_exit_failure : () -> a
+- 
+  def main =
+    fn {
+-     _ ->
++     _#14 ->
+        {
+          (null(Cons(True)(Cons(True)(Nil)))) |> fn {
+-           False ->
++           False() ->
+              {
+                malgo_print_string("OK")
+              } |
+-           True ->
++           True() ->
+              {
+                malgo_exit_failure(())
+              }
+          }
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- data Maybe a#0 = Nothing() | Just(a#0)
++ def |> =
+- 
++   \param$15 ->
+- data Bool  = False() | True()
++     \param$16 ->
++       case Tuple(param$15, param$16) of {
++         Tuple(x#11, f#12) -> f#12(x#11)
++       }
+  
+- data List a#1 = Nil() | Cons(a#1, List(a#1))
++ def mHead =
++   \param$17 ->
++     case param$17 of {
++       Nil() -> invoke Nothing
++       Cons(p#5, _#6) -> invoke Just(p#5)
++     }
+  
+- foreign malgo_print_string : String# -> ()
++ def isNothing =
++   \param$18 ->
++     case param$18 of {
++       Nothing() -> invoke True
++       Just(_#3) -> invoke False
++     }
+  
+- foreign malgo_exit_failure : () -> a#13
++ def null =
++   \param$19 ->
++     case param$19 of {
++       as#8 -> invoke isNothing(invoke mHead(as#8))
++     }
+  
+- sig isNothing : Maybe(a#2) -> Bool
++ def main =
++   \param$20 ->
++     case param$20 of {
++       _#14 ->
++         invoke |>( invoke null( invoke Cons( invoke True )( invoke Cons( invoke True )( invoke Nil ) ) ) )( \param$21 ->
++           case param$21 of {
++             False() -> invoke malgo_print_string("OK")
++             True() -> invoke malgo_exit_failure(Tuple())
++           } )
++     }
+  
+- sig mHead : List(a#4) -> Maybe(a#4)
++ def Nothing = Nothing()
+  
+- sig null : List(a#7) -> Bool
++ def Just = \constructor$22 -> Just(constructor$22)
+  
+- sig |> : a#9 -> a#9 -> b#10 -> b#10
++ def False = False()
+  
+- def |> =
++ def True = True()
+-   fn {
+-     x#11 f#12 ->
+-       {
+-         f#12(x#11)
+-       }
+-   }
+  
+- def mHead =
++ def Nil = Nil()
+-   fn {
+-     Nil() ->
+-       {
+-         Nothing
+-       } |
+-     Cons(p#5, _#6) ->
+-       {
+-         Just(p#5)
+-       }
+-   }
+  
+- def isNothing =
++ def Cons =
+-   fn {
++   \constructor$23 -> \constructor$24 -> Cons(constructor$23, constructor$24)
+-     Nothing() ->
+-       {
+-         True
+-       } |
+-     Just(_#3) ->
+-       {
+-         False
+-       }
+-   }
+  
+- def null =
++ def malgo_print_string = \primitive$25 -> #malgo_print_string(primitive$25)
+-   fn {
+-     as#8 ->
+-       {
+-         isNothing(mHead(as#8))
+-       }
+-   }
+  
+- def main =
++ def malgo_exit_failure = \primitive$26 -> #malgo_exit_failure(primitive$26)
+-   fn {
+-     _#14 ->
+-       {
+-         (null(Cons(True)(Cons(True)(Nil)))) |> fn {
+-           False() ->
+-             {
+-               malgo_print_string("OK")
+-             } |
+-           True() ->
+-             {
+-               malgo_exit_failure(())
+-             }
+-         }
+-       }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def |> =
+    \param$15 ->
+      \param$16 ->
+        case Tuple(param$15, param$16) of {
+          Tuple(x#11, f#12) -> f#12(x#11)
+        }
+  
+  def mHead =
+    \param$17 ->
+      case param$17 of {
+-       Nil() -> invoke Nothing
++       Nil() -> Nothing()
+-       Cons(p#5, _#6) -> invoke Just(p#5)
++       Cons(p#5, _#6) -> Just(p#5)
+      }
+  
+  def isNothing =
+    \param$18 ->
+      case param$18 of {
+-       Nothing() -> invoke True
++       Nothing() -> True()
+-       Just(_#3) -> invoke False
++       Just(_#3) -> False()
+      }
+  
+  def null =
+    \param$19 ->
+      case param$19 of {
+        as#8 -> invoke isNothing(invoke mHead(as#8))
+      }
+  
+  def main =
+    \param$20 ->
+      case param$20 of {
+        _#14 ->
+-         invoke |>( invoke null( invoke Cons( invoke True )( invoke Cons( invoke True )( invoke Nil ) ) ) )( \param$21 ->
++         invoke |>(invoke null(Cons(True(), Cons(True(), Nil()))))( \param$21 ->
+            case param$21 of {
+              False() -> invoke malgo_print_string("OK")
+              True() -> invoke malgo_exit_failure(Tuple())
+            } )
+      }
+  
+  def Nothing = Nothing()
+  
+  def Just = \constructor$22 -> Just(constructor$22)
+  
+  def False = False()
+  
+  def True = True()
+  
+  def Nil = Nil()
+  
+  def Cons =
+    \constructor$23 -> \constructor$24 -> Cons(constructor$23, constructor$24)
+  
+  def malgo_print_string = \primitive$25 -> #malgo_print_string(primitive$25)
+  
+  def malgo_exit_failure = \primitive$26 -> #malgo_exit_failure(primitive$26)
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def |> =
+    \param$15 ->
+      \param$16 ->
+        case Tuple(param$15, param$16) of {
+          Tuple(x#11, f#12) -> f#12(x#11)
+        }
+  
+  def mHead =
+    \param$17 ->
+      case param$17 of {
+        Nil() -> Nothing()
+        Cons(p#5, _#6) -> Just(p#5)
+      }
+  
+  def isNothing =
+    \param$18 ->
+      case param$18 of {
+        Nothing() -> True()
+        Just(_#3) -> False()
+      }
+  
+  def null =
+    \param$19 ->
+      case param$19 of {
+        as#8 -> invoke isNothing(invoke mHead(as#8))
+      }
+  
+  def main =
+    \param$20 ->
+      case param$20 of {
+        _#14 ->
+          invoke |>(invoke null(Cons(True(), Cons(True(), Nil()))))( \param$21 ->
+            case param$21 of {
+              False() -> invoke malgo_print_string("OK")
+              True() -> invoke malgo_exit_failure(Tuple())
+            } )
+      }
+  
+  def Nothing = Nothing()
+  
+  def Just = \constructor$22 -> Just(constructor$22)
+  
+  def False = False()
+  
+  def True = True()
+  
+  def Nil = Nil()
+  
+  def Cons =
+    \constructor$23 -> \constructor$24 -> Cons(constructor$23, constructor$24)
+  
+  def malgo_print_string = \primitive$25 -> #malgo_print_string(primitive$25)
+  
+  def malgo_exit_failure = \primitive$26 -> #malgo_exit_failure(primitive$26)
+
+
+=== ReuseSpecialize -> ToCore ===
+- def |> =
++ def |>(return$27) =
+-   \param$15 ->
++   \param$15 return$28 . {
+-     \param$16 ->
++     \param$16 return$29 . {
+-       case Tuple(param$15, param$16) of {
++       Tuple(param$15, param$16) ~ select {
+-         Tuple(x#11, f#12) -> f#12(x#11)
++         Tuple(x#11, f#12) -> f#12 ~ (x#11, return$29)
+        }
++     } ~ return$28
++   } ~ return$27
+  
+- def mHead =
++ def mHead(return$30) =
+-   \param$17 ->
++   \param$17 return$31 . {
+-     case param$17 of {
++     param$17 ~ select {
+-       Nil() -> Nothing()
++       Nil() -> Nothing() ~ return$31
+-       Cons(p#5, _#6) -> Just(p#5)
++       Cons(p#5, _#6) -> Just(p#5) ~ return$31
+      }
++   } ~ return$30
+  
+- def isNothing =
++ def isNothing(return$32) =
+-   \param$18 ->
++   \param$18 return$33 . {
+-     case param$18 of {
++     param$18 ~ select {
+-       Nothing() -> True()
++       Nothing() -> True() ~ return$33
+-       Just(_#3) -> False()
++       Just(_#3) -> False() ~ return$33
+      }
++   } ~ return$32
+  
+- def null =
++ def null(return$34) =
+-   \param$19 ->
++   \param$19 return$35 . {
+-     case param$19 of {
++     param$19 ~ select {
+-       as#8 -> invoke isNothing(invoke mHead(as#8))
++       as#8 ->
++         invoke isNothing ~ ( do return$36 . {
++           invoke mHead ~ (as#8, return$36)
++         }
++         , return$35 )
+      }
++   } ~ return$34
+  
+- def main =
++ def main(return$37) =
+-   \param$20 ->
++   \param$20 return$38 . {
+-     case param$20 of {
++     param$20 ~ select {
+        _#14 ->
+-         invoke |>(invoke null(Cons(True(), Cons(True(), Nil()))))( \param$21 ->
++         invoke |> ~ ( do return$40 . {
+-           case param$21 of {
++           invoke null ~ (Cons(True(), Cons(True(), Nil())), return$40)
+-             False() -> invoke malgo_print_string("OK")
++         }
+-             True() -> invoke malgo_exit_failure(Tuple())
++         , ( \param$21 return$39 . {
+-           } )
++           param$21 ~ select {
++             False() -> invoke malgo_print_string ~ ("OK", return$39)
++             True() -> invoke malgo_exit_failure ~ (Tuple(), return$39)
++           }
++         }
++         , return$38 ) )
+      }
++   } ~ return$37
+  
+- def Nothing = Nothing()
++ def Nothing(return$41) = Nothing() ~ return$41
+  
+- def Just = \constructor$22 -> Just(constructor$22)
++ def Just(return$42) =
++   \constructor$22 return$43 . {
++     Just(constructor$22) ~ return$43
++   } ~ return$42
+  
+- def False = False()
++ def False(return$44) = False() ~ return$44
+  
+- def True = True()
++ def True(return$45) = True() ~ return$45
+  
+- def Nil = Nil()
++ def Nil(return$46) = Nil() ~ return$46
+  
+- def Cons =
++ def Cons(return$47) =
+-   \constructor$23 -> \constructor$24 -> Cons(constructor$23, constructor$24)
++   \constructor$23 return$48 . {
++     \constructor$24 return$49 . {
++       Cons(constructor$23, constructor$24) ~ return$49
++     } ~ return$48
++   } ~ return$47
+  
+- def malgo_print_string = \primitive$25 -> #malgo_print_string(primitive$25)
++ def malgo_print_string(return$50) =
++   \primitive$25 return$51 . {
++     #malgo_print_string(primitive$25) ~ return$51
++   } ~ return$50
+  
+- def malgo_exit_failure = \primitive$26 -> #malgo_exit_failure(primitive$26)
++ def malgo_exit_failure(return$52) =
++   \primitive$26 return$53 . {
++     #malgo_exit_failure(primitive$26) ~ return$53
++   } ~ return$52
+
+
+=== ToCore -> Flat ===
+  def |>(return$27) =
+    \param$15 return$28 . {
+      \param$16 return$29 . {
+        Tuple(param$15, param$16) ~ select {
+          Tuple(x#11, f#12) -> f#12 ~ (x#11, return$29)
+        }
+      } ~ return$28
+    } ~ return$27
+  
+  def mHead(return$30) =
+    \param$17 return$31 . {
+      param$17 ~ select {
+        Nil() -> Nothing() ~ return$31
+        Cons(p#5, _#6) -> Just(p#5) ~ return$31
+      }
+    } ~ return$30
+  
+  def isNothing(return$32) =
+    \param$18 return$33 . {
+      param$18 ~ select {
+        Nothing() -> True() ~ return$33
+        Just(_#3) -> False() ~ return$33
+      }
+    } ~ return$32
+  
+  def null(return$34) =
+    \param$19 return$35 . {
+      param$19 ~ select {
+        as#8 ->
+-         invoke isNothing ~ ( do return$36 . {
++         invoke isNothing ~ then outer$54 -> {
+-           invoke mHead ~ (as#8, return$36)
++           join return$36 = then inner$55 -> {
++             outer$54 ~ (inner$55, return$35)
++           }
++           in invoke mHead ~ (as#8, return$36)
+          }
+-         , return$35 )
+      }
+    } ~ return$34
+  
+  def main(return$37) =
+    \param$20 return$38 . {
+      param$20 ~ select {
+        _#14 ->
+-         invoke |> ~ ( do return$40 . {
++         invoke |> ~ then outer$56 -> {
+-           invoke null ~ (Cons(True(), Cons(True(), Nil())), return$40)
++           join return$40 = then inner$57 -> {
+-         }
++             outer$56 ~ ( inner$57
+-         , ( \param$21 return$39 . {
++             , ( \param$21 return$39 . {
+-           param$21 ~ select {
++               param$21 ~ select {
+-             False() -> invoke malgo_print_string ~ ("OK", return$39)
++                 False() -> invoke malgo_print_string ~ ("OK", return$39)
+-             True() -> invoke malgo_exit_failure ~ (Tuple(), return$39)
++                 True() -> invoke malgo_exit_failure ~ (Tuple(), return$39)
++               }
++             }
++             , return$38 ) )
+            }
++           in invoke null ~ (Cons(True(), Cons(True(), Nil())), return$40)
+          }
+-         , return$38 ) )
+      }
+    } ~ return$37
+  
+  def Nothing(return$41) = Nothing() ~ return$41
+  
+  def Just(return$42) =
+    \constructor$22 return$43 . {
+      Just(constructor$22) ~ return$43
+    } ~ return$42
+  
+  def False(return$44) = False() ~ return$44
+  
+  def True(return$45) = True() ~ return$45
+  
+  def Nil(return$46) = Nil() ~ return$46
+  
+  def Cons(return$47) =
+    \constructor$23 return$48 . {
+      \constructor$24 return$49 . {
+        Cons(constructor$23, constructor$24) ~ return$49
+      } ~ return$48
+    } ~ return$47
+  
+  def malgo_print_string(return$50) =
+    \primitive$25 return$51 . {
+      #malgo_print_string(primitive$25) ~ return$51
+    } ~ return$50
+  
+  def malgo_exit_failure(return$52) =
+    \primitive$26 return$53 . {
+      #malgo_exit_failure(primitive$26) ~ return$53
+    } ~ return$52
+
+
+=== Flat -> Join ===
+  def |>(return$27) =
+    \param$15 return$28 . {
+      \param$16 return$29 . {
+-       Tuple(param$15, param$16) ~ select {
++       join select$59 = select {
+-         Tuple(x#11, f#12) -> f#12 ~ (x#11, return$29)
++         Tuple(x#11, f#12) ->
++           join apply$58 = (x#11, return$29)
++           in f#12 ~ apply$58
+        }
++       in Tuple(param$15, param$16) ~ select$59
+      } ~ return$28
+    } ~ return$27
+  
+  def mHead(return$30) =
+    \param$17 return$31 . {
+-     param$17 ~ select {
++     join select$60 = select {
+        Nil() -> Nothing() ~ return$31
+        Cons(p#5, _#6) -> Just(p#5) ~ return$31
+      }
++     in param$17 ~ select$60
+    } ~ return$30
+  
+  def isNothing(return$32) =
+    \param$18 return$33 . {
+-     param$18 ~ select {
++     join select$61 = select {
+        Nothing() -> True() ~ return$33
+        Just(_#3) -> False() ~ return$33
+      }
++     in param$18 ~ select$61
+    } ~ return$32
+  
+  def null(return$34) =
+    \param$19 return$35 . {
+-     param$19 ~ select {
++     join select$65 = select {
+        as#8 ->
+-         invoke isNothing ~ then outer$54 -> {
++         join then$64 = then outer$54 -> {
+            join return$36 = then inner$55 -> {
+-             outer$54 ~ (inner$55, return$35)
++             join apply$63 = (inner$55, return$35)
++             in outer$54 ~ apply$63
+            }
+-           in invoke mHead ~ (as#8, return$36)
++           in join apply$62 = (as#8, return$36)
++           in invoke mHead ~ apply$62
+          }
++         in invoke isNothing ~ then$64
+      }
++     in param$19 ~ select$65
+    } ~ return$34
+  
+  def main(return$37) =
+    \param$20 return$38 . {
+-     param$20 ~ select {
++     join select$73 = select {
+        _#14 ->
+-         invoke |> ~ then outer$56 -> {
++         join then$72 = then outer$56 -> {
+            join return$40 = then inner$57 -> {
+-             outer$56 ~ ( inner$57
++             join apply$70 = ( \param$21 return$39 . {
+-             , ( \param$21 return$39 . {
++               join select$69 = select {
+-               param$21 ~ select {
++                 False() ->
+-                 False() -> invoke malgo_print_string ~ ("OK", return$39)
++                   join apply$67 = ("OK", return$39)
+-                 True() -> invoke malgo_exit_failure ~ (Tuple(), return$39)
++                   in invoke malgo_print_string ~ apply$67
++                 True() ->
++                   join apply$68 = (Tuple(), return$39)
++                   in invoke malgo_exit_failure ~ apply$68
+                }
++               in param$21 ~ select$69
+              }
+-             , return$38 ) )
++             , return$38 )
++             in join apply$71 = (inner$57, apply$70)
++             in outer$56 ~ apply$71
+            }
+-           in invoke null ~ (Cons(True(), Cons(True(), Nil())), return$40)
++           in join apply$66 = (Cons(True(), Cons(True(), Nil())), return$40)
++           in invoke null ~ apply$66
+          }
++         in invoke |> ~ then$72
+      }
++     in param$20 ~ select$73
+    } ~ return$37
+  
+  def Nothing(return$41) = Nothing() ~ return$41
+  
+  def Just(return$42) =
+    \constructor$22 return$43 . {
+      Just(constructor$22) ~ return$43
+    } ~ return$42
+  
+  def False(return$44) = False() ~ return$44
+  
+  def True(return$45) = True() ~ return$45
+  
+  def Nil(return$46) = Nil() ~ return$46
+  
+  def Cons(return$47) =
+    \constructor$23 return$48 . {
+      \constructor$24 return$49 . {
+        Cons(constructor$23, constructor$24) ~ return$49
+      } ~ return$48
+    } ~ return$47
+  
+  def malgo_print_string(return$50) =
+    \primitive$25 return$51 . {
+      #malgo_print_string(primitive$25) ~ return$51
+    } ~ return$50
+  
+  def malgo_exit_failure(return$52) =
+    \primitive$26 return$53 . {
+      #malgo_exit_failure(primitive$26) ~ return$53
+    } ~ return$52
+
+
+=== Join -> ClosureConv ===
+- def |>(return$27) =
++ toplevel fn |>(return$27) =
+-   \param$15 return$28 . {
++   let closure$81 = closure lambda$75()
+-     \param$16 return$29 . {
++   return return$27(closure$81)
+-       join select$59 = select {
+-         Tuple(x#11, f#12) ->
+-           join apply$58 = (x#11, return$29)
+-           in f#12 ~ apply$58
+-       }
+-       in Tuple(param$15, param$16) ~ select$59
+-     } ~ return$28
+-   } ~ return$27
+  
+- def mHead(return$30) =
++ closure fn lambda$75(self$76, param$15, return$28) =
+-   \param$17 return$31 . {
++   let closure$80 = closure lambda$77(param$15)
+-     join select$60 = select {
++   return return$28(closure$80)
+-       Nil() -> Nothing() ~ return$31
+-       Cons(p#5, _#6) -> Just(p#5) ~ return$31
+-     }
+-     in param$17 ~ select$60
+-   } ~ return$30
+  
+- def isNothing(return$32) =
++ closure fn lambda$77(self$78, param$16, return$29) =
+-   \param$18 return$33 . {
++   let param$15 = self$78.cap[0]
+-     join select$61 = select {
++   let struct$79 = Tuple(param$15, param$16)
+-       Nothing() -> True() ~ return$33
++   if struct$79.tag == Tuple then {
+-       Just(_#3) -> False() ~ return$33
++     let x#11 = struct$79.0
++     let f#12 = struct$79.1
++     return f#12(x#11, return$29)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ toplevel fn mHead(return$30) =
++   let closure$87 = closure lambda$83()
++   return return$30(closure$87)
++ 
++ closure fn lambda$83(self$84, param$17, return$31) =
++   if param$17.tag == Nil then {
++     let struct$85 = Nothing()
++     return return$31(struct$85)
++   } else {
++     if param$17.tag == Cons then {
++       let p#5 = param$17.0
++       let _#6 = param$17.1
++       let struct$86 = Just(p#5)
++       return return$31(struct$86)
++     } else {
++       panic "no matching branch"
+      }
+-     in param$18 ~ select$61
++   }
+-   } ~ return$32
+  
+- def null(return$34) =
++ toplevel fn isNothing(return$32) =
+-   \param$19 return$35 . {
++   let closure$93 = closure lambda$89()
+-     join select$65 = select {
++   return return$32(closure$93)
+-       as#8 ->
++ 
+-         join then$64 = then outer$54 -> {
++ closure fn lambda$89(self$90, param$18, return$33) =
+-           join return$36 = then inner$55 -> {
++   if param$18.tag == Nothing then {
+-             join apply$63 = (inner$55, return$35)
++     let struct$91 = True()
+-             in outer$54 ~ apply$63
++     return return$33(struct$91)
+-           }
++   } else {
+-           in join apply$62 = (as#8, return$36)
++     if param$18.tag == Just then {
+-           in invoke mHead ~ apply$62
++       let _#3 = param$18.0
+-         }
++       let struct$92 = False()
+-         in invoke isNothing ~ then$64
++       return return$33(struct$92)
++     } else {
++       panic "no matching branch"
+      }
+-     in param$19 ~ select$65
++   }
+-   } ~ return$34
+  
+- def main(return$37) =
++ toplevel fn null(return$34) =
+-   \param$20 return$38 . {
++   let closure$106 = closure lambda$95()
+-     join select$73 = select {
++   return return$34(closure$106)
+-       _#14 ->
++ 
+-         join then$72 = then outer$56 -> {
++ closure fn lambda$95(self$96, param$19, return$35) =
+-           join return$40 = then inner$57 -> {
++   if  then {
+-             join apply$70 = ( \param$21 return$39 . {
++     let as#8 = param$19
+-               join select$69 = select {
++     let then$64 = closure join$97(as#8, return$35)
+-                 False() ->
++     return isNothing(then$64)
+-                   join apply$67 = ("OK", return$39)
++   } else {
+-                   in invoke malgo_print_string ~ apply$67
++     panic "no matching branch"
+-                 True() ->
++   }
+-                   join apply$68 = (Tuple(), return$39)
++ 
+-                   in invoke malgo_exit_failure ~ apply$68
++ closure fn join$97(self$98, value$99) =
+-               }
++   let as#8 = self$98.cap[0]
+-               in param$21 ~ select$69
++   let return$35 = self$98.cap[1]
+-             }
++   let return$36 = closure join$100(return$35, value$99)
+-             , return$38 )
++   let apply$62 = closure join$103(as#8, return$36)
+-             in join apply$71 = (inner$57, apply$70)
++   return mHead(apply$62)
+-             in outer$56 ~ apply$71
++ 
+-           }
++ closure fn join$100(self$101, value$102) =
+-           in join apply$66 = (Cons(True(), Cons(True(), Nil())), return$40)
++   let return$35 = self$101.cap[0]
+-           in invoke null ~ apply$66
++   let value$99 = self$101.cap[1]
+-         }
++   return value$99(value$102, return$35)
+-         in invoke |> ~ then$72
++ 
++ closure fn join$103(self$104, value$105) =
++   let as#8 = self$104.cap[0]
++   let return$36 = self$104.cap[1]
++   return value$105(as#8, return$36)
++ 
++ toplevel fn main(return$37) =
++   let closure$138 = closure lambda$108()
++   return return$37(closure$138)
++ 
++ closure fn lambda$108(self$109, param$20, return$38) =
++   if  then {
++     let _#14 = param$20
++     let then$72 = closure join$110(return$38)
++     return |>(then$72)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$110(self$111, value$112) =
++   let return$38 = self$111.cap[0]
++   let return$40 = closure join$113(return$38, value$112)
++   let apply$66 = closure join$130(return$40)
++   return null(apply$66)
++ 
++ closure fn join$113(self$114, value$115) =
++   let return$38 = self$114.cap[0]
++   let value$112 = self$114.cap[1]
++   let apply$70 = closure join$116(return$38)
++   return value$112(value$115, apply$70)
++ 
++ closure fn join$116(self$117, value$118) =
++   let return$38 = self$117.cap[0]
++   let closure$129 = closure lambda$119()
++   return value$118(closure$129, return$38)
++ 
++ closure fn lambda$119(self$120, param$21, return$39) =
++   if param$21.tag == False then {
++     let apply$67 = closure join$121(return$39)
++     return malgo_print_string(apply$67)
++   } else {
++     if param$21.tag == True then {
++       let apply$68 = closure join$125(return$39)
++       return malgo_exit_failure(apply$68)
++     } else {
++       panic "no matching branch"
+      }
+-     in param$20 ~ select$73
++   }
+-   } ~ return$37
+  
+- def Nothing(return$41) = Nothing() ~ return$41
++ closure fn join$121(self$122, value$123) =
++   let return$39 = self$122.cap[0]
++   let lit$124 = "OK"
++   return value$123(lit$124, return$39)
+  
+- def Just(return$42) =
++ closure fn join$125(self$126, value$127) =
+-   \constructor$22 return$43 . {
++   let return$39 = self$126.cap[0]
+-     Just(constructor$22) ~ return$43
++   let struct$128 = Tuple()
+-   } ~ return$42
++   return value$127(struct$128, return$39)
+  
+- def False(return$44) = False() ~ return$44
++ closure fn join$130(self$131, value$132) =
++   let return$40 = self$131.cap[0]
++   let struct$133 = True()
++   let struct$134 = True()
++   let struct$135 = Nil()
++   let struct$136 = Cons(struct$134, struct$135)
++   let struct$137 = Cons(struct$133, struct$136)
++   return value$132(struct$137, return$40)
+  
+- def True(return$45) = True() ~ return$45
++ toplevel fn Nothing(return$41) =
++   let struct$140 = Nothing()
++   return return$41(struct$140)
+  
+- def Nil(return$46) = Nil() ~ return$46
++ toplevel fn Just(return$42) =
++   let closure$145 = closure lambda$142()
++   return return$42(closure$145)
+  
+- def Cons(return$47) =
++ closure fn lambda$142(self$143, constructor$22, return$43) =
+-   \constructor$23 return$48 . {
++   let struct$144 = Just(constructor$22)
+-     \constructor$24 return$49 . {
++   return return$43(struct$144)
+-       Cons(constructor$23, constructor$24) ~ return$49
+-     } ~ return$48
+-   } ~ return$47
+  
+- def malgo_print_string(return$50) =
++ toplevel fn False(return$44) =
+-   \primitive$25 return$51 . {
++   let struct$147 = False()
+-     #malgo_print_string(primitive$25) ~ return$51
++   return return$44(struct$147)
+-   } ~ return$50
+  
+- def malgo_exit_failure(return$52) =
++ toplevel fn True(return$45) =
+-   \primitive$26 return$53 . {
++   let struct$149 = True()
+-     #malgo_exit_failure(primitive$26) ~ return$53
++   return return$45(struct$149)
+-   } ~ return$52
++ 
++ toplevel fn Nil(return$46) =
++   let struct$151 = Nil()
++   return return$46(struct$151)
++ 
++ toplevel fn Cons(return$47) =
++   let closure$159 = closure lambda$153()
++   return return$47(closure$159)
++ 
++ closure fn lambda$153(self$154, constructor$23, return$48) =
++   let closure$158 = closure lambda$155(constructor$23)
++   return return$48(closure$158)
++ 
++ closure fn lambda$155(self$156, constructor$24, return$49) =
++   let constructor$23 = self$156.cap[0]
++   let struct$157 = Cons(constructor$23, constructor$24)
++   return return$49(struct$157)
++ 
++ toplevel fn malgo_print_string(return$50) =
++   let closure$164 = closure lambda$161()
++   return return$50(closure$164)
++ 
++ closure fn lambda$161(self$162, primitive$25, return$51) =
++   let prim_result$163 = #malgo_print_string(primitive$25)
++   return return$51(prim_result$163)
++ 
++ toplevel fn malgo_exit_failure(return$52) =
++   let closure$169 = closure lambda$166()
++   return return$52(closure$169)
++ 
++ closure fn lambda$166(self$167, primitive$26, return$53) =
++   let prim_result$168 = #malgo_exit_failure(primitive$26)
++   return return$53(prim_result$168)
++ 
++ toplevel fn zig_main$172() =
++   let finish$170 = closure join$174()
++   let after_main$171 = closure join$177(finish$170)
++   return main(after_main$171)
++ 
++ closure fn join$174(self$175, value$176) = return value$176
++ 
++ closure fn join$177(self$178, value$179) =
++   let finish$170 = self$178.cap[0]
++   let struct$180 = Tuple()
++   return value$179(struct$180, finish$170)
++ 
++ entry = zig_main$172
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn |>(return$27) =
+    let closure$81 = closure lambda$75()
+    return return$27(closure$81)
+  
+  closure fn lambda$75(self$76, param$15, return$28) =
+    let closure$80 = closure lambda$77(param$15)
+    return return$28(closure$80)
+  
+  closure fn lambda$77(self$78, param$16, return$29) =
+    let param$15 = self$78.cap[0]
+-   let struct$79 = Tuple(param$15, param$16)
++   if  then {
+-   if struct$79.tag == Tuple then {
++     return param$16(param$15, return$29)
+-     let x#11 = struct$79.0
+-     let f#12 = struct$79.1
+-     return f#12(x#11, return$29)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn mHead(return$30) =
+    let closure$87 = closure lambda$83()
+    return return$30(closure$87)
+  
+  closure fn lambda$83(self$84, param$17, return$31) =
+    if param$17.tag == Nil then {
+      let struct$85 = Nothing()
+      return return$31(struct$85)
+    } else {
+      if param$17.tag == Cons then {
+        let p#5 = param$17.0
+        let _#6 = param$17.1
+        let struct$86 = Just(p#5)
+        return return$31(struct$86)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn isNothing(return$32) =
+    let closure$93 = closure lambda$89()
+    return return$32(closure$93)
+  
+  closure fn lambda$89(self$90, param$18, return$33) =
+    if param$18.tag == Nothing then {
+      let struct$91 = True()
+      return return$33(struct$91)
+    } else {
+      if param$18.tag == Just then {
+        let _#3 = param$18.0
+        let struct$92 = False()
+        return return$33(struct$92)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn null(return$34) =
+    let closure$106 = closure lambda$95()
+    return return$34(closure$106)
+  
+  closure fn lambda$95(self$96, param$19, return$35) =
+    if  then {
+-     let as#8 = param$19
++     let then$64 = closure join$97(param$19, return$35)
+-     let then$64 = closure join$97(as#8, return$35)
+      return isNothing(then$64)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$97(self$98, value$99) =
+    let as#8 = self$98.cap[0]
+    let return$35 = self$98.cap[1]
+    let return$36 = closure join$100(return$35, value$99)
+    let apply$62 = closure join$103(as#8, return$36)
+    return mHead(apply$62)
+  
+  closure fn join$100(self$101, value$102) =
+    let return$35 = self$101.cap[0]
+    let value$99 = self$101.cap[1]
+    return value$99(value$102, return$35)
+  
+  closure fn join$103(self$104, value$105) =
+    let as#8 = self$104.cap[0]
+    let return$36 = self$104.cap[1]
+    return value$105(as#8, return$36)
+  
+  toplevel fn main(return$37) =
+    let closure$138 = closure lambda$108()
+    return return$37(closure$138)
+  
+  closure fn lambda$108(self$109, param$20, return$38) =
+    if  then {
+-     let _#14 = param$20
+      let then$72 = closure join$110(return$38)
+      return |>(then$72)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$110(self$111, value$112) =
+    let return$38 = self$111.cap[0]
+    let return$40 = closure join$113(return$38, value$112)
+    let apply$66 = closure join$130(return$40)
+    return null(apply$66)
+  
+  closure fn join$113(self$114, value$115) =
+    let return$38 = self$114.cap[0]
+    let value$112 = self$114.cap[1]
+    let apply$70 = closure join$116(return$38)
+    return value$112(value$115, apply$70)
+  
+  closure fn join$116(self$117, value$118) =
+    let return$38 = self$117.cap[0]
+    let closure$129 = closure lambda$119()
+    return value$118(closure$129, return$38)
+  
+  closure fn lambda$119(self$120, param$21, return$39) =
+    if param$21.tag == False then {
+      let apply$67 = closure join$121(return$39)
+      return malgo_print_string(apply$67)
+    } else {
+      if param$21.tag == True then {
+        let apply$68 = closure join$125(return$39)
+        return malgo_exit_failure(apply$68)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$121(self$122, value$123) =
+    let return$39 = self$122.cap[0]
+    let lit$124 = "OK"
+    return value$123(lit$124, return$39)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$39 = self$126.cap[0]
+    let struct$128 = Tuple()
+    return value$127(struct$128, return$39)
+  
+  closure fn join$130(self$131, value$132) =
+    let return$40 = self$131.cap[0]
+    let struct$133 = True()
+    let struct$134 = True()
+    let struct$135 = Nil()
+    let struct$136 = Cons(struct$134, struct$135)
+    let struct$137 = Cons(struct$133, struct$136)
+    return value$132(struct$137, return$40)
+  
+  toplevel fn Nothing(return$41) =
+    let struct$140 = Nothing()
+    return return$41(struct$140)
+  
+  toplevel fn Just(return$42) =
+    let closure$145 = closure lambda$142()
+    return return$42(closure$145)
+  
+  closure fn lambda$142(self$143, constructor$22, return$43) =
+    let struct$144 = Just(constructor$22)
+    return return$43(struct$144)
+  
+  toplevel fn False(return$44) =
+    let struct$147 = False()
+    return return$44(struct$147)
+  
+  toplevel fn True(return$45) =
+    let struct$149 = True()
+    return return$45(struct$149)
+  
+  toplevel fn Nil(return$46) =
+    let struct$151 = Nil()
+    return return$46(struct$151)
+  
+  toplevel fn Cons(return$47) =
+    let closure$159 = closure lambda$153()
+    return return$47(closure$159)
+  
+  closure fn lambda$153(self$154, constructor$23, return$48) =
+    let closure$158 = closure lambda$155(constructor$23)
+    return return$48(closure$158)
+  
+  closure fn lambda$155(self$156, constructor$24, return$49) =
+    let constructor$23 = self$156.cap[0]
+    let struct$157 = Cons(constructor$23, constructor$24)
+    return return$49(struct$157)
+  
+  toplevel fn malgo_print_string(return$50) =
+    let closure$164 = closure lambda$161()
+    return return$50(closure$164)
+  
+  closure fn lambda$161(self$162, primitive$25, return$51) =
+    let prim_result$163 = #malgo_print_string(primitive$25)
+    return return$51(prim_result$163)
+  
+  toplevel fn malgo_exit_failure(return$52) =
+    let closure$169 = closure lambda$166()
+    return return$52(closure$169)
+  
+  closure fn lambda$166(self$167, primitive$26, return$53) =
+    let prim_result$168 = #malgo_exit_failure(primitive$26)
+    return return$53(prim_result$168)
+  
+  toplevel fn zig_main$172() =
+    let finish$170 = closure join$174()
+    let after_main$171 = closure join$177(finish$170)
+    return main(after_main$171)
+  
+  closure fn join$174(self$175, value$176) = return value$176
+  
+  closure fn join$177(self$178, value$179) =
+    let finish$170 = self$178.cap[0]
+    let struct$180 = Tuple()
+    return value$179(struct$180, finish$170)
+  
+  entry = zig_main$172
+
+
+=== Peephole -> Perceus ===
+  toplevel fn |>(return$27) =
+    let closure$81 = closure lambda$75()
+    return return$27(closure$81)
+  
+  closure fn lambda$75(self$76, param$15, return$28) =
++   drop self$76
+    let closure$80 = closure lambda$77(param$15)
+    return return$28(closure$80)
+  
+  closure fn lambda$77(self$78, param$16, return$29) =
+    let param$15 = self$78.cap[0]
++   dup param$15
++   drop self$78
+    if  then {
+      return param$16(param$15, return$29)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn mHead(return$30) =
+    let closure$87 = closure lambda$83()
+    return return$30(closure$87)
+  
+  closure fn lambda$83(self$84, param$17, return$31) =
++   drop self$84
+    if param$17.tag == Nil then {
++     drop param$17
+      let struct$85 = Nothing()
+      return return$31(struct$85)
+    } else {
+      if param$17.tag == Cons then {
+        let p#5 = param$17.0
+-       let _#6 = param$17.1
++       dup p#5
++       drop param$17
+        let struct$86 = Just(p#5)
+        return return$31(struct$86)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn isNothing(return$32) =
+    let closure$93 = closure lambda$89()
+    return return$32(closure$93)
+  
+  closure fn lambda$89(self$90, param$18, return$33) =
++   drop self$90
+    if param$18.tag == Nothing then {
++     drop param$18
+      let struct$91 = True()
+      return return$33(struct$91)
+    } else {
+      if param$18.tag == Just then {
+-       let _#3 = param$18.0
++       drop param$18
+        let struct$92 = False()
+        return return$33(struct$92)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn null(return$34) =
+    let closure$106 = closure lambda$95()
+    return return$34(closure$106)
+  
+  closure fn lambda$95(self$96, param$19, return$35) =
++   drop self$96
+    if  then {
+      let then$64 = closure join$97(param$19, return$35)
+      return isNothing(then$64)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$97(self$98, value$99) =
+    let as#8 = self$98.cap[0]
++   dup as#8
+    let return$35 = self$98.cap[1]
++   dup return$35
++   drop self$98
+    let return$36 = closure join$100(return$35, value$99)
+    let apply$62 = closure join$103(as#8, return$36)
+    return mHead(apply$62)
+  
+  closure fn join$100(self$101, value$102) =
+    let return$35 = self$101.cap[0]
++   dup return$35
+    let value$99 = self$101.cap[1]
++   dup value$99
++   drop self$101
+    return value$99(value$102, return$35)
+  
+  closure fn join$103(self$104, value$105) =
+    let as#8 = self$104.cap[0]
++   dup as#8
+    let return$36 = self$104.cap[1]
++   dup return$36
++   drop self$104
+    return value$105(as#8, return$36)
+  
+  toplevel fn main(return$37) =
+    let closure$138 = closure lambda$108()
+    return return$37(closure$138)
+  
+  closure fn lambda$108(self$109, param$20, return$38) =
++   drop param$20
++   drop self$109
+    if  then {
+      let then$72 = closure join$110(return$38)
+      return |>(then$72)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$110(self$111, value$112) =
+    let return$38 = self$111.cap[0]
++   dup return$38
++   drop self$111
+    let return$40 = closure join$113(return$38, value$112)
+    let apply$66 = closure join$130(return$40)
+    return null(apply$66)
+  
+  closure fn join$113(self$114, value$115) =
+    let return$38 = self$114.cap[0]
++   dup return$38
+    let value$112 = self$114.cap[1]
++   dup value$112
++   drop self$114
+    let apply$70 = closure join$116(return$38)
+    return value$112(value$115, apply$70)
+  
+  closure fn join$116(self$117, value$118) =
+    let return$38 = self$117.cap[0]
++   dup return$38
++   drop self$117
+    let closure$129 = closure lambda$119()
+    return value$118(closure$129, return$38)
+  
+  closure fn lambda$119(self$120, param$21, return$39) =
++   drop self$120
+    if param$21.tag == False then {
++     drop param$21
+      let apply$67 = closure join$121(return$39)
+      return malgo_print_string(apply$67)
+    } else {
+      if param$21.tag == True then {
++       drop param$21
+        let apply$68 = closure join$125(return$39)
+        return malgo_exit_failure(apply$68)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$121(self$122, value$123) =
+    let return$39 = self$122.cap[0]
++   dup return$39
++   drop self$122
+    let lit$124 = "OK"
+    return value$123(lit$124, return$39)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$39 = self$126.cap[0]
++   dup return$39
++   drop self$126
+    let struct$128 = Tuple()
+    return value$127(struct$128, return$39)
+  
+  closure fn join$130(self$131, value$132) =
+    let return$40 = self$131.cap[0]
++   dup return$40
++   drop self$131
+    let struct$133 = True()
+    let struct$134 = True()
+    let struct$135 = Nil()
+    let struct$136 = Cons(struct$134, struct$135)
+    let struct$137 = Cons(struct$133, struct$136)
+    return value$132(struct$137, return$40)
+  
+  toplevel fn Nothing(return$41) =
+    let struct$140 = Nothing()
+    return return$41(struct$140)
+  
+  toplevel fn Just(return$42) =
+    let closure$145 = closure lambda$142()
+    return return$42(closure$145)
+  
+  closure fn lambda$142(self$143, constructor$22, return$43) =
++   drop self$143
+    let struct$144 = Just(constructor$22)
+    return return$43(struct$144)
+  
+  toplevel fn False(return$44) =
+    let struct$147 = False()
+    return return$44(struct$147)
+  
+  toplevel fn True(return$45) =
+    let struct$149 = True()
+    return return$45(struct$149)
+  
+  toplevel fn Nil(return$46) =
+    let struct$151 = Nil()
+    return return$46(struct$151)
+  
+  toplevel fn Cons(return$47) =
+    let closure$159 = closure lambda$153()
+    return return$47(closure$159)
+  
+  closure fn lambda$153(self$154, constructor$23, return$48) =
++   drop self$154
+    let closure$158 = closure lambda$155(constructor$23)
+    return return$48(closure$158)
+  
+  closure fn lambda$155(self$156, constructor$24, return$49) =
+    let constructor$23 = self$156.cap[0]
++   dup constructor$23
++   drop self$156
+    let struct$157 = Cons(constructor$23, constructor$24)
+    return return$49(struct$157)
+  
+  toplevel fn malgo_print_string(return$50) =
+    let closure$164 = closure lambda$161()
+    return return$50(closure$164)
+  
+  closure fn lambda$161(self$162, primitive$25, return$51) =
++   drop self$162
+    let prim_result$163 = #malgo_print_string(primitive$25)
++   drop primitive$25
+    return return$51(prim_result$163)
+  
+  toplevel fn malgo_exit_failure(return$52) =
+    let closure$169 = closure lambda$166()
+    return return$52(closure$169)
+  
+  closure fn lambda$166(self$167, primitive$26, return$53) =
++   drop self$167
+    let prim_result$168 = #malgo_exit_failure(primitive$26)
++   drop primitive$26
+    return return$53(prim_result$168)
+  
+  toplevel fn zig_main$172() =
+    let finish$170 = closure join$174()
+    let after_main$171 = closure join$177(finish$170)
+    return main(after_main$171)
+  
+- closure fn join$174(self$175, value$176) = return value$176
++ closure fn join$174(self$175, value$176) =
++   drop self$175
++   return value$176
+  
+  closure fn join$177(self$178, value$179) =
+    let finish$170 = self$178.cap[0]
++   dup finish$170
++   drop self$178
+    let struct$180 = Tuple()
+    return value$179(struct$180, finish$170)
+  
+  entry = zig_main$172
+
+
+=== Perceus -> Reuse ===
+  toplevel fn |>(return$27) =
+    let closure$81 = closure lambda$75()
+    return return$27(closure$81)
+  
+  closure fn lambda$75(self$76, param$15, return$28) =
+-   drop self$76
+    let closure$80 = closure lambda$77(param$15)
++   drop self$76
+    return return$28(closure$80)
+  
+  closure fn lambda$77(self$78, param$16, return$29) =
+    let param$15 = self$78.cap[0]
+    dup param$15
+    drop self$78
+    if  then {
+      return param$16(param$15, return$29)
+    } else {
+      panic "no matching branch"
+    }
+  
+  toplevel fn mHead(return$30) =
+    let closure$87 = closure lambda$83()
+    return return$30(closure$87)
+  
+  closure fn lambda$83(self$84, param$17, return$31) =
+    drop self$84
+    if param$17.tag == Nil then {
+-     drop param$17
++     dropReuse reuse$181 = param$17 /0
+-     let struct$85 = Nothing()
++     let struct$85 = reuse reuse$181 Nothing()
+      return return$31(struct$85)
+    } else {
+      if param$17.tag == Cons then {
+        let p#5 = param$17.0
+        dup p#5
+-       drop param$17
++       dropReuse reuse$182 = param$17 /1
+-       let struct$86 = Just(p#5)
++       let struct$86 = reuse reuse$182 Just(p#5)
+        return return$31(struct$86)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn isNothing(return$32) =
+    let closure$93 = closure lambda$89()
+    return return$32(closure$93)
+  
+  closure fn lambda$89(self$90, param$18, return$33) =
+    drop self$90
+    if param$18.tag == Nothing then {
+-     drop param$18
++     dropReuse reuse$183 = param$18 /0
+-     let struct$91 = True()
++     let struct$91 = reuse reuse$183 True()
+      return return$33(struct$91)
+    } else {
+      if param$18.tag == Just then {
+-       drop param$18
++       dropReuse reuse$184 = param$18 /0
+-       let struct$92 = False()
++       let struct$92 = reuse reuse$184 False()
+        return return$33(struct$92)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  toplevel fn null(return$34) =
+    let closure$106 = closure lambda$95()
+    return return$34(closure$106)
+  
+  closure fn lambda$95(self$96, param$19, return$35) =
+    drop self$96
+    if  then {
+      let then$64 = closure join$97(param$19, return$35)
+      return isNothing(then$64)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$97(self$98, value$99) =
+    let as#8 = self$98.cap[0]
+    dup as#8
+    let return$35 = self$98.cap[1]
+    dup return$35
+-   drop self$98
+    let return$36 = closure join$100(return$35, value$99)
+    let apply$62 = closure join$103(as#8, return$36)
++   drop self$98
+    return mHead(apply$62)
+  
+  closure fn join$100(self$101, value$102) =
+    let return$35 = self$101.cap[0]
+    dup return$35
+    let value$99 = self$101.cap[1]
+    dup value$99
+    drop self$101
+    return value$99(value$102, return$35)
+  
+  closure fn join$103(self$104, value$105) =
+    let as#8 = self$104.cap[0]
+    dup as#8
+    let return$36 = self$104.cap[1]
+    dup return$36
+    drop self$104
+    return value$105(as#8, return$36)
+  
+  toplevel fn main(return$37) =
+    let closure$138 = closure lambda$108()
+    return return$37(closure$138)
+  
+  closure fn lambda$108(self$109, param$20, return$38) =
+    drop param$20
+    drop self$109
+    if  then {
+      let then$72 = closure join$110(return$38)
+      return |>(then$72)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$110(self$111, value$112) =
+    let return$38 = self$111.cap[0]
+    dup return$38
+-   drop self$111
+    let return$40 = closure join$113(return$38, value$112)
+    let apply$66 = closure join$130(return$40)
++   drop self$111
+    return null(apply$66)
+  
+  closure fn join$113(self$114, value$115) =
+    let return$38 = self$114.cap[0]
+    dup return$38
+    let value$112 = self$114.cap[1]
+    dup value$112
+-   drop self$114
+    let apply$70 = closure join$116(return$38)
++   drop self$114
+    return value$112(value$115, apply$70)
+  
+  closure fn join$116(self$117, value$118) =
+    let return$38 = self$117.cap[0]
+    dup return$38
+-   drop self$117
+    let closure$129 = closure lambda$119()
++   drop self$117
+    return value$118(closure$129, return$38)
+  
+  closure fn lambda$119(self$120, param$21, return$39) =
+    drop self$120
+    if param$21.tag == False then {
+-     drop param$21
+      let apply$67 = closure join$121(return$39)
++     drop param$21
+      return malgo_print_string(apply$67)
+    } else {
+      if param$21.tag == True then {
+-       drop param$21
+        let apply$68 = closure join$125(return$39)
++       drop param$21
+        return malgo_exit_failure(apply$68)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$121(self$122, value$123) =
+    let return$39 = self$122.cap[0]
+    dup return$39
+-   drop self$122
+    let lit$124 = "OK"
++   drop self$122
+    return value$123(lit$124, return$39)
+  
+  closure fn join$125(self$126, value$127) =
+    let return$39 = self$126.cap[0]
+    dup return$39
+-   drop self$126
++   dropReuse reuse$185 = self$126 /0
+-   let struct$128 = Tuple()
++   let struct$128 = reuse reuse$185 Tuple()
+    return value$127(struct$128, return$39)
+  
+  closure fn join$130(self$131, value$132) =
+    let return$40 = self$131.cap[0]
+    dup return$40
+-   drop self$131
++   dropReuse reuse$186 = self$131 /0
+-   let struct$133 = True()
++   let struct$133 = reuse reuse$186 True()
+    let struct$134 = True()
+    let struct$135 = Nil()
+    let struct$136 = Cons(struct$134, struct$135)
+    let struct$137 = Cons(struct$133, struct$136)
+    return value$132(struct$137, return$40)
+  
+  toplevel fn Nothing(return$41) =
+    let struct$140 = Nothing()
+    return return$41(struct$140)
+  
+  toplevel fn Just(return$42) =
+    let closure$145 = closure lambda$142()
+    return return$42(closure$145)
+  
+  closure fn lambda$142(self$143, constructor$22, return$43) =
+-   drop self$143
++   dropReuse reuse$187 = self$143 /1
+-   let struct$144 = Just(constructor$22)
++   let struct$144 = reuse reuse$187 Just(constructor$22)
+    return return$43(struct$144)
+  
+  toplevel fn False(return$44) =
+    let struct$147 = False()
+    return return$44(struct$147)
+  
+  toplevel fn True(return$45) =
+    let struct$149 = True()
+    return return$45(struct$149)
+  
+  toplevel fn Nil(return$46) =
+    let struct$151 = Nil()
+    return return$46(struct$151)
+  
+  toplevel fn Cons(return$47) =
+    let closure$159 = closure lambda$153()
+    return return$47(closure$159)
+  
+  closure fn lambda$153(self$154, constructor$23, return$48) =
+-   drop self$154
+    let closure$158 = closure lambda$155(constructor$23)
++   drop self$154
+    return return$48(closure$158)
+  
+  closure fn lambda$155(self$156, constructor$24, return$49) =
+    let constructor$23 = self$156.cap[0]
+    dup constructor$23
+-   drop self$156
++   dropReuse reuse$188 = self$156 /2
+-   let struct$157 = Cons(constructor$23, constructor$24)
++   let struct$157 = reuse reuse$188 Cons(constructor$23, constructor$24)
+    return return$49(struct$157)
+  
+  toplevel fn malgo_print_string(return$50) =
+    let closure$164 = closure lambda$161()
+    return return$50(closure$164)
+  
+  closure fn lambda$161(self$162, primitive$25, return$51) =
+-   drop self$162
+    let prim_result$163 = #malgo_print_string(primitive$25)
++   drop self$162
+    drop primitive$25
+    return return$51(prim_result$163)
+  
+  toplevel fn malgo_exit_failure(return$52) =
+    let closure$169 = closure lambda$166()
+    return return$52(closure$169)
+  
+  closure fn lambda$166(self$167, primitive$26, return$53) =
+-   drop self$167
+    let prim_result$168 = #malgo_exit_failure(primitive$26)
++   drop self$167
+    drop primitive$26
+    return return$53(prim_result$168)
+  
+  toplevel fn zig_main$172() =
+    let finish$170 = closure join$174()
+    let after_main$171 = closure join$177(finish$170)
+    return main(after_main$171)
+  
+  closure fn join$174(self$175, value$176) =
+    drop self$175
+    return value$176
+  
+  closure fn join$177(self$178, value$179) =
+    let finish$170 = self$178.cap[0]
+    dup finish$170
+-   drop self$178
++   dropReuse reuse$189 = self$178 /0
+-   let struct$180 = Tuple()
++   let struct$180 = reuse reuse$189 Tuple()
+    return value$179(struct$180, finish$170)
+  
+  entry = zig_main$172

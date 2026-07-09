@@ -18,6 +18,7 @@
 module Malgo.Backend.Zig.RcCheck (checkProgram, checkFunc, RcViolation (..)) where
 
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Malgo.Backend.Zig.Ir
 import Malgo.Prelude
 import Malgo.Sequent.Fun (Name)
@@ -32,6 +33,13 @@ data RcViolation
     DupOfDead Name Name
   | -- | 'Ir.Drop' of a variable holding no reference.
     DropOfDead Name Name
+  | -- | 'Ir.MkStructReuse' referenced a reuse token not currently held
+    -- (never produced by a 'Ir.DropReuse', or already consumed).
+    TokenUnavailable Name Name
+  | -- | Reuse tokens ('Ir.DropReuse') still held when a consuming
+    -- terminator fired — every token must be consumed by exactly one
+    -- 'Ir.MkStructReuse' before its statement list ends.
+    TokenUnconsumed Name [Name]
   deriving stock (Eq, Show)
 
 checkProgram :: Program -> Either [RcViolation] ()
@@ -41,7 +49,8 @@ checkProgram program = case concatMap checkFunc program.funcs of
 
 data St = St
   { counts :: Map Name Int,
-    aliasRoot :: Map Name Name
+    aliasRoot :: Map Name Name,
+    tokens :: Set Name
   }
 
 checkFunc :: Func -> [RcViolation]
@@ -55,7 +64,8 @@ checkFunc fn = goBlock st0 fn.body
               ( [(p, 1) | p <- fn.params]
                   <> [(fn.selfVar, 1) | fn.kind /= TopLevelFn]
               ),
-          aliasRoot = Map.empty
+          aliasRoot = Map.empty,
+          tokens = Set.empty
         }
 
     ownedCount st x = Map.findWithDefault 0 x st.counts
@@ -87,6 +97,11 @@ checkFunc fn = goBlock st0 fn.body
       Drop x
         | ownedCount st x >= 1 -> goStmts st {counts = Map.adjust (subtract 1) x st.counts} rest term
         | otherwise -> DropOfDead fname x : goStmts st rest term
+      DropReuse tok x _
+        | ownedCount st x >= 1 ->
+            goStmts st {counts = Map.adjust (subtract 1) x st.counts, tokens = Set.insert tok st.tokens} rest term
+        | otherwise ->
+            DropOfDead fname x : goStmts st {tokens = Set.insert tok st.tokens} rest term
       Let x e -> case e of
         -- noreturn: the path exits the process here; no obligations.
         PanicExpr _ -> []
@@ -98,6 +113,11 @@ checkFunc fn = goBlock st0 fn.body
         MkClosure _ ops -> consuming ops
         MkRecord _ ops -> consuming ops
         Force v _ -> consuming [v]
+        MkStructReuse tok _ ops ->
+          let tokViolation = [TokenUnavailable fname tok | tok `Set.notMember` st.tokens]
+              st1 = st {tokens = Set.delete tok st.tokens}
+              (vs, st2) = consumeMany st1 ops
+           in tokViolation <> vs <> goStmts (bind st2 x 1) rest term
         where
           consuming ops =
             let (vs, st') = consumeMany st ops
@@ -110,4 +130,7 @@ checkFunc fn = goBlock st0 fn.body
       term ->
         let (vs, st') = consumeMany st (termOperands term)
             leftover = [y | (y, n) <- Map.toList st'.counts, n > 0]
-         in vs <> [UnconsumedAtExit fname leftover | not (null leftover)]
+            leftoverTokens = Set.toList st'.tokens
+         in vs
+              <> [UnconsumedAtExit fname leftover | not (null leftover)]
+              <> [TokenUnconsumed fname leftoverTokens | not (null leftoverTokens)]

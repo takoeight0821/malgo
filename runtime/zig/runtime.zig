@@ -85,6 +85,23 @@ var g_scratch_state: std.heap.ArenaAllocator = undefined;
 /// build mode. Zero at exit == no leaked Values.
 pub var g_live_objects: usize = 0;
 
+/// Total Objects ever allocated. Reported on stderr at exit when the
+/// MALGO_RC_STATS environment variable is set; purely an optimization
+/// instrument, invisible otherwise.
+pub var g_total_allocs: usize = 0;
+
+/// Times 'dropReuse' recycled an Object in place instead of freeing it.
+/// Reported alongside `g_total_allocs`.
+pub var g_reuse_hits: usize = 0;
+
+/// Set from the MALGO_RC_TRACE environment variable at startup. When true,
+/// every `*Named` wrapper below (see "Named RC tracing" further down) emits
+/// one JSON-lines record per RC event to stderr, for offline correlation by
+/// `scripts/rctrace.py`. The plain (untraced) dup/drop/mkStruct/... below
+/// are never touched by this -- tracing is purely additive and cannot
+/// change any RC decision.
+pub var g_trace_enabled: bool = false;
+
 /// Called first thing in the generated `main` (and in `zig test` blocks).
 pub fn initHeap() void {
     g_value = switch (builtin.mode) {
@@ -96,6 +113,9 @@ pub fn initHeap() void {
     // (if any); growing it under the fresh arena would be undefined. Only
     // matters for `zig test`, where initHeap runs once per test block.
     g_free_worklist = .empty;
+    // std.c.getenv, not std.posix (removed in Zig 0.16); libc is always
+    // linked (see Toolchain.hs's -lc).
+    g_trace_enabled = std.c.getenv("MALGO_RC_TRACE") != null;
 }
 
 /// Transient non-Value bytes: print formatting, encode/parse buffers, the
@@ -109,6 +129,7 @@ fn alloc(kind: Kind, payload: Payload) Value {
     const obj = g_value.create(Object) catch @panic("Malgo: out of memory");
     obj.* = Object{ .rc = 1, .kind = kind, .payload = payload };
     g_live_objects += 1;
+    g_total_allocs += 1;
     return obj;
 }
 
@@ -135,18 +156,25 @@ var g_free_worklist: std.ArrayList(Value) = .empty;
 
 fn free(root: Value) void {
     g_free_worklist.append(scratch(), root) catch @panic("Malgo: out of memory");
+    drainFreeWorklist();
+}
+
+/// Destroys every dead Object currently queued. Shared by `free` (which
+/// queues `root` itself first) and `dropReuse` (which queues only a
+/// recycled Object's former children, never the Object itself).
+fn drainFreeWorklist() void {
     while (g_free_worklist.pop()) |obj| {
         switch (obj.kind) {
             .strukt => {
-                decChildren(obj.payload.strukt.fields);
+                decChildren(obj, obj.payload.strukt.fields);
                 g_value.free(obj.payload.strukt.fields);
             },
             .closure => {
-                decChildren(obj.payload.closure.captures);
+                decChildren(obj, obj.payload.closure.captures);
                 g_value.free(obj.payload.closure.captures);
             },
             .record => {
-                decChildren(obj.payload.record.captures);
+                decChildren(obj, obj.payload.record.captures);
                 g_value.free(obj.payload.record.captures);
                 // NamedField holds no Values -- only a name (a string
                 // literal in the generated code's .rodata, never freed)
@@ -154,7 +182,7 @@ fn free(root: Value) void {
                 g_value.free(obj.payload.record.fields);
             },
             .codata => {
-                decChildren(obj.payload.codata.captures);
+                decChildren(obj, obj.payload.codata.captures);
                 g_value.free(obj.payload.codata.captures);
                 g_value.free(obj.payload.codata.branches);
             },
@@ -169,8 +197,85 @@ fn free(root: Value) void {
     }
 }
 
-fn decChildren(children: []const Value) void {
-    for (children) |c| {
+/// FBIP-style reuse (Koka's "reuse tokens"): when `v` is uniquely
+/// referenced, releases its children exactly as `drop` would but keeps the
+/// Object itself alive (as a `.strukt`, since `mkStructReuse` is the only
+/// consumer of a token) for the paired `mkStructReuse` to overwrite --
+/// recycling one allocation instead of freeing-then-reallocating. The
+/// backing array survives too when its length already matches `arity`,
+/// otherwise it is freed here and `mkStructReuse` allocates a fresh one.
+///
+/// Falls back to an ordinary `drop` (returning `null`) for a shared value,
+/// an immortal, or a kind with a second owned buffer beyond one children
+/// array (`record`'s separate fields array, `codata`'s separate branches
+/// array, `string`'s bytes) -- reuse only ever recycles a single array, so
+/// these fall back rather than adding another bookkeeping case. Every
+/// caller of `mkStructReuse` already handles a `null` token by allocating
+/// fresh, so a fallback here is exactly as correct as the original
+/// `drop`\/`mkStruct` pair, only less cheap.
+pub fn dropReuse(v: Value, arity: usize) ?Value {
+    if (v.rc == IMMORTAL) return null;
+    if (v.rc != 1) {
+        drop(v);
+        return null;
+    }
+    switch (v.kind) {
+        .strukt => {
+            const fields = v.payload.strukt.fields;
+            decChildren(v, fields);
+            drainFreeWorklist();
+            if (fields.len != arity) {
+                g_value.free(fields);
+                v.payload.strukt.fields = &.{};
+            }
+        },
+        .closure => {
+            const captures = v.payload.closure.captures;
+            decChildren(v, captures);
+            drainFreeWorklist();
+            const kept = if (captures.len == arity) captures else blk: {
+                g_value.free(captures);
+                break :blk &.{};
+            };
+            v.payload = .{ .strukt = .{ .tag = .{ .tuple = {} }, .fields = kept } };
+        },
+        .int32, .int64, .float, .double, .char, .unit => {
+            v.payload = .{ .strukt = .{ .tag = .{ .tuple = {} }, .fields = &.{} } };
+        },
+        .record, .codata, .string => {
+            drop(v);
+            return null;
+        },
+    }
+    v.kind = .strukt;
+    g_reuse_hits += 1;
+    return v;
+}
+
+/// Overwrites a token produced by `dropReuse` in place when possible, else
+/// allocates fresh via `mkStruct`. `tag` is a value (a `[]const u8` name
+/// pointing at the generated code's own `.rodata`, or a bare tuple
+/// marker), so overwriting it is just a copy with no ownership
+/// implications.
+pub fn mkStructReuse(tok: ?Value, tag: Tag, fields: []const Value) Value {
+    const obj = tok orelse return mkStruct(tag, fields);
+    std.debug.assert(obj.rc == 1 and obj.kind == .strukt);
+    if (obj.payload.strukt.fields.len == fields.len) {
+        @memcpy(@constCast(obj.payload.strukt.fields), fields);
+        obj.payload.strukt.tag = tag;
+    } else {
+        std.debug.assert(obj.payload.strukt.fields.len == 0);
+        obj.payload.strukt = .{ .tag = tag, .fields = g_value.dupe(Value, fields) catch @panic("Malgo: out of memory") };
+    }
+    return obj;
+}
+
+/// `container` is only used for tracing (see "Named RC tracing" below); it
+/// carries no RC obligation of its own here (the caller already dropped its
+/// own reference to `container` by the time its children are decremented).
+fn decChildren(container: Value, children: []const Value) void {
+    for (children, 0..) |c, i| {
+        traceDecChild(container, i, c);
         if (c.rc == IMMORTAL) continue;
         std.debug.assert(c.rc > 0);
         c.rc -= 1;
@@ -230,6 +335,131 @@ pub fn mkCodata(branches: []const NamedBranch, captures: []const Value) Value {
     const ownedBranches = g_value.dupe(NamedBranch, branches) catch @panic("Malgo: out of memory");
     const ownedCaptures = g_value.dupe(Value, captures) catch @panic("Malgo: out of memory");
     return alloc(.codata, .{ .codata = .{ .branches = ownedBranches, .captures = ownedCaptures } });
+}
+
+// ===== Named RC tracing (scripts/rctrace.py) =====
+//
+// Every wrapper here performs the exact same RC operation as its untraced
+// counterpart above (by calling straight through to it), then -- only when
+// `g_trace_enabled` -- emits one JSON-lines event to stderr carrying the
+// compile-time-known symbolic name and enclosing function that
+// 'Malgo.Backend.Zig.Emit' threads through from the Zig-IR 'Name'/'Func'
+// each operation came from. `scripts/rctrace.py` replays this log to
+// answer "who still holds a reference to this object right now", instead
+// of the throwaway raw-pointer tracing this replaces (see the M13 plan
+// entry in the project's Zig-backend notes).
+//
+// These wrappers are the only thing 'Emit.hs' ever calls; the plain
+// dup/drop/dropReuse/mkStruct/mkClosure/mkStructReuse above are otherwise
+// only exercised directly by this file's own `test` blocks, so tracing
+// cannot perturb the RC decisions those tests already exercise.
+
+fn traceLine(event: []const u8, v: Value, name: []const u8, func: []const u8) void {
+    if (!g_trace_enabled) return;
+    const rc: i64 = if (v.rc == IMMORTAL) -1 else @intCast(v.rc);
+    var buf: [256]u8 = undefined;
+    const line = std.fmt.bufPrint(
+        &buf,
+        "{{\"ev\":\"{s}\",\"ptr\":\"0x{x}\",\"rc\":{d},\"name\":\"{s}\",\"func\":\"{s}\"}}\n",
+        .{ event, @intFromPtr(v), rc, name, func },
+    ) catch return;
+    writeStderr(line);
+}
+
+/// Like 'traceLine', but identifies the object by an address captured
+/// earlier instead of dereferencing `v` -- for events reported after a call
+/// (like 'dropReuseNamed') that may already have freed the object.
+fn traceAddr(event: []const u8, addr: usize, name: []const u8, func: []const u8) void {
+    if (!g_trace_enabled) return;
+    var buf: [256]u8 = undefined;
+    const line = std.fmt.bufPrint(
+        &buf,
+        "{{\"ev\":\"{s}\",\"ptr\":\"0x{x}\",\"name\":\"{s}\",\"func\":\"{s}\"}}\n",
+        .{ event, addr, name, func },
+    ) catch return;
+    writeStderr(line);
+}
+
+/// Traces a construction event (`mkStruct`/`mkClosure`/`mkStructReuse`):
+/// records the fresh container's address plus, per slot, the symbolic name
+/// and child address that went into it -- so a later 'traceDecChild' event
+/// against the same (container, slot) pair can be resolved back to a name.
+fn traceSlots(event: []const u8, v: Value, fields: []const Value, names: []const []const u8, func: []const u8) void {
+    if (!g_trace_enabled) return;
+    var head: [256]u8 = undefined;
+    const headLine = std.fmt.bufPrint(
+        &head,
+        "{{\"ev\":\"{s}\",\"ptr\":\"0x{x}\",\"func\":\"{s}\",\"slots\":[",
+        .{ event, @intFromPtr(v), func },
+    ) catch return;
+    writeStderr(headLine);
+    for (fields, 0..) |child, i| {
+        if (i != 0) writeStderr(",");
+        const name = if (i < names.len) names[i] else "?";
+        var slot: [256]u8 = undefined;
+        const slotLine = std.fmt.bufPrint(
+            &slot,
+            "{{\"i\":{d},\"name\":\"{s}\",\"child\":\"0x{x}\"}}",
+            .{ i, name, @intFromPtr(child) },
+        ) catch continue;
+        writeStderr(slotLine);
+    }
+    writeStderr("]}\n");
+}
+
+/// Traces a `decChildren` release: `container`'s slot `slot` (a former
+/// field/capture) is about to have its reference decremented. `rc_before`
+/// is `child`'s refcount at this moment.
+fn traceDecChild(container: Value, slot: usize, child: Value) void {
+    if (!g_trace_enabled) return;
+    const rc: i64 = if (child.rc == IMMORTAL) -1 else @intCast(child.rc);
+    var buf: [160]u8 = undefined;
+    const line = std.fmt.bufPrint(
+        &buf,
+        "{{\"ev\":\"decChild\",\"container\":\"0x{x}\",\"slot\":{d},\"child\":\"0x{x}\",\"rc_before\":{d}}}\n",
+        .{ @intFromPtr(container), slot, @intFromPtr(child), rc },
+    ) catch return;
+    writeStderr(line);
+}
+
+pub fn dupNamed(v: Value, name: []const u8, func: []const u8) void {
+    dup(v);
+    traceLine("dup", v, name, func);
+}
+
+pub fn dropNamed(v: Value, name: []const u8, func: []const u8) void {
+    // Trace before dropping: `v` may be destroyed (and its memory reused or
+    // poisoned) by `drop` if this was its last reference.
+    traceLine("drop", v, name, func);
+    drop(v);
+}
+
+pub fn dropReuseNamed(v: Value, arity: usize, name: []const u8, func: []const u8) ?Value {
+    const addr = @intFromPtr(v);
+    traceLine("dropReuse_attempt", v, name, func);
+    const result = dropReuse(v, arity);
+    // Only the pre-captured address is used past this point: on a miss
+    // that fell through to a plain `drop`, `v` itself may already be freed.
+    traceAddr(if (result != null) "dropReuse_hit" else "dropReuse_miss", addr, name, func);
+    return result;
+}
+
+pub fn mkStructNamed(tag: Tag, fields: []const Value, names: []const []const u8, func: []const u8) Value {
+    const v = mkStruct(tag, fields);
+    traceSlots("mkStruct", v, fields, names, func);
+    return v;
+}
+
+pub fn mkClosureNamed(code: CodeFn, captures: []const Value, names: []const []const u8, func: []const u8) Value {
+    const v = mkClosure(code, captures);
+    traceSlots("mkClosure", v, captures, names, func);
+    return v;
+}
+
+pub fn mkStructReuseNamed(tok: ?Value, tag: Tag, fields: []const Value, names: []const []const u8, func: []const u8) Value {
+    const v = mkStructReuse(tok, tag, fields);
+    traceSlots("mkStructReuse", v, fields, names, func);
+    return v;
 }
 
 // ===== Dispatch =====
@@ -376,6 +606,13 @@ pub fn flushStdout() void {}
 /// deliberately bypass this -- the process is going down anyway, and every
 /// golden case exits 0 through here, so the corpus is fully gated.
 pub fn exitWithLeakCheck() void {
+    // std.c.getenv, not std.posix (removed in Zig 0.16); libc is always
+    // linked (see Toolchain.hs's -lc).
+    if (std.c.getenv("MALGO_RC_STATS") != null) {
+        var buf: [96]u8 = undefined;
+        const line = std.fmt.bufPrint(&buf, "MALGO-STATS: total_allocs={d} reuse_hits={d}\n", .{ g_total_allocs, g_reuse_hits }) catch "MALGO-STATS: ?\n";
+        writeStderr(line);
+    }
     var leaked = g_live_objects != 0;
     if (builtin.mode == .Debug or builtin.mode == .ReleaseSafe) {
         // Also ask DebugAllocator, which catches non-Object leaks in the
@@ -456,6 +693,20 @@ pub fn malgo_unsafe_cast(args: []const Value) Value {
     dup(args[0]);
     return args[0];
 }
+
+/// Inserted by Malgo.Sequent.ReuseSpecialize: keeps a matched-and-about-to-
+/// be-discarded scrutinee (args[0]) mentioned right before the
+/// reconstruction meant to reuse it, so Perceus's static last-use analysis
+/// places the scrutinee's real Drop here instead of immediately after
+/// pattern-match projection. Must not touch args[0]'s refcount itself --
+/// Perceus already accounts for and inserts that Drop statically -- so this
+/// returns the immortal `no_self` sentinel, whose (always-unused) result
+/// needs no Drop either.
+pub fn reuseHint(args: []const Value) Value {
+    _ = args;
+    return no_self;
+}
+
 
 pub fn malgo_add_int32_t(args: []const Value) Value {
     return mkInt32(asI32(args[0]) +% asI32(args[1]));
@@ -992,6 +1243,16 @@ test "dup/drop: an extra reference delays the free by exactly one drop" {
     try std.testing.expectEqual(before, g_live_objects);
 }
 
+test "g_total_allocs counts every Object ever allocated, freed or not" {
+    initHeap();
+    const before = g_total_allocs;
+    const a = mkInt32(1);
+    const pair = mkStruct(.{ .tuple = {} }, &[_]Value{a});
+    try std.testing.expectEqual(before + 2, g_total_allocs);
+    drop(pair);
+    try std.testing.expectEqual(before + 2, g_total_allocs);
+}
+
 test "drop releases a struct's children transitively" {
     initHeap();
     const before = g_live_objects;
@@ -1060,6 +1321,94 @@ test "unsafe_cast returns an owned reference" {
     drop(w);
     try std.testing.expectEqual(before + 1, g_live_objects);
     drop(v);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "dropReuse recycles a uniquely-referenced same-arity struct in place" {
+    initHeap();
+    const before = g_live_objects;
+    const beforeAllocs = g_total_allocs;
+    const beforeHits = g_reuse_hits;
+    const a = mkInt32(1);
+    const b = mkInt32(2);
+    const pair = mkStruct(.{ .tuple = {} }, &[_]Value{ a, b });
+    const tok = dropReuse(pair, 2);
+    try std.testing.expect(tok != null);
+    try std.testing.expectEqual(pair, tok.?);
+    try std.testing.expectEqual(beforeHits + 1, g_reuse_hits);
+    // a/b were released transitively, just as an ordinary drop would.
+    try std.testing.expectEqual(before + 1, g_live_objects);
+    const c = mkInt32(3);
+    const d = mkInt32(4);
+    const rebuilt = mkStructReuse(tok, .{ .named = "Cons" }, &[_]Value{ c, d });
+    try std.testing.expectEqual(pair, rebuilt);
+    // 5 Objects allocated total (a, b, pair, c, d); the recycled pair
+    // Object + its array were reused for `rebuilt`, not freed-and-reallocated.
+    try std.testing.expectEqual(beforeAllocs + 5, g_total_allocs);
+    drop(rebuilt);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "dropReuse falls back to an ordinary drop for a shared value" {
+    initHeap();
+    const before = g_live_objects;
+    const a = mkInt32(1);
+    const pair = mkStruct(.{ .tuple = {} }, &[_]Value{a});
+    dup(pair);
+    const tok = dropReuse(pair, 1);
+    try std.testing.expect(tok == null);
+    try std.testing.expectEqual(@as(u32, 1), pair.rc);
+    drop(pair);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "dropReuse falls back for an immortal value" {
+    initHeap();
+    try std.testing.expectEqual(@as(?Value, null), dropReuse(no_self, 0));
+    try std.testing.expectEqual(IMMORTAL, no_self.rc);
+}
+
+test "dropReuse reallocates the backing array on an arity mismatch" {
+    initHeap();
+    const before = g_live_objects;
+    const a = mkInt32(1);
+    const pair = mkStruct(.{ .tuple = {} }, &[_]Value{a});
+    const tok = dropReuse(pair, 3);
+    try std.testing.expect(tok != null);
+    const c = mkInt32(2);
+    const d = mkInt32(3);
+    const e = mkInt32(4);
+    const rebuilt = mkStructReuse(tok, .{ .tuple = {} }, &[_]Value{ c, d, e });
+    try std.testing.expectEqual(pair, rebuilt);
+    try std.testing.expectEqual(@as(usize, 3), rebuilt.payload.strukt.fields.len);
+    drop(rebuilt);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "dropReuse recycles a closure's Object into a struct" {
+    initHeap();
+    const before = g_live_objects;
+    const a = mkInt32(1);
+    const b = mkInt32(2);
+    const closure = mkClosure(&identityCode, &[_]Value{ a, b });
+    const tok = dropReuse(closure, 2);
+    try std.testing.expect(tok != null);
+    try std.testing.expectEqual(closure, tok.?);
+    const c = mkInt32(3);
+    const d = mkInt32(4);
+    const rebuilt = mkStructReuse(tok, .{ .tuple = {} }, &[_]Value{ c, d });
+    try std.testing.expectEqual(closure, rebuilt);
+    drop(rebuilt);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "mkStructReuse allocates fresh on a null token" {
+    initHeap();
+    const before = g_live_objects;
+    const a = mkInt32(1);
+    const built = mkStructReuse(null, .{ .tuple = {} }, &[_]Value{a});
+    try std.testing.expectEqual(Kind.strukt, built.kind);
+    drop(built);
     try std.testing.expectEqual(before, g_live_objects);
 }
 

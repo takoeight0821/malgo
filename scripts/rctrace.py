@@ -17,6 +17,9 @@ section) is one JSON object per line:
   {"ev":"mkStruct"|"mkClosure"|"mkStructReuse","ptr":"0x..","func":"..",
    "slots":[{"i":0,"name":"..","child":"0x.."}, ...]}
   {"ev":"decChild","container":"0x..","slot":0,"child":"0x..","rc_before":N}
+  {"ev":"trace_overflow"}  -- a name/func string didn't fit runtime.zig's
+  fixed trace-line buffer; this marker takes the dropped event's place so a
+  missing event is visible instead of silent (see emitTraced there).
 """
 
 import argparse

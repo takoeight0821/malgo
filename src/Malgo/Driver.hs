@@ -15,6 +15,7 @@ import Malgo.Features
 import Malgo.Module
 import Malgo.Parser (ParserPass (..))
 import Malgo.Pass (CompileError, Pass (..), runCompileError)
+import Malgo.Path (toFilePath)
 import Malgo.Prelude
 import Malgo.Query
 import Malgo.Query.Database
@@ -121,7 +122,7 @@ compileToExecutable srcPath outPath optMode = do
     core <- fetchLinkedCore srcModulePath parsedAst
     runReader parsedAst.moduleName $ runPass ZigPass core
   save srcModulePath ".zig" (convertString @Text @BS.ByteString zigText)
-  workspace <- getWorkspace
+  workspace <- toFilePath <$> getWorkspaceAbs
   let zigPath = outPath <> ".zig"
   liftIO $ BS.writeFile zigPath (convertString zigText)
   liftIO $ Zig.buildExecutable workspace zigPath outPath optMode

@@ -141,13 +141,37 @@ def print_birth(events, target, start_line):
     print(f"--- {target}'s construction event was not found in this trace (allocated before tracing was relevant, or via mk{{Int32,String,...}}) ---")
 
 
+def count_overflows(events, start_line, end_line):
+    """How many trace_overflow markers (see runtime.zig's emitTraced) fall in
+    [start_line, end_line) -- a construction event lost to one could have
+    been a referrer of `target` that every lookup below now can't see."""
+    total = 0
+    for ev in events:
+        if ev["_line"] < start_line:
+            continue
+        if end_line is not None and ev["_line"] >= end_line:
+            break
+        if ev.get("ev") == "trace_overflow":
+            total += 1
+    return total
+
+
 def print_live_referrers(events, target, start_line, at_line):
     referrers = live_referrers_at(events, target, start_line, at_line)
+    overflows = count_overflows(events, start_line, at_line + 1)
     print(f"--- live referrers of {target} at/before line {at_line} (this generation) ---")
+    if overflows:
+        print(f"  WARNING: {overflows} trace_overflow marker(s) in this range -- a lost")
+        print("  construction event could have been a referrer this trace can no")
+        print("  longer identify; the result below may be incomplete, not definitive.")
     if not referrers:
-        print("  (none found -- either truly unreferenced, or held only as a")
-        print("   direct local variable never captured into a struct/closure;")
-        print("   see the direct RC event timeline above for that case)")
+        if overflows:
+            print("  (none found in the events this trace could decode -- see the")
+            print("   trace_overflow warning above before concluding it is unreferenced)")
+        else:
+            print("  (none found -- either truly unreferenced, or held only as a")
+            print("   direct local variable never captured into a struct/closure;")
+            print("   see the direct RC event timeline above for that case)")
         return
     for r in referrers:
         print(
@@ -167,6 +191,15 @@ def main():
     if not events:
         print("no events read from trace", file=sys.stderr)
         return 1
+
+    total_overflows = sum(1 for ev in events if ev.get("ev") == "trace_overflow")
+    if total_overflows:
+        print(
+            f"warning: {total_overflows} trace_overflow marker(s) in this trace -- some "
+            "events (whose name/func string overflowed runtime.zig's fixed trace buffer) "
+            "were replaced by this marker at the source, so this trace may be incomplete",
+            file=sys.stderr,
+        )
 
     target = args.target
     at_line = args.at_line

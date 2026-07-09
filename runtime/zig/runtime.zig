@@ -1,7 +1,14 @@
 //! Malgo Zig backend runtime.
 //!
-//! v1 (M1-M8): arena allocator, never frees. `dup`/`drop` land with the
-//! Perceus RC pass (M9); until then nothing in the emitted code calls them.
+//! Memory model (M9): every Value carries a reference count; `dup`/`drop`
+//! calls are inserted by the compiler's Perceus pass. Two heaps:
+//!
+//!   * `g_value` -- Objects, their fields/captures arrays, and string
+//!     payload bytes. Individually freed when a count reaches zero;
+//!     covered by the leak check.
+//!   * scratch (an arena) -- transient non-Value bytes (print formatting,
+//!     parse/encode buffers, the free worklist). Bulk-freed at process
+//!     exit; exempt from the leak check.
 //!
 //! I/O deliberately bypasses Zig 0.16's new async `std.Io` interface (which
 //! churned significantly between 0.15 and 0.16) in favor of direct libc/
@@ -10,6 +17,7 @@
 //! are unbuffered, so there is nothing to flush and no "flush before exit /
 //! before stdin read" ordering bug to get wrong.
 const std = @import("std");
+const builtin = @import("builtin");
 
 // ===== Value representation =====
 
@@ -17,7 +25,15 @@ pub const Kind = enum(u8) { int32, int64, float, double, char, string, strukt, c
 
 pub const Tag = union(enum) { tuple: void, named: []const u8 };
 
-pub const CodeFn = *const fn (cap: []const Value, args: []const Value) Value;
+/// Self-passing calling convention (Koka/Lean style): a closure/record
+/// field/codata branch receives the closure object itself as `self` and
+/// reads its captures via `capturesOf(self)`. Under Perceus RC (M9), this
+/// is what makes "a call consumes one reference of the callee" possible:
+/// the callee dups the captures it needs and then drops `self` -- the
+/// caller has no post-call point to do either, since every call is a tail
+/// call. Top-level definitions are called directly with the `no_self`
+/// sentinel and ignore it.
+pub const CodeFn = *const fn (self: Value, args: []const Value) Value;
 
 pub const Struct = struct { tag: Tag, fields: []const Value };
 pub const Closure = struct { code: CodeFn, captures: []const Value };
@@ -40,21 +56,126 @@ pub const Payload = union(Kind) {
     unit: void,
 };
 
-pub const Object = struct { kind: Kind, payload: Payload };
-pub const Value = *const Object;
+/// Reference count sentinel for values that live for the whole process
+/// (`no_self`, the identity continuation): `dup`/`drop` are no-ops on them.
+pub const IMMORTAL: u32 = 0xFFFF_FFFF;
 
-// ===== Allocation (arena, v1) =====
+pub const Object = struct { rc: u32, kind: Kind, payload: Payload };
+pub const Value = *Object;
 
-pub var g_arena: *std.heap.ArenaAllocator = undefined;
+var NO_SELF_OBJ: Object = .{ .rc = IMMORTAL, .kind = .unit, .payload = .{ .unit = {} } };
 
-pub fn newArena() std.heap.ArenaAllocator {
-    return std.heap.ArenaAllocator.init(std.heap.page_allocator);
+/// Sentinel `self` for calling a top-level definition (which has no
+/// captures and ignores it).
+pub const no_self: Value = &NO_SELF_OBJ;
+
+// ===== Heaps =====
+
+var g_debug: std.heap.DebugAllocator(.{}) = .init;
+
+/// The Value heap: Objects, their fields/captures backing arrays, and
+/// string payload bytes. `DebugAllocator` in safe build modes (leak, UAF
+/// and double-free detection); `smp_allocator` in release-fast, where the
+/// `g_live_objects` counter still provides the zero-leak invariant.
+pub var g_value: std.mem.Allocator = undefined;
+
+var g_scratch_state: std.heap.ArenaAllocator = undefined;
+
+/// Live Objects in the Value heap (allocated minus freed), independent of
+/// build mode. Zero at exit == no leaked Values.
+pub var g_live_objects: usize = 0;
+
+/// Called first thing in the generated `main` (and in `zig test` blocks).
+pub fn initHeap() void {
+    g_value = switch (builtin.mode) {
+        .Debug, .ReleaseSafe => g_debug.allocator(),
+        .ReleaseFast, .ReleaseSmall => std.heap.smp_allocator,
+    };
+    g_scratch_state = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    // The worklist's backing storage came from the previous scratch arena
+    // (if any); growing it under the fresh arena would be undefined. Only
+    // matters for `zig test`, where initHeap runs once per test block.
+    g_free_worklist = .empty;
+}
+
+/// Transient non-Value bytes: print formatting, encode/parse buffers, the
+/// free worklist. Never individually freed; bulk-released at process exit;
+/// exempt from the leak check.
+fn scratch() std.mem.Allocator {
+    return g_scratch_state.allocator();
 }
 
 fn alloc(kind: Kind, payload: Payload) Value {
-    const obj = g_arena.allocator().create(Object) catch @panic("Malgo: out of memory");
-    obj.* = Object{ .kind = kind, .payload = payload };
+    const obj = g_value.create(Object) catch @panic("Malgo: out of memory");
+    obj.* = Object{ .rc = 1, .kind = kind, .payload = payload };
+    g_live_objects += 1;
     return obj;
+}
+
+// ===== Reference counting =====
+
+pub inline fn dup(v: Value) void {
+    if (v.rc != IMMORTAL) v.rc += 1;
+}
+
+pub fn drop(v: Value) void {
+    if (v.rc == IMMORTAL) return;
+    // An underflow here is an over-drop bug in the Perceus pass; fail at
+    // the exact faulty drop rather than corrupting the heap.
+    std.debug.assert(v.rc > 0);
+    v.rc -= 1;
+    if (v.rc == 0) free(v);
+}
+
+/// Deferred stack of dead (rc == 0) Objects awaiting destruction, so that
+/// dropping a deep structure (a 100k-element cons list) never recurses on
+/// the native stack. Backed by scratch: its storage is reused across
+/// frees and reclaimed only at exit.
+var g_free_worklist: std.ArrayList(Value) = .empty;
+
+fn free(root: Value) void {
+    g_free_worklist.append(scratch(), root) catch @panic("Malgo: out of memory");
+    while (g_free_worklist.pop()) |obj| {
+        switch (obj.kind) {
+            .strukt => {
+                decChildren(obj.payload.strukt.fields);
+                g_value.free(obj.payload.strukt.fields);
+            },
+            .closure => {
+                decChildren(obj.payload.closure.captures);
+                g_value.free(obj.payload.closure.captures);
+            },
+            .record => {
+                decChildren(obj.payload.record.captures);
+                g_value.free(obj.payload.record.captures);
+                // NamedField holds no Values -- only a name (a string
+                // literal in the generated code's .rodata, never freed)
+                // and a code pointer.
+                g_value.free(obj.payload.record.fields);
+            },
+            .codata => {
+                decChildren(obj.payload.codata.captures);
+                g_value.free(obj.payload.codata.captures);
+                g_value.free(obj.payload.codata.branches);
+            },
+            // String payload bytes are unconditionally owned by the Value
+            // heap: `mkString` copies and `mkStringOwned` documents the
+            // transfer, so there is no static-vs-heap ambiguity here.
+            .string => g_value.free(obj.payload.string),
+            .int32, .int64, .float, .double, .char, .unit => {},
+        }
+        g_live_objects -= 1;
+        g_value.destroy(obj);
+    }
+}
+
+fn decChildren(children: []const Value) void {
+    for (children) |c| {
+        if (c.rc == IMMORTAL) continue;
+        std.debug.assert(c.rc > 0);
+        c.rc -= 1;
+        if (c.rc == 0) g_free_worklist.append(scratch(), c) catch @panic("Malgo: out of memory");
+    }
 }
 
 pub fn mkInt32(n: i32) Value {
@@ -72,32 +193,42 @@ pub fn mkDouble(d: f64) Value {
 pub fn mkChar(codepoint: u21) Value {
     return alloc(.char, .{ .char = codepoint });
 }
+/// Copies `bytes` into the Value heap, so a string's payload is always
+/// owned by its Object (a caller may pass a .rodata literal, a stack
+/// buffer, or scratch bytes -- `free` never has to guess).
 pub fn mkString(bytes: []const u8) Value {
+    const owned = g_value.dupe(u8, bytes) catch @panic("Malgo: out of memory");
+    return alloc(.string, .{ .string = owned });
+}
+
+/// Takes ownership of a buffer the caller already allocated on `g_value`
+/// (exact-sized: it is later freed with this very slice).
+pub fn mkStringOwned(bytes: []const u8) Value {
     return alloc(.string, .{ .string = bytes });
 }
 
 /// Copies `fields`: the caller typically passes a stack-temporary slice
 /// literal (`&[_]Value{...}`) that does not outlive this call.
 pub fn mkStruct(tag: Tag, fields: []const Value) Value {
-    const owned = g_arena.allocator().dupe(Value, fields) catch @panic("Malgo: out of memory");
+    const owned = g_value.dupe(Value, fields) catch @panic("Malgo: out of memory");
     return alloc(.strukt, .{ .strukt = .{ .tag = tag, .fields = owned } });
 }
 
 /// Copies `captures`, for the same reason as 'mkStruct'.
 pub fn mkClosure(code: CodeFn, captures: []const Value) Value {
-    const owned = g_arena.allocator().dupe(Value, captures) catch @panic("Malgo: out of memory");
+    const owned = g_value.dupe(Value, captures) catch @panic("Malgo: out of memory");
     return alloc(.closure, .{ .closure = .{ .code = code, .captures = owned } });
 }
 
 pub fn mkRecord(fields: []const NamedField, captures: []const Value) Value {
-    const ownedFields = g_arena.allocator().dupe(NamedField, fields) catch @panic("Malgo: out of memory");
-    const ownedCaptures = g_arena.allocator().dupe(Value, captures) catch @panic("Malgo: out of memory");
+    const ownedFields = g_value.dupe(NamedField, fields) catch @panic("Malgo: out of memory");
+    const ownedCaptures = g_value.dupe(Value, captures) catch @panic("Malgo: out of memory");
     return alloc(.record, .{ .record = .{ .fields = ownedFields, .captures = ownedCaptures } });
 }
 
 pub fn mkCodata(branches: []const NamedBranch, captures: []const Value) Value {
-    const ownedBranches = g_arena.allocator().dupe(NamedBranch, branches) catch @panic("Malgo: out of memory");
-    const ownedCaptures = g_arena.allocator().dupe(Value, captures) catch @panic("Malgo: out of memory");
+    const ownedBranches = g_value.dupe(NamedBranch, branches) catch @panic("Malgo: out of memory");
+    const ownedCaptures = g_value.dupe(Value, captures) catch @panic("Malgo: out of memory");
     return alloc(.codata, .{ .codata = .{ .branches = ownedBranches, .captures = ownedCaptures } });
 }
 
@@ -109,13 +240,24 @@ pub fn applyCovalue(covalue: Value, value: Value) Value {
 
 pub fn callClosure(closure: Value, args: []const Value) Value {
     if (closure.kind != .closure) panic("callClosure: value is not a function");
-    return closure.payload.closure.code(closure.payload.closure.captures, args);
+    return closure.payload.closure.code(closure, args);
+}
+
+/// The captures slice of a closure/record/codata value, read by the
+/// callee out of its own `self` argument.
+pub fn capturesOf(v: Value) []const Value {
+    return switch (v.kind) {
+        .closure => v.payload.closure.captures,
+        .record => v.payload.record.captures,
+        .codata => v.payload.codata.captures,
+        else => panic("capturesOf: value has no captures"),
+    };
 }
 
 pub fn applyDestructor(codata: Value, name: []const u8, args: []const Value) Value {
     if (codata.kind != .codata) panic("applyDestructor: value is not codata");
     for (codata.payload.codata.branches) |branch| {
-        if (stringEq(branch.name, name)) return branch.code(codata.payload.codata.captures, args);
+        if (stringEq(branch.name, name)) return branch.code(codata, args);
     }
     panic("applyDestructor: no matching destructor");
 }
@@ -123,24 +265,34 @@ pub fn applyDestructor(codata: Value, name: []const u8, args: []const Value) Val
 pub fn projectField(record: Value, name: []const u8, k: Value) Value {
     if (record.kind != .record) panic("projectField: value is not a record");
     for (record.payload.record.fields) |field| {
-        if (stringEq(field.name, name)) return field.code(record.payload.record.captures, &[_]Value{k});
+        if (stringEq(field.name, name)) return field.code(record, &[_]Value{k});
     }
     panic("projectField: no such field");
 }
 
-fn identityCode(cap: []const Value, args: []const Value) Value {
-    _ = cap;
+fn identityCode(self: Value, args: []const Value) Value {
+    // The uniform closure protocol is "dup used captures, then drop self";
+    // with no captures and an immortal self this is a no-op, kept for
+    // uniformity with generated closure bodies.
+    drop(self);
     return args[0];
 }
+
+var IDENTITY_KONT_OBJ: Object = .{
+    .rc = IMMORTAL,
+    .kind = .closure,
+    .payload = .{ .closure = .{ .code = &identityCode, .captures = &[_]Value{} } },
+};
 
 /// A covalue that, once invoked, returns its argument unchanged. Since every
 /// generated function tail-returns whatever the covalue it invokes returns,
 /// calling a record field's code with this as its continuation makes the
 /// field's (call-by-name) computation synchronous from the caller's point of
 /// view -- used by `Expand` pattern matching to force a field into a plain
-/// value it can immediately test and bind against.
+/// value it can immediately test and bind against. Immortal: forcing a
+/// field allocates nothing and creates no RC obligation.
 pub fn identityKont() Value {
-    return mkClosure(&identityCode, &[_]Value{});
+    return &IDENTITY_KONT_OBJ;
 }
 
 /// Force a record field by name without checking `record`'s kind first
@@ -149,7 +301,7 @@ pub fn identityKont() Value {
 pub fn forceField(record: Value, name: []const u8) ?Value {
     if (record.kind != .record) return null;
     for (record.payload.record.fields) |field| {
-        if (stringEq(field.name, name)) return field.code(record.payload.record.captures, &[_]Value{identityKont()});
+        if (stringEq(field.name, name)) return field.code(record, &[_]Value{identityKont()});
     }
     return null;
 }
@@ -218,6 +370,29 @@ fn writeStderr(bytes: []const u8) void {
 /// No-op: writes are unbuffered.
 pub fn flushStdout() void {}
 
+/// The generated `main`'s last statement. A leaked Value means the Perceus
+/// pass under-dropped somewhere: report and exit 83 (the zig-golden
+/// harness's leak bucket). Early-exit paths (`panic`, `malgo_exit_*`)
+/// deliberately bypass this -- the process is going down anyway, and every
+/// golden case exits 0 through here, so the corpus is fully gated.
+pub fn exitWithLeakCheck() void {
+    var leaked = g_live_objects != 0;
+    if (builtin.mode == .Debug or builtin.mode == .ReleaseSafe) {
+        // Also ask DebugAllocator, which catches non-Object leaks in the
+        // Value heap (fields/captures arrays, string bytes) and prints
+        // per-allocation stack traces to stderr.
+        if (g_debug.deinit() == .leak) leaked = true;
+    }
+    if (leaked) {
+        var buf: [32]u8 = undefined;
+        const count = std.fmt.bufPrint(&buf, "{d}", .{g_live_objects}) catch "?";
+        writeStderr("MALGO-LEAK: ");
+        writeStderr(count);
+        writeStderr(" objects\n");
+        std.process.exit(83);
+    }
+}
+
 /// Reads one byte from stdin, or null at EOF.
 fn readStdinByte() ?u8 {
     var buf: [1]u8 = undefined;
@@ -265,16 +440,20 @@ fn utf8ByteOffsetOfScalar(s: []const u8, scalarIndex: usize) usize {
     return it.i;
 }
 
-fn utf8EncodeAlloc(codepoint: u21) []const u8 {
+fn utf8EncodeAlloc(a: std.mem.Allocator, codepoint: u21) []const u8 {
     var buf: [4]u8 = undefined;
     const len = std.unicode.utf8Encode(codepoint, &buf) catch panic("invalid Unicode codepoint");
-    return g_arena.allocator().dupe(u8, buf[0..len]) catch @panic("Malgo: out of memory");
+    return a.dupe(u8, buf[0..len]) catch @panic("Malgo: out of memory");
 }
 
 // ===== Primitives (rt.<foreign import name>, called with a single args slice) =====
 // Authoritative semantics: src/Malgo/Sequent/Eval.hs's `fetchPrimitive`.
 
 pub fn malgo_unsafe_cast(args: []const Value) Value {
+    // Primitives borrow their arguments but return an owned result; this
+    // is the one primitive that returns an argument itself, so it must
+    // mint the reference it hands back.
+    dup(args[0]);
     return args[0];
 }
 
@@ -502,7 +681,7 @@ pub fn malgo_int32_t_to_char(args: []const Value) Value {
     return mkChar(@intCast(n));
 }
 pub fn malgo_char_to_string(args: []const Value) Value {
-    return mkString(utf8EncodeAlloc(asChar(args[0])));
+    return mkStringOwned(utf8EncodeAlloc(g_value, asChar(args[0])));
 }
 pub fn malgo_is_digit(args: []const Value) Value {
     // Data.Char.isDigit is itself ASCII-only ('0'..'9'), so no Latin-1 case applies here.
@@ -543,19 +722,19 @@ pub fn malgo_string_cons(args: []const Value) Value {
     const s = asStr(args[1]);
     var buf: [4]u8 = undefined;
     const len = std.unicode.utf8Encode(c, &buf) catch panic("invalid Unicode codepoint");
-    const owned = g_arena.allocator().alloc(u8, len + s.len) catch @panic("Malgo: out of memory");
+    const owned = g_value.alloc(u8, len + s.len) catch @panic("Malgo: out of memory");
     @memcpy(owned[0..len], buf[0..len]);
     @memcpy(owned[len..], s);
-    return mkString(owned);
+    return mkStringOwned(owned);
 }
 
 pub fn malgo_string_append(args: []const Value) Value {
     const a = asStr(args[0]);
     const b = asStr(args[1]);
-    const owned = g_arena.allocator().alloc(u8, a.len + b.len) catch @panic("Malgo: out of memory");
+    const owned = g_value.alloc(u8, a.len + b.len) catch @panic("Malgo: out of memory");
     @memcpy(owned[0..a.len], a);
     @memcpy(owned[a.len..], b);
-    return mkString(owned);
+    return mkStringOwned(owned);
 }
 
 /// Mirrors Eval.hs's `malgo_substring`, which never fails: `T.take (end -
@@ -575,8 +754,8 @@ pub fn malgo_substring(args: []const Value) Value {
     const clampedEnd: i64 = clampI64(clampedStart + takeCount, clampedStart, len);
     const startByte = utf8ByteOffsetOfScalar(s, @intCast(clampedStart));
     const endByte = utf8ByteOffsetOfScalar(s, @intCast(clampedEnd));
-    const owned = g_arena.allocator().dupe(u8, s[startByte..endByte]) catch @panic("Malgo: out of memory");
-    return mkString(owned);
+    const owned = g_value.dupe(u8, s[startByte..endByte]) catch @panic("Malgo: out of memory");
+    return mkStringOwned(owned);
 }
 
 fn clampI64(x: i64, lo: i64, hi: i64) i64 {
@@ -589,24 +768,24 @@ pub fn malgo_string_reverse(args: []const Value) Value {
     const s = asStr(args[0]);
     var codepoints: std.ArrayList(u21) = .empty;
     var it: std.unicode.Utf8Iterator = .{ .bytes = s, .i = 0 };
-    while (it.nextCodepoint()) |cp| codepoints.append(g_arena.allocator(), cp) catch @panic("Malgo: out of memory");
+    while (it.nextCodepoint()) |cp| codepoints.append(scratch(), cp) catch @panic("Malgo: out of memory");
     var out: std.ArrayList(u8) = .empty;
     var i: usize = codepoints.items.len;
     while (i > 0) {
         i -= 1;
         var buf: [4]u8 = undefined;
         const len = std.unicode.utf8Encode(codepoints.items[i], &buf) catch panic("invalid Unicode codepoint");
-        out.appendSlice(g_arena.allocator(), buf[0..len]) catch @panic("Malgo: out of memory");
+        out.appendSlice(scratch(), buf[0..len]) catch @panic("Malgo: out of memory");
     }
     return mkString(out.items);
 }
 
 pub fn malgo_int32_t_to_string(args: []const Value) Value {
-    const s = std.fmt.allocPrint(g_arena.allocator(), "{d}", .{asI32(args[0])}) catch @panic("Malgo: out of memory");
+    const s = std.fmt.allocPrint(scratch(), "{d}", .{asI32(args[0])}) catch @panic("Malgo: out of memory");
     return mkString(s);
 }
 pub fn malgo_int64_t_to_string(args: []const Value) Value {
-    const s = std.fmt.allocPrint(g_arena.allocator(), "{d}", .{asI64(args[0])}) catch @panic("Malgo: out of memory");
+    const s = std.fmt.allocPrint(scratch(), "{d}", .{asI64(args[0])}) catch @panic("Malgo: out of memory");
     return mkString(s);
 }
 /// Mirrors Haskell's `show :: RealFloat a => a -> String` (fixed-point
@@ -616,7 +795,7 @@ pub fn malgo_int64_t_to_string(args: []const Value) Value {
 /// string, matching `floatToDigits`; only the notation choice and the
 /// "always show a fractional part" rule need reproducing by hand.
 fn formatHaskellFloat(comptime T: type, x: T) []const u8 {
-    const a = g_arena.allocator();
+    const a = scratch();
     if (std.math.isNan(x)) return "NaN";
     if (std.math.isInf(x)) return if (x < 0) "-Infinity" else "Infinity";
     const absX = @abs(x);
@@ -654,7 +833,9 @@ pub fn malgo_newline(args: []const Value) Value {
     return unitValue();
 }
 pub fn malgo_print_char(args: []const Value) Value {
-    writeStdout(utf8EncodeAlloc(asChar(args[0])));
+    var buf: [4]u8 = undefined;
+    const len = std.unicode.utf8Encode(asChar(args[0]), &buf) catch panic("invalid Unicode codepoint");
+    writeStdout(buf[0..len]);
     return unitValue();
 }
 pub fn malgo_print_string(args: []const Value) Value {
@@ -691,7 +872,7 @@ pub fn malgo_get_char(args: []const Value) Value {
 pub fn malgo_get_contents(args: []const Value) Value {
     _ = args;
     var out: std.ArrayList(u8) = .empty;
-    while (readStdinByte()) |b| out.append(g_arena.allocator(), b) catch @panic("Malgo: out of memory");
+    while (readStdinByte()) |b| out.append(scratch(), b) catch @panic("Malgo: out of memory");
     return mkString(out.items);
 }
 
@@ -700,7 +881,7 @@ pub fn malgo_get_line(args: []const Value) Value {
     var out: std.ArrayList(u8) = .empty;
     while (readStdinByte()) |b| {
         if (b == '\n') break;
-        out.append(g_arena.allocator(), b) catch @panic("Malgo: out of memory");
+        out.append(scratch(), b) catch @panic("Malgo: out of memory");
     }
     return mkString(out.items);
 }
@@ -721,8 +902,8 @@ pub fn malgo_get_args(args: []const Value) Value {
     if (g_argv.len <= 1) return mkString("");
     var out: std.ArrayList(u8) = .empty;
     for (g_argv[1..], 0..) |arg, i| {
-        if (i != 0) out.append(g_arena.allocator(), '\n') catch @panic("Malgo: out of memory");
-        out.appendSlice(g_arena.allocator(), std.mem.sliceTo(arg, 0)) catch @panic("Malgo: out of memory");
+        if (i != 0) out.append(scratch(), '\n') catch @panic("Malgo: out of memory");
+        out.appendSlice(scratch(), std.mem.sliceTo(arg, 0)) catch @panic("Malgo: out of memory");
     }
     return mkString(out.items);
 }
@@ -779,13 +960,13 @@ pub fn malgo_string_to_int64(args: []const Value) Value {
 // Mirrors `Malgo.Sequent.Eval.valueToText`.
 
 fn valueToText(v: Value) []const u8 {
-    const a = g_arena.allocator();
+    const a = scratch();
     return switch (v.kind) {
         .int32 => std.fmt.allocPrint(a, "{d}", .{v.payload.int32}) catch @panic("Malgo: out of memory"),
         .int64 => std.fmt.allocPrint(a, "{d}", .{v.payload.int64}) catch @panic("Malgo: out of memory"),
         .float => formatHaskellFloat(f32, v.payload.float),
         .double => formatHaskellFloat(f64, v.payload.double),
-        .char => utf8EncodeAlloc(v.payload.char),
+        .char => utf8EncodeAlloc(a, v.payload.char),
         .string => v.payload.string,
         .strukt => structToText(v.payload.strukt),
         .closure => "<function>",
@@ -795,8 +976,95 @@ fn valueToText(v: Value) []const u8 {
     };
 }
 
+// ===== Runtime unit tests (`zig test runtime/zig/runtime.zig`) =====
+// The Haskell test suite never runs these; CI's zig-golden job and local
+// development do.
+
+test "dup/drop: an extra reference delays the free by exactly one drop" {
+    initHeap();
+    const before = g_live_objects;
+    const v = mkInt32(42);
+    try std.testing.expectEqual(before + 1, g_live_objects);
+    dup(v);
+    drop(v);
+    try std.testing.expectEqual(before + 1, g_live_objects);
+    drop(v);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "drop releases a struct's children transitively" {
+    initHeap();
+    const before = g_live_objects;
+    const a = mkInt32(1);
+    const b = mkInt32(2);
+    const pair = mkStruct(.{ .tuple = {} }, &[_]Value{ a, b });
+    try std.testing.expectEqual(before + 3, g_live_objects);
+    drop(pair);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "a shared child survives its first parent's drop" {
+    initHeap();
+    const before = g_live_objects;
+    const shared = mkInt32(7);
+    dup(shared);
+    const p1 = mkStruct(.{ .tuple = {} }, &[_]Value{shared});
+    const p2 = mkStruct(.{ .tuple = {} }, &[_]Value{shared});
+    drop(p1);
+    try std.testing.expectEqual(@as(i32, 7), shared.payload.int32);
+    drop(p2);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "deep chain frees iteratively without native-stack recursion" {
+    initHeap();
+    const before = g_live_objects;
+    var chain = mkStruct(.{ .named = "Nil" }, &[_]Value{});
+    var i: usize = 0;
+    while (i < 100_000) : (i += 1) {
+        chain = mkStruct(.{ .named = "Cons" }, &[_]Value{ mkInt32(0), chain });
+    }
+    drop(chain);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "immortals ignore rc traffic" {
+    initHeap();
+    dup(no_self);
+    drop(no_self);
+    drop(no_self);
+    try std.testing.expectEqual(IMMORTAL, no_self.rc);
+    const k = identityKont();
+    dup(k);
+    drop(k);
+    drop(k);
+    try std.testing.expectEqual(IMMORTAL, k.rc);
+}
+
+test "string payloads are owned and freed with the object" {
+    initHeap();
+    const before = g_live_objects;
+    const s = mkString("hello");
+    const t = malgo_string_append(&[_]Value{ s, s });
+    try std.testing.expect(stringEq(t.payload.string, "hellohello"));
+    drop(t);
+    drop(s);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "unsafe_cast returns an owned reference" {
+    initHeap();
+    const before = g_live_objects;
+    const v = mkInt32(1);
+    const w = malgo_unsafe_cast(&[_]Value{v});
+    drop(w);
+    try std.testing.expectEqual(before + 1, g_live_objects);
+    drop(v);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
 fn structToText(s: Struct) []const u8 {
-    const a = g_arena.allocator();
+    const a = scratch();
     return switch (s.tag) {
         .tuple => blk: {
             if (s.fields.len == 0) break :blk "{}";

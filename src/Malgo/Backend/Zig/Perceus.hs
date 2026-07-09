@@ -47,22 +47,26 @@ perceusFunc fn = fn {body = insertBlock delta0 fn.body}
 -- in scope. Invariant: each Δ variable holds exactly one owned reference.
 insertBlock :: Set Name -> Block -> Block
 insertBlock delta (Block stmts term) =
-  let (stmts', term') = goStmts delta stmts term
+  let (stmts', term') = goStmts delta (suffixFreeVars stmts term) stmts term
    in Block stmts' term'
 
-goStmts :: Set Name -> [Stmt] -> Terminator -> ([Stmt], Terminator)
+-- 'goStmts'\/'goLive' thread 'suffixFreeVars' through their recursion so
+-- they never re-scan a statement suffix they have already scanned (each
+-- recursive step would otherwise redo the whole remaining 'freeVarsBlock'
+-- walk, making the pass quadratic in block length).
+goStmts :: Set Name -> [Set Name] -> [Stmt] -> Terminator -> ([Stmt], Terminator)
 -- A bare panic block is RC-exempt (the process exits): no drops before it.
-goStmts _ [] (TPanic msg) = ([], TPanic msg)
-goStmts delta stmts term =
+goStmts _ _ [] (TPanic msg) = ([], TPanic msg)
+goStmts delta (live : lives) stmts term =
   -- (D) Eagerly drop every owned variable that is dead from here on.
-  let live = freeVarsBlock (Block stmts term)
-      deadNow = Set.toList (delta Set.\\ live)
-      (rest, term') = goLive (delta `Set.intersection` live) stmts term
+  let deadNow = Set.toList (delta Set.\\ live)
+      (rest, term') = goLive (delta `Set.intersection` live) (live : lives) stmts term
    in (map Drop deadNow <> rest, term')
+goStmts _ [] _ _ = error "Malgo.Backend.Zig.Perceus: liveSets shorter than stmts (invariant violation)"
 
-goLive :: Set Name -> [Stmt] -> Terminator -> ([Stmt], Terminator)
-goLive delta [] term = insertTerminator delta term
-goLive delta (stmt : rest) term = case stmt of
+goLive :: Set Name -> [Set Name] -> [Stmt] -> Terminator -> ([Stmt], Terminator)
+goLive delta _ [] term = insertTerminator delta term
+goLive delta (_ : liveAfter : lives) (stmt : rest) term = case stmt of
   Dup _ -> error "Malgo.Backend.Zig.Perceus: input already contains Dup"
   Drop _ -> error "Malgo.Backend.Zig.Perceus: input already contains Drop"
   DropReuse {} -> error "Malgo.Backend.Zig.Perceus: input already contains DropReuse (Reuse runs after Perceus)"
@@ -87,14 +91,13 @@ goLive delta (stmt : rest) term = case stmt of
     Force v _ -> owningLet [v]
     MkStructReuse {} -> error "Malgo.Backend.Zig.Perceus: input already contains MkStructReuse (Reuse runs after Perceus)"
     where
-      liveAfter = freeVarsBlock (Block rest term)
       -- A borrowed read creates no reference: promote the binding to owned
       -- with a Dup when it is live, elide it entirely when it is dead.
       borrowedLet
         | x `Set.member` liveAfter =
-            let (rest', term') = goStmts (Set.insert x delta) rest term
+            let (rest', term') = goStmts (Set.insert x delta) (liveAfter : lives) rest term
              in (stmt : Dup x : rest', term')
-        | otherwise = goStmts delta rest term
+        | otherwise = goStmts delta (liveAfter : lives) rest term
       -- (Let) The expression moves one reference per operand occurrence;
       -- an operand still live afterwards keeps its own reference, so it
       -- needs one Dup per occurrence, else one fewer (its reference moves).
@@ -107,8 +110,9 @@ goLive delta (stmt : rest) term = case stmt of
               | otherwise = replicate (n - 1) (Dup y)
             consumedAway = Set.fromList [y | (y, _) <- counts, y `Set.notMember` liveAfter]
             delta' = Set.insert x (delta Set.\\ consumedAway)
-            (rest', term') = goStmts delta' rest term
+            (rest', term') = goStmts delta' (liveAfter : lives) rest term
          in (concatMap dupsFor counts <> (stmt : rest'), term')
+goLive _ _ (_ : _) _ = error "Malgo.Backend.Zig.Perceus: liveSets shorter than stmts (invariant violation)"
 
 insertTerminator :: Set Name -> Terminator -> ([Stmt], Terminator)
 insertTerminator delta = \case

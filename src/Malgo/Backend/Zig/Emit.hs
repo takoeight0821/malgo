@@ -87,21 +87,26 @@ emitFunc fn =
         ]
 
 emitBlock :: (Name -> Text) -> Text -> Ir.Block -> Text
-emitBlock pv funcName (Ir.Block stmts0 terminator) = go stmts0
+emitBlock pv funcName (Ir.Block stmts0 terminator) = go (Ir.suffixFreeVars stmts0 terminator) stmts0
   where
-    go [] = emitTerminator pv funcName terminator
+    go _ [] = emitTerminator pv funcName terminator
     -- 'Ir.PanicExpr' is noreturn: nothing after it in this block is
     -- reachable, and Zig rejects unreachable statements, so printing
     -- truncates here.
-    go (Ir.Let _ (Ir.PanicExpr what) : _) = "rt.panicUnimplemented(" <> zigStringLit what <> ");\n"
-    go (Ir.Let x e : rest) =
-      let usedLater = x `Set.member` Ir.freeVarsBlock (Ir.Block rest terminator)
+    go _ (Ir.Let _ (Ir.PanicExpr what) : _) = "rt.panicUnimplemented(" <> zigStringLit what <> ");\n"
+    -- 'liveAfter' (the free variables of everything from `rest` on) is read
+    -- off 'Ir.suffixFreeVars' rather than a fresh 'Ir.freeVarsBlock' call on
+    -- `rest`, so this walk stays linear in block length instead of
+    -- quadratic (a fresh scan per binding would re-walk every remaining
+    -- statement at every position).
+    go (_ : liveAfter : lives) (Ir.Let x e : rest) =
+      let usedLater = x `Set.member` liveAfter
           discard = if usedLater then "" else "_ = " <> pv x <> ";\n"
-       in "const " <> pv x <> " = " <> emitExpr pv funcName e <> ";\n" <> discard <> go rest
-    go (Ir.Dup x : rest) = "rt.dupNamed(" <> pv x <> ", " <> nameLit x <> ", " <> funcName <> ");\n" <> go rest
-    go (Ir.Drop x : rest) = "rt.dropNamed(" <> pv x <> ", " <> nameLit x <> ", " <> funcName <> ");\n" <> go rest
-    go (Ir.DropReuse tok x arity : rest) =
-      let usedLater = tok `Set.member` Ir.freeVarsBlock (Ir.Block rest terminator)
+       in "const " <> pv x <> " = " <> emitExpr pv funcName e <> ";\n" <> discard <> go (liveAfter : lives) rest
+    go (_ : lives) (Ir.Dup x : rest) = "rt.dupNamed(" <> pv x <> ", " <> nameLit x <> ", " <> funcName <> ");\n" <> go lives rest
+    go (_ : lives) (Ir.Drop x : rest) = "rt.dropNamed(" <> pv x <> ", " <> nameLit x <> ", " <> funcName <> ");\n" <> go lives rest
+    go (_ : liveAfter : lives) (Ir.DropReuse tok x arity : rest) =
+      let usedLater = tok `Set.member` liveAfter
           discard = if usedLater then "" else "_ = " <> pv tok <> ";\n"
        in "const "
             <> pv tok
@@ -115,7 +120,8 @@ emitBlock pv funcName (Ir.Block stmts0 terminator) = go stmts0
             <> funcName
             <> ");\n"
             <> discard
-            <> go rest
+            <> go (liveAfter : lives) rest
+    go _ (_ : _) = error "Malgo.Backend.Zig.Emit: suffixFreeVars shorter than stmts (invariant violation)"
 
 emitTerminator :: (Name -> Text) -> Text -> Ir.Terminator -> Text
 emitTerminator pv funcName = \case

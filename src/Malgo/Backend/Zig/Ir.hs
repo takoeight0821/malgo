@@ -29,6 +29,7 @@ module Malgo.Backend.Zig.Ir
     freeVarsTerminator,
     freeVarsExpr,
     freeVarsGuard,
+    suffixFreeVars,
     pathRoot,
     termOperands,
   )
@@ -185,6 +186,21 @@ freeVarsBlock (Block stmts terminator) = go stmts
     go (Dup x : rest) = Set.insert x (go rest)
     go (Drop x : rest) = Set.insert x (go rest)
     go (DropReuse tok x _ : rest) = Set.insert x (Set.delete tok (go rest))
+
+-- | @suffixFreeVars stmts term !! i == freeVarsBlock (Block (drop i stmts) term)@
+-- for every @i@ in @[0 .. length stmts]@, computed in one bottom-up pass.
+-- Callers that walk a statement list and, at each position, need the free
+-- variables of everything from there on (e.g. an unused-binding check)
+-- would otherwise call 'freeVarsBlock' afresh on each shrinking suffix,
+-- making that walk quadratic in the block's length; indexing into this
+-- list instead keeps it linear.
+suffixFreeVars :: [Stmt] -> Terminator -> [Set Name]
+suffixFreeVars stmts term = scanr step (freeVarsTerminator term) stmts
+  where
+    step (Let x e) live = freeVarsExpr e <> Set.delete x live
+    step (Dup x) live = Set.insert x live
+    step (Drop x) live = Set.insert x live
+    step (DropReuse tok x _) live = Set.insert x (Set.delete tok live)
 
 freeVarsStmt :: Stmt -> Set Name
 freeVarsStmt (Let _ e) = freeVarsExpr e

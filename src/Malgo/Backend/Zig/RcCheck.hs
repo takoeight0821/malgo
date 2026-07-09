@@ -97,9 +97,11 @@ checkFunc fn = goBlock st0 fn.body
       Drop x
         | ownedCount st x >= 1 -> goStmts st {counts = Map.adjust (subtract 1) x st.counts} rest term
         | otherwise -> DropOfDead fname x : goStmts st rest term
-      DropReuse tok x _ ->
-        let (vs, st') = consume st x
-         in vs <> goStmts st' {tokens = Set.insert tok st'.tokens} rest term
+      DropReuse tok x _
+        | ownedCount st x >= 1 ->
+            goStmts st {counts = Map.adjust (subtract 1) x st.counts, tokens = Set.insert tok st.tokens} rest term
+        | otherwise ->
+            DropOfDead fname x : goStmts st {tokens = Set.insert tok st.tokens} rest term
       Let x e -> case e of
         -- noreturn: the path exits the process here; no obligations.
         PanicExpr _ -> []

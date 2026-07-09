@@ -81,25 +81,31 @@ pairStmts = go []
     -- before a reconstruction so `scrutinee` (not the immediately-unused
     -- `hint` result) is the thing this pass should offer up for reuse.
     -- Perceus (see its own reuseHint special case) treats reuseHint as
-    -- consuming `scrutinee` and always emits the resulting dead `hint`
-    -- binding's Drop immediately afterward (nothing else can be live in
-    -- between: both are only ever referenced here). Recognize that exact
-    -- two-statement shape, discard it, and push `scrutinee` instead of
-    -- `hint` -- an unrecognized/reordered shape simply falls through to the
-    -- generic cases below (hint's Drop would then compete normally; always
-    -- safe, per this module's dynamic reuse fallback, just missing the
-    -- optimization). Any OTHER drops still pending at this point (most
-    -- notably this Func's own `self`, whose captures array can hold a
-    -- second, not-yet-released reference into `scrutinee`'s payload) are
-    -- flushed here instead of being carried forward: the general (D) rule
-    -- lets an unrelated pending drop survive past a MkStruct it didn't
-    -- pair with, all the way to the next one or the block's end, but
-    -- deferring it past THIS point would leave `scrutinee` looking
-    -- non-unique when 'runtime.dropReuse' checks it, silently forfeiting
-    -- the reuse this whole pass exists for.
-    go pending (Let hint (Prim "reuseHint" [scrutinee]) : Drop hint' : rest)
-      | hint == hint' =
-          (map Drop (reverse pending) <>) <$> go [scrutinee] rest
+    -- consuming `scrutinee`, so `scrutinee`'s reference is only ever
+    -- actually released by THIS rewrite (the runtime's own @reuseHint@
+    -- primitive is a no-op) -- unlike an ordinary Drop, there is no plain
+    -- fallback that still drops it if this pattern isn't recognized, so
+    -- failing to recognize it here would leak `scrutinee`, not just miss
+    -- the optimization. `hint` (a fresh, single-use temporary) is always
+    -- newly dead right after this Let, so Perceus's (D) rule always emits
+    -- `Drop hint` somewhere in the very next contiguous run of eager
+    -- drops -- but not necessarily FIRST in that run, if some other
+    -- variable also happens to die at this exact point (its position
+    -- among simultaneous deaths depends on `Set.toList`'s alphabetical
+    -- order). Scan that whole run for `hint` rather than requiring literal
+    -- adjacency, so a coincidentally-interleaved drop can't defeat
+    -- recognition; any OTHER drops found in the run (most notably this
+    -- Func's own `self`) are flushed immediately rather than carried
+    -- forward, for the same reason as below.
+    go pending (Let hint (Prim "reuseHint" [scrutinee]) : rest)
+      | hint `elem` dropNames =
+          let otherDrops = map Drop (filter (/= hint) dropNames)
+           in ((map Drop (reverse pending) <> otherDrops) <>) <$> go [scrutinee] rest'
+      where
+        (drops, rest') = span isDrop rest
+        dropNames = [x | Drop x <- drops]
+        isDrop (Drop _) = True
+        isDrop _ = False
     go pending (Drop x : rest) = go (x : pending) rest
     go (dropped : restPending) (Let x (MkStruct tag ops) : rest) = do
       tok <- newTemporalId "reuse"

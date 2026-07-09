@@ -170,3 +170,66 @@ jobs:
           PRECOMPILE_TIMEOUT: 300
           CASE_TIMEOUT: 600
         run: scripts/selfhost-level2.sh
+
+  zig-golden:
+    name: Zig backend golden parity (GHC ${{ matrix.ghc-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc-version: ['9.12.4']
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 2
+
+      - name: Restore file timestamps
+        run: |
+          rev=HEAD
+          for f in $(git ls-tree -r -t --full-name --name-only "$rev"); do
+            touch -d "$(git log --pretty=format:%cI -1 "$rev" -- "$f")" "$f"
+          done
+
+      - uses: ./.github/actions/setup-haskell-cached
+        id: setup
+        with:
+          ghc-version: ${{ matrix.ghc-version }}
+
+      - name: Configure the build
+        run: cabal configure --enable-tests --disable-documentation
+
+      - name: Cache cabal store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-store-${{ hashFiles('cabal.project.freeze') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-store-
+
+      - name: Cache dist-newstyle
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: dist-newstyle
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-ziggolden-${{ hashFiles('cabal.project.freeze') }}-${{ hashFiles('src/**/*.hs', '*.cabal', 'package.yaml', 'runtime/zig/*.zig', 'scripts/zig-golden.sh', 'test/testcases/malgo/**/*.mlg') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-ziggolden-${{ hashFiles('cabal.project.freeze') }}-
+
+      # This action also caches Zig's own global cache directory (build
+      # artifacts for the standard library etc.), keyed on the Zig version.
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: '0.16.0'
+
+      - name: Build malgo
+        run: |
+          cabal build lib:malgo --only-dependencies
+          cabal build exe:malgo
+
+      - name: Run Zig backend golden parity sweep
+        env:
+          MAX_FAILURES: 40
+          COMPILE_TIMEOUT: 120
+          CASE_TIMEOUT: 20
+        run: scripts/zig-golden.sh

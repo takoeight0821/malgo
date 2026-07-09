@@ -1,6 +1,7 @@
 module Main (main) where
 
 import Malgo.Backend.SchemeSpec qualified as SchemeSpec
+import Malgo.Backend.ZigSpec qualified as ZigSpec
 import Malgo.ElaborateSpec qualified as ElaborateSpec
 import Malgo.FeaturesSpec qualified as FeaturesSpec
 import Malgo.ForthSpec qualified as ForthSpec
@@ -29,6 +30,7 @@ main = do
     describe "Malgo.Features" FeaturesSpec.spec
     describe "Malgo.Query.Engine" QueryEngineSpec.spec
     describe "Malgo.Backend.Scheme" SchemeSpec.spec
+    describe "Malgo.Backend.Zig" ZigSpec.spec
     describe "Malgo.Sequent.ToFun" ToFunSpec.spec
     describe "Malgo.Sequent.ToCore" ToCoreSpec.spec
     describe "Malgo.Sequent.Eval" (EvalSpec.specWith builtin prelude)

@@ -7,6 +7,7 @@ where
 
 import Control.Exception (Exception (..))
 import Effectful
+import Effectful.Error.Static (throwError)
 import Effectful.Reader.Static (Reader)
 import Effectful.State.Static.Local (State)
 import Malgo.Backend.Zig.ClosureConv (convertProgram)
@@ -35,7 +36,7 @@ instance Pass ZigPass where
     case checkProgram ir of
       Right () -> emitProgram ir
       Left violations ->
-        error $ "Malgo.Backend.Zig: Perceus produced a non-linear program: " <> show violations
+        throwError (ZigError $ "Perceus produced a non-linear program: " <> convertString (show violations))
 
 data ZigError = ZigError Text
   deriving stock (Show)

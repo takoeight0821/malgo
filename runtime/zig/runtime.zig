@@ -259,12 +259,17 @@ pub fn dropReuse(v: Value, arity: usize) ?Value {
 /// implications.
 pub fn mkStructReuse(tok: ?Value, tag: Tag, fields: []const Value) Value {
     const obj = tok orelse return mkStruct(tag, fields);
-    std.debug.assert(obj.rc == 1 and obj.kind == .strukt);
+    // A malformed token here would mean overwriting memory `dropReuse` never
+    // vacated -- corruption, not a recoverable error. Checked explicitly
+    // (not via `std.debug.assert`, which ReleaseFast/ReleaseSmall compile
+    // out entirely) as a last line of defense behind RcCheck's static
+    // token-linearity verification.
+    if (obj.rc != 1 or obj.kind != .strukt) panic("mkStructReuse: token does not own a unique strukt Object");
     if (obj.payload.strukt.fields.len == fields.len) {
         @memcpy(@constCast(obj.payload.strukt.fields), fields);
         obj.payload.strukt.tag = tag;
     } else {
-        std.debug.assert(obj.payload.strukt.fields.len == 0);
+        if (obj.payload.strukt.fields.len != 0) panic("mkStructReuse: arity-mismatched token was not cleared by dropReuse");
         obj.payload.strukt = .{ .tag = tag, .fields = g_value.dupe(Value, fields) catch @panic("Malgo: out of memory") };
     }
     return obj;

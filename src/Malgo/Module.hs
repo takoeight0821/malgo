@@ -5,6 +5,7 @@ module Malgo.Module
     HasModuleName,
     Workspace,
     getWorkspace,
+    getWorkspaceAbs,
     registerModule,
     getModulePath,
     runWorkspaceOnPwd,

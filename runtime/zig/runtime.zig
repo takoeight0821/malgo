@@ -259,12 +259,22 @@ pub fn dropReuse(v: Value, arity: usize) ?Value {
 /// implications.
 pub fn mkStructReuse(tok: ?Value, tag: Tag, fields: []const Value) Value {
     const obj = tok orelse return mkStruct(tag, fields);
+    // A malformed token here would mean overwriting memory `dropReuse` never
+    // vacated -- corruption, not a recoverable error, and a last line of
+    // defense behind RcCheck's static token-linearity verification. The
+    // `std.debug.assert` gives a full stack trace pinpointing the call site
+    // in Debug/ReleaseSafe; it is compiled out entirely in
+    // ReleaseFast/ReleaseSmall, so the explicit `panic` after it is what
+    // actually catches a violation there (at the cost of only a one-line
+    // message, not a trace).
     std.debug.assert(obj.rc == 1 and obj.kind == .strukt);
+    if (obj.rc != 1 or obj.kind != .strukt) panic("mkStructReuse: token does not own a unique strukt Object");
     if (obj.payload.strukt.fields.len == fields.len) {
         @memcpy(@constCast(obj.payload.strukt.fields), fields);
         obj.payload.strukt.tag = tag;
     } else {
         std.debug.assert(obj.payload.strukt.fields.len == 0);
+        if (obj.payload.strukt.fields.len != 0) panic("mkStructReuse: arity-mismatched token was not cleared by dropReuse");
         obj.payload.strukt = .{ .tag = tag, .fields = g_value.dupe(Value, fields) catch @panic("Malgo: out of memory") };
     }
     return obj;
@@ -354,16 +364,28 @@ pub fn mkCodata(branches: []const NamedBranch, captures: []const Value) Value {
 // only exercised directly by this file's own `test` blocks, so tracing
 // cannot perturb the RC decisions those tests already exercise.
 
+/// `name`\/`func` come from compiler-generated (unbounded-length) Zig-IR
+/// identifiers, so formatting into a fixed stack buffer can in principle
+/// overflow. Writes a valid one-line JSON marker in that case instead of
+/// silently dropping the event -- `scripts/rctrace.py` can then tell a
+/// missing event from one that was never emitted.
+fn emitTraced(result: std.fmt.BufPrintError![]const u8) void {
+    const line = result catch {
+        writeStderr("{\"ev\":\"trace_overflow\"}\n");
+        return;
+    };
+    writeStderr(line);
+}
+
 fn traceLine(event: []const u8, v: Value, name: []const u8, func: []const u8) void {
     if (!g_trace_enabled) return;
     const rc: i64 = if (v.rc == IMMORTAL) -1 else @intCast(v.rc);
-    var buf: [256]u8 = undefined;
-    const line = std.fmt.bufPrint(
+    var buf: [512]u8 = undefined;
+    emitTraced(std.fmt.bufPrint(
         &buf,
         "{{\"ev\":\"{s}\",\"ptr\":\"0x{x}\",\"rc\":{d},\"name\":\"{s}\",\"func\":\"{s}\"}}\n",
         .{ event, @intFromPtr(v), rc, name, func },
-    ) catch return;
-    writeStderr(line);
+    ));
 }
 
 /// Like 'traceLine', but identifies the object by an address captured
@@ -371,13 +393,12 @@ fn traceLine(event: []const u8, v: Value, name: []const u8, func: []const u8) vo
 /// (like 'dropReuseNamed') that may already have freed the object.
 fn traceAddr(event: []const u8, addr: usize, name: []const u8, func: []const u8) void {
     if (!g_trace_enabled) return;
-    var buf: [256]u8 = undefined;
-    const line = std.fmt.bufPrint(
+    var buf: [512]u8 = undefined;
+    emitTraced(std.fmt.bufPrint(
         &buf,
         "{{\"ev\":\"{s}\",\"ptr\":\"0x{x}\",\"name\":\"{s}\",\"func\":\"{s}\"}}\n",
         .{ event, addr, name, func },
-    ) catch return;
-    writeStderr(line);
+    ));
 }
 
 /// Traces a construction event (`mkStruct`/`mkClosure`/`mkStructReuse`):
@@ -386,22 +407,28 @@ fn traceAddr(event: []const u8, addr: usize, name: []const u8, func: []const u8)
 /// against the same (container, slot) pair can be resolved back to a name.
 fn traceSlots(event: []const u8, v: Value, fields: []const Value, names: []const []const u8, func: []const u8) void {
     if (!g_trace_enabled) return;
-    var head: [256]u8 = undefined;
+    var head: [512]u8 = undefined;
     const headLine = std.fmt.bufPrint(
         &head,
         "{{\"ev\":\"{s}\",\"ptr\":\"0x{x}\",\"func\":\"{s}\",\"slots\":[",
         .{ event, @intFromPtr(v), func },
-    ) catch return;
+    ) catch {
+        writeStderr("{\"ev\":\"trace_overflow\"}\n");
+        return;
+    };
     writeStderr(headLine);
     for (fields, 0..) |child, i| {
         if (i != 0) writeStderr(",");
         const name = if (i < names.len) names[i] else "?";
-        var slot: [256]u8 = undefined;
+        var slot: [512]u8 = undefined;
+        // A fallback placeholder, not `catch continue`: skipping the slot
+        // outright would also break the enclosing JSON array (a comma was
+        // already written above for every non-first slot).
         const slotLine = std.fmt.bufPrint(
             &slot,
             "{{\"i\":{d},\"name\":\"{s}\",\"child\":\"0x{x}\"}}",
             .{ i, name, @intFromPtr(child) },
-        ) catch continue;
+        ) catch "{\"i\":-1,\"name\":\"?\",\"child\":\"0x0\"}";
         writeStderr(slotLine);
     }
     writeStderr("]}\n");
@@ -706,7 +733,6 @@ pub fn reuseHint(args: []const Value) Value {
     _ = args;
     return no_self;
 }
-
 
 pub fn malgo_add_int32_t(args: []const Value) Value {
     return mkInt32(asI32(args[0]) +% asI32(args[1]));

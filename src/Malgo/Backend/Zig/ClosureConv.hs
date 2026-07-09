@@ -122,16 +122,19 @@ escapingNamesStatement (BinOp _ _ lhs rhs _k) = escapingNamesProducer lhs <> esc
 escapingNamesStatement (Ifz _ cond t e) =
   escapingNamesProducer cond <> escapingNamesStatement t <> escapingNamesStatement e
 
+-- | 'Lambda'\/'Object'\/'Mu'\/'Cocase' are all nested-closure-body
+-- producers: an escaping name of the *enclosing* statement is exactly a
+-- free variable of theirs (their own join structure is a separate,
+-- independently-analyzed scope — see the haddock above), so those cases
+-- just delegate to 'freeVarsProducer' rather than duplicating its rules.
 escapingNamesProducer :: Producer -> Set Name
 escapingNamesProducer (Var _ _) = Set.empty
 escapingNamesProducer (Literal _ _) = Set.empty
 escapingNamesProducer (Construct _ _ ps ks) = Set.unions (map escapingNamesProducer ps) <> Set.fromList ks
-escapingNamesProducer (Lambda _ names stmt) = freeVarsStatement stmt Set.\\ Set.fromList names
-escapingNamesProducer (Object _ fields) =
-  Set.unions [freeVarsStatement stmt Set.\\ Set.singleton ret | (ret, stmt) <- Map.elems fields]
-escapingNamesProducer (Mu _ name stmt) = Set.delete name (freeVarsStatement stmt)
-escapingNamesProducer (Cocase _ branches) =
-  Set.unions [freeVarsStatement stmt Set.\\ Set.fromList vars | (_, vars, stmt) <- branches]
+escapingNamesProducer p@(Lambda {}) = freeVarsProducer p
+escapingNamesProducer p@(Object {}) = freeVarsProducer p
+escapingNamesProducer p@(Mu {}) = freeVarsProducer p
+escapingNamesProducer p@(Cocase {}) = freeVarsProducer p
 
 escapingNamesConsumer :: Consumer -> Set Name
 escapingNamesConsumer (Label _ _) = Set.empty -- eliminated by Normalize; kept total defensively.
@@ -215,15 +218,40 @@ collectJoinsConsumer (Destructor _ _ ps _) = concatMap collectJoinsProducer ps
 -- | The direct-escaping rule alone (see 'classifyJoins' for why this is not
 -- the whole story).
 initialClassifyJoins :: Statement -> Map Name Ownership
-initialClassifyJoins (Cut p _) = initialClassifyJoinsProducer p
-initialClassifyJoins (Join _ name consumer stmt) =
-  let ownership = if name `Set.member` escapingNamesStatement stmt then Escaping else Local
-   in Map.insert name ownership (initialClassifyJoinsConsumer consumer <> initialClassifyJoins stmt)
-initialClassifyJoins (Primitive _ _ ps _) = Map.unions (map initialClassifyJoinsProducer ps)
-initialClassifyJoins (Invoke _ _ _) = Map.empty
-initialClassifyJoins (ExternalCall _ _ ps _) = Map.unions (map initialClassifyJoinsProducer ps)
-initialClassifyJoins (BinOp _ _ lhs rhs _) = initialClassifyJoinsProducer lhs <> initialClassifyJoinsProducer rhs
-initialClassifyJoins (Ifz _ cond t e) = initialClassifyJoinsProducer cond <> initialClassifyJoins t <> initialClassifyJoins e
+initialClassifyJoins = fst . initialClassifyJoinsWithEscaping
+
+-- | 'initialClassifyJoins' fused with 'escapingNamesStatement' of the same
+-- statement: a chain of nested 'Join's calling 'escapingNamesStatement'
+-- freshly on its own (shrinking) continuation at every node would
+-- re-traverse that continuation once per enclosing 'Join', making
+-- classification quadratic in the chain's length. Computing both bottom-up
+-- in one traversal instead means each node's escaping-name set is built
+-- once, from its already-computed children, not re-walked from scratch.
+initialClassifyJoinsWithEscaping :: Statement -> (Map Name Ownership, Set Name)
+initialClassifyJoinsWithEscaping (Cut p _) =
+  (initialClassifyJoinsProducer p, escapingNamesProducer p)
+initialClassifyJoinsWithEscaping (Join _ name consumer stmt) =
+  let (m, esc) = initialClassifyJoinsWithEscaping stmt
+      ownership = if name `Set.member` esc then Escaping else Local
+      (cm, cesc) = initialClassifyJoinsConsumerWithEscaping consumer
+   in ( Map.insert name ownership (cm <> m),
+        cesc <> esc
+      )
+initialClassifyJoinsWithEscaping (Primitive _ _ ps _) =
+  (Map.unions (map initialClassifyJoinsProducer ps), Set.unions (map escapingNamesProducer ps))
+initialClassifyJoinsWithEscaping (Invoke _ _ k) = (Map.empty, Set.singleton k)
+initialClassifyJoinsWithEscaping (ExternalCall _ _ ps _) =
+  (Map.unions (map initialClassifyJoinsProducer ps), Set.unions (map escapingNamesProducer ps))
+initialClassifyJoinsWithEscaping (BinOp _ _ lhs rhs _) =
+  ( initialClassifyJoinsProducer lhs <> initialClassifyJoinsProducer rhs,
+    escapingNamesProducer lhs <> escapingNamesProducer rhs
+  )
+initialClassifyJoinsWithEscaping (Ifz _ cond t e) =
+  let (mt, escT) = initialClassifyJoinsWithEscaping t
+      (me, escE) = initialClassifyJoinsWithEscaping e
+   in ( initialClassifyJoinsProducer cond <> mt <> me,
+        escapingNamesProducer cond <> escT <> escE
+      )
 
 -- | Only descends into a nested closure's free variables for escaping
 -- analysis, but its *own* join structure still needs classifying once it is
@@ -240,13 +268,25 @@ initialClassifyJoinsProducer (Mu _ _ _) = Map.empty
 initialClassifyJoinsProducer (Cocase _ _) = Map.empty
 
 initialClassifyJoinsConsumer :: Consumer -> Map Name Ownership
-initialClassifyJoinsConsumer (Label _ _) = Map.empty
-initialClassifyJoinsConsumer (Apply _ ps _) = Map.unions (map initialClassifyJoinsProducer ps)
-initialClassifyJoinsConsumer (Project _ _ _) = Map.empty
-initialClassifyJoinsConsumer (Then _ _ stmt) = initialClassifyJoins stmt
-initialClassifyJoinsConsumer (Finish _) = Map.empty
-initialClassifyJoinsConsumer (Select _ branches) = Map.unions (map (\(Branch _ _ stmt) -> initialClassifyJoins stmt) branches)
-initialClassifyJoinsConsumer (Destructor _ _ ps _) = Map.unions (map initialClassifyJoinsProducer ps)
+initialClassifyJoinsConsumer = fst . initialClassifyJoinsConsumerWithEscaping
+
+-- | 'initialClassifyJoinsConsumer' fused with 'escapingNamesConsumer', for
+-- the same reason 'initialClassifyJoinsWithEscaping' fuses with
+-- 'escapingNamesStatement': the 'Join' case above needs both a consumer's
+-- classification and its escaping-name set, and computing them separately
+-- would re-walk a 'Then'\/'Select' consumer's nested statement(s) twice.
+initialClassifyJoinsConsumerWithEscaping :: Consumer -> (Map Name Ownership, Set Name)
+initialClassifyJoinsConsumerWithEscaping (Label _ _) = (Map.empty, Set.empty)
+initialClassifyJoinsConsumerWithEscaping (Apply _ ps ks) =
+  (Map.unions (map initialClassifyJoinsProducer ps), Set.unions (map escapingNamesProducer ps) <> Set.fromList ks)
+initialClassifyJoinsConsumerWithEscaping (Project _ _ k) = (Map.empty, Set.singleton k)
+initialClassifyJoinsConsumerWithEscaping (Then _ _ stmt) = initialClassifyJoinsWithEscaping stmt
+initialClassifyJoinsConsumerWithEscaping (Finish _) = (Map.empty, Set.empty)
+initialClassifyJoinsConsumerWithEscaping (Select _ branches) =
+  let results = [initialClassifyJoinsWithEscaping stmt | Branch _ _ stmt <- branches]
+   in (Map.unions (map fst results), Set.unions (map snd results))
+initialClassifyJoinsConsumerWithEscaping (Destructor _ _ ps k) =
+  (Map.unions (map initialClassifyJoinsProducer ps), Set.unions (map escapingNamesProducer ps) <> Set.singleton k)
 
 -- | Local (same-function) substitution environment: a join name classified
 -- 'Local' maps to the 'Consumer' it was bound to, to be inlined at use.

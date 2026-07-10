@@ -167,10 +167,14 @@ emitExpr pv funcName = \case
   Ir.MkStructReuse tok tag vs -> "rt.mkStructReuseNamed(" <> pv tok <> ", " <> compileTag tag <> ", " <> valueSlice pv vs <> ", " <> nameSlice vs <> ", " <> funcName <> ")"
   Ir.MkClosure fn vs -> "rt.mkClosureNamed(&" <> mangleId fn <> ", " <> valueSlice pv vs <> ", " <> nameSlice vs <> ", " <> funcName <> ")"
   Ir.MkRecord fields vs ->
-    "rt.mkRecord(&[_]rt.NamedField{"
+    "rt.mkRecordNamed(&[_]rt.NamedField{"
       <> T.intercalate ", " [".{ .name = " <> zigStringLit fieldName <> ", .code = &" <> mangleId fn <> " }" | (fieldName, fn) <- fields]
       <> "}, "
       <> valueSlice pv vs
+      <> ", "
+      <> nameSlice vs
+      <> ", "
+      <> funcName
       <> ")"
   Ir.Prim name vs -> "rt." <> name <> "(" <> valueSlice pv vs <> ")"
   Ir.ReadPath p -> emitPath pv p

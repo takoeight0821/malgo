@@ -19,11 +19,8 @@ import Data.ByteString qualified as BS
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Effectful.Reader.Static (runReader)
-import Malgo.Backend.Zig.ClosureConv (convertProgram)
-import Malgo.Backend.Zig.Peephole (peepholeProgram)
-import Malgo.Backend.Zig.Perceus (perceusProgram)
+import Malgo.Backend.Zig (ZigStages (..), runZigStages)
 import Malgo.Backend.Zig.RcCheck (checkProgram)
-import Malgo.Backend.Zig.Reuse (reuseProgram)
 import Malgo.Debug.PrettyIR
 import Malgo.Elaborate (ElaboratePass (..))
 import Malgo.Features (Feature (..), FeatureFlags (..))
@@ -40,7 +37,7 @@ import Malgo.Sequent.Core.Flat (flatProgram)
 import Malgo.Sequent.Core.Join (joinProgram)
 import Malgo.Sequent.ReuseSpecialize (specializeProgram)
 import Malgo.Sequent.SaturateCtor (saturateProgram)
-import Malgo.Sequent.ToCore (toCore)
+import Malgo.Sequent.ToCore (toCoreFrom)
 import Malgo.Sequent.ToFun (ToFunPass (..))
 import Malgo.Syntax (Module (..))
 
@@ -72,19 +69,16 @@ runTrace srcPath useInfer malgo2025 = do
       -- Saturated-constructor inlining and reuse-hint insertion now run
       -- first thing inside toCore (shared by every backend), not as
       -- Join-IR-local Zig passes; traced here at the Fun IR level, where
-      -- the rewrites actually happen. `toCore fun` reapplies both
-      -- internally (idempotent, cheap), so `core` reflects the real
-      -- post-specialization pipeline regardless.
+      -- the rewrites actually happen. `toCoreFrom specializedFun` reuses
+      -- this same specialization, so `core` reflects the real
+      -- post-specialization pipeline without re-minting its temporaries.
       let saturatedFun = saturateProgram fun
       specializedFun <- specializeProgram saturatedFun
-      core <- toCore fun
+      core <- toCoreFrom specializedFun
       flat <- flatProgram core
       joined <- joinProgram flat
-      ir <- convertProgram joined
-      let peepholed = peepholeProgram ir
-          perceused = perceusProgram peepholed
-      reused <- reuseProgram perceused
-      let reuseNote = case checkProgram reused of
+      stages <- runZigStages joined
+      let reuseNote = case checkProgram stages.reuse of
             Right () -> ""
             Left violations ->
               "-- RC CHECK VIOLATIONS:\n"
@@ -100,10 +94,10 @@ runTrace srcPath useInfer malgo2025 = do
              Stage "ToCore" (renderCoreFull core),
              Stage "Flat" (renderFlat flat),
              Stage "Join" (renderJoin joined),
-             Stage "ClosureConv" (renderZigIr ir),
-             Stage "Peephole" (renderZigIr peepholed),
-             Stage "Perceus" (renderZigIr perceused),
-             Stage "Reuse" (reuseNote <> renderZigIr reused)
+             Stage "ClosureConv" (renderZigIr stages.closureConv),
+             Stage "Peephole" (renderZigIr stages.peephole),
+             Stage "Perceus" (renderZigIr stages.perceus),
+             Stage "Reuse" (reuseNote <> renderZigIr stages.reuse)
            ]
   where
     flag =

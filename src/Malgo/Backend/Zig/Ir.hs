@@ -25,7 +25,6 @@ module Malgo.Backend.Zig.Ir
     Guard (..),
     Test (..),
     freeVarsBlock,
-    freeVarsStmt,
     freeVarsTerminator,
     freeVarsExpr,
     freeVarsGuard,
@@ -201,12 +200,6 @@ suffixFreeVars stmts term = scanr step (freeVarsTerminator term) stmts
     step (Dup x) live = Set.insert x live
     step (Drop x) live = Set.insert x live
     step (DropReuse tok x _) live = Set.insert x (Set.delete tok live)
-
-freeVarsStmt :: Stmt -> Set Name
-freeVarsStmt (Let _ e) = freeVarsExpr e
-freeVarsStmt (Dup x) = Set.singleton x
-freeVarsStmt (Drop x) = Set.singleton x
-freeVarsStmt (DropReuse _ x _) = Set.singleton x
 
 freeVarsExpr :: Expr -> Set Name
 freeVarsExpr (Lit _) = Set.empty

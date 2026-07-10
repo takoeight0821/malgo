@@ -2,7 +2,7 @@ module Main (main) where
 
 import Malgo.Debug.Pipeline (runTrace)
 import Malgo.Prelude
-import Network.Wai.Handler.Warp (run)
+import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort)
 import Options.Applicative
 import Server (app)
 
@@ -37,4 +37,4 @@ main = do
     <> show (length stages)
     <> " stages). Listening on http://localhost:"
     <> show opt.port
-  run opt.port (app stages)
+  runSettings (setHost "127.0.0.1" $ setPort opt.port defaultSettings) (app stages)

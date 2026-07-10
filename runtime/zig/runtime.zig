@@ -142,8 +142,12 @@ pub inline fn dup(v: Value) void {
 pub fn drop(v: Value) void {
     if (v.rc == IMMORTAL) return;
     // An underflow here is an over-drop bug in the Perceus pass; fail at
-    // the exact faulty drop rather than corrupting the heap.
+    // the exact faulty drop rather than corrupting the heap. The
+    // `std.debug.assert` gives a full stack trace in Debug/ReleaseSafe but is
+    // compiled out in ReleaseFast/ReleaseSmall, so the explicit `panic` after
+    // it is what catches a violation there.
     std.debug.assert(v.rc > 0);
+    if (v.rc == 0) panic("drop: over-drop of an already-dead Object");
     v.rc -= 1;
     if (v.rc == 0) free(v);
 }
@@ -288,6 +292,7 @@ fn decChildren(container: Value, children: []const Value) void {
         traceDecChild(container, i, c);
         if (c.rc == IMMORTAL) continue;
         std.debug.assert(c.rc > 0);
+        if (c.rc == 0) panic("decChildren: over-drop of an already-dead child Object");
         c.rc -= 1;
         if (c.rc == 0) g_free_worklist.append(scratch(), c) catch @panic("Malgo: out of memory");
     }
@@ -360,9 +365,9 @@ pub fn mkCodata(branches: []const NamedBranch, captures: []const Value) Value {
 // entry in the project's Zig-backend notes).
 //
 // These wrappers are the only thing 'Emit.hs' ever calls; the plain
-// dup/drop/dropReuse/mkStruct/mkClosure/mkStructReuse above are otherwise
-// only exercised directly by this file's own `test` blocks, so tracing
-// cannot perturb the RC decisions those tests already exercise.
+// dup/drop/dropReuse/mkStruct/mkClosure/mkStructReuse/mkRecord above are
+// otherwise only exercised directly by this file's own `test` blocks, so
+// tracing cannot perturb the RC decisions those tests already exercise.
 
 /// `name`\/`func` come from compiler-generated (unbounded-length) Zig-IR
 /// identifiers, so formatting into a fixed stack buffer can in principle
@@ -401,7 +406,8 @@ fn traceAddr(event: []const u8, addr: usize, name: []const u8, func: []const u8)
     ));
 }
 
-/// Traces a construction event (`mkStruct`/`mkClosure`/`mkStructReuse`):
+/// Traces a construction event
+/// (`mkStruct`/`mkClosure`/`mkStructReuse`/`mkRecord`):
 /// records the fresh container's address plus, per slot, the symbolic name
 /// and child address that went into it -- so a later 'traceDecChild' event
 /// against the same (container, slot) pair can be resolved back to a name.
@@ -486,6 +492,12 @@ pub fn mkClosureNamed(code: CodeFn, captures: []const Value, names: []const []co
 pub fn mkStructReuseNamed(tok: ?Value, tag: Tag, fields: []const Value, names: []const []const u8, func: []const u8) Value {
     const v = mkStructReuse(tok, tag, fields);
     traceSlots("mkStructReuse", v, fields, names, func);
+    return v;
+}
+
+pub fn mkRecordNamed(fields: []const NamedField, captures: []const Value, names: []const []const u8, func: []const u8) Value {
+    const v = mkRecord(fields, captures);
+    traceSlots("mkRecord", v, captures, names, func);
     return v;
 }
 
@@ -660,7 +672,7 @@ pub fn exitWithLeakCheck() void {
 /// Reads one byte from stdin, or null at EOF.
 fn readStdinByte() ?u8 {
     var buf: [1]u8 = undefined;
-    const n = std.posix.read(0, &buf) catch return null;
+    const n = std.posix.read(0, &buf) catch panic("stdin read error");
     if (n == 0) return null;
     return buf[0];
 }
@@ -1026,7 +1038,7 @@ pub fn malgo_substring(args: []const Value) Value {
     const rawEnd = asI64(args[2]);
     const len: i64 = @intCast(std.unicode.utf8CountCodepoints(s) catch panic("malformed UTF-8 string"));
     const clampedStart: i64 = clampI64(rawStart, 0, len);
-    const takeCount = rawEnd - rawStart;
+    const takeCount = rawEnd -% rawStart;
     if (takeCount <= 0) return mkString("");
     const clampedEnd: i64 = clampI64(clampedStart + takeCount, clampedStart, len);
     const startByte = utf8ByteOffsetOfScalar(s, @intCast(clampedStart));

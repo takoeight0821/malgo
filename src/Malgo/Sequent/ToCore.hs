@@ -1,4 +1,4 @@
-module Malgo.Sequent.ToCore (toCore, ToCorePass (..)) where
+module Malgo.Sequent.ToCore (toCore, toCoreFrom, ToCorePass (..)) where
 
 import Data.Traversable (for)
 import Effectful
@@ -30,8 +30,16 @@ instance Pass ToCorePass where
 -- in their curried form, and self-recursive match-then-rebuild functions
 -- carry a @reuseHint@ marking their about-to-be-discarded scrutinee.
 toCore :: (State Uniq :> es, Reader ModuleName :> es) => Program -> Eff es C.Program
-toCore program = do
-  Program {..} <- specializeProgram (saturateProgram program)
+toCore program = specializeProgram (saturateProgram program) >>= toCoreFrom
+
+-- | The CPS-conversion half of 'toCore', taking a 'Program' that has
+-- already been through 'saturateProgram' and 'specializeProgram'. Exposed
+-- for callers that already computed that pair for their own purposes (e.g.
+-- 'Malgo.Debug.Pipeline' rendering the "ReuseSpecialize" stage) — calling
+-- 'specializeProgram' again on the same input would mint a second,
+-- differently-numbered set of fresh temporaries instead of reusing it.
+toCoreFrom :: (State Uniq :> es, Reader ModuleName :> es) => Program -> Eff es C.Program
+toCoreFrom Program {..} = do
   definitions <- traverse convertDefinition definitions
   pure C.Program {definitions, dependencies}
 

@@ -121,7 +121,6 @@ compileToExecutable srcPath outPath optMode = do
     parsedAst <- runPass ParserPass (srcPath, convertString @BS.ByteString src)
     core <- fetchLinkedCore srcModulePath parsedAst
     runReader parsedAst.moduleName $ runPass ZigPass core
-  save srcModulePath ".zig" (convertString @Text @BS.ByteString zigText)
   workspace <- toFilePath <$> getWorkspaceAbs
   let zigPath = outPath <> ".zig"
   liftIO $ BS.writeFile zigPath (convertString zigText)

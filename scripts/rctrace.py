@@ -14,7 +14,7 @@ The trace format (emitted by runtime/zig/runtime.zig's "Named RC tracing"
 section) is one JSON object per line:
   {"ev":"dup"|"drop"|"dropReuse_attempt"|"dropReuse_hit"|"dropReuse_miss",
    "ptr":"0x..","rc":N,"name":"..","func":".."}
-  {"ev":"mkStruct"|"mkClosure"|"mkStructReuse","ptr":"0x..","func":"..",
+  {"ev":"mkStruct"|"mkClosure"|"mkStructReuse"|"mkRecord","ptr":"0x..","func":"..",
    "slots":[{"i":0,"name":"..","child":"0x.."}, ...]}
   {"ev":"decChild","container":"0x..","slot":0,"child":"0x..","rc_before":N}
   {"ev":"trace_overflow"}  -- a name/func string didn't fit runtime.zig's
@@ -27,7 +27,7 @@ import json
 import sys
 
 DIRECT_EVENTS = {"dup", "drop", "dropReuse_attempt", "dropReuse_hit", "dropReuse_miss"}
-CONSTRUCT_EVENTS = {"mkStruct", "mkClosure", "mkStructReuse"}
+CONSTRUCT_EVENTS = {"mkStruct", "mkClosure", "mkStructReuse", "mkRecord"}
 
 
 def load_events(path):

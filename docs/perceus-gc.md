@@ -161,7 +161,7 @@ of only a one-line message there, not a trace).
 
 ## Debugging: `MALGO_RC_TRACE` and `scripts/rctrace.py`
 
-Every `dup`/`drop`/`dropReuse`/`mkStruct`/`mkClosure`/`mkStructReuse` the compiler
+Every `dup`/`drop`/`dropReuse`/`mkStruct`/`mkClosure`/`mkStructReuse`/`mkRecord` the compiler
 emits actually calls a `*Named` wrapper (`dupNamed`, `dropNamed`, ...) that performs
 the exact same RC operation, then — only when the `MALGO_RC_TRACE` environment
 variable is set — emits one JSON-lines event to stderr carrying the compile-time

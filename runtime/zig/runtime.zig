@@ -135,15 +135,35 @@ fn alloc(kind: Kind, payload: Payload) Value {
 
 // ===== Reference counting =====
 
+/// A heap-corruption invariant shared by every RC bookkeeping site that
+/// guards against over-drop / reuse-token misuse: fail at the exact
+/// faulty call rather than silently corrupting the heap. In
+/// Debug/ReleaseSafe, `std.debug.assert` gives a full stack trace via
+/// Zig's safety-checked `unreachable`. In ReleaseFast/ReleaseSmall,
+/// `assert` compiles to `unreachable` as a pure optimizer hint with no
+/// runtime check -- worse, if a plain `if (!cond) panic(...)` followed
+/// it, LLVM can use the assert to "prove" that condition dead and elide
+/// the panic entirely, even though `cond` was actually violated at
+/// runtime (verified empirically: an assert immediately followed by the
+/// same check as a plain `if` silently drops the panic branch under
+/// `-O ReleaseFast`). So the two build-mode families get entirely
+/// separate code paths, never both an assert and a check on the same
+/// condition in the same build.
+inline fn rcInvariant(cond: bool, comptime msg: []const u8) void {
+    if (builtin.mode == .Debug or builtin.mode == .ReleaseSafe) {
+        std.debug.assert(cond);
+    } else if (!cond) {
+        panic(msg);
+    }
+}
+
 pub inline fn dup(v: Value) void {
     if (v.rc != IMMORTAL) v.rc += 1;
 }
 
 pub fn drop(v: Value) void {
     if (v.rc == IMMORTAL) return;
-    // An underflow here is an over-drop bug in the Perceus pass; fail at
-    // the exact faulty drop rather than corrupting the heap.
-    std.debug.assert(v.rc > 0);
+    rcInvariant(v.rc > 0, "drop: over-drop of an already-dead Object");
     v.rc -= 1;
     if (v.rc == 0) free(v);
 }
@@ -261,20 +281,13 @@ pub fn mkStructReuse(tok: ?Value, tag: Tag, fields: []const Value) Value {
     const obj = tok orelse return mkStruct(tag, fields);
     // A malformed token here would mean overwriting memory `dropReuse` never
     // vacated -- corruption, not a recoverable error, and a last line of
-    // defense behind RcCheck's static token-linearity verification. The
-    // `std.debug.assert` gives a full stack trace pinpointing the call site
-    // in Debug/ReleaseSafe; it is compiled out entirely in
-    // ReleaseFast/ReleaseSmall, so the explicit `panic` after it is what
-    // actually catches a violation there (at the cost of only a one-line
-    // message, not a trace).
-    std.debug.assert(obj.rc == 1 and obj.kind == .strukt);
-    if (obj.rc != 1 or obj.kind != .strukt) panic("mkStructReuse: token does not own a unique strukt Object");
+    // defense behind RcCheck's static token-linearity verification.
+    rcInvariant(obj.rc == 1 and obj.kind == .strukt, "mkStructReuse: token does not own a unique strukt Object");
     if (obj.payload.strukt.fields.len == fields.len) {
         @memcpy(@constCast(obj.payload.strukt.fields), fields);
         obj.payload.strukt.tag = tag;
     } else {
-        std.debug.assert(obj.payload.strukt.fields.len == 0);
-        if (obj.payload.strukt.fields.len != 0) panic("mkStructReuse: arity-mismatched token was not cleared by dropReuse");
+        rcInvariant(obj.payload.strukt.fields.len == 0, "mkStructReuse: arity-mismatched token was not cleared by dropReuse");
         obj.payload.strukt = .{ .tag = tag, .fields = g_value.dupe(Value, fields) catch @panic("Malgo: out of memory") };
     }
     return obj;
@@ -287,7 +300,7 @@ fn decChildren(container: Value, children: []const Value) void {
     for (children, 0..) |c, i| {
         traceDecChild(container, i, c);
         if (c.rc == IMMORTAL) continue;
-        std.debug.assert(c.rc > 0);
+        rcInvariant(c.rc > 0, "decChildren: over-drop of an already-dead child Object");
         c.rc -= 1;
         if (c.rc == 0) g_free_worklist.append(scratch(), c) catch @panic("Malgo: out of memory");
     }
@@ -360,9 +373,9 @@ pub fn mkCodata(branches: []const NamedBranch, captures: []const Value) Value {
 // entry in the project's Zig-backend notes).
 //
 // These wrappers are the only thing 'Emit.hs' ever calls; the plain
-// dup/drop/dropReuse/mkStruct/mkClosure/mkStructReuse above are otherwise
-// only exercised directly by this file's own `test` blocks, so tracing
-// cannot perturb the RC decisions those tests already exercise.
+// dup/drop/dropReuse/mkStruct/mkClosure/mkStructReuse/mkRecord above are
+// otherwise only exercised directly by this file's own `test` blocks, so
+// tracing cannot perturb the RC decisions those tests already exercise.
 
 /// `name`\/`func` come from compiler-generated (unbounded-length) Zig-IR
 /// identifiers, so formatting into a fixed stack buffer can in principle
@@ -401,7 +414,8 @@ fn traceAddr(event: []const u8, addr: usize, name: []const u8, func: []const u8)
     ));
 }
 
-/// Traces a construction event (`mkStruct`/`mkClosure`/`mkStructReuse`):
+/// Traces a construction event
+/// (`mkStruct`/`mkClosure`/`mkStructReuse`/`mkRecord`):
 /// records the fresh container's address plus, per slot, the symbolic name
 /// and child address that went into it -- so a later 'traceDecChild' event
 /// against the same (container, slot) pair can be resolved back to a name.
@@ -486,6 +500,12 @@ pub fn mkClosureNamed(code: CodeFn, captures: []const Value, names: []const []co
 pub fn mkStructReuseNamed(tok: ?Value, tag: Tag, fields: []const Value, names: []const []const u8, func: []const u8) Value {
     const v = mkStructReuse(tok, tag, fields);
     traceSlots("mkStructReuse", v, fields, names, func);
+    return v;
+}
+
+pub fn mkRecordNamed(fields: []const NamedField, captures: []const Value, names: []const []const u8, func: []const u8) Value {
+    const v = mkRecord(fields, captures);
+    traceSlots("mkRecord", v, captures, names, func);
     return v;
 }
 
@@ -660,7 +680,7 @@ pub fn exitWithLeakCheck() void {
 /// Reads one byte from stdin, or null at EOF.
 fn readStdinByte() ?u8 {
     var buf: [1]u8 = undefined;
-    const n = std.posix.read(0, &buf) catch return null;
+    const n = std.posix.read(0, &buf) catch panic("stdin read error");
     if (n == 0) return null;
     return buf[0];
 }
@@ -1026,7 +1046,7 @@ pub fn malgo_substring(args: []const Value) Value {
     const rawEnd = asI64(args[2]);
     const len: i64 = @intCast(std.unicode.utf8CountCodepoints(s) catch panic("malformed UTF-8 string"));
     const clampedStart: i64 = clampI64(rawStart, 0, len);
-    const takeCount = rawEnd - rawStart;
+    const takeCount = rawEnd -% rawStart;
     if (takeCount <= 0) return mkString("");
     const clampedEnd: i64 = clampI64(clampedStart + takeCount, clampedStart, len);
     const startByte = utf8ByteOffsetOfScalar(s, @intCast(clampedStart));

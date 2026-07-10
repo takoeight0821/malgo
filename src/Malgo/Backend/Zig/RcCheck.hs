@@ -77,9 +77,15 @@ checkFunc fn = goBlock st0 fn.body
 
     useBorrowed st x = [UseAfterConsume fname x | not (accessible st x)]
 
-    consume st x
-      | ownedCount st x >= 1 = ([], st {counts = Map.adjust (subtract 1) x st.counts})
-      | otherwise = ([UseAfterConsume fname x], st)
+    -- Shared by 'consume', the 'Drop' case, and the 'DropReuse' case below:
+    -- decrement an owned reference count, or report that none was held.
+    decrementOwned st x
+      | ownedCount st x >= 1 = (True, st {counts = Map.adjust (subtract 1) x st.counts})
+      | otherwise = (False, st)
+
+    consume st x =
+      let (ok, st') = decrementOwned st x
+       in ([UseAfterConsume fname x | not ok], st')
 
     consumeMany = foldl' (\(vs, st) x -> first (vs <>) (consume st x)) . ([],)
 
@@ -94,14 +100,13 @@ checkFunc fn = goBlock st0 fn.body
       Dup x
         | accessible st x -> goStmts st {counts = Map.insertWith (+) x 1 st.counts} rest term
         | otherwise -> DupOfDead fname x : goStmts st {counts = Map.insertWith (+) x 1 st.counts} rest term
-      Drop x
-        | ownedCount st x >= 1 -> goStmts st {counts = Map.adjust (subtract 1) x st.counts} rest term
-        | otherwise -> DropOfDead fname x : goStmts st rest term
-      DropReuse tok x _
-        | ownedCount st x >= 1 ->
-            goStmts st {counts = Map.adjust (subtract 1) x st.counts, tokens = Set.insert tok st.tokens} rest term
-        | otherwise ->
-            DropOfDead fname x : goStmts st {tokens = Set.insert tok st.tokens} rest term
+      Drop x ->
+        let (ok, st') = decrementOwned st x
+         in [DropOfDead fname x | not ok] <> goStmts st' rest term
+      DropReuse tok x _ ->
+        let (ok, st') = decrementOwned st x
+            st'' = st' {tokens = Set.insert tok st'.tokens}
+         in [DropOfDead fname x | not ok] <> goStmts st'' rest term
       Let x e -> case e of
         -- noreturn: the path exits the process here; no obligations.
         PanicExpr _ -> []

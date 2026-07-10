@@ -16,9 +16,6 @@ import Test.Hspec
 -- golden-output blowup already fixed once for the per-pass Spec suites.
 spec :: Spec
 spec = parallel do
-  runIO do
-    setupBuiltin
-    setupPrelude
   testcases <- runIO do
     files <- listDirectory testcaseDir
     pure $ filter (isExtensionOf "mlg") files

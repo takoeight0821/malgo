@@ -12,12 +12,10 @@
 module Malgo.Backend.Zig.PerceusSpec (specWith) where
 
 import Effectful.Reader.Static (runReader)
-import Malgo.Backend.Zig.ClosureConv (convertProgram)
+import Malgo.Backend.Zig (ZigStages (..), runZigStages)
 import Malgo.Backend.Zig.Ir
-import Malgo.Backend.Zig.Peephole (peepholeProgram)
-import Malgo.Backend.Zig.Perceus (perceusFunc, perceusProgram)
+import Malgo.Backend.Zig.Perceus (perceusFunc)
 import Malgo.Backend.Zig.RcCheck (RcViolation (..), checkFunc, checkProgram)
-import Malgo.Backend.Zig.Reuse (reuseProgram)
 import Malgo.Id
 import Malgo.Module (ArtifactPath, ModuleName (..))
 import Malgo.Monad (runMalgoM)
@@ -187,18 +185,15 @@ corpusSpec builtin prelude = describe "corpus linearity (all golden testcases)" 
     it (takeBaseName testcase) do
       -- saturateProgram already ran inside compileTestCase's toCore call.
       (moduleName, program) <- compileTestCase builtin prelude (testcaseDir </> testcase)
-      (ir, final) <- runMalgoM flag $ runReader moduleName do
-        ir <- convertProgram program
-        -- The conversion itself never inserts RC ops...
-        final <- reuseProgram (perceusProgram (peepholeProgram ir))
-        pure (ir, final)
-      for_ ir.funcs \fn ->
+      stages <- runMalgoM flag $ runReader moduleName $ runZigStages program
+      -- The conversion itself never inserts RC ops...
+      for_ stages.closureConv.funcs \fn ->
         hasRcOps fn.body `shouldBe` False
       -- ...and the full pipeline (scrutinee-tuple peephole, Perceus, then
       -- Reuse — mirroring Zig.hs's order) stays linear on every path,
       -- including its new reuse-token obligations.
-      checkProgram final `shouldBe` Right ()
-      when (any (hasReuseOp . (.body)) final.funcs) $ writeIORef reuseFired True
+      checkProgram stages.reuse `shouldBe` Right ()
+      when (any (hasReuseOp . (.body)) stages.reuse.funcs) $ writeIORef reuseFired True
   -- A silent no-op pairing pass (matching nothing corpus-wide) would still
   -- pass every linearity check above; this is the guard against that.
   it "pairs at least one Drop/MkStruct somewhere in the corpus" do

@@ -33,14 +33,18 @@ instance Pass ZigPass where
   type Effects ZigPass es = (Reader ModuleName :> es, State Uniq :> es)
 
   runPassImpl _ program = do
-    stages <- runZigStages program
+    -- Only the final stage is needed here (unlike the MET tracer and the
+    -- corpus test, which inspect every intermediate); binding just that
+    -- field, rather than keeping the whole 'ZigStages' around, lets the
+    -- earlier stages be collected before 'emitProgram' runs.
+    ZigStages {reuse} <- runZigStages program
     -- The linearity check is pure and fast relative to the rest of the
     -- pipeline; running it unconditionally turns any Perceus bug into a
     -- compile-time error instead of a use-after-free in the produced
     -- binary. It also verifies reuse-token linearity, so a Reuse bug is
     -- caught the same way.
-    case checkProgram stages.reuse of
-      Right () -> emitProgram stages.reuse
+    case checkProgram reuse of
+      Right () -> emitProgram reuse
       Left violations ->
         throwError (ZigError $ "Perceus produced a non-linear program: " <> convertString (show violations))
 

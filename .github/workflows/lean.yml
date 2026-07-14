@@ -1,0 +1,25 @@
+name: lean
+
+# CI for the Lean 4 port under lean/. Milestone-gated jobs (parity,
+# zig-golden, selfhost) activate via lean/ci-gates.env as the port
+# progresses; lean-build (build + golden tests) is always on.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: lean-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lean-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
+        with:
+          lake-package-directory: lean
+          test: true

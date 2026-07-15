@@ -157,6 +157,8 @@ registering the result. Port of `searchAndRegister`. -/
 private partial def searchAndRegister (ws : Workspace) (name : ModuleName) : IO ArtifactPath := do
   match name with
   | .artifact path => return path
+  | .rawPath path =>
+    throw (IO.userError s!"unresolved import path reached the workspace: {path}")
   | .moduleName raw =>
     let fileName := raw ++ ".mlg"
     let rec search (dirs : Array System.FilePath) : IO System.FilePath := do

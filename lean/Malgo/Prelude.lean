@@ -50,6 +50,30 @@ instance : HasRange Range := ⟨id⟩
 
 instance : HasRange Empty := ⟨fun e => nomatch e⟩
 
+/-- Haskell `Data.List.NonEmpty`. -/
+structure NEList (α : Type u) where
+  head : α
+  tail : List α
+  deriving BEq, Ord, Repr
+
+namespace NEList
+
+def toList (xs : NEList α) : List α := xs.head :: xs.tail
+
+def map (f : α → β) (xs : NEList α) : NEList β := ⟨f xs.head, xs.tail.map f⟩
+
+def singleton (a : α) : NEList α := ⟨a, []⟩
+
+def length (xs : NEList α) : Nat := 1 + xs.tail.length
+
+def ofList : List α → Option (NEList α)
+  | [] => none
+  | x :: xs => some ⟨x, xs⟩
+
+instance [Inhabited α] : Inhabited (NEList α) := ⟨⟨default, []⟩⟩
+
+end NEList
+
 /-- Replaces Haskell's `prettyprinter`-based `Pretty`. Rendering is plain
 `String`; layout combinators are introduced only if a golden demands them. -/
 class Pretty (α : Type u) where

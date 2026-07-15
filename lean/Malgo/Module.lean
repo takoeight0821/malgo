@@ -101,11 +101,34 @@ private def findFileIn (dirs : Array System.FilePath) (fileName : String) :
       return some candidate
   return none
 
+/-- Resolve `.`/`..` components lexically; fallback for nonexistent
+paths, where Haskell `canonicalizePath` still succeeds but
+`IO.FS.realPath` throws. -/
+private def lexicalNormalize (p : System.FilePath) : System.FilePath := Id.run do
+  let mut stack : List String := []
+  for c in p.components do
+    match c with
+    | "" | "." => pure ()
+    | ".." => stack := stack.drop 1
+    | c => stack := c :: stack
+  return System.FilePath.mk
+    (System.FilePath.pathSeparator.toString ++
+      System.FilePath.pathSeparator.toString.intercalate stack.reverse)
+
+/-- Port of Haskell `canonicalizePath`: resolve symlinks when the path
+exists, normalize lexically when it does not (the argument must already
+be absolute, which both call sites guarantee). -/
+private def canonicalizePath (p : System.FilePath) : IO System.FilePath := do
+  try
+    IO.FS.realPath p
+  catch _ =>
+    return lexicalNormalize p
+
 /-- Resolve a path string relative to the directory containing the
 workspace (the project root). Port of `parseArtifactPathFromPwd`. -/
 def parseArtifactPathFromPwd (ws : Workspace) (path : System.FilePath) : IO ArtifactPath := do
   let pwd := ws.dir.parent
-  let originRaw ← IO.FS.realPath (pwd.toFilePath / path)
+  let originRaw ← canonicalizePath (pwd.toFilePath / path)
   let originPath ← IO.ofExcept (Path.parseAbsFile originRaw |>.mapError IO.userError)
   let relPath ← IO.ofExcept (pwd.stripProperPrefix originPath |>.mapError IO.userError)
   return { rawPath := path, originPath, relPath, targetPath := ws.dir / relPath }
@@ -115,7 +138,7 @@ Port of `parseArtifactPath`. -/
 def parseArtifactPath (ws : Workspace) (from_ : ArtifactPath) (path : System.FilePath) :
     IO ArtifactPath := do
   let base := from_.originPath.parent
-  let originRaw ← IO.FS.realPath (base.toFilePath / path)
+  let originRaw ← canonicalizePath (base.toFilePath / path)
   let originPath ← IO.ofExcept (Path.parseAbsFile originRaw |>.mapError IO.userError)
   let originBase := ws.dir.parent
   let relPath ← IO.ofExcept (originBase.stripProperPrefix originPath |>.mapError IO.userError)
@@ -156,14 +179,33 @@ class Resource (α : Type) where
 
 namespace Resource
 
-/-- Atomic save: write to a temp file in the same directory, then rename
-over the target (port of `atomicWriteByteString`). -/
+/-- Atomic save: write to a uniquely-named temp file in the same
+directory, then rename over the target (port of
+`atomicWriteByteString`). The unique name (`.writeNew` open, which fails
+on an existing file) keeps concurrent writers of a shared artifact from
+interleaving into one temp file; rename is last-writer-wins, which is
+fine because the payload is a deterministic function of the source. -/
 def save [Resource α] (path : ArtifactPath) (ext : String) (content : α) : IO Unit := do
   let target := (path.targetPath.replaceExtension ext).toFilePath
   IO.FS.createDirAll (target.parent.getD (System.FilePath.mk "."))
-  let tmp := System.FilePath.mk (target.toString ++ ".tmp")
-  IO.FS.writeBinFile tmp (toBytes content)
-  IO.FS.rename tmp target
+  let mut written := false
+  for n in [0:1000] do
+    let tmp := System.FilePath.mk s!"{target}.{n}.tmp"
+    let handle? ← try
+        some <$> IO.FS.Handle.mk tmp .writeNew
+      catch _ => pure none
+    if let some handle := handle? then
+      try
+        handle.write (toBytes content)
+        handle.flush
+        IO.FS.rename tmp target
+      catch e =>
+        try IO.FS.removeFile tmp catch _ => pure ()
+        throw e
+      written := true
+      break
+  unless written do
+    throw (IO.userError s!"Resource.save: could not create a temp file for {target}")
 
 /-- Load from the workspace mirror, falling back to (and caching from)
 the origin file. Port of `Resource.load`. -/

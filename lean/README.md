@@ -6,7 +6,9 @@ committed `.golden/` tree, the selfhost scripts, and `scripts/zig-golden.sh`
 gate both implementations. Groups whose output legitimately differs from
 Haskell (float formatting, megaparsec error text, PrettyIR layout) are
 regenerated into `.golden-lean/` with the same layout; the test runner
-checks `.golden/` first and falls back.
+checks `.golden-lean/` first (an explicit override wins), then the shared
+`.golden/`. `--update` only ever writes `.golden-lean/` — the shared tree
+stays Haskell-owned.
 
 ## Building
 

@@ -65,7 +65,7 @@ end Atom
 inductive SExpr where
   | atom (a : Atom)
   | list (xs : List SExpr)
-  deriving BEq, Repr
+  deriving BEq, Repr, Inhabited
 
 namespace SExpr
 

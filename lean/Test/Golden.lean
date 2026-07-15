@@ -1,8 +1,10 @@
 /-! Hand-rolled golden runner, layout-compatible with hspec-golden:
 `.golden/<Group>/<Case>/golden` holds the expected bytes, `actual` is
-written next to it on mismatch. Groups that legitimately diverge from the
-Haskell output live in `.golden-lean/` with the same layout; the runner
-checks `.golden/` first and falls back. -/
+written next to it on mismatch. Cases whose Lean output legitimately
+diverges from Haskell get an override in `.golden-lean/` with the same
+layout: the runner checks `.golden-lean/` first (an explicit override
+wins), then the shared `.golden/`. `--update` only ever writes to
+`.golden-lean/` — the shared tree stays Haskell-owned. -/
 
 namespace Malgo.Test
 
@@ -14,19 +16,15 @@ structure GoldenCase where
 def repoRoot : IO System.FilePath := do
   return System.FilePath.mk ((← IO.getEnv "MALGO_REPO_ROOT").getD "..")
 
+/-- Override directory (`.golden-lean/`) first, shared `.golden/` second. -/
 private def goldenDirs (c : GoldenCase) : IO (Array System.FilePath) := do
   let root ← repoRoot
-  return #[root / ".golden" / c.group / c.name, root / ".golden-lean" / c.group / c.name]
+  return #[root / ".golden-lean" / c.group / c.name, root / ".golden" / c.group / c.name]
 
-/-- Locate the golden file for a case: prefer `.golden/`, fall back to
-`.golden-lean/`; with `update = true` a missing case is created under
-`.golden-lean/` (never under the shared `.golden/`). -/
-private def resolveGoldenDir (update : Bool) (c : GoldenCase) : IO (Option System.FilePath) := do
+private def resolveGoldenDir (c : GoldenCase) : IO (Option System.FilePath) := do
   for dir in (← goldenDirs c) do
     if (← (dir / "golden").pathExists) then
       return some dir
-  if update then
-    return some ((← goldenDirs c)[1]!)
   return none
 
 structure Outcome where
@@ -35,18 +33,25 @@ structure Outcome where
 
 def checkGolden (update : Bool) (c : GoldenCase) : IO Outcome := do
   let label := s!"{c.group}/{c.name}"
-  match ← resolveGoldenDir update c with
-  | none => return ⟨false, s!"MISSING {label}: no golden file (run with --update to create)"⟩
+  let overrideDir := (← goldenDirs c)[0]!
+  match ← resolveGoldenDir c with
+  | none =>
+    if update then
+      IO.FS.createDirAll overrideDir
+      IO.FS.writeFile (overrideDir / "golden") (← c.run)
+      return ⟨true, s!"CREATED {label} (in .golden-lean)"⟩
+    return ⟨false, s!"MISSING {label}: no golden file (run with --update to create)"⟩
   | some dir =>
     let goldenPath := dir / "golden"
     let actual ← c.run
-    let existing ← if (← goldenPath.pathExists) then some <$> IO.FS.readFile goldenPath else pure none
-    if existing == some actual then
+    if (← IO.FS.readFile goldenPath) == actual then
       return ⟨true, s!"ok {label}"⟩
     else if update then
-      IO.FS.createDirAll dir
-      IO.FS.writeFile goldenPath actual
-      return ⟨true, s!"UPDATED {label}"⟩
+      -- Never clobber the shared, Haskell-owned .golden/ tree: a
+      -- divergent case gets (or refreshes) a .golden-lean override.
+      IO.FS.createDirAll overrideDir
+      IO.FS.writeFile (overrideDir / "golden") actual
+      return ⟨true, s!"UPDATED {label} (override in .golden-lean)"⟩
     else
       IO.FS.createDirAll dir
       IO.FS.writeFile (dir / "actual") actual
@@ -68,6 +73,11 @@ def parseArgs : List String → Except String Config
   | arg :: _ => .error s!"unknown argument: {arg} (usage: [--match PATTERN] [--update])"
 
 def runSuite (cfg : Config) (cases : List GoldenCase) : IO UInt32 := do
+  let root ← repoRoot
+  unless (← (root / ".golden").isDir) do
+    IO.eprintln s!"golden root not found at {root / ".golden"} — run from lean/ (lake test) \
+or set MALGO_REPO_ROOT to the repository root"
+    return 2
   let selected := match cfg.match? with
     | none => cases
     | some pat => cases.filter fun c => (s!"{c.group}/{c.name}".splitOn pat).length > 1

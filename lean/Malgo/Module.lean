@@ -34,6 +34,11 @@ end ArtifactPath
 inductive ModuleName where
   | moduleName (raw : String)
   | artifact (path : ArtifactPath)
+  /-- Not in Haskell: a path-literal import as written in the source.
+  Exists only between the pure parse and import resolution (the Haskell
+  parser resolves paths mid-parse via IO); never reaches dumps or later
+  passes. -/
+  | rawPath (path : String)
   deriving BEq, Ord, Repr
 
 namespace ModuleName
@@ -41,6 +46,7 @@ namespace ModuleName
 def toStr : ModuleName → String
   | .moduleName raw => raw
   | .artifact path => path.relPath.toFilePath.toString
+  | .rawPath path => path
 
 /-- Basename of the module without extension; used in `Id` dumps. -/
 def digest : ModuleName → String
@@ -49,6 +55,7 @@ def digest : ModuleName → String
     match path.relPath.filename.splitExtension with
     | some (name, _) => name.toFilePath.toString
     | none => path.relPath.filename.toFilePath.toString
+  | .rawPath path => path
 
 instance : Pretty ModuleName := ⟨toStr⟩
 
@@ -56,6 +63,7 @@ instance : ToSExpr ModuleName where
   toSExpr
     | .moduleName raw => .atom (.symbol raw)
     | .artifact path => .atom (.str path.relPath.toFilePath.toString)
+    | .rawPath path => .atom (.str path)
 
 instance : HasRange ModuleName where
   range m :=

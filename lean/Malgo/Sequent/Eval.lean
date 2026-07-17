@@ -98,13 +98,13 @@ def isZeroValue : Value → Bool
   | _ => false
 
 /-- Convert any Value to a text representation for printing (Haskell
-`valueToText`). Float rendering uses Lean `toString`, which is NOT
-byte-identical to Haskell `show` for floats — the only known parity gap. -/
+`valueToText`). Floats render via `Malgo.haskellShowFloat` (Haskell-`show`
+parity within the goldens' decimal range; see its docstring for limits). -/
 partial def valueToText : Value → String
   | .immediate (.int32 n) => toString n.toInt
   | .immediate (.int64 n) => toString n.toInt
-  | .immediate (.float f) => toString f.toFloat
-  | .immediate (.double d) => toString d
+  | .immediate (.float f) => Malgo.haskellShowFloat f.toFloat
+  | .immediate (.double d) => Malgo.haskellShowFloat d
   | .immediate (.char c) => String.singleton c
   | .immediate (.string s) => s
   | .struct .tuple [] => "{}"
@@ -406,8 +406,8 @@ def unaryPrim (range : Range) (name : String) (f : Range → Value → EvalM Val
 def toStringPrim (range : Range) (name : String) : List Value → EvalM Value
   | [.immediate (.int32 n)] => pure (.immediate (.string (toString n.toInt)))
   | [.immediate (.int64 n)] => pure (.immediate (.string (toString n.toInt)))
-  | [.immediate (.float n)] => pure (.immediate (.string (toString n.toFloat)))
-  | [.immediate (.double n)] => pure (.immediate (.string (toString n)))
+  | [.immediate (.float n)] => pure (.immediate (.string (Malgo.haskellShowFloat n.toFloat)))
+  | [.immediate (.double n)] => pure (.immediate (.string (Malgo.haskellShowFloat n)))
   | [.immediate (.string s)] => pure (.immediate (.string s))
   | values => throw (.invalidArguments range name values)
 

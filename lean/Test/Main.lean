@@ -149,6 +149,29 @@ def toCoreCases (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
       coreCase memo s!"flat-fingerprint/{n}" p (fun ir => Malgo.Test.Fingerprint.fingerprintFlat ir.flat),
       coreCase memo s!"join-fingerprint/{n}" p (fun ir => Malgo.Test.Fingerprint.fingerprintJoin ir.join) ]
 
+/-! ## Eval gate (captured stdout, per `EvalSpec`)
+
+Linking mirrors Haskell `compileTestCase`: `builtin <> prelude <> program`
+(Builtin/Prelude Join programs come from the same uniq-isolated lowerings
+the ToCore gate validated), stdin is the fixed `"Hello\n"` of
+`setupTestStdin`, and the golden is the captured stdout. -/
+
+private def evalGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
+    (name : String) : IO String := do
+  try
+    let builtin ← getAllIR memo (System.FilePath.mk "runtime/malgo/Builtin.mlg")
+    let prel ← getAllIR memo (System.FilePath.mk "runtime/malgo/Prelude.mlg")
+    let ir ← getAllIR memo (testcasePath name)
+    let linked := Malgo.Driver.linkPrograms [builtin.join, prel.join, ir.join]
+    let (handlers, outRef) ← Malgo.Sequent.Eval.Handlers.buffered "Hello\n"
+    MalgoM.run flag {} (Malgo.Sequent.Eval.evalProgram ir.moduleName handlers linked)
+    outRef.get
+  catch e => return s!"ERROR: {toString e}"
+
+def evalCases (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
+    (names : List String) : List GoldenCase :=
+  names.map fun n => { group := "Malgo.Sequent.Eval", name := n, run := evalGolden memo n }
+
 /-- Testcase base names under `test/testcases/malgo/` (Haskell
 `listDirectory testcaseDir`), sorted for stable output. -/
 def enumerateTestcases : IO (List String) := do
@@ -175,4 +198,5 @@ def main (args : List String) : IO UInt32 := do
     let memo ← IO.mkRef ({} : Std.HashMap String Malgo.Driver.AllIR)
     let names ← Malgo.Test.enumerateTestcases
     let allCases := Malgo.Test.cases ++ Malgo.Test.toCoreCases memo names
+      ++ Malgo.Test.evalCases memo names
     Malgo.Test.runSuite cfg allCases

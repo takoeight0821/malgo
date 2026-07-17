@@ -9,6 +9,7 @@ import Malgo.Sequent.ToCore
 import Malgo.Sequent.Core.Full
 import Malgo.Sequent.Core.Flat
 import Malgo.Sequent.Core.Join
+import Malgo.Sequent.Eval
 
 /-! M1 mini-driver: a direct, in-memory compile pipeline up to Rename.
 
@@ -118,8 +119,11 @@ def compileToFun (ws : Workspace) (cache : InterfaceCache) (path : System.FilePa
   let (renamed, _) ← compileToRenamed ws cache path
   Malgo.Sequent.ToFun.pass renamed.moduleName renamed.moduleDefinition
 
-/-- All three Core-level IRs for one module, matching `ToCoreSpec`'s `AllIR`. -/
+/-- All three Core-level IRs for one module, matching `ToCoreSpec`'s `AllIR`,
+plus the module name and dependency list needed for linking and eval. -/
 structure AllIR where
+  moduleName : ModuleName
+  dependencies : List ModuleName
   core : Malgo.Sequent.Core.Full.Program
   flat : Malgo.Sequent.Core.Flat.Program
   join : Malgo.Sequent.Core.Join.Program
@@ -127,12 +131,63 @@ structure AllIR where
 /-- Parse + rename + ToFun + ToCore + Flat + Join, keeping every stage. -/
 def compileToJoin (ws : Workspace) (cache : InterfaceCache) (path : System.FilePath) :
     MalgoM AllIR := do
-  let (renamed, _) ← compileToRenamed ws cache path
+  let (renamed, rnState) ← compileToRenamed ws cache path
   let mn := renamed.moduleName
   let fn ← Malgo.Sequent.ToFun.pass mn renamed.moduleDefinition
   let core ← Malgo.Sequent.ToCore.toCore mn fn
   let flat ← Malgo.Sequent.Core.Flat.flatProgram mn core
   let join ← Malgo.Sequent.Core.Join.joinProgram mn flat
-  pure { core, flat, join }
+  pure { moduleName := mn, dependencies := rnState.dependencies.toList, core, flat, join }
+
+/-! ## Linking and evaluation (M1: direct in-memory linking, no artifacts) -/
+
+/-- Concatenate Join programs, dependencies first (the order Haskell's
+`compileTestCase` uses: `builtin <> prelude <> program`). -/
+def linkPrograms (progs : List Malgo.Sequent.Core.Join.Program) :
+    Malgo.Sequent.Core.Join.Program :=
+  { definitions := progs.flatMap (·.definitions), dependencies := [] }
+
+/-- Compile a module and its dependency closure to Join programs, dependencies
+first (depth-first postorder, deduplicated). Each module is lowered once; a
+dependency is re-renamed for lowering even though `loadInterface` renamed it
+for its interface — wasteful but sound, since cross-module references use
+uniq-free `External` ids (the query engine removes the duplication in M2). -/
+partial def compileClosure (ws : Workspace) (cache : InterfaceCache)
+    (joins : IO.Ref (Std.TreeMap ModuleName AllIR)) (path : System.FilePath) :
+    MalgoM AllIR := do
+  let ir ← compileToJoin ws cache path
+  for dep in ir.dependencies do
+    unless (← joins.get).contains dep do
+      let depPath ← MalgoM.io (ws.getModulePath dep)
+      let depIR ← compileClosure ws cache joins depPath.originPath.toFilePath
+      joins.modify (·.insert dep depIR)
+  pure ir
+
+/-- Deposit a compiled module's source into the workspace mirror (Haskell
+`save srcModulePath ".mlg" src` in `Driver.compile`). Bare-name imports
+(`import Builtin`) resolve by searching the mirror, so evaluating
+`runtime/malgo/Builtin.mlg` once seeds it for later runs — the protocol
+`scripts/zig-golden.sh` and the selfhost scripts rely on. -/
+private def seedMirror (ir : AllIR) : IO Unit := do
+  if let .artifact ap := ir.moduleName then
+    let target := ap.targetPath.toFilePath
+    IO.FS.createDirAll (target.parent.getD (System.FilePath.mk "."))
+    IO.FS.writeBinFile target (← IO.FS.readBinFile ap.originPath.toFilePath)
+
+/-- CLI entry for `malgo eval --target eval`: compile, link the dependency
+closure, and run the interpreter on real handles. -/
+def compileAndEval (flag : Flag) (path : System.FilePath) : IO UInt32 := do
+  let ws ← Workspace.setup
+  MalgoM.run flag {} do
+    let cache : InterfaceCache ← MalgoM.io (IO.mkRef {})
+    let joins ← MalgoM.io (IO.mkRef ({} : Std.TreeMap ModuleName AllIR))
+    let ir ← compileClosure ws cache joins path
+    let deps := (← MalgoM.io joins.get).values
+    for m in deps ++ [ir] do
+      MalgoM.io (seedMirror m)
+    let linked := linkPrograms (deps.map (·.join) ++ [ir.join])
+    let handlers := Malgo.Sequent.Eval.Handlers.real flag.programArgs
+    Malgo.Sequent.Eval.evalProgram ir.moduleName handlers linked
+  return 0
 
 end Malgo.Driver

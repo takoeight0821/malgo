@@ -177,9 +177,11 @@ def makeAbsolute (p : System.FilePath) : IO System.FilePath := do
 def runEval (flag : Flag) (source : System.FilePath) : IO UInt32 := do
   match flag.target with
   | .eval =>
-    -- TODO(M1 integration): Driver.compileAndEval flag source
-    IO.eprintln s!"malgo eval: the evaluator is not wired up yet (M1 integration pending): {source}"
-    return 1
+    try
+      Malgo.Driver.compileAndEval flag source
+    catch e =>
+      IO.eprintln (toString e)
+      return 1
   | .scheme =>
     IO.eprintln "malgo eval --target scheme: the Scheme backend is not yet ported."
     return 1

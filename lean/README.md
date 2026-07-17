@@ -27,7 +27,8 @@ not wire-compatible with the Haskell `binary` formats.
 | Milestone | Status | Modules |
 |---|---|---|
 | M0 support layer | done | Prelude, Path, SExpr (s-cargot-exact printer), Module, Features, Monad, Pass, Id, Data/IntMap |
-| M1 walking skeleton | not started | Parser/Prim+CStyle, Syntax, Rename, Sequent/{Fun,ToFun,ToCore,Core.*}, Eval, CLI |
+| M1 walking skeleton | done — `lake test` 337/337 | Parser/Prim+CStyle, Syntax (phase-indexed), Rename, Data/Graph (SCC), Sequent/{Fun,ToFun,SaturateCtor,ReuseSpecialize,ToCore,Core.{Full,Flat,Join}}, Eval (defunctionalized ConsumerK), Driver, CLI. Gates: Parser 3/3, Rename 18/18, ToFun 18/18, ToCore 225/225 (incl. all 73 join dumps + fingerprints), Eval 73/73 stdout goldens; `malgo eval` verified end-to-end incl. the mirror-seeding protocol |
+| M4 Scheme backend | ported early, unverified | Backend/Scheme (selfhost gate pending) |
 | M2–M9 | not started | see the plan |
 
 Conventions:

@@ -3,6 +3,7 @@ import Std.Data.TreeSet
 import Malgo.Prelude
 import Malgo.Id
 import Malgo.Module
+import Malgo.Interface
 import Malgo.Syntax.Extension
 
 /-! Port of `src/Malgo/Rename/RnEnv.hs`: the name-resolution environment
@@ -129,21 +130,11 @@ def lookupQualifiedVar (env : RnEnv) (pos : Range) (modName : ModuleName) (name 
 
 /-! ## Interface
 
-Minimal placeholder for `Malgo.Interface`, holding only the fields the
-Rename pass consumes for imports (keyed by raw name, matching
-`buildInterface`'s `Map.mapKeys (·.name)`). The driver constructs and
-persists the full interface later. -/
+The real `Interface` (and `externalFromInterface`) now live in
+`Malgo/Interface.lean`. Re-export them into `Malgo.Rename` so the renamer's
+consumption surface — and the test harness's `Malgo.Rename.Interface` —
+stays unchanged. -/
 
-structure Interface where
-  moduleName : ModuleName
-  infixInfo : Std.TreeMap String (Assoc × Int) := {}
-  dependencies : Std.TreeSet ModuleName := {}
-  exportedIdentList : List String := []
-  exportedTypeIdentList : List String := []
-
-/-- Turn a raw exported name into its `external` `Id` in the interface's
-module. -/
-def externalFromInterface (i : Interface) (name : String) : Id :=
-  { name, moduleName := i.moduleName, sort := .external }
+export Malgo (Interface externalFromInterface)
 
 end Malgo.Rename

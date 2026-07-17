@@ -1,5 +1,5 @@
 -- | Malgo.Driver is the entry point of `malgo to-ll`.
-module Malgo.Driver (compile, compileFromAST, compileToExecutable, withDump) where
+module Malgo.Driver (compile, compileFromAST, compileToExecutable, withDump, DumpStage (..), dumpFingerprint) where
 
 import Control.Exception (IOException, catch)
 import Data.ByteString qualified as BS
@@ -20,10 +20,17 @@ import Malgo.Prelude
 import Malgo.Query
 import Malgo.Query.Database
 import Malgo.Query.Engine
+import Malgo.Rename (RenamePass (..), genBuiltinRnEnv)
 import Malgo.Sequent.BigStepEval (BigStepEvalPass (..))
+import Malgo.Sequent.Core.Fingerprint (fingerprintFlat, fingerprintJoin)
+import Malgo.Sequent.Core.Flat (flatProgram)
 import Malgo.Sequent.Core.Join qualified as Join
+import Malgo.Sequent.Core.Join (joinProgram)
 import Malgo.Sequent.Eval (EvalPass (..), Handlers (..))
+import Malgo.Sequent.ToCore (toCore)
+import Malgo.Sequent.ToFun (ToFunPass (..))
 import Malgo.Syntax qualified as Syntax
+import Malgo.Syntax (Module (..))
 import Malgo.Syntax.Extension
 import System.IO (hPutChar)
 import System.IO qualified as IO
@@ -148,3 +155,40 @@ compile srcPath = do
       hPrint stderr $ pretty parsedAst
     runReader parsedAst.moduleName
       $ compileFromAST srcModulePath parsedAst
+
+-- | Which format-immune IR fingerprint to print (see
+-- 'Malgo.Sequent.Core.Fingerprint').
+data DumpStage = FlatFingerprint | JoinFingerprint
+
+-- | Lower a single module (unlinked) through Parse → Rename → ToFun →
+-- ToCore → Flat → Join and print its canonical IR fingerprint. Mirrors the
+-- @ToCoreSpec@ 'driveAll' path exactly (the one that produced the committed
+-- @{flat,join}-fingerprint@ goldens), so the Lean CLI's @dump@ can be diffed
+-- against it for cross-implementation IR parity. Dependency interfaces are
+-- resolved from the workspace mirror, so seed Builtin/Prelude first.
+dumpFingerprint ::
+  ( Reader Flag :> es,
+    IOE :> es,
+    State Uniq :> es,
+    Workspace :> es,
+    Features :> es
+  ) =>
+  DumpStage ->
+  FilePath ->
+  Eff es ()
+dumpFingerprint stage srcPath = do
+  src <- liftIO $ BS.readFile srcPath
+  db <- liftIO newDatabase
+  out <- runCompileError $ runQueryDB db do
+    parsed <- runPass ParserPass (srcPath, convertString @BS.ByteString src)
+    rnEnv <- genBuiltinRnEnv
+    (Module modName renamedBindGroup, _) <- runPass RenamePass (parsed, rnEnv)
+    runReader modName do
+      fun <- runPass ToFunPass renamedBindGroup
+      core <- toCore fun
+      flat <- flatProgram core
+      joined <- joinProgram flat
+      pure $ case stage of
+        FlatFingerprint -> fingerprintFlat flat
+        JoinFingerprint -> fingerprintJoin joined
+  liftIO $ putStrLn out

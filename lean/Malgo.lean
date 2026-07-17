@@ -6,6 +6,7 @@ import Malgo.Features
 import Malgo.Monad
 import Malgo.Pass
 import Malgo.Id
+import Malgo.Interface
 import Malgo.Data.IntMap
 import Malgo.Data.Graph
 import Malgo.Data.ShowFloat
@@ -22,11 +23,13 @@ import Malgo.Sequent.ToFun
 import Malgo.Sequent.SaturateCtor
 import Malgo.Sequent.ReuseSpecialize
 import Malgo.Sequent.ToCore
+import Malgo.Sequent.Core.Json
 import Malgo.Sequent.Eval
 import Malgo.Sequent.BigStepEval
 import Malgo.Rename.RnEnv
 import Malgo.Rename.RnState
 import Malgo.Rename.Pass
-import Malgo.Sequent.Eval
+import Malgo.Query
+import Malgo.Query.Engine
 import Malgo.Backend.Scheme
 import Malgo.Driver

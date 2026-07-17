@@ -25,8 +25,62 @@ private def parseGolden (name : String) : IO String := do
 private def parserCase (name : String) : GoldenCase :=
   { group := "Malgo.Parser", name, run := parseGolden name }
 
+/-! ## Rename golden cases (the first real uniq-order-parity gate)
+
+Each case runs the M1 mini-driver (`Malgo.Driver.compileToRenamed`) and
+dumps `sShow` of the renamed module — exactly what the Haskell
+`RenameSpec`'s `driveRename` dumps. Builtin/Prelude interfaces are
+pre-built once in uniq-isolated runs (mirroring `setupBuiltin`/
+`setupPrelude`) so a testcase's own `Id`s start at uniq 0. -/
+
+/-- Test flag, matching Haskell `TestUtils.flag`. -/
+def flag : Flag :=
+  { noOptimize := false, lambdaLift := false, debugMode := false, testMode := true,
+    target := .eval, evalMode := .smallStep, useInfer := false, programArgs := [] }
+
+initialize prebuiltRef : IO.Ref (Option (Std.TreeMap ModuleName Malgo.Rename.Interface)) ←
+  IO.mkRef none
+
+/-- Pre-build (once) the Builtin then Prelude interfaces, each in its own
+`MalgoM.run` so their uniqs never leak into a testcase's numbering. -/
+def getPrebuilt : IO (Std.TreeMap ModuleName Malgo.Rename.Interface) := do
+  match ← prebuiltRef.get with
+  | some c => return c
+  | none =>
+    let ws ← Workspace.setup
+    let cache ← IO.mkRef ({} : Std.TreeMap ModuleName Malgo.Rename.Interface)
+    MalgoM.run flag {} (Malgo.Driver.prebuildInterface ws cache "runtime/malgo/Builtin.mlg")
+    MalgoM.run flag {} (Malgo.Driver.prebuildInterface ws cache "runtime/malgo/Prelude.mlg")
+    let c ← cache.get
+    prebuiltRef.set (some c)
+    return c
+
+private def renameGolden (path : System.FilePath) : IO String := do
+  try
+    let ws ← Workspace.setup
+    let cache ← IO.mkRef (← getPrebuilt)
+    let (renamed, _) ← MalgoM.run flag {} (Malgo.Driver.compileToRenamed ws cache path)
+    return sShow renamed
+  catch e => return s!"ERROR: {toString e}"
+
+private def renameCase (name : String) (path : System.FilePath) : GoldenCase :=
+  { group := "Malgo.Rename", name, run := renameGolden path }
+
+private def testcasePath (name : String) : System.FilePath :=
+  System.FilePath.mk s!"test/testcases/malgo/{name}.mlg"
+
+/-- The 18 non-error Rename goldens: Builtin/Prelude (from `runtime/malgo/`)
+plus the 16 representative testcases. -/
+def renameCases : List GoldenCase :=
+  [ renameCase "Builtin" "runtime/malgo/Builtin.mlg",
+    renameCase "Prelude" "runtime/malgo/Prelude.mlg" ] ++
+  ([ "Primitive", "ListOps", "HelloImport", "RecordTest", "RowPoly", "CodataE2E",
+     "FibCopattern", "LabelGoto", "NestedMatch", "CStyleApply", "ZeroArgs", "Eventually",
+     "TuplePattern", "NestedRecursive", "StringPattern", "LetPattern" ].map
+    (fun n => renameCase n (testcasePath n)))
+
 def cases : List GoldenCase :=
-  [parserCase "Primitive", parserCase "HelloImport", parserCase "Eventually"]
+  [parserCase "Primitive", parserCase "HelloImport", parserCase "Eventually"] ++ renameCases
 
 end Malgo.Test
 

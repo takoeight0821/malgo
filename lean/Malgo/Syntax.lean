@@ -285,8 +285,8 @@ partial def Pat.dump [ToSExpr (XId p)] : Pat p → SExpr
   | .tuple _ ps => .list (sym "tuple" :: ps.map Pat.dump)
   | .record _ kps => .list (sym "record" :: kps.map fun (k, pat) => .list [toSExpr k, pat.dump])
   | .list _ ps => .list (sym "list" :: ps.map Pat.dump)
-  | .unboxed _ l => toSExpr l
-  | .boxed _ l => toSExpr l
+  | .unboxed _ l => .list [sym "unboxed", toSExpr l]
+  | .boxed _ l => .list [sym "boxed", toSExpr l]
 
 end
 

@@ -24,3 +24,5 @@ import Malgo.Sequent.ToCore
 import Malgo.Rename.RnEnv
 import Malgo.Rename.RnState
 import Malgo.Rename.Pass
+import Malgo.Backend.Scheme
+import Malgo.Driver

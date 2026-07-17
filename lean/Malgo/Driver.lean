@@ -3,6 +3,12 @@ import Malgo.Module
 import Malgo.Parser
 import Malgo.Parser.Prim
 import Malgo.Rename.Pass
+import Malgo.Sequent.Fun
+import Malgo.Sequent.ToFun
+import Malgo.Sequent.ToCore
+import Malgo.Sequent.Core.Full
+import Malgo.Sequent.Core.Flat
+import Malgo.Sequent.Core.Join
 
 /-! M1 mini-driver: a direct, in-memory compile pipeline up to Rename.
 
@@ -97,5 +103,36 @@ def prebuildInterface (ws : Workspace) (cache : InterfaceCache) (path : System.F
     let inf := buildInterface parsed.moduleName rnState
     cache.modify (·.insert parsed.moduleName inf)
     cache.modify (·.insert (.moduleName parsed.moduleName.digest) inf)
+
+/-! ## Lowering to the sequent IRs (single module, unlinked)
+
+Mirrors Haskell `TestUtils`/`Query.Engine` for one module: ToFun → ToCore
+(runs saturate+specialize internally — not re-run here) → Flat → Join.
+Cross-module linking (concatenating Builtin/Prelude programs) comes with
+Eval integration; these produce the single module's IR, as the ToFun/ToCore
+specs dump. -/
+
+/-- Parse + rename + ToFun. -/
+def compileToFun (ws : Workspace) (cache : InterfaceCache) (path : System.FilePath) :
+    MalgoM Malgo.Sequent.Fun.Program := do
+  let (renamed, _) ← compileToRenamed ws cache path
+  Malgo.Sequent.ToFun.pass renamed.moduleName renamed.moduleDefinition
+
+/-- All three Core-level IRs for one module, matching `ToCoreSpec`'s `AllIR`. -/
+structure AllIR where
+  core : Malgo.Sequent.Core.Full.Program
+  flat : Malgo.Sequent.Core.Flat.Program
+  join : Malgo.Sequent.Core.Join.Program
+
+/-- Parse + rename + ToFun + ToCore + Flat + Join, keeping every stage. -/
+def compileToJoin (ws : Workspace) (cache : InterfaceCache) (path : System.FilePath) :
+    MalgoM AllIR := do
+  let (renamed, _) ← compileToRenamed ws cache path
+  let mn := renamed.moduleName
+  let fn ← Malgo.Sequent.ToFun.pass mn renamed.moduleDefinition
+  let core ← Malgo.Sequent.ToCore.toCore mn fn
+  let flat ← Malgo.Sequent.Core.Flat.flatProgram mn core
+  let join ← Malgo.Sequent.Core.Join.joinProgram mn flat
+  pure { core, flat, join }
 
 end Malgo.Driver

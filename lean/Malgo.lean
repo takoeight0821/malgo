@@ -21,8 +21,10 @@ import Malgo.Sequent.ToFun
 import Malgo.Sequent.SaturateCtor
 import Malgo.Sequent.ReuseSpecialize
 import Malgo.Sequent.ToCore
+import Malgo.Sequent.Eval
 import Malgo.Rename.RnEnv
 import Malgo.Rename.RnState
 import Malgo.Rename.Pass
+import Malgo.Sequent.Eval
 import Malgo.Backend.Scheme
 import Malgo.Driver

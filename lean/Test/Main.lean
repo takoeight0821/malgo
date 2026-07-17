@@ -172,6 +172,68 @@ def evalCases (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     (names : List String) : List GoldenCase :=
   names.map fun n => { group := "Malgo.Sequent.Eval", name := n, run := evalGolden memo n }
 
+/-! ## BigStepEval gate (captured stdout, per `BigStepEvalSpec`)
+
+Identical linking/stdin to `evalGolden`, but drives the program through the
+big-step evaluator. The Haskell `BigStepEvalSpec` nests these under
+`describe "golden"`, so the golden path is
+`.golden/Malgo.Sequent.BigStepEval/golden/<Case>/golden` — hence the
+`golden/` prefix in `name`. The goldens are byte-identical to small-step's;
+the consistency/with-elaborate `describe` blocks are not ported (they assert
+evaluator agreement, not stdout). -/
+
+private def bigStepEvalGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
+    (name : String) : IO String := do
+  try
+    let builtin ← getAllIR memo (System.FilePath.mk "runtime/malgo/Builtin.mlg")
+    let prel ← getAllIR memo (System.FilePath.mk "runtime/malgo/Prelude.mlg")
+    let ir ← getAllIR memo (testcasePath name)
+    let linked := Malgo.Driver.linkPrograms [builtin.join, prel.join, ir.join]
+    let (handlers, outRef) ← Malgo.Sequent.Eval.Handlers.buffered "Hello\n"
+    MalgoM.run flag {} (Malgo.Sequent.BigStepEval.bigStepEvalProgram ir.moduleName handlers linked)
+    outRef.get
+  catch e => return s!"ERROR: {toString e}"
+
+def bigStepEvalCases (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
+    (names : List String) : List GoldenCase :=
+  names.map fun n =>
+    { group := "Malgo.Sequent.BigStepEval", name := s!"golden/{n}", run := bigStepEvalGolden memo n }
+
+/-! ## Forth gate (captured stdout, per `ForthSpec`)
+
+`ForthSpec` compiles `examples/malgo/Forth.mlg` once, then for every
+`test/testcases/forth/<case>.fs` feeds that file's contents as **stdin**
+(Forth.mlg reads its program via `getContents`, not argv) to the small-step
+`evalProgram`, capturing stdout. Golden path is
+`.golden/Malgo.Forth/<case>/golden`. -/
+
+private def forthMlgPath : System.FilePath := System.FilePath.mk "examples/malgo/Forth.mlg"
+private def forthTestcaseDir : System.FilePath := System.FilePath.mk "test/testcases/forth"
+
+private def forthGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
+    (caseName : String) : IO String := do
+  try
+    let builtin ← getAllIR memo (System.FilePath.mk "runtime/malgo/Builtin.mlg")
+    let prel ← getAllIR memo (System.FilePath.mk "runtime/malgo/Prelude.mlg")
+    let forth ← getAllIR memo forthMlgPath
+    let linked := Malgo.Driver.linkPrograms [builtin.join, prel.join, forth.join]
+    let input ← IO.FS.readFile (forthTestcaseDir / s!"{caseName}.fs")
+    let (handlers, outRef) ← Malgo.Sequent.Eval.Handlers.buffered input
+    MalgoM.run flag {} (Malgo.Sequent.Eval.evalProgram forth.moduleName handlers linked)
+    outRef.get
+  catch e => return s!"ERROR: {toString e}"
+
+/-- Base names of `test/testcases/forth/*.fs`, sorted for stable output. -/
+def enumerateForthTestcases : IO (List String) := do
+  let entries ← forthTestcaseDir.readDir
+  let names := entries.toList.filterMap fun e =>
+    if e.fileName.endsWith ".fs" then (System.FilePath.mk e.fileName).fileStem else none
+  return (names.toArray.qsort (· < ·)).toList
+
+def forthCases (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
+    (names : List String) : List GoldenCase :=
+  names.map fun n => { group := "Malgo.Forth", name := n, run := forthGolden memo n }
+
 /-- Testcase base names under `test/testcases/malgo/` (Haskell
 `listDirectory testcaseDir`), sorted for stable output. -/
 def enumerateTestcases : IO (List String) := do
@@ -197,6 +259,9 @@ def main (args : List String) : IO UInt32 := do
   | .ok cfg =>
     let memo ← IO.mkRef ({} : Std.HashMap String Malgo.Driver.AllIR)
     let names ← Malgo.Test.enumerateTestcases
+    let forthNames ← Malgo.Test.enumerateForthTestcases
     let allCases := Malgo.Test.cases ++ Malgo.Test.toCoreCases memo names
       ++ Malgo.Test.evalCases memo names
+      ++ Malgo.Test.bigStepEvalCases memo names
+      ++ Malgo.Test.forthCases memo forthNames
     Malgo.Test.runSuite cfg allCases

@@ -60,11 +60,20 @@ inductive Value where
 `writeSlot`/`writeSlotOpt` write to an integer store slot (the `Mu` ref and
 `matchExpand`'s `Maybe` ref respectively). Both writes are the same store
 operation; the `Opt` variant differs only in how its slot is seeded
-(absent, meaning `Nothing`) and read at the allocation site. -/
+(absent, meaning `Nothing`) and read at the allocation site.
+
+`bigStep` is the fourth shape, built only by `Malgo.Sequent.BigStepEval`
+(the `mkConsumerValue` closure over a result slot + captured env + consumer
+AST). BigStepEval interprets it in its own mutual block; the arm in
+`applyConsumerK` below exists because `BigStepEval` reuses the small-step
+`matchPat`/`matchExpand`, whose `Expand` path drives the small-step
+`evalStatement` over a record env that (in a big-step run) may hold
+`bigStep` consumers. -/
 inductive ConsumerK where
   | run (env : Env) (k : JConsumer)
   | writeSlot (slot : Nat)
   | writeSlotOpt (slot : Nat)
+  | bigStep (slot : Nat) (env : Env) (k : JConsumer)
 
 /-- Haskell `Env {localBindings :: IntMap Value, externalBindings :: Map
 Name Value}`. `localBindings` keys are Internal/Temporal uniqs (the fast
@@ -692,6 +701,11 @@ partial def applyConsumerK : ConsumerK → Value → EvalM Unit
   | .run env k, value => evalConsumer env k value
   | .writeSlot slot, value => storeSet slot value
   | .writeSlotOpt slot, value => storeSet slot value
+  -- Reached only when BigStepEval's `matchExpand` (shared `matchPat`) drives
+  -- this small-step evalStatement over a big-step record env; drive the
+  -- consumer for its effects. The captured slot is irrelevant on that path
+  -- (nothing reads it), so the two evaluators stay observationally equal.
+  | .bigStep _ env k, value => evalConsumer env k value
 
 partial def evalStatement (env : Env) : JStatement → EvalM Unit
   | .cut (.mu _ name stmt) consumer => do

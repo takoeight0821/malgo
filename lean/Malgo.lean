@@ -23,6 +23,7 @@ import Malgo.Sequent.SaturateCtor
 import Malgo.Sequent.ReuseSpecialize
 import Malgo.Sequent.ToCore
 import Malgo.Sequent.Eval
+import Malgo.Sequent.BigStepEval
 import Malgo.Rename.RnEnv
 import Malgo.Rename.RnState
 import Malgo.Rename.Pass

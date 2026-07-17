@@ -177,6 +177,10 @@ def makeAbsolute (p : System.FilePath) : IO System.FilePath := do
 def runEval (flag : Flag) (source : System.FilePath) : IO UInt32 := do
   match flag.target with
   | .eval =>
+    if flag.evalMode == .bigStep then
+      -- Silently falling back to small-step would misreport results.
+      IO.eprintln "malgo eval --eval-mode bigstep: the big-step evaluator is not yet ported (M2)."
+      return 1
     try
       Malgo.Driver.compileAndEval flag source
     catch e =>
@@ -224,7 +228,8 @@ def run : List String → IO UInt32
   | [] => do IO.eprintln usage; return 1
   | cmd :: rest =>
     if isHelp cmd then do IO.println usage; return 0
-    else if rest.any isHelp then do IO.println usage; return 0
+    -- `--help` after `--` belongs to the evaluated program, not to malgo.
+    else if (rest.takeWhile (· != "--")).any isHelp then do IO.println usage; return 0
     else match cmd with
       | "eval" =>
         match parseEval rest {} false with

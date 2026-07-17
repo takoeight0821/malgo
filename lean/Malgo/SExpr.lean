@@ -1,3 +1,5 @@
+import Malgo.Data.ShowFloat
+
 /-! Port of `src/Malgo/SExpr.hs` plus the parts of s-cargot 0.1.6.0
 (`Data.SCargot.Print`) that Malgo uses: `encodeOne (basicPrint atomToText)`.
 Golden files compare against this output byte-for-byte, so the printer
@@ -44,21 +46,9 @@ namespace Atom
 
 end Atom
 
-/-- Approximate Haskell's `show` for a float. `Float.toString` yields a
-fixed 6-decimal form (`3.140000`); Haskell prints the shortest
-round-tripping decimal (`3.14`). Trimming trailing fractional zeros (always
-keeping one digit) reproduces Haskell across the normal decimal range, which
-covers every float/double value in the goldens (`0.0`, `0.25`, `0.5`,
-`3.14`). Values that Haskell would print in scientific notation, or that
-need more than six fractional digits, are NOT matched — none occur in the
-goldens. Shared by the golden dumps (`Atom.render`) and the interpreter's
-`to_string` primitives. -/
-def haskellShowFloat (n : Float) : String :=
-  match (toString n).splitOn "." with
-  | [intPart, fracPart] =>
-    let trimmed := (fracPart.toList.reverse.dropWhile (· == '0')).reverse
-    if trimmed.isEmpty then intPart ++ ".0" else intPart ++ "." ++ String.ofList trimmed
-  | _ => toString n
+-- `Malgo.haskellShowFloat` (Haskell `show @Double` parity) lives in
+-- `Malgo.Data.ShowFloat`; both the golden dumps and the interpreter's
+-- `to_string`/print primitives use it.
 
 namespace Atom
 

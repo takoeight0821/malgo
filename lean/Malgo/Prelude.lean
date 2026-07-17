@@ -50,11 +50,17 @@ instance : HasRange Range := ⟨id⟩
 
 instance : HasRange Empty := ⟨fun e => nomatch e⟩
 
-/-- Insert `(k, v)` into an assoc list kept in ascending key order.
-Duplicate keys are not expected (the Haskell source uses `Data.Map`). -/
+/-- Insert `(k, v)` into an assoc list kept in ascending key order. An
+existing equal key wins: `sortAssocAscending` folds from the right, so the
+LAST occurrence in the source list is inserted first and kept — matching
+`Data.Map.fromList`'s last-occurrence-wins semantics for duplicates. -/
 def insertAssocAscending [Ord κ] (x : κ × α) : List (κ × α) → List (κ × α)
   | [] => [x]
-  | y :: ys => if compare x.1 y.1 == .gt then y :: insertAssocAscending x ys else x :: y :: ys
+  | y :: ys =>
+    match compare x.1 y.1 with
+    | .gt => y :: insertAssocAscending x ys
+    | .eq => y :: ys
+    | .lt => x :: y :: ys
 
 /-- Emulate `Data.Map.fromList`/`Map.toList`: an assoc list presented in
 ascending key order. Used for the sequent IRs' `Object`/`Expand` fields,

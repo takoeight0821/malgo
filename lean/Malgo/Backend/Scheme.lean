@@ -89,12 +89,14 @@ def compileTag : Tag → String
   | .tuple => "tuple"
   | .tag t => mangleText t
 
-/-- Compile a literal to a Scheme expression. -/
+/-- Compile a literal to a Scheme expression. Floats render via
+`haskellShowFloat` (the Haskell backend emits `show`'s output; Chez reads
+both fixed and `e`-notation). -/
 def compileLiteral : Literal → String
   | .int32 n => toString n.toInt
   | .int64 n => toString n.toInt
-  | .float f => toString f.toFloat
-  | .double d => toString d
+  | .float f => Malgo.haskellShowFloat f.toFloat
+  | .double d => Malgo.haskellShowFloat d
   | .char c => "#\\" ++ escapeChar c
   | .string t => "\"" ++ escapeString t ++ "\""
 

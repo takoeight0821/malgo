@@ -305,14 +305,21 @@ private partial def skipBlockComment : P Unit := do
   _ ← string "{-"
   skipRest
 where
+  /-- An unterminated `{-` is a parse error at EOF, like megaparsec's
+  `L.skipBlockComment` (which demands the closing `-}`). -/
   skipRest : P Unit := do
     _ ← takeWhileP (· != '-')
-    (do _ ← string "-}"; pure ()) <|> (do _ ← char '-'; skipRest) <|> pure ()
+    (do _ ← string "-}"; pure ())
+      <|> (do _ ← char '-'; skipRest)
+      <|> (do eof; P.fail "unterminated block comment")
 
-/-- `L.space space1 (L.skipLineComment "--") (L.skipBlockComment "{-" "-}")` -/
+/-- `L.space space1 (L.skipLineComment "--") (L.skipBlockComment "{-" "-}")`.
+A consumed failure (e.g. an unterminated block comment) propagates, as in
+megaparsec's `skipMany`. -/
 partial def space : P Unit := fun s =>
   match (space1 <|> skipLineComment <|> skipBlockComment) s with
   | .ok _ s' true => space s'
+  | .err e true => .err e true
   | _ => .ok () s false
 
 def lexeme (p : P α) : P α := do
@@ -419,7 +426,9 @@ def charLiteral : P Char :=
   <|> satisfy (fun _ => true) [.label "literal character"]
 
 /-- `L.float`: an unsigned float; requires a fractional part and/or
-exponent (megaparsec rejects a bare integer). -/
+exponent (megaparsec rejects a bare integer). The value is built with
+`Float.ofScientific` (one correctly-rounded decimal→binary conversion),
+not naive digit arithmetic, so parsing matches Haskell to the last ULP. -/
 def float : P Float := do
   let intPart ← some digitChar
   let frac ← optional (attempt do
@@ -433,19 +442,20 @@ def float : P Float := do
   if frac.isNone && exp.isNone then
     P.fail "float"
   else
-    let digitsVal (ds : NEList Char) : Float :=
-      ds.toList.foldl (fun acc d => acc * 10 + Float.ofNat (d.toNat - '0'.toNat)) 0
-    let base := digitsVal intPart
-    let withFrac := match frac with
-      | .none => base
-      | .some ds => base + digitsVal ds / Float.ofNat (10 ^ ds.toList.length)
-    let value := match exp with
-      | .none => withFrac
+    let digitsNat (ds : List Char) : Nat :=
+      ds.foldl (fun acc d => acc * 10 + (d.toNat - '0'.toNat)) 0
+    let fracDigits := (frac.map (·.toList)).getD []
+    let mantissa := digitsNat (intPart.toList ++ fracDigits)
+    let expVal : Int := match exp with
+      | .none => 0
       | .some (sign, ds) =>
-        let e := ds.toList.foldl (fun acc d => acc * 10 + (d.toNat - '0'.toNat)) 0
-        if sign == '-' then withFrac / Float.ofNat (10 ^ e)
-        else withFrac * Float.ofNat (10 ^ e)
-    pure value
+        let e : Int := digitsNat ds.toList
+        if sign == '-' then -e else e
+    let decExp : Int := expVal - fracDigits.length
+    if decExp ≥ 0 then
+      pure (Float.ofScientific mantissa false decExp.toNat)
+    else
+      pure (Float.ofScientific mantissa true (-decExp).toNat)
 
 end P
 

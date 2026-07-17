@@ -172,7 +172,11 @@ private def seedMirror (ir : AllIR) : IO Unit := do
   if let .artifact ap := ir.moduleName then
     let target := ap.targetPath.toFilePath
     IO.FS.createDirAll (target.parent.getD (System.FilePath.mk "."))
-    IO.FS.writeBinFile target (← IO.FS.readBinFile ap.originPath.toFilePath)
+    -- Atomic tmp+rename: concurrent `malgo eval` runs (the golden sweep
+    -- scripts run cases in parallel) must not observe a half-written mirror.
+    let tmp := System.FilePath.mk s!"{target}.{ap.originPath.toFilePath.toString.hash}.tmp"
+    IO.FS.writeBinFile tmp (← IO.FS.readBinFile ap.originPath.toFilePath)
+    IO.FS.rename tmp target
 
 /-- CLI entry for `malgo eval --target eval`: compile, link the dependency
 closure, and run the interpreter on real handles. -/

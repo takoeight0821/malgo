@@ -128,6 +128,14 @@ inductive EvalError where
   | noMatch (range : Range) (value : Value)
   | primitiveNotImplemented (range : Range) (name : String) (values : List Value)
   | invalidArguments (range : Range) (name : String) (values : List Value)
+  /-- Haskell `div`/`mod` throw a divide-by-zero `ArithException`;
+  `Int.fdiv/fmod` would silently yield 0/`a`. -/
+  | divideByZero (range : Range)
+  /-- Control-flow, not an error: `malgo_exit_success`. Haskell throws the
+  `ExitSuccess` exception; `IO.Process.exit` would kill the whole host
+  process (including the golden test runner). `evalProgram` catches this
+  and treats it as successful termination. -/
+  | exitSuccess
 
 instance : Inhabited Range := ⟨{ start := SourcePos.initial "", stop := SourcePos.initial "" }⟩
 instance : Inhabited Id := ⟨{ name := "", moduleName := .moduleName "", sort := .external }⟩
@@ -150,6 +158,8 @@ def EvalError.render : EvalError → String
   | .invalidArguments range name values =>
     s!"{pretty range}: Invalid arguments for {name}: " ++
       String.intercalate ", " (values.map valueToText)
+  | .divideByZero range => s!"{pretty range}: divide by zero"
+  | .exitSuccess => "ExitSuccess"
 
 def EvalError.range? : EvalError → Option Range
   | .undefinedVariable r _ => some r
@@ -161,6 +171,8 @@ def EvalError.range? : EvalError → Option Range
   | .noMatch r _ => some r
   | .primitiveNotImplemented r _ _ => some r
   | .invalidArguments r _ _ => some r
+  | .divideByZero r => some r
+  | .exitSuccess => none
 
 /-! ## Handlers and the evaluation context -/
 
@@ -173,13 +185,33 @@ structure Handlers where
   stderr : Char → IO Unit
   arguments : List String
 
-/-- Process-handle handlers. `stdin` reads one byte and decodes it as a
-codepoint (fine for ASCII; full UTF-8 stdin is out of scope for the CLI
-path, which is not golden-tested — the goldens use `buffered`). -/
+/-- Read one UTF-8 codepoint from stdin; I/O errors read as EOF, like
+Haskell's `getChar \`catch\` \(_ :: IOException) -> Nothing`. A malformed
+lead byte falls back to its Latin-1 interpretation rather than aborting. -/
+private def readCharUtf8 : IO (Option Char) := do
+  try
+    let stdin ← IO.getStdin
+    let head ← stdin.read 1
+    if head.size == 0 then return none
+    let b0 := head[0]!
+    let extra :=
+      if b0.toNat < 0x80 then 0
+      else if b0.toNat < 0xC0 then 0  -- stray continuation byte
+      else if b0.toNat < 0xE0 then 1
+      else if b0.toNat < 0xF0 then 2
+      else 3
+    if extra == 0 then
+      return some (Char.ofNat b0.toNat)
+    let rest ← stdin.read (USize.ofNat extra)
+    match String.fromUTF8? (head ++ rest) with
+    | some s => return s.toList.head?
+    | none => return some (Char.ofNat b0.toNat)
+  catch _ =>
+    return none
+
+/-- Process-handle handlers. -/
 def Handlers.real (arguments : List String) : Handlers where
-  stdin := do
-    let bytes ← (← IO.getStdin).read 1
-    if bytes.size == 0 then return none else return (some (Char.ofNat bytes[0]!.toNat))
+  stdin := readCharUtf8
   stdout := fun c => do (← IO.getStdout).putStr (String.singleton c)
   stderr := fun c => do (← IO.getStderr).putStr (String.singleton c)
   arguments := arguments
@@ -336,18 +368,22 @@ def mulValue (range : Range) : Value → Value → EvalM Value
 match Haskell `div`/`mod`; Lean's native `Int./` truncates toward zero. -/
 def divValue (range : Range) : Value → Value → EvalM Value
   | .immediate (.int32 a), .immediate (.int32 b) =>
-    pure (.immediate (.int32 (Int32.ofInt (Int.fdiv a.toInt b.toInt))))
+    if b == 0 then throw (.divideByZero range)
+    else pure (.immediate (.int32 (Int32.ofInt (Int.fdiv a.toInt b.toInt))))
   | .immediate (.int64 a), .immediate (.int64 b) =>
-    pure (.immediate (.int64 (Int64.ofInt (Int.fdiv a.toInt b.toInt))))
+    if b == 0 then throw (.divideByZero range)
+    else pure (.immediate (.int64 (Int64.ofInt (Int.fdiv a.toInt b.toInt))))
   | .immediate (.float a), .immediate (.float b) => pure (.immediate (.float (a / b)))
   | .immediate (.double a), .immediate (.double b) => pure (.immediate (.double (a / b)))
   | a, b => throw (.invalidArguments range "malgo_div" [a, b])
 
 def modValue (range : Range) : Value → Value → EvalM Value
   | .immediate (.int32 a), .immediate (.int32 b) =>
-    pure (.immediate (.int32 (Int32.ofInt (Int.fmod a.toInt b.toInt))))
+    if b == 0 then throw (.divideByZero range)
+    else pure (.immediate (.int32 (Int32.ofInt (Int.fmod a.toInt b.toInt))))
   | .immediate (.int64 a), .immediate (.int64 b) =>
-    pure (.immediate (.int64 (Int64.ofInt (Int.fmod a.toInt b.toInt))))
+    if b == 0 then throw (.divideByZero range)
+    else pure (.immediate (.int64 (Int64.ofInt (Int.fmod a.toInt b.toInt))))
   | a, b => throw (.invalidArguments range "malgo_mod" [a, b])
 
 def negValue (range : Range) : Value → EvalM Value
@@ -410,6 +446,57 @@ def toStringPrim (range : Range) (name : String) : List Value → EvalM Value
   | [.immediate (.double n)] => pure (.immediate (.string (Malgo.haskellShowFloat n)))
   | [.immediate (.string s)] => pure (.immediate (.string s))
   | values => throw (.invalidArguments range name values)
+
+/-- Haskell `reads @Int` with the `[(n, "")]` full-consumption pattern:
+leading whitespace, arbitrarily nested parentheses, `-` (whitespace may
+follow the sign — `lex` skips it), and `0x`/`0X` hex / `0o`/`0O` octal
+prefixes. Trailing input (even whitespace) rejects, as in Haskell. -/
+private partial def readsIntAux : List Char → Option (Int × List Char)
+  | cs =>
+    let cs := cs.dropWhile Char.isWhitespace
+    match cs with
+    | '(' :: rest => do
+      let (n, rest') ← readsIntAux rest
+      match rest'.dropWhile Char.isWhitespace with
+      | ')' :: rest'' => some (n, rest'')
+      | _ => none
+    | '-' :: rest => do
+      let rest := rest.dropWhile Char.isWhitespace
+      let (n, rest') ← readsUnsigned rest
+      some (-n, rest')
+    | cs => readsUnsigned cs
+where
+  digitsIn (base : Nat) (isDigit : Char → Bool) (toVal : Char → Nat) (cs : List Char) :
+      Option (Int × List Char) :=
+    let (ds, rest) := (cs.takeWhile isDigit, cs.dropWhile isDigit)
+    if ds.isEmpty then none
+    else some ((ds.foldl (fun acc c => acc * base + toVal c) 0 : Nat), rest)
+  readsUnsigned : List Char → Option (Int × List Char)
+    | '0' :: x :: rest =>
+      if x == 'x' || x == 'X' then
+        digitsIn 16 (fun c => c.isDigit || ('a' ≤ c.toLower && c.toLower ≤ 'f'))
+          (fun c => if c.isDigit then c.toNat - '0'.toNat else c.toLower.toNat - 'a'.toNat + 10)
+          rest
+      else if x == 'o' || x == 'O' then
+        digitsIn 8 (fun c => '0' ≤ c && c ≤ '7') (fun c => c.toNat - '0'.toNat) rest
+      else
+        digitsIn 10 Char.isDigit (fun c => c.toNat - '0'.toNat) ('0' :: x :: rest)
+    | cs => digitsIn 10 Char.isDigit (fun c => c.toNat - '0'.toNat) cs
+
+def readsInt (s : String) : Option Int :=
+  match readsIntAux s.toList with
+  | some (n, []) => some n
+  | _ => none
+
+/-- Haskell `toEnum @Char`: errors outside `0..0x10FFFF`. Deviation: Haskell
+`Char` admits surrogates (D800–DFFF) but Lean `Char` cannot represent them,
+so they error here too — unreachable from well-formed programs. -/
+private def intToChar (range : Range) (prim : String) (values : List Value) (n : Int) :
+    EvalM Char :=
+  if n < 0 || n > 0x10FFFF || !(n.toNat.isValidChar) then
+    throw (.invalidArguments range prim values)
+  else
+    pure (Char.ofNat n.toNat)
 
 /-- Char at a codepoint index (`malgo_string_at`). -/
 def stringAtImpl (range : Range) (i : Int64) (s : String) : EvalM Value :=
@@ -507,7 +594,7 @@ def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM
     | "malgo_str_to_int" =>
       match values with
       | [.immediate (.string s)] =>
-        match s.toInt? with
+        match readsInt s with
         | some n => pure (.immediate (.int64 (Int64.ofInt n)))
         | none => throw (.invalidArguments range "malgo_str_to_int" [.immediate (.string s)])
       | _ => throw (.invalidArguments range "malgo_str_to_int" values)
@@ -521,7 +608,8 @@ def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM
       | _ => throw (.invalidArguments range "malgo_rune_to_str" values)
     | "malgo_int_to_rune" =>
       match values with
-      | [.immediate (.int64 n)] => pure (.immediate (.char (Char.ofNat n.toInt.toNat)))
+      | [.immediate (.int64 n)] => do
+        pure (.immediate (.char (← intToChar range "malgo_int_to_rune" values n.toInt)))
       | _ => throw (.invalidArguments range "malgo_int_to_rune" values)
     | "malgo_rune_to_int" =>
       match values with
@@ -549,7 +637,8 @@ def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM
       | _ => throw (.invalidArguments range "malgo_char_ord" values)
     | "malgo_int32_t_to_char" =>
       match values with
-      | [.immediate (.int32 n)] => pure (.immediate (.char (Char.ofNat n.toInt.toNat)))
+      | [.immediate (.int32 n)] => do
+        pure (.immediate (.char (← intToChar range "malgo_int32_t_to_char" values n.toInt)))
       | _ => throw (.invalidArguments range "malgo_int32_t_to_char" values)
     | "malgo_read_file" =>
       match values with
@@ -568,8 +657,8 @@ def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM
       pure (.immediate (.string (String.ofList cs)))
     | "malgo_get_args" =>
       pure (.immediate (.string (String.intercalate "\n" h.arguments)))
-    | "malgo_exit_success" => do
-      IO.Process.exit 0
+    | "malgo_exit_success" =>
+      throw .exitSuccess
     | "malgo_stderr_string" =>
       match values with
       | [.immediate (.string text)] => do putTextTo h.stderr text; pure (.struct .tuple [])
@@ -577,14 +666,14 @@ def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM
     | "malgo_string_to_int32" =>
       match values with
       | [.immediate (.string s)] =>
-        match s.toInt? with
+        match readsInt s with
         | some n => pure (.immediate (.int32 (Int32.ofInt n)))
         | none => throw (.invalidArguments range "malgo_string_to_int32" [.immediate (.string s)])
       | _ => throw (.invalidArguments range "malgo_string_to_int32" values)
     | "malgo_string_to_int64" =>
       match values with
       | [.immediate (.string s)] =>
-        match s.toInt? with
+        match readsInt s with
         | some n => pure (.immediate (.int64 (Int64.ofInt n)))
         | none => throw (.invalidArguments range "malgo_string_to_int64" [.immediate (.string s)])
       | _ => throw (.invalidArguments range "malgo_string_to_int64" values)
@@ -758,6 +847,7 @@ def evalProgram (moduleName : ModuleName) (handlers : Handlers) (program : JProg
     let result ← MalgoM.io (((evalStatement emptyEnv entry).run ctx).run)
     match result with
     | .ok () => pure ()
+    | .error .exitSuccess => pure ()  -- malgo_exit_success: clean termination
     | .error e => throw { passName := "Eval", message := e.render, range? := e.range? }
 
 end Malgo.Sequent.Eval

@@ -17,3 +17,6 @@ import Malgo.Sequent.Fun
 import Malgo.Sequent.Core.Full
 import Malgo.Sequent.Core.Flat
 import Malgo.Sequent.Core.Join
+import Malgo.Rename.RnEnv
+import Malgo.Rename.RnState
+import Malgo.Rename.Pass

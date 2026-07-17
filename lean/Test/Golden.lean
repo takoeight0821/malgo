@@ -13,8 +13,11 @@ structure GoldenCase where
   name : String
   run : IO String
 
+/-- The runner's cwd is the repository root: `main` chdirs there before
+running the suite (so `Workspace` and artifact relPaths resolve against the
+root). Golden paths are therefore relative to ".". -/
 def repoRoot : IO System.FilePath := do
-  return System.FilePath.mk ((← IO.getEnv "MALGO_REPO_ROOT").getD "..")
+  return System.FilePath.mk "."
 
 /-- Override directory (`.golden-lean/`) first, shared `.golden/` second. -/
 private def goldenDirs (c : GoldenCase) : IO (Array System.FilePath) := do

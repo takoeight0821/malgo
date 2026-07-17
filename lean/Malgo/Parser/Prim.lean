@@ -222,13 +222,22 @@ def sepBy1 (p : P α) (sep : P β) : P (NEList α) := do
 def sepBy (p : P α) (sep : P β) : P (List α) :=
   (NEList.toList <$> sepBy1 p sep) <|> pure []
 
-def sepEndBy1 (p : P α) (sep : P β) : P (NEList α) := do
-  let xs ← sepBy1 p sep
-  _ ← optional sep
-  return xs
+/- `sepEndBy1`/`sepEndBy` allow an optional trailing separator. Defined
+by interleaving (like `parser-combinators`) rather than via `sepBy1`, so a
+trailing separator followed by an unconsumed element failure stays an
+unconsumed failure the recursion can recover from. -/
+mutual
+partial def sepEndBy1 (p : P α) (sep : P β) : P (NEList α) := do
+  let x ← p
+  (do
+    _ ← sep
+    let xs ← sepEndBy p sep
+    return ⟨x, xs⟩)
+  <|> pure ⟨x, []⟩
 
-def sepEndBy (p : P α) (sep : P β) : P (List α) :=
+partial def sepEndBy (p : P α) (sep : P β) : P (List α) :=
   (NEList.toList <$> sepEndBy1 p sep) <|> pure []
+end
 
 def between (open_ : P α) (close : P β) (p : P γ) : P γ := do
   _ ← open_

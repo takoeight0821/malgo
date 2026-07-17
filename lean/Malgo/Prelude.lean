@@ -50,6 +50,19 @@ instance : HasRange Range := ⟨id⟩
 
 instance : HasRange Empty := ⟨fun e => nomatch e⟩
 
+/-- Insert `(k, v)` into an assoc list kept in ascending key order.
+Duplicate keys are not expected (the Haskell source uses `Data.Map`). -/
+def insertAssocAscending [Ord κ] (x : κ × α) : List (κ × α) → List (κ × α)
+  | [] => [x]
+  | y :: ys => if compare x.1 y.1 == .gt then y :: insertAssocAscending x ys else x :: y :: ys
+
+/-- Emulate `Data.Map.fromList`/`Map.toList`: an assoc list presented in
+ascending key order. Used for the sequent IRs' `Object`/`Expand` fields,
+which are `Map Text _` in Haskell but must be stored as assoc lists in
+Lean (a `Std.TreeMap` cannot nest inside a recursive inductive). -/
+def sortAssocAscending [Ord κ] (xs : List (κ × α)) : List (κ × α) :=
+  xs.foldr insertAssocAscending []
+
 /-- Haskell `Data.List.NonEmpty`. -/
 structure NEList (α : Type u) where
   head : α

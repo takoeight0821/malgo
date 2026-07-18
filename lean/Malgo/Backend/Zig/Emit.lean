@@ -155,7 +155,7 @@ partial def emitStmts (pv : Name → String) (funcName : String)
     | _ :: liveAfter :: rest_lives =>
       declareConst (pv x) (emitExpr pv funcName e) (liveAfter.contains x)
         ++ emitStmts pv funcName (liveAfter :: rest_lives) rest term
-    | _ => ""
+    | _ => panic! "Malgo.Backend.Zig.Emit: suffixFreeVars shorter than stmts (invariant violation)"
   | .dup x :: rest, term =>
     "rt.dupNamed(" ++ pv x ++ ", " ++ nameLit x ++ ", " ++ funcName ++ ");\n"
       ++ emitStmts pv funcName lives.tail rest term
@@ -169,7 +169,7 @@ partial def emitStmts (pv : Name → String) (funcName : String)
         ("rt.dropReuseNamed(" ++ pv x ++ ", " ++ toString arity ++ ", " ++ nameLit x ++ ", " ++ funcName ++ ")")
         (liveAfter.contains tok)
         ++ emitStmts pv funcName (liveAfter :: rest_lives) rest term
-    | _ => ""
+    | _ => panic! "Malgo.Backend.Zig.Emit: suffixFreeVars shorter than stmts (invariant violation)"
 
 partial def emitTerminator (pv : Name → String) (funcName : String) : Terminator → String
   | .applyCo k v => "return rt.applyCovalue(" ++ pv k ++ ", " ++ pv v ++ ");\n"

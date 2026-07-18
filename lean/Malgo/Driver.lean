@@ -186,48 +186,49 @@ real handles.
 The top-level file is parsed directly (mirroring `compileToRenamed`) and its
 already-parsed module seeded into the engine's `cacheParsedModule` under its
 own resolved name, so `fetchLinkedProgram` starts from a cache hit instead
-of re-deriving the module's identity. -/
+of re-deriving the module's identity.
+
+`compileAndEval`/`compileScheme`/`compileZig`/`compileToNativeExecutable`
+(all four CLI entries below) share this exact parse+link+seed sequence —
+`linkForCli` is the one place it lives, so a future fix only has one call
+site to update. -/
+private def linkForCli (ws : Workspace) (path : System.FilePath) :
+    MalgoM (ModuleName × Malgo.Sequent.Core.Join.Program) := do
+  let db ← MalgoM.io Malgo.Query.newQueryDB
+  let text ← MalgoM.io (IO.FS.readFile path)
+  match ← Malgo.Parser.pass ws path text with
+  | (.error e, _) => throw (parseError e)
+  | (.ok parsed, _) =>
+    MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
+    let linked ← Malgo.Query.Engine.fetchLinkedProgram ws db parsed.moduleName
+    -- Seed the `.mlg` mirror for every module the query touched (top module
+    -- + transitive deps) so a later, separate `malgo eval` invocation's
+    -- bare-name imports can find them — orthogonal to the `.sqt`/`.mlgi`
+    -- artifacts the query engine persists.
+    let touched := (← MalgoM.io db.cacheRenamedModule.get).keys
+    for m in touched do
+      MalgoM.io (seedMirrorFor ws m)
+    pure (parsed.moduleName, linked)
+
 def compileAndEval (flag : Flag) (path : System.FilePath) : IO UInt32 := do
   let ws ← Workspace.setup
   MalgoM.run flag {} do
-    let db ← MalgoM.io Malgo.Query.newQueryDB
-    let text ← MalgoM.io (IO.FS.readFile path)
-    match ← Malgo.Parser.pass ws path text with
-    | (.error e, _) => throw (parseError e)
-    | (.ok parsed, _) =>
-      MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
-      let linked ← Malgo.Query.Engine.fetchLinkedProgram ws db parsed.moduleName
-      -- Seed the `.mlg` mirror for every module the query touched (top
-      -- module + transitive deps) so a later, separate `malgo eval`
-      -- invocation's bare-name imports can find them — orthogonal to the
-      -- `.sqt`/`.mlgi` artifacts the query engine persists.
-      let touched := (← MalgoM.io db.cacheRenamedModule.get).keys
-      for m in touched do
-        MalgoM.io (seedMirrorFor ws m)
-      let handlers := Malgo.Sequent.Eval.Handlers.real flag.programArgs
-      match flag.evalMode with
-      | .smallStep => Malgo.Sequent.Eval.evalProgram parsed.moduleName handlers linked
-      | .bigStep => Malgo.Sequent.BigStepEval.bigStepEvalProgram parsed.moduleName handlers linked
+    let (moduleName, linked) ← linkForCli ws path
+    let handlers := Malgo.Sequent.Eval.Handlers.real flag.programArgs
+    match flag.evalMode with
+    | .smallStep => Malgo.Sequent.Eval.evalProgram moduleName handlers linked
+    | .bigStep => Malgo.Sequent.BigStepEval.bigStepEvalProgram moduleName handlers linked
   return 0
 
 /-- CLI entry for `malgo eval --target scheme`: link exactly as
-`compileAndEval` (same `fetchLinkedProgram` fetch and mirror seeding) but,
-instead of interpreting, emit the Scheme source for the linked Join program.
-Mirrors Haskell `Driver.compileFromAST`'s `TargetScheme` branch. -/
+`compileAndEval` but, instead of interpreting, emit the Scheme source for the
+linked Join program. Mirrors Haskell `Driver.compileFromAST`'s `TargetScheme`
+branch. -/
 def compileScheme (flag : Flag) (path : System.FilePath) : IO UInt32 := do
   let ws ← Workspace.setup
   MalgoM.run flag {} do
-    let db ← MalgoM.io Malgo.Query.newQueryDB
-    let text ← MalgoM.io (IO.FS.readFile path)
-    match ← Malgo.Parser.pass ws path text with
-    | (.error e, _) => throw (parseError e)
-    | (.ok parsed, _) =>
-      MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
-      let linked ← Malgo.Query.Engine.fetchLinkedProgram ws db parsed.moduleName
-      let touched := (← MalgoM.io db.cacheRenamedModule.get).keys
-      for m in touched do
-        MalgoM.io (seedMirrorFor ws m)
-      MalgoM.io (IO.print (Malgo.Backend.Scheme.compileToScheme parsed.moduleName linked))
+    let (moduleName, linked) ← linkForCli ws path
+    MalgoM.io (IO.print (Malgo.Backend.Scheme.compileToScheme moduleName linked))
   return 0
 
 /-- CLI entry for `malgo eval --target zig`: link exactly as `compileScheme`,
@@ -238,18 +239,9 @@ and print the generated Zig source. Mirrors Haskell `Driver.compileFromAST`'s
 def compileZig (flag : Flag) (path : System.FilePath) : IO UInt32 := do
   let ws ← Workspace.setup
   MalgoM.run flag {} do
-    let db ← MalgoM.io Malgo.Query.newQueryDB
-    let text ← MalgoM.io (IO.FS.readFile path)
-    match ← Malgo.Parser.pass ws path text with
-    | (.error e, _) => throw (parseError e)
-    | (.ok parsed, _) =>
-      MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
-      let linked ← Malgo.Query.Engine.fetchLinkedProgram ws db parsed.moduleName
-      let touched := (← MalgoM.io db.cacheRenamedModule.get).keys
-      for m in touched do
-        MalgoM.io (seedMirrorFor ws m)
-      let zigText ← Malgo.Backend.Zig.compileToZigText parsed.moduleName linked
-      MalgoM.io (IO.print zigText)
+    let (moduleName, linked) ← linkForCli ws path
+    let zigText ← Malgo.Backend.Zig.compileToZigText moduleName linked
+    MalgoM.io (IO.print zigText)
   return 0
 
 /-- CLI entry for `malgo compile SOURCE -o OUT`: link and lower to Zig exactly
@@ -260,21 +252,12 @@ def compileToNativeExecutable (flag : Flag) (path : System.FilePath)
     (outPath : System.FilePath) (optMode : Malgo.Backend.Zig.Toolchain.OptMode) : IO UInt32 := do
   let ws ← Workspace.setup
   MalgoM.run flag {} do
-    let db ← MalgoM.io Malgo.Query.newQueryDB
-    let text ← MalgoM.io (IO.FS.readFile path)
-    match ← Malgo.Parser.pass ws path text with
-    | (.error e, _) => throw (parseError e)
-    | (.ok parsed, _) =>
-      MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
-      let linked ← Malgo.Query.Engine.fetchLinkedProgram ws db parsed.moduleName
-      let touched := (← MalgoM.io db.cacheRenamedModule.get).keys
-      for m in touched do
-        MalgoM.io (seedMirrorFor ws m)
-      let zigText ← Malgo.Backend.Zig.compileToZigText parsed.moduleName linked
-      let zigPath := outPath.toString ++ ".zig"
-      MalgoM.io (IO.FS.writeFile zigPath zigText)
-      MalgoM.io (Malgo.Backend.Zig.Toolchain.buildExecutable
-        (toString ws.dir) zigPath outPath.toString optMode)
+    let (moduleName, linked) ← linkForCli ws path
+    let zigText ← Malgo.Backend.Zig.compileToZigText moduleName linked
+    let zigPath := outPath.toString ++ ".zig"
+    MalgoM.io (IO.FS.writeFile zigPath zigText)
+    MalgoM.io (Malgo.Backend.Zig.Toolchain.buildExecutable
+      (toString ws.dir) zigPath outPath.toString optMode)
   return 0
 
 end Malgo.Driver

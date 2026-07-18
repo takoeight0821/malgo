@@ -212,8 +212,11 @@ def runEval (flag : Flag) (source : System.FilePath) : IO UInt32 := do
       IO.eprintln (toString e)
       return 1
   | .scheme =>
-    IO.eprintln "malgo eval --target scheme: the Scheme backend is not yet ported."
-    return 1
+    try
+      Malgo.Driver.compileScheme flag source
+    catch e =>
+      IO.eprintln (toString e)
+      return 1
   | .zig =>
     IO.eprintln "malgo eval --target zig: the Zig backend is not yet ported."
     return 1

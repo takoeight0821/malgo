@@ -281,7 +281,11 @@ end
 def inferScGroup (env : TyEnv) (defs : List (ScDef .rename)) : InferM TyEnv := do
   enterLevel
   let freshVars ← defs.mapM fun (_, name, _) => do pure (name, ← freshTyVar)
-  let localEnv := freshVars.foldl (fun e (name, ty) => e.insert name { vars := [], ty }) env
+  -- Haskell `env <> Map.fromList freshVars`: `Map`'s `Semigroup` is
+  -- left-biased, so `env`'s entry wins on a key collision. Insert only when
+  -- absent, rather than unconditionally overwriting.
+  let localEnv := freshVars.foldl
+    (fun e (name, ty) => if e.contains name then e else e.insert name { vars := [], ty }) env
   for ((pos, _, expr), (_, expectedTy)) in defs.zip freshVars do
     let actualTy ← inferExpr localEnv expr
     addConstraint (.cUnify pos expectedTy actualTy)

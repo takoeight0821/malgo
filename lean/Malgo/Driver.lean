@@ -13,6 +13,7 @@ import Malgo.Sequent.Eval
 import Malgo.Sequent.BigStepEval
 import Malgo.Query
 import Malgo.Query.Engine
+import Malgo.Backend.Scheme
 
 /-! M1 mini-driver: a direct, in-memory compile pipeline up to Rename.
 
@@ -205,6 +206,26 @@ def compileAndEval (flag : Flag) (path : System.FilePath) : IO UInt32 := do
       match flag.evalMode with
       | .smallStep => Malgo.Sequent.Eval.evalProgram parsed.moduleName handlers linked
       | .bigStep => Malgo.Sequent.BigStepEval.bigStepEvalProgram parsed.moduleName handlers linked
+  return 0
+
+/-- CLI entry for `malgo eval --target scheme`: link exactly as
+`compileAndEval` (same `fetchLinkedProgram` fetch and mirror seeding) but,
+instead of interpreting, emit the Scheme source for the linked Join program.
+Mirrors Haskell `Driver.compileFromAST`'s `TargetScheme` branch. -/
+def compileScheme (flag : Flag) (path : System.FilePath) : IO UInt32 := do
+  let ws ← Workspace.setup
+  MalgoM.run flag {} do
+    let db ← MalgoM.io Malgo.Query.newQueryDB
+    let text ← MalgoM.io (IO.FS.readFile path)
+    match ← Malgo.Parser.pass ws path text with
+    | (.error e, _) => throw (parseError e)
+    | (.ok parsed, _) =>
+      MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
+      let linked ← Malgo.Query.Engine.fetchLinkedProgram ws db parsed.moduleName
+      let touched := (← MalgoM.io db.cacheRenamedModule.get).keys
+      for m in touched do
+        MalgoM.io (seedMirrorFor ws m)
+      MalgoM.io (IO.print (Malgo.Backend.Scheme.compileToScheme parsed.moduleName linked))
   return 0
 
 end Malgo.Driver

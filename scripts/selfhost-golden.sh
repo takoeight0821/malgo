@@ -10,6 +10,7 @@ CASE_TIMEOUT=${CASE_TIMEOUT:-20}
 PRECOMPILE_TIMEOUT=${PRECOMPILE_TIMEOUT:-180}
 KEEP_WORK=${KEEP_WORK:-0}
 PARALLEL_JOBS=${PARALLEL_JOBS:-$(nproc 2>/dev/null || echo 4)}
+MALGO_WORK_DIR=${MALGO_WORK_DIR:-.malgo-work}
 
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
@@ -20,13 +21,15 @@ log() {
 }
 
 if [[ "$KEEP_WORK" != "1" ]]; then
-  log "cleaning work directory: .malgo-work"
-  rm -rf .malgo-work
+  log "cleaning work directory: $MALGO_WORK_DIR"
+  rm -rf "$MALGO_WORK_DIR"
 fi
 
-log "building malgo executable"
-cabal build exe:malgo >/dev/null
-log "build complete"
+if [[ "$MALGO" == *cabal* ]]; then
+  log "building malgo executable"
+  cabal build exe:malgo >/dev/null
+  log "build complete"
+fi
 
 precompile=(
   runtime/malgo/Builtin.mlg
@@ -58,8 +61,8 @@ done
 
 log "precompile phase complete (${#precompile[@]} files)"
 
-SCHEME_MAIN=".malgo-work/main.scm"
-mkdir -p .malgo-work
+SCHEME_MAIN="$MALGO_WORK_DIR/main.scm"
+mkdir -p "$MALGO_WORK_DIR"
 log "compiling Main.mlg to Scheme"
 if ! $MALGO eval --target scheme runtime/malgo/compiler/Main.mlg > "$SCHEME_MAIN"; then
   log "Scheme compilation failed"

@@ -193,10 +193,6 @@ partial def producerFromJson (j : Json) : Except String Producer := do
   | [tag, r, a] => match ← tag.getStr? with
     | "var" => return .var (← fromJson? r) (← fromJson? a)
     | "lit" => return .literal (← fromJson? r) (← fromJson? a)
-    | other => .error s!"Producer: unknown 3-element tag {other}"
-  | [tag, r, a, b] => match ← tag.getStr? with
-    | "mu" => return .mu (← fromJson? r) (← fromJson? a) (← statementFromJson b)
-    | "lam" => return .lambda (← fromJson? r) (← jParseList fromJson? a) (← statementFromJson b)
     | "obj" => return .object (← fromJson? r) (← jParseList (fun e => do
         match (← e.getArr?).toList with
         | [k, name, s] => return (← k.getStr?, ← fromJson? name, ← statementFromJson s)
@@ -205,6 +201,10 @@ partial def producerFromJson (j : Json) : Except String Producer := do
         match (← e.getArr?).toList with
         | [d, vars, s] => return (← d.getStr?, ← jParseList fromJson? vars, ← statementFromJson s)
         | _ => .error "Producer.cocase: bad branch") a)
+    | other => .error s!"Producer: unknown 3-element tag {other}"
+  | [tag, r, a, b] => match ← tag.getStr? with
+    | "mu" => return .mu (← fromJson? r) (← fromJson? a) (← statementFromJson b)
+    | "lam" => return .lambda (← fromJson? r) (← jParseList fromJson? a) (← statementFromJson b)
     | other => .error s!"Producer: unknown 4-element tag {other}"
   | [tag, r, a, b, c] => match ← tag.getStr? with
     | "con" => return .construct (← fromJson? r) (← fromJson? a) (← jParseList producerFromJson b) (← jParseList fromJson? c)

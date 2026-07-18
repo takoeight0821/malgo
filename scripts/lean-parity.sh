@@ -15,8 +15,14 @@
 #                SOURCE`; output must match exactly (format-immune IR
 #                counts, so this is robust to uniq-numbering/formatting
 #                differences that a golden-file diff would flag).
-#   scheme, zig, error -- not yet implemented; each prints a note and is
-#                skipped (not a failure), pending M3/M4/M5.
+#   error        `<impl> eval --infer test/testcases/malgo/error/<Case>.mlg`
+#                for every case with a committed `<Case>.mlg.expect` sidecar
+#                (see that directory's README for how the sidecars were
+#                derived and why some fixtures there are deliberately
+#                excluded); hard gate is BOTH exit nonzero -- message text is
+#                never compared.
+#   scheme, zig -- not yet implemented; each prints a note and is skipped
+#                (not a failure), pending M4/M5.
 #
 # Env knobs (all optional):
 #   HS_MALGO       path to the Haskell malgo executable (default: `cabal
@@ -149,12 +155,46 @@ run_fingerprint_mode() {
   total_fail=$((total_fail + fail))
 }
 
+run_error_mode() {
+  local pass=0 fail=0
+  local -a fail_names=()
+  local error_dir="$TESTCASE_DIR/error"
+  for expect in "$error_dir"/*.mlg.expect; do
+    [ -e "$expect" ] || continue
+    case=$(basename "$expect" .mlg.expect)
+    src="$error_dir/$case.mlg"
+    MALGO_WORK_DIR=.malgo-work timeout "$CASE_TIMEOUT" \
+      "$HS_MALGO" eval --infer "$src" >/dev/null 2>"$WORK/$case.hs.err"
+    hs_exit=$?
+    MALGO_WORK_DIR=.malgo-work-lean timeout "$CASE_TIMEOUT" \
+      "$LEAN_MALGO" eval --infer "$src" >/dev/null 2>"$WORK/$case.lean.err"
+    lean_exit=$?
+    if [ "$hs_exit" -ne 0 ] && [ "$lean_exit" -ne 0 ]; then
+      pass=$((pass + 1))
+    else
+      fail=$((fail + 1))
+      fail_names+=("$case(hs=$hs_exit,lean=$lean_exit)")
+    fi
+    if [ "$((total_fail + fail))" -ge "$MAX_FAILURES" ]; then
+      echo "Stopping early: reached MAX_FAILURES=$MAX_FAILURES"
+      break
+    fi
+  done
+  echo "=== error: $pass/$((pass + fail)) passed ==="
+  if [ "$fail" -gt 0 ]; then
+    echo "  mismatch: ${fail_names[*]}"
+  fi
+  total_pass=$((total_pass + pass))
+  total_fail=$((total_fail + fail))
+}
+
 for mode in "${MODES[@]}"; do
   case "$mode" in
     eval) run_eval_mode eval "" ;;
     bigstep) run_eval_mode bigstep "--eval-mode bigstep" ;;
     fingerprint) run_fingerprint_mode ;;
-    scheme|zig|error)
+    error) run_error_mode ;;
+    scheme|zig)
       echo "=== $mode: not yet implemented, skipping ==="
       ;;
     *)

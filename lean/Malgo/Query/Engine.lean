@@ -14,6 +14,7 @@ import Malgo.Sequent.ToCore
 import Malgo.Sequent.Core.Flat
 import Malgo.Sequent.Core.Join
 import Malgo.Sequent.Core.Json
+import Malgo.Infer
 
 /-! Port of `src/Malgo/Query/Engine.hs`: the memoized query handlers over a
 `QueryDB`, plus reverse-dependency invalidation (`reverseDepClosure`,
@@ -150,9 +151,62 @@ def linkDeps (ws : Workspace) (dependencies : Std.TreeSet ModuleName)
     definitions := program.definitions ++ deps.flatMap (·.definitions),
     dependencies := [] }
 
-/-- Linked Join program for a module (Haskell `LinkedProgram`, with
-`useInfer = false`): rename → ToFun → ToCore → Flat → Join → save `.sqt` →
-link the transitive dependency closure. -/
+mutual
+
+/-- Union each dependency's exported `TyEnv` (port of `buildDepsEnv`). Each
+`InferredModule` result already covers signatures, foreigns, data
+constructors, and inferred bare defs.
+
+Haskell surfaces a two-deps-export-the-same-`Id` collision loudly (plain
+`error`, via `Map.intersectionWith` on the KEYS — it does not special-case
+"same Id, same value", any repeated key is fatal), since a genuine
+cross-module `Id` clash indicates an upstream invariant violation. This is
+deliberately reproduced exactly, not softened: the query engine can key the
+same underlying module under two `ModuleName` aliases (`.moduleName
+"Builtin"` and the artifact-path form path-string imports resolve to), and a
+module reached both ways lists as two distinct dependency-set entries —
+Haskell hits the identical crash in that situation (confirmed empirically:
+`test/testcases/malgo/error/{ConstructorArity,StringPatIsNotSupported}.mlg`,
+which import Builtin/Prelude via relative path *and* transitively via
+Prelude's own bare-name `import Builtin`, crash under `--infer` on exactly
+this). Silently unioning here would diverge from the oracle on those two
+fixtures and mask a real upstream aliasing defect rather than surfacing it —
+see `test/testcases/malgo/error/README.md`. -/
+partial def buildDepsEnv (ws : Workspace) (db : QueryDB) (deps : Std.TreeSet ModuleName) :
+    MalgoM Malgo.Infer.TyEnv := do
+  deps.toList.foldlM (init := ({} : Malgo.Infer.TyEnv)) fun acc dep => do
+    let depEnv ← fetchInferredModule ws db dep
+    let collisions := depEnv.foldl (fun ks k _ => if acc.contains k then k :: ks else ks) []
+    unless collisions.isEmpty do
+      let msg := s!"buildDepsEnv: dependency {dep.toStr} redefines names already exported by " ++
+        s!"an earlier dep: {collisions.map Malgo.Id.toText}"
+      throw { passName := "Query.Engine", message := msg }
+    pure (depEnv.foldl (fun m k v => m.insert k v) acc)
+
+/-- Exported `TyEnv` for a module (Haskell `InferredModule`): rename →
+buildDepsEnv → elaborate (malgo2025) → infer → export only the entries this
+module contributes (`finalEnv \ depsEnv`). -/
+partial def fetchInferredModule (ws : Workspace) (db : QueryDB) (modName : ModuleName) :
+    MalgoM Malgo.Infer.TyEnv := do
+  match (← db.cacheInferredModule.get).get? modName with
+  | some result => return result
+  | none =>
+    let (renamed, rnState) ← fetchRenamedModule ws db modName
+    let mn := renamed.moduleName
+    let depsEnv ← buildDepsEnv ws db rnState.dependencies
+    let bindGroup ← if (← Malgo.hasFeature .malgo2025)
+      then Malgo.Elaborate.pass mn renamed.moduleDefinition
+      else pure renamed.moduleDefinition
+    let (_, finalEnv) ← Malgo.Infer.pass mn depsEnv bindGroup
+    let exported := finalEnv.foldl (fun m k v => if depsEnv.contains k then m else m.insert k v) {}
+    db.cacheInferredModule.modify (·.insert modName exported)
+    return exported
+
+end
+
+/-- Linked Join program for a module (Haskell `LinkedProgram`): rename →
+elaborate (malgo2025) → [infer if `useInfer`] → ToFun → ToCore → Flat →
+Join → save `.sqt` → link the transitive dependency closure. -/
 partial def fetchLinkedProgram (ws : Workspace) (db : QueryDB) (modName : ModuleName) :
     MalgoM Sequent.Core.Join.Program := do
   match (← db.cacheLinkedProgram.get).get? modName with
@@ -166,7 +220,12 @@ partial def fetchLinkedProgram (ws : Workspace) (db : QueryDB) (modName : Module
     let bindGroup ← if (← Malgo.hasFeature .malgo2025)
       then Malgo.Elaborate.pass mn renamed.moduleDefinition
       else pure renamed.moduleDefinition
-    let fn ← Sequent.ToFun.pass mn bindGroup
+    let bindGroup' ← if (← getFlag).useInfer then do
+        let importedEnv ← buildDepsEnv ws db rnState.dependencies
+        let (bg, _) ← Malgo.Infer.pass mn importedEnv bindGroup
+        pure bg
+      else pure bindGroup
+    let fn ← Sequent.ToFun.pass mn bindGroup'
     let core ← Sequent.ToCore.toCore mn fn
     let flat ← Sequent.Core.Flat.flatProgram mn core
     let program ← Sequent.Core.Join.joinProgram mn flat
@@ -216,6 +275,7 @@ def invalidateModule (db : QueryDB) (modName : ModuleName) : IO Unit := do
     db.cacheRenamedModule.modify (·.erase m)
     db.cacheModuleInterface.modify (·.erase m)
     db.cacheLinkedProgram.modify (·.erase m)
+    db.cacheInferredModule.modify (·.erase m)
 
 /-! ## `reverseDepClosure` unit checks (port of `Malgo.Query.EngineSpec`) -/
 

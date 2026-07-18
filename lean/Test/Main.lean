@@ -269,6 +269,227 @@ def cases : List GoldenCase :=
   [parserCase "Primitive", parserCase "HelloImport", parserCase "Eventually"]
     ++ renameCases ++ elaborateCases ++ toFunCases
 
+/-! ## Infer full-program gate (port of `Malgo.InferSpec`)
+
+Each testcase is driven Parse → Rename → Elaborate → Infer (via the engine's
+`fetchInferredModule`, mirroring the Haskell `InferredModule` handler) with
+`useInfer := true` and `malgo2025` enabled. Success = inference completes
+without throwing; there is no golden (Haskell's `knownBadInfer` is empty, so
+every testcase must succeed). -/
+
+def inferFlag : Flag := { flag with useInfer := true }
+def malgo2025 : FeatureFlags := FeatureFlags.ofList [.malgo2025]
+
+private def parseError' (e : Malgo.Parser.PError) : CompileError :=
+  { passName := "Parser", message := e.render, range? := none }
+
+/-- Parse a source file and seed it into `cacheParsedModule` under its own
+module name; returns the parsed module. -/
+private def seedParsed (ws : Workspace) (db : Malgo.Query.QueryDB) (path : System.FilePath) :
+    MalgoM (Malgo.Syntax.Module .parse) := do
+  let text ← MalgoM.io (IO.FS.readFile path)
+  match ← Malgo.Parser.pass ws path text with
+  | (.error e, _) => throw (parseError' e)
+  | (.ok parsed, _) =>
+    MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
+    return parsed
+
+/-- Register Builtin/Prelude module paths so the engine's bare-name import
+resolution (`getModulePath`) finds them at their `runtime/malgo/` origin
+without needing a pre-seeded workspace mirror. -/
+private def registerRuntime (ws : Workspace) : MalgoM Unit := do
+  ws.registerModule (.moduleName "Builtin") (← ws.parseArtifactPathFromPwd "runtime/malgo/Builtin.mlg")
+  ws.registerModule (.moduleName "Prelude") (← ws.parseArtifactPathFromPwd "runtime/malgo/Prelude.mlg")
+
+/-- Accumulate each dependency's exported `TyEnv`, left-biased on collision
+(port of `InferSpec.runInferCapturing`'s own inline `foldlM ... <> ...`
+fold — NOT `Query.Engine.buildDepsEnv`, which is a different, stricter
+function used only by the query engine's own per-module internal
+accumulation and the CLI's `LinkedProgram` handler).
+
+Haskell's test harness deliberately does not route the top-level testcase's
+OWN direct dependencies through `Query.Engine.buildDepsEnv`: a testcase that
+directly imports both Prelude and Builtin (the overwhelmingly common case —
+Prelude does `module {..} = import Builtin`, re-exporting every Builtin name)
+would otherwise always collide, since Prelude's own exported env already
+contains Builtin's names. `Map.<>`'s left-bias silently prefers the
+earlier-listed dependency's copy, which is fine since re-exported names are
+identical regardless of which dependency contributed them.
+
+The engine's `buildDepsEnv` stays genuinely strict (matching Haskell's
+`Query/Engine.hs` literally) because it is exercised at CLI-parity level by
+`scripts/lean-parity.sh --mode error`: `malgo eval --infer` on a real
+testcase (e.g. `Undefined.mlg`, which has this exact Prelude+Builtin
+diamond) crashes on Haskell's actual binary too — confirmed empirically —
+so the Lean CLI must crash identically, not silently succeed. -/
+private def buildDepsEnvLenient (ws : Workspace) (db : Malgo.Query.QueryDB)
+    (deps : Std.TreeSet ModuleName) : MalgoM Malgo.Infer.TyEnv :=
+  deps.toList.foldlM (init := ({} : Malgo.Infer.TyEnv)) fun acc dep => do
+    let depEnv ← Malgo.Query.Engine.fetchInferredModule ws db dep
+    pure (depEnv.foldl (fun m k v => if m.contains k then m else m.insert k v) acc)
+
+/-- Run inference on one testcase; `.ok ()` on success, `.error msg` on any
+compile error. Mirrors Haskell `InferSpec.runInfer`/`driveInfer`: renames the
+target directly (never calling `fetchInferredModule` ON the top-level
+testcase itself — only on each of its dependencies, via
+`buildDepsEnvLenient`), then infers with the accumulated deps env. -/
+def driveInfer (name : String) : IO (Except String Unit) := do
+  let ws ← Workspace.setup
+  try
+    MalgoM.run inferFlag malgo2025 do
+      let db ← MalgoM.io Malgo.Query.newQueryDB
+      registerRuntime ws
+      let parsed ← seedParsed ws db (testcasePath name)
+      let (renamed, rnState) ← Malgo.Query.Engine.fetchRenamedModule ws db parsed.moduleName
+      let depsEnv ← buildDepsEnvLenient ws db rnState.dependencies
+      let bindGroup ← if (← Malgo.hasFeature .malgo2025)
+        then Malgo.Elaborate.pass renamed.moduleName renamed.moduleDefinition
+        else pure renamed.moduleDefinition
+      let _ ← Malgo.Infer.pass renamed.moduleName depsEnv bindGroup
+      pure ()
+    return .ok ()
+  catch e => return .error (toString e)
+
+/-- Capture the module name, dependency env, and exported env from inference
+(port of `runInferCapturing`), for the export-boundary tests. -/
+def runInferCapturing (name : String) :
+    IO (ModuleName × Malgo.Infer.TyEnv × Malgo.Infer.TyEnv) := do
+  let ws ← Workspace.setup
+  MalgoM.run inferFlag malgo2025 do
+    let db ← MalgoM.io Malgo.Query.newQueryDB
+    registerRuntime ws
+    let parsed ← seedParsed ws db (testcasePath name)
+    let (renamed, rnState) ← Malgo.Query.Engine.fetchRenamedModule ws db parsed.moduleName
+    let mn := renamed.moduleName
+    let depsEnv ← buildDepsEnvLenient ws db rnState.dependencies
+    let bindGroup ← if (← Malgo.hasFeature .malgo2025)
+      then Malgo.Elaborate.pass mn renamed.moduleDefinition
+      else pure renamed.moduleDefinition
+    let (_, finalEnv) ← Malgo.Infer.pass mn depsEnv bindGroup
+    let exported := finalEnv.foldl (fun m k v => if depsEnv.contains k then m else m.insert k v) {}
+    pure (mn, depsEnv, exported)
+
+/-- Run the two `InferredModule export boundary` unit tests on Echo.mlg.
+Returns the number of failures (0 = both pass). -/
+def runBoundaryTests : IO Nat := do
+  let mut failed := 0
+  let (mn, depsEnv, exported) ← runInferCapturing "Echo"
+  let leakedDep := exported.toList.filter (fun (k, _) => depsEnv.contains k)
+  let leakedMod := exported.toList.filter (fun (k, _) => k.moduleName != mn)
+  if leakedDep.isEmpty && leakedMod.isEmpty then
+    IO.println "ok Malgo.Infer/boundary/no-dep-leakage"
+  else
+    failed := failed + 1
+    IO.println s!"FAIL Malgo.Infer/boundary/no-dep-leakage: {leakedDep.length} dep, {leakedMod.length} foreign-module"
+  let mainNames := exported.toList.filter (fun (k, _) => k.name == "main")
+  if mainNames.length == 1 then
+    IO.println "ok Malgo.Infer/boundary/single-main"
+  else
+    failed := failed + 1
+    IO.println s!"FAIL Malgo.Infer/boundary/single-main: found {mainNames.length}"
+  return failed
+
+/-! ## Constraint/Unify unit tests (port of the `Malgo.InferSpec` unit cases)
+
+`applySubst`/`composeSubst`/`unify` are `partial` (equi-recursive), so these
+run as runtime assertions rather than `#guard`. -/
+
+open Malgo.Infer in
+private def mkId (n : String) : Id :=
+  { name := n, moduleName := .moduleName "Test", sort := .external }
+
+open Malgo.Infer in
+/-- Run `unify` in a fresh inference state; `.ok subst` or `.error msg`. -/
+private def runUnify (t1 t2 : Ty) : IO (Except String Subst) := do
+  try
+    let s ← MalgoM.run flag {} do
+      let ctx : InferCtx := { moduleName := .moduleName "Test" }
+      let act := ((unify dummyRange t1 t2).run ctx).run' initGenState
+      Malgo.wrapError "Unify" InferError.render InferError.rangeOf act
+    return .ok s
+  catch e => return .error (toString e)
+
+open Malgo.Infer in
+/-- Constraint/Unify unit checks; returns `(failures, total)`. -/
+def runUnitTests : IO (Nat × Nat) := do
+  let t0 := mkId "_t0"
+  let t1 := mkId "_t1"
+  let s1 : Subst := ({} : Subst).insert t0 (.tMu (.tArr (.tBound 0) (.tVar t1 0)))
+  let s2 : Subst := ({} : Subst).insert t1 (.tArr (.tVar t0 0) tyInt32)
+  let composed := composeSubst s2 s1
+  let composed' := composeSubst (({} : Subst).insert t1 tyString) (({} : Subst).insert t0 tyInt32)
+  let checks : List (String × IO Bool) :=
+    [ ("applySubst-var", pure (applySubst (({} : Subst).insert t0 tyInt32) (.tVar t0 0) == tyInt32)),
+      ("applySubst-unrelated", pure (applySubst (({} : Subst).insert t0 tyInt32) (.tVar t1 0) == .tVar t1 0)),
+      ("applySubst-nosub-tbound",
+        pure (applySubst (({} : Subst).insert (mkId "a") tyInt32) (.tMu (.tBound 0)) == .tMu (.tBound 0))),
+      ("freeVars-forall",
+        pure ((freeVars (.tForall (.tArr (.tBound 0) (.tVar (mkId "b") 0)))).toList == [mkId "b"])),
+      ("occursIn-nested", pure (occursIn (mkId "a") (.tArr (.tVar (mkId "a") 0) tyInt32))),
+      ("occursIn-mu-bound", pure (occursIn (mkId "a") (.tMu (.tBound 0)) == false)),
+      ("generalize-above-level", pure ((generalize 0 (.tArr (.tVar t0 1) (.tVar t1 0))).vars == [t0])),
+      ("generalize-mu-not-quantified",
+        pure ((generalize 0 (.tMu (.tArr (.tBound 0) (.tVar (mkId "_t6") 2)))).vars == [mkId "_t6"])),
+      ("composeSubst-330-no-self-ref",
+        pure (match composed.get? t0 with | some v => occursIn t0 v == false | none => false)),
+      ("composeSubst-idempotent",
+        pure (composed'.get? t0 == some tyInt32 && composed'.get? t1 == some tyString)),
+      ("unify-con-eq", do pure (← runUnify tyInt32 tyInt32).isOk),
+      ("unify-con-neq", do pure (!(← runUnify tyInt32 tyString).isOk)),
+      ("unify-var-concrete", do pure (← runUnify (.tVar t0 0) tyInt32).isOk),
+      ("unify-recursive-to-mu", do
+        pure (match (← runUnify (.tVar t0 0) (.tArr (.tVar t0 0) tyInt32)) with
+          | .ok subst => subst.get? t0 == some (.tMu (.tArr (.tBound 0) tyInt32))
+          | .error _ => false)),
+      ("unify-reject-mu-vs-int", do
+        pure (!(← runUnify (.tMu (.tArr (.tBound 0) tyInt32)) (.tArr tyInt32 tyInt32)).isOk)),
+      ("unify-alpha-equiv-mu", do
+        pure (← runUnify (.tMu (.tArr (.tBound 0) tyInt32)) (.tMu (.tArr (.tBound 0) tyInt32))).isOk),
+      ("unify-bottom", do pure (← runUnify .tBottom tyInt32).isOk),
+      ("unify-tuple-len-mismatch", do
+        pure (!(← runUnify (.tTuple [tyInt32]) (.tTuple [tyInt32, tyString])).isOk)),
+      ("unify-record-match", do
+        pure (← runUnify (.tRecord [("x", tyInt32), ("y", tyString)] none)
+                         (.tRecord [("x", tyInt32), ("y", tyString)] none)).isOk) ]
+  let mut failed := 0
+  for (label, act) in checks do
+    if ← act then IO.println s!"ok Malgo.Infer/unit/{label}"
+    else
+      failed := failed + 1
+      IO.println s!"FAIL Malgo.Infer/unit/{label}"
+  return (failed, checks.length)
+
+/-- Full-program inference gate + boundary tests. Respects `--match`. -/
+def runInferGate (cfg : Config) (names : List String) : IO UInt32 := do
+  let selected := names.filter fun n => match cfg.match? with
+    | none => true
+    | some pat => (s!"Malgo.Infer/{n}".splitOn pat).length > 1
+  let runBoundary := match cfg.match? with
+    | none => true
+    | some pat => (("Malgo.Infer/boundary").splitOn pat).length > 1
+  let runUnit := match cfg.match? with
+    | none => true
+    | some pat => (("Malgo.Infer/unit").splitOn pat).length > 1
+  if selected.isEmpty && !runBoundary && !runUnit then return 0
+  let mut failed := 0
+  let mut total := 0
+  if runUnit then
+    let (unitFail, unitTotal) ← runUnitTests
+    failed := failed + unitFail
+    total := total + unitTotal
+  for n in selected do
+    total := total + 1
+    match ← driveInfer n with
+    | .ok () => IO.println s!"ok Malgo.Infer/{n}"
+    | .error msg =>
+      failed := failed + 1
+      IO.println s!"FAIL Malgo.Infer/{n}: {msg}"
+  if runBoundary then
+    total := total + 2
+    failed := failed + (← runBoundaryTests)
+  IO.println s!"=== infer {total - failed}/{total} passed ==="
+  return if failed == 0 then 0 else 1
+
 end Malgo.Test
 
 def main (args : List String) : IO UInt32 := do
@@ -287,4 +508,6 @@ def main (args : List String) : IO UInt32 := do
       ++ Malgo.Test.evalCases memo names
       ++ Malgo.Test.bigStepEvalCases memo names
       ++ Malgo.Test.forthCases memo forthNames
-    Malgo.Test.runSuite cfg allCases
+    let goldenCode ← Malgo.Test.runSuite cfg allCases
+    let inferCode ← Malgo.Test.runInferGate cfg names
+    return (if goldenCode == 0 && inferCode == 0 then 0 else 1)

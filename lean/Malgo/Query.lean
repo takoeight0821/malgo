@@ -5,6 +5,7 @@ import Malgo.Interface
 import Malgo.Syntax
 import Malgo.Rename.RnState
 import Malgo.Sequent.Core.Join
+import Malgo.Infer
 
 /-! Port of `src/Malgo/Query.hs` + `src/Malgo/Query/Database.hs`.
 
@@ -34,7 +35,8 @@ structure QueryDB where
   cacheRenamedModule : IO.Ref (Std.TreeMap ModuleName (Module .rename × RnState))
   cacheModuleInterface : IO.Ref (Std.TreeMap ModuleName Interface)
   cacheLinkedProgram : IO.Ref (Std.TreeMap ModuleName Sequent.Core.Join.Program)
-  -- TODO(M3): cacheInferredModule : IO.Ref (Std.TreeMap ModuleName TyEnv)
+  /-- Each module's exported `TyEnv` (inference results). -/
+  cacheInferredModule : IO.Ref (Std.TreeMap ModuleName Malgo.Infer.TyEnv)
   /-- In-memory source registry; populated by `updateSource` (e.g. from LSP). -/
   sourceMap : IO.Ref (Std.TreeMap ModuleName (System.FilePath × String))
 
@@ -45,6 +47,7 @@ def newQueryDB : IO QueryDB := do
     cacheRenamedModule := ← IO.mkRef {},
     cacheModuleInterface := ← IO.mkRef {},
     cacheLinkedProgram := ← IO.mkRef {},
+    cacheInferredModule := ← IO.mkRef {},
     sourceMap := ← IO.mkRef {} }
 
 /-- A `QueryDB` sharing an existing interface cache. The M1 test harness
@@ -57,6 +60,7 @@ def QueryDB.ofInterfaceCache (cache : IO.Ref (Std.TreeMap ModuleName Interface))
     cacheRenamedModule := ← IO.mkRef {},
     cacheModuleInterface := cache,
     cacheLinkedProgram := ← IO.mkRef {},
+    cacheInferredModule := ← IO.mkRef {},
     sourceMap := ← IO.mkRef {} }
 
 /-- Port of `Malgo.Interface.buildInterface`: project the renamer's final

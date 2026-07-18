@@ -30,6 +30,9 @@ import Malgo.Rename.RnEnv
 import Malgo.Rename.RnState
 import Malgo.Rename.Pass
 import Malgo.Elaborate
+import Malgo.Infer.Constraint
+import Malgo.Infer.Unify
+import Malgo.Infer
 import Malgo.Query
 import Malgo.Query.Engine
 import Malgo.Backend.Scheme

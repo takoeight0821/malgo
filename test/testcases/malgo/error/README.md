@@ -21,9 +21,32 @@ regardless of the flag), which is why the harness always passes `--infer`.
 | `NeedSpaceDot.mlg` | `rename` | yes |
 | `QualifiedImport.mlg` | `rename` | yes |
 | `NonExhaustive.mlg` | `eval` | yes (runtime non-exhaustive match) |
-| `ConstructorArity.mlg` | `type` | no — only `Malgo.Query.Engine.buildDepsEnv`'s duplicate-export `error` call, tripped under `--infer` by this file's relative-path imports; not really about constructor arity as the name suggests |
+| `ConstructorArity.mlg` | `type` | no — see the `buildDepsEnv` note below; not actually about constructor arity |
 | `InvalidPattern.mlg` | `type` | no — succeeds (prints `OK`) without `--infer`; the clause-arity mismatch is only caught by `InferPass` |
-| `StringPatIsNotSupported.mlg` | `type` | no — same as above (prints `OK` without `--infer`) |
+| `StringPatIsNotSupported.mlg` | `type` | no — see the `buildDepsEnv` note below; not actually about string patterns |
+
+**`ConstructorArity.mlg`/`StringPatIsNotSupported.mlg`'s real failure mode** is
+`Malgo.Query.Engine.buildDepsEnv`'s duplicate-export `error` call — and it is
+NOT specific to these two files. Any module that directly imports both
+Prelude and Builtin hits it, because Prelude re-exports every Builtin name
+(`module {..} = import Builtin`): the direct Builtin import and Prelude's
+re-exported copy collide in `buildDepsEnv`'s strict accumulation. Confirmed
+empirically that this crashes the real Haskell CLI (`malgo eval --infer`) on
+an *ordinary* testcase too (`Undefined.mlg`, which has the identical
+Prelude+Builtin diamond) — so it is a genuine, if latent, Haskell CLI defect,
+not something particular to the `error/` fixtures. It stays latent in
+Haskell's own test suite only because `InferSpec.runInferCapturing` computes
+a testcase's top-level dependency env via its own separate, lenient
+left-biased fold (`foldlM (\acc dep -> (depEnv <>)) Map.empty`) instead of
+calling the strict `Query.Engine.buildDepsEnv` — the two are different
+functions in Haskell, and only the lenient one is exercised by anything that
+currently passes. The Lean port mirrors this exact split (see
+`lean/Test/Main.lean`'s `buildDepsEnvLenient` vs `Malgo.Query.Engine.
+buildDepsEnv`), so: the `lake test` infer gate (mirroring `runInferCapturing`)
+passes on `Undefined.mlg` and all other Prelude+Builtin-diamond testcases,
+while the real CLI binary (mirroring `Query/Engine.hs`'s `LinkedProgram`
+handler literally) crashes on them under `--infer` — on both implementations
+identically, which is what `--mode error` checks for these two files.
 
 **Six files have NO `.expect` and are excluded from `--mode error`:**
 `ErrorKind.mlg`, `ErrorKind2.mlg`, `ErrorKind3.mlg`, `ErrorPatSynRecon.mlg`,

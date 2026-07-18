@@ -153,3 +153,23 @@ bash scripts/selfhost-level2.sh
 - Conventional Commits format (see `.gitmessage`)
 - Example: `feat(parser): support C-style apply`
 - Quality gate: `mise run format && mise run test`
+
+## Lean 4 port (`lean/`)
+
+A full second implementation of Malgo — parser through every backend
+(Eval/Scheme/Zig), the query-based compilation engine, the linter, the
+LSP server, and the MET debug tracer (`malgo debug-trace`) — exists in
+Lean 4 under `lean/`, at parity with this Haskell implementation (which
+remains the semantic oracle: the committed `.golden/` tree, the
+self-hosted-compiler stress test, and `scripts/zig-golden.sh` gate both
+implementations, not just this one). See `lean/README.md` for build
+commands and milestone-by-milestone status, and `PORTING.md` at the repo
+root for the file-by-file module mapping and the Haskell-retirement
+criteria (not yet met — do not treat this port as a reason to stop
+maintaining the Haskell code).
+
+If you change semantics anywhere under `src/Malgo/` (not just fixing a
+typo or adding a comment), the same change almost certainly needs to land
+in `lean/Malgo/` in the same PR — check `PORTING.md`'s module table for
+the corresponding Lean file, and re-run `bash scripts/lean-parity.sh`
+before considering the change complete.

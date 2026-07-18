@@ -1,0 +1,34 @@
+module {..} = import "../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../runtime/malgo/Prelude.mlg"
+
+-- A CPU-bound benchmark fixture for `bench/lean-vs-haskell.sh`: naive
+-- recursive fibonacci, deliberately un-memoized so it does real work (the
+-- example under `examples/malgo/Fib.mlg` only computes `fib 5`, too small
+-- to produce a stable wall-clock difference between implementations).
+--
+-- `n = 15` is deliberate, not arbitrary: `fib 18`/`fib 20` reproducibly
+-- SIGSEGV when compiled via the Zig backend (`--opt release-fast`), on
+-- BOTH the Haskell- and Lean-compiled binaries identically — confirmed a
+-- pre-existing bug in the Zig backend's original (Haskell) design,
+-- faithfully reproduced by the Lean port, not a Lean-specific regression.
+-- Out of scope to fix here; `n = 15` is the largest value confirmed to run
+-- cleanly on both toolchains via both `eval` and `compile`.
+
+infix 4 (<=)
+def (<=) = { x y -> leInt32 x y }
+
+infixl 6 (+)
+def (+) = { x y -> addInt32 x y }
+
+infixl 6 (-)
+def (-) = { x y -> subInt32 x y }
+
+def fib = { n ->
+  if (n <= 1)
+    { n }
+    { fib (n - 1) + fib (n - 2) }
+}
+
+def main = {
+  fib 15 |> toStringInt32 |> putStrLn
+}

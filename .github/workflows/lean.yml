@@ -2,12 +2,20 @@ name: lean
 
 # CI for the Lean 4 port under lean/. Milestone-gated jobs (parity,
 # zig-golden, selfhost) activate via lean/ci-gates.env as the port
-# progresses; lean-build (build + golden tests) is always on.
+# progresses; lean-build (build + golden tests) is always on. M9
+# (consolidation): the whole workflow (every gated job, same as any push)
+# also runs on a nightly schedule, independent of push/PR activity, so a
+# silent divergence (e.g. a Haskell-side change that doesn't touch
+# anything the Lean side would rebuild against) is caught within a day
+# rather than waiting for the next code change to either implementation.
 
 on:
   push:
     branches: [master]
   pull_request:
+  schedule:
+    - cron: '17 3 * * *' # nightly, off-peak; arbitrary minute to avoid the top-of-hour GitHub Actions crowd
+  workflow_dispatch:
 
 concurrency:
   group: lean-${{ github.ref }}

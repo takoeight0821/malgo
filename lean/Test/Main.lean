@@ -2,6 +2,7 @@ import Malgo
 import Test.Golden
 import Test.Fingerprint
 import Test.LspSession
+import Test.MetPage
 
 /-! Test driver. Parser golden cases run the real C-style parser
 (`Malgo.Parser.pass`) and dump the parsed+resolved module with
@@ -352,6 +353,14 @@ def runLspSessionGate : IO Nat := do
   | .ok () => IO.println "ok Malgo.LSP/session"; return 0
   | .error msg => IO.println s!"FAIL Malgo.LSP/session: {msg}"; return 1
 
+/-! ## MET page gate (M8, authored fresh — no Haskell reference test
+exists; see `Test/MetPage.lean`'s module doc). -/
+
+def runMetPageGate : IO Nat := do
+  match ← Malgo.Test.MetPage.run with
+  | .ok () => IO.println "ok Malgo.Debug.MetPage/index"; return 0
+  | .error msg => IO.println s!"FAIL Malgo.Debug.MetPage/index: {msg}"; return 1
+
 /-! ## Infer full-program gate (port of `Malgo.InferSpec`)
 
 Each testcase is driven Parse → Rename → Elaborate → Infer (via the engine's
@@ -598,4 +607,6 @@ def main (args : List String) : IO UInt32 := do
     let goldenCode ← Malgo.Test.runSuite cfg allCases
     let inferCode ← Malgo.Test.runInferGate cfg names
     let lspFailures ← Malgo.Test.runLspSessionGate
-    return (if goldenCode == 0 && inferCode == 0 && lspFailures == 0 then 0 else 1)
+    let metPageFailures ← Malgo.Test.runMetPageGate
+    return (if goldenCode == 0 && inferCode == 0 && lspFailures == 0 && metPageFailures == 0
+      then 0 else 1)

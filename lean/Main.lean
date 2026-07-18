@@ -54,7 +54,8 @@ def usage : String :=
   "              [--target eval|scheme|zig] [--eval-mode smallstep|bigstep]\n" ++
   "              [--infer] [ARG...]\n" ++
   "  compile SOURCE [-o|--output OUT] [--opt debug|release-safe|release-fast]\n" ++
-  "  lint SOURCE [--deny-warnings]"
+  "  lint SOURCE [--deny-warnings]\n" ++
+  "  debug-trace SOURCE [-o|--output trace.html] [--infer] [--malgo2025]"
 
 /-- Split `--name=value` into `(--name, some value)`; a plain token is
 `(token, none)`. Mirrors optparse accepting both `--name value` and
@@ -164,6 +165,30 @@ private partial def parseLint (args : List String) (acc : LintAcc) : Except Stri
       | none => parseLint rest { acc with source := some (System.FilePath.mk a) }
       | some _ => .error s!"unexpected extra argument: {a}"
 
+/-! ## `debug-trace` (MET — M-exp-Tracer, port of `app/met`) -/
+
+private structure DebugTraceAcc where
+  source : Option System.FilePath := none
+  outPath : System.FilePath := System.FilePath.mk "trace.html"
+  useInfer : Bool := false
+  malgo2025 : Bool := false
+
+private partial def parseDebugTrace (args : List String) (acc : DebugTraceAcc) :
+    Except String DebugTraceAcc :=
+  match args with
+  | [] => .ok acc
+  | a :: rest =>
+    let (name, inline) := splitInline a
+    if name == "-o" || name == "--output" then do
+      let (v, rest') ← takeValue name inline rest
+      parseDebugTrace rest' { acc with outPath := System.FilePath.mk v }
+    else if name == "--infer" then parseDebugTrace rest { acc with useInfer := true }
+    else if name == "--malgo2025" then parseDebugTrace rest { acc with malgo2025 := true }
+    else if a.startsWith "-" && a != "-" then .error s!"unknown option: {a}"
+    else match acc.source with
+      | none => parseDebugTrace rest { acc with source := some (System.FilePath.mk a) }
+      | some _ => .error s!"unexpected extra argument: {a}"
+
 /-! ## `dump` (hidden: cross-implementation IR-fingerprint parity tool) -/
 
 inductive DumpStage where
@@ -270,6 +295,22 @@ def runLint (source : System.FilePath) (denyWarnings : Bool) : IO UInt32 := do
     IO.eprintln (toString e)
     return 1
 
+/-- Port of `app/met` (MET — the M-exp-Tracer): trace `source` through the
+whole pipeline once (`Malgo.Debug.Pipeline.runTrace`) and render every
+stage/transition into one self-contained static HTML file at `outPath` —
+see `Malgo.Debug.MetPage`'s module doc for why this replaces Haskell's
+`met` web server rather than porting a server. -/
+def runDebugTrace (source outPath : System.FilePath) (useInfer malgo2025 : Bool) : IO UInt32 := do
+  try
+    let stages ← Malgo.Debug.Pipeline.runTrace source useInfer malgo2025
+    let html := Malgo.Debug.MetPage.renderPage source.toString stages
+    IO.FS.writeFile outPath html
+    IO.eprintln s!"MET: traced {source} ({stages.length} stages) -> {outPath}"
+    return 0
+  catch e =>
+    IO.eprintln (toString e)
+    return 1
+
 /-- Hidden developer subcommand mirroring Haskell `dumpFingerprint`: lower a
 single module (unlinked) through Parse → Rename → ToFun → ToCore → Flat →
 Join and print its canonical, format-immune IR fingerprint — used by
@@ -345,6 +386,14 @@ def run : List String → IO UInt32
           | some src, some stage => do
             let srcAbs ← makeAbsolute src
             runDump srcAbs stage
+      | "debug-trace" =>
+        match parseDebugTrace rest {} with
+        | .error e => parseError e
+        | .ok acc => match acc.source with
+          | none => parseError "debug-trace: missing SOURCE"
+          | some src => do
+            let srcAbs ← makeAbsolute src
+            runDebugTrace srcAbs acc.outPath acc.useInfer acc.malgo2025
       | other => parseError s!"unknown command: {other}"
 
 end Malgo.Cli

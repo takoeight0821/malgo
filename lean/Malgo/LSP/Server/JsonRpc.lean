@@ -38,7 +38,11 @@ private partial def readExactly (h : IO.FS.Stream) (n : Nat) : IO ByteArray := d
   loop ByteArray.empty n
 
 /-- Read the `Content-Length` header, skipping other header lines until the
-    blank separator. Returns `none` on EOF. -/
+    blank separator. Returns `none` on EOF *or* on a malformed
+    (non-numeric) `Content-Length` value — the latter is logged to stderr
+    first, since collapsing both into the same `none` silently makes a
+    protocol violation indistinguishable from a clean disconnect at the
+    `readMessage` call site. -/
 private partial def readContentLength (h : IO.FS.Stream) : IO (Option Nat) := do
   let line ← h.getLine
   if line.isEmpty then return none
@@ -48,7 +52,11 @@ private partial def readContentLength (h : IO.FS.Stream) : IO (Option Nat) := do
   else if stripped.startsWith "Content-Length: " then
     let rest := (stripped.drop "Content-Length: ".length).trimAscii.toString
     skipUntilBlank h
-    return rest.toNat?
+    match rest.toNat? with
+    | some n => return some n
+    | none =>
+      IO.eprintln s!"Malgo.LSP.Server.JsonRpc: malformed Content-Length value: {rest}"
+      return none
   else
     readContentLength h
 where

@@ -16,7 +16,7 @@ inductive JValue where
   | string (s : String)
   | array (xs : List JValue)
   | object (fields : List (String × JValue))
-  deriving Repr, Inhabited
+  deriving Repr, Inhabited, BEq
 
 /-- Build a JSON object from key-value pairs. -/
 def jObject (fields : List (String × JValue)) : JValue := .object fields
@@ -135,7 +135,37 @@ private partial def parseStringChars (acc : List Char) : List Char → Option (J
   | '\\' :: 'u' :: a :: b :: c :: d :: rest =>
     if isHexDigit a && isHexDigit b && isHexDigit c && isHexDigit d then
       let code := hexVal a * 4096 + hexVal b * 256 + hexVal c * 16 + hexVal d
-      parseStringChars (Char.ofNat code :: acc) rest
+      -- Astral (non-BMP) characters are encoded as a UTF-16 surrogate
+      -- pair of two `\uXXXX` escapes (what e.g. Python's `json.dumps
+      -- (ensure_ascii=True)` produces). `Char.ofNat` rejects the whole
+      -- surrogate range [0xD800, 0xDFFF] as an invalid Unicode scalar
+      -- value (falling back to NUL) — unlike Haskell's `chr`, which
+      -- accepts any Int as a `Char` including individually-invalid
+      -- surrogate halves — so a lone `Char.ofNat` per escape would
+      -- silently corrupt every astral character into two NUL bytes.
+      -- Detect a high surrogate and combine it with an immediately
+      -- following low-surrogate escape into the real codepoint; a
+      -- genuinely lone/unpaired surrogate (malformed input) falls back
+      -- to U+FFFD (the standard Unicode replacement character) instead
+      -- of NUL, which is closer to what real JSON decoders do and at
+      -- least doesn't inject a silent NUL byte into the string.
+      if 0xD800 ≤ code && code ≤ 0xDBFF then
+        match rest with
+        | '\\' :: 'u' :: a2 :: b2 :: c2 :: d2 :: rest' =>
+          if isHexDigit a2 && isHexDigit b2 && isHexDigit c2 && isHexDigit d2 then
+            let code2 := hexVal a2 * 4096 + hexVal b2 * 256 + hexVal c2 * 16 + hexVal d2
+            if 0xDC00 ≤ code2 && code2 ≤ 0xDFFF then
+              let combined := 0x10000 + (code - 0xD800) * 0x400 + (code2 - 0xDC00)
+              parseStringChars (Char.ofNat combined :: acc) rest'
+            else
+              parseStringChars (Char.ofNat 0xFFFD :: acc) rest
+          else
+            parseStringChars (Char.ofNat 0xFFFD :: acc) rest
+        | _ => parseStringChars (Char.ofNat 0xFFFD :: acc) rest
+      else if 0xDC00 ≤ code && code ≤ 0xDFFF then
+        parseStringChars (Char.ofNat 0xFFFD :: acc) rest
+      else
+        parseStringChars (Char.ofNat code :: acc) rest
     else
       parseStringChars ('\\' :: acc) ('u' :: a :: b :: c :: d :: rest)
   | c :: rest => parseStringChars (c :: acc) rest
@@ -147,7 +177,17 @@ private def digitsToNat (ds : List Char) : Nat :=
   ds.foldl (fun acc c => acc * 10 + (c.toNat - '0'.toNat)) 0
 
 /-- Parse a numeric substring (the whole slice, mirroring Haskell's
-    `reads … [(n, "")]` full-consume requirement) into a `Float`. -/
+    `reads … [(n, "")]` full-consume requirement) into a `Float`.
+
+    A `.`/`e`/`E` marker MUST be followed by at least one digit — JSON's
+    number grammar requires it, and so does Haskell's `reads` (`reads
+    "5." :: [(Double,String)]` yields `[(5.0, ".")]`, a non-empty leftover
+    that fails the full-consume check). The `.span isDigit` calls below
+    only bound how many digits get *consumed*; they don't validate that
+    any were found, so each marker branch explicitly rejects a
+    zero-digit tail instead of silently letting the empty leftover pass
+    the final full-consume check (which is what let `"5."`, `"1e"`,
+    `"1e+"`, and `"1.e5"` through as valid numbers before this fix). -/
 private def parseFloatComplete (chars : List Char) : Option Float :=
   let (neg, r0) := match chars with
     | '-' :: t => (true, t)
@@ -155,28 +195,36 @@ private def parseFloatComplete (chars : List Char) : Option Float :=
   let (intDs, r1) := r0.span isDigit
   if intDs.isEmpty then none
   else
-    let (fracDs, r2) := match r1 with
-      | '.' :: t => t.span isDigit
-      | _ => ([], r1)
-    let (expNeg, expDs, r3) := match r2 with
-      | e :: t =>
-        if e == 'e' || e == 'E' then
-          let (esign, t2) := match t with
-            | '+' :: x => (false, x)
-            | '-' :: x => (true, x)
-            | _ => (false, t)
-          let (ed, r) := t2.span isDigit
-          (esign, ed, r)
-        else (false, [], r2)
-      | _ => (false, [], r2)
-    if !r3.isEmpty then none
-    else
-      let mantissa := digitsToNat (intDs ++ fracDs)
-      let e : Int := (if expNeg then -(Int.ofNat (digitsToNat expDs)) else Int.ofNat (digitsToNat expDs))
-                       - Int.ofNat fracDs.length
-      let mag : Float := if e ≥ 0 then Float.ofScientific mantissa false e.toNat
-                         else Float.ofScientific mantissa true (-e).toNat
-      some (if neg then -mag else mag)
+    let fracResult : Option (List Char × List Char) := match r1 with
+      | '.' :: t =>
+        let (fd, r) := t.span isDigit
+        if fd.isEmpty then none else some (fd, r)
+      | _ => some ([], r1)
+    match fracResult with
+    | none => none
+    | some (fracDs, r2) =>
+      let expResult : Option (Bool × List Char × List Char) := match r2 with
+        | e :: t =>
+          if e == 'e' || e == 'E' then
+            let (esign, t2) := match t with
+              | '+' :: x => (false, x)
+              | '-' :: x => (true, x)
+              | _ => (false, t)
+            let (ed, r) := t2.span isDigit
+            if ed.isEmpty then none else some (esign, ed, r)
+          else some (false, [], r2)
+        | [] => some (false, [], r2)
+      match expResult with
+      | none => none
+      | some (expNeg, expDs, r3) =>
+        if !r3.isEmpty then none
+        else
+          let mantissa := digitsToNat (intDs ++ fracDs)
+          let e : Int := (if expNeg then -(Int.ofNat (digitsToNat expDs)) else Int.ofNat (digitsToNat expDs))
+                           - Int.ofNat fracDs.length
+          let mag : Float := if e ≥ 0 then Float.ofScientific mantissa false e.toNat
+                             else Float.ofScientific mantissa true (-e).toNat
+          some (if neg then -mag else mag)
 
 private def parseNumber (s : List Char) : Option (JValue × List Char) :=
   let (numChars, rest) :=
@@ -249,5 +297,19 @@ def decodeJson (s : String) : Option JValue :=
   match parseValue s.toList with
   | some (v, rest) => if rest.all isWs then some v else none
   | none => none
+
+-- Regression checks for the boundary-review fixes above: a `.`/`e`/`E`
+-- marker with no digits after it must reject the whole number (matching
+-- Haskell's `reads` full-consume requirement), and a UTF-16 surrogate
+-- pair must combine into its real astral codepoint rather than each half
+-- separately collapsing to NUL.
+#guard decodeJson "5." == none
+#guard decodeJson "1e" == none
+#guard decodeJson "1e+" == none
+#guard decodeJson "1.e5" == none
+#guard decodeJson "5.0" == some (.number 5.0)
+#guard decodeJson "1e5" == some (.number 100000.0)
+#guard decodeJson "\"\\ud83d\\ude00\"" == some (.string (String.singleton (Char.ofNat 0x1F600)))
+#guard decodeJson "\"\\ud800\"" == some (.string (String.singleton (Char.ofNat 0xFFFD)))
 
 end Malgo.LSP.Json

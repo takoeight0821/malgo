@@ -115,7 +115,12 @@ end
 
 /-- Load dependency programs from disk and merge into a single linked program
 (port of `linkDeps`). Each dependency's single-module `.sqt` is loaded and
-its definitions concatenated; `dependencies` is transitive, so this covers
+its definitions concatenated, dependencies first (matching Haskell
+`compileTestCase`'s `builtin <> prelude <> program` and the M1 driver's
+`linkPrograms`): `Toplevels` is a map keyed by (module-qualified) `Name`, so
+this order is not observable in `evalProgram`'s output, but it is the
+direction a same-named local definition would correctly shadow an imported
+one were that ever possible. `dependencies` is transitive, so this covers
 the whole closure with no duplication. -/
 def linkDeps (ws : Workspace) (dependencies : Std.TreeSet ModuleName)
     (program : Sequent.Core.Join.Program) : MalgoM Sequent.Core.Join.Program := do
@@ -123,7 +128,7 @@ def linkDeps (ws : Workspace) (dependencies : Std.TreeSet ModuleName)
     let path ← ws.getModulePath dep
     (Resource.load path ".sqt" : IO Sequent.Core.Join.Program)
   pure {
-    definitions := program.definitions ++ deps.flatMap (·.definitions),
+    definitions := deps.flatMap (·.definitions) ++ program.definitions,
     dependencies := [] }
 
 /-- Linked Join program for a module (Haskell `LinkedProgram`, with

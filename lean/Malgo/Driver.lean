@@ -11,6 +11,8 @@ import Malgo.Sequent.Core.Flat
 import Malgo.Sequent.Core.Join
 import Malgo.Sequent.Eval
 import Malgo.Sequent.BigStepEval
+import Malgo.Query
+import Malgo.Query.Engine
 
 /-! M1 mini-driver: a direct, in-memory compile pipeline up to Rename.
 
@@ -140,7 +142,14 @@ def compileToJoin (ws : Workspace) (cache : InterfaceCache) (path : System.FileP
   let join ← Malgo.Sequent.Core.Join.joinProgram mn flat
   pure { moduleName := mn, dependencies := rnState.dependencies.toList, core, flat, join }
 
-/-! ## Linking and evaluation (M1: direct in-memory linking, no artifacts) -/
+/-! ## Linking (M1 test harness: direct in-memory linking, no artifacts)
+
+`linkPrograms` backs the golden gates in `Test/Main.lean`, which link a
+fixed `[builtin, prelude, program]` list rather than a discovered dependency
+closure (each precompiled once, in a uniq-isolated run, for golden byte
+parity). The CLI's `compileAndEval` below instead resolves and links an
+arbitrary dependency closure through the query engine
+(`Malgo.Query.Engine.fetchLinkedProgram`). -/
 
 /-- Concatenate Join programs, dependencies first (the order Haskell's
 `compileTestCase` uses: `builtin <> prelude <> program`). -/
@@ -148,53 +157,54 @@ def linkPrograms (progs : List Malgo.Sequent.Core.Join.Program) :
     Malgo.Sequent.Core.Join.Program :=
   { definitions := progs.flatMap (·.definitions), dependencies := [] }
 
-/-- Compile a module and its dependency closure to Join programs, dependencies
-first (depth-first postorder, deduplicated). Each module is lowered once; a
-dependency is re-renamed for lowering even though `loadInterface` renamed it
-for its interface — wasteful but sound, since cross-module references use
-uniq-free `External` ids (the query engine removes the duplication in M2). -/
-partial def compileClosure (ws : Workspace) (cache : InterfaceCache)
-    (joins : IO.Ref (Std.TreeMap ModuleName AllIR)) (path : System.FilePath) :
-    MalgoM AllIR := do
-  let ir ← compileToJoin ws cache path
-  for dep in ir.dependencies do
-    unless (← joins.get).contains dep do
-      let depPath ← MalgoM.io (ws.getModulePath dep)
-      let depIR ← compileClosure ws cache joins depPath.originPath.toFilePath
-      joins.modify (·.insert dep depIR)
-  pure ir
-
-/-- Deposit a compiled module's source into the workspace mirror (Haskell
-`save srcModulePath ".mlg" src` in `Driver.compile`). Bare-name imports
-(`import Builtin`) resolve by searching the mirror, so evaluating
+/-- Deposit a module's source into the workspace mirror (Haskell `save
+srcModulePath ".mlg" src` in `Driver.compile`). Bare-name imports (`import
+Builtin`) resolve by searching the mirror, so evaluating
 `runtime/malgo/Builtin.mlg` once seeds it for later runs — the protocol
-`scripts/zig-golden.sh` and the selfhost scripts rely on. -/
-private def seedMirror (ir : AllIR) : IO Unit := do
-  if let .artifact ap := ir.moduleName then
-    let target := ap.targetPath.toFilePath
-    IO.FS.createDirAll (target.parent.getD (System.FilePath.mk "."))
-    -- Atomic tmp+rename: concurrent `malgo eval` runs (the golden sweep
-    -- scripts run cases in parallel) must not observe a half-written mirror.
-    let tmp := System.FilePath.mk s!"{target}.{ap.originPath.toFilePath.toString.hash}.tmp"
-    IO.FS.writeBinFile tmp (← IO.FS.readBinFile ap.originPath.toFilePath)
-    IO.FS.rename tmp target
+`scripts/zig-golden.sh` and the selfhost scripts rely on. Resolves `modName`
+via the workspace (works for both `.artifact`- and `.moduleName`-keyed
+modules), independent of any particular IR representation. -/
+private def seedMirrorFor (ws : Workspace) (modName : ModuleName) : IO Unit := do
+  let ap ← ws.getModulePath modName
+  let target := ap.targetPath.toFilePath
+  IO.FS.createDirAll (target.parent.getD (System.FilePath.mk "."))
+  -- Atomic tmp+rename: concurrent `malgo eval` runs (the golden sweep
+  -- scripts run cases in parallel) must not observe a half-written mirror.
+  let tmp := System.FilePath.mk s!"{target}.{ap.originPath.toFilePath.toString.hash}.tmp"
+  IO.FS.writeBinFile tmp (← IO.FS.readBinFile ap.originPath.toFilePath)
+  IO.FS.rename tmp target
 
-/-- CLI entry for `malgo eval --target eval`: compile, link the dependency
-closure, and run the interpreter on real handles. -/
+/-- CLI entry for `malgo eval --target eval`: compile through the query
+engine (`Malgo.Query.Engine.fetchLinkedProgram` — memoized fetch, each
+dependency parsed/renamed/lowered exactly once and persisted as `.sqt`,
+unlike `compileClosure`'s M1-era double-rename) and run the interpreter on
+real handles.
+
+The top-level file is parsed directly (mirroring `compileToRenamed`) and its
+already-parsed module seeded into the engine's `cacheParsedModule` under its
+own resolved name, so `fetchLinkedProgram` starts from a cache hit instead
+of re-deriving the module's identity. -/
 def compileAndEval (flag : Flag) (path : System.FilePath) : IO UInt32 := do
   let ws ← Workspace.setup
   MalgoM.run flag {} do
-    let cache : InterfaceCache ← MalgoM.io (IO.mkRef {})
-    let joins ← MalgoM.io (IO.mkRef ({} : Std.TreeMap ModuleName AllIR))
-    let ir ← compileClosure ws cache joins path
-    let deps := (← MalgoM.io joins.get).values
-    for m in deps ++ [ir] do
-      MalgoM.io (seedMirror m)
-    let linked := linkPrograms (deps.map (·.join) ++ [ir.join])
-    let handlers := Malgo.Sequent.Eval.Handlers.real flag.programArgs
-    match flag.evalMode with
-    | .smallStep => Malgo.Sequent.Eval.evalProgram ir.moduleName handlers linked
-    | .bigStep => Malgo.Sequent.BigStepEval.bigStepEvalProgram ir.moduleName handlers linked
+    let db ← MalgoM.io Malgo.Query.newQueryDB
+    let text ← MalgoM.io (IO.FS.readFile path)
+    match ← Malgo.Parser.pass ws path text with
+    | (.error e, _) => throw (parseError e)
+    | (.ok parsed, _) =>
+      MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
+      let linked ← Malgo.Query.Engine.fetchLinkedProgram ws db parsed.moduleName
+      -- Seed the `.mlg` mirror for every module the query touched (top
+      -- module + transitive deps) so a later, separate `malgo eval`
+      -- invocation's bare-name imports can find them — orthogonal to the
+      -- `.sqt`/`.mlgi` artifacts the query engine persists.
+      let touched := (← MalgoM.io db.cacheRenamedModule.get).keys
+      for m in touched do
+        MalgoM.io (seedMirrorFor ws m)
+      let handlers := Malgo.Sequent.Eval.Handlers.real flag.programArgs
+      match flag.evalMode with
+      | .smallStep => Malgo.Sequent.Eval.evalProgram parsed.moduleName handlers linked
+      | .bigStep => Malgo.Sequent.BigStepEval.bigStepEvalProgram parsed.moduleName handlers linked
   return 0
 
 end Malgo.Driver

@@ -59,13 +59,20 @@ def fetchSource (ws : Workspace) (db : QueryDB) (modName : ModuleName) :
     let path := modPath.originPath.toFilePath
     return (path, ← IO.FS.readFile path)
 
-/-- Best-effort `.mlgi` write (write-only; see the module note). -/
+/-- Best-effort `.mlgi` write (write-only; see the module note). Only a
+failure to resolve the module's path is swallowed — mirroring Haskell's
+`tryGetModulePath`, which catches solely `WorkspaceError` from
+`getModulePath` and lets `save` fail loudly. A real `Resource.save` failure
+(disk full, permission error, a codec bug) must propagate, not vanish. -/
 private def saveInterfaceBestEffort (ws : Workspace) (modName : ModuleName) (inf : Interface) :
     MalgoM Unit := do
-  try
-    let path ← ws.getModulePath modName
-    Resource.save path ".mlgi" inf
-  catch _ => pure ()
+  let path? ← try
+    pure (some (← ws.getModulePath modName))
+  catch _ =>
+    pure none
+  match path? with
+  | some path => Resource.save path ".mlgi" inf
+  | none => pure ()
 
 /-- Parsed AST for a module (Haskell `ParsedModule`). -/
 partial def fetchParsedModule (ws : Workspace) (db : QueryDB) (modName : ModuleName) :
@@ -100,35 +107,46 @@ partial def fetchRenamedModule (ws : Workspace) (db : QueryDB) (modName : Module
     return result
 
 /-- Interface for a module (Haskell `ModuleInterface`). Cache hit returns
-immediately; a miss renames in-run (see the module note). -/
+immediately; a miss renames in-run (see the module note). The fallback (only
+reachable if `fetchRenamedModule` is ever changed to not always populate
+`cacheModuleInterface` before returning — it does today) keys the interface
+by the renamed module's own name, exactly like `fetchRenamedModule` does, so
+an alias-keyed query never produces an Interface with the wrong exported
+name. -/
 partial def fetchInterface (ws : Workspace) (db : QueryDB) (modName : ModuleName) :
     MalgoM Interface := do
   match (← db.cacheModuleInterface.get).get? modName with
   | some inf => return inf
   | none =>
-    let (_, rnState) ← fetchRenamedModule ws db modName
+    let (renamed, rnState) ← fetchRenamedModule ws db modName
     match (← db.cacheModuleInterface.get).get? modName with
     | some inf => return inf
-    | none => return buildInterface modName rnState
+    | none => return buildInterface renamed.moduleName rnState
 
 end
 
 /-- Load dependency programs from disk and merge into a single linked program
 (port of `linkDeps`). Each dependency's single-module `.sqt` is loaded and
-its definitions concatenated, dependencies first (matching Haskell
-`compileTestCase`'s `builtin <> prelude <> program` and the M1 driver's
-`linkPrograms`): `Toplevels` is a map keyed by (module-qualified) `Name`, so
-this order is not observable in `evalProgram`'s output, but it is the
-direction a same-named local definition would correctly shadow an imported
-one were that ever possible. `dependencies` is transitive, so this covers
-the whole closure with no duplication. -/
+its definitions concatenated AFTER the module's own — Haskell
+`Query/Engine.hs`'s `linkDeps` (the actual ported function): `program.
+definitions <> concatMap ... deps`. (Not `TestUtils.compileTestCase`'s
+unrelated `builtin <> prelude <> program`, which links a fixed test-harness
+list, not a discovered closure — an earlier version of this comment cited
+that by mistake and had the order backwards.) `Toplevels` is a map built by
+folding `insert` over this list (`evalProgram`), so on a qualified-name
+collision the LAST occurrence wins; own-first/deps-last here means a
+dependency's definition would win such a collision, matching Haskell
+exactly (an edge case with no legal source today, since External `Id`s are
+qualified by module — but the concatenation order must still match the
+oracle byte-for-byte in case it ever becomes observable). `dependencies` is
+transitive, so this covers the whole closure with no duplication. -/
 def linkDeps (ws : Workspace) (dependencies : Std.TreeSet ModuleName)
     (program : Sequent.Core.Join.Program) : MalgoM Sequent.Core.Join.Program := do
   let deps ← dependencies.toList.mapM fun dep => do
     let path ← ws.getModulePath dep
     (Resource.load path ".sqt" : IO Sequent.Core.Join.Program)
   pure {
-    definitions := deps.flatMap (·.definitions) ++ program.definitions,
+    definitions := program.definitions ++ deps.flatMap (·.definitions),
     dependencies := [] }
 
 /-- Linked Join program for a module (Haskell `LinkedProgram`, with

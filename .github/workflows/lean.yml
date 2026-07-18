@@ -14,6 +14,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  gates:
+    runs-on: ubuntu-latest
+    outputs:
+      parity: ${{ steps.g.outputs.LEAN_PARITY }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: g
+        run: cat lean/ci-gates.env >> "$GITHUB_OUTPUT"
+
   lean-build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -23,3 +32,46 @@ jobs:
         with:
           lake-package-directory: lean
           test: true
+
+  lean-parity:
+    needs: gates
+    if: needs.gates.outputs.parity == '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 2
+
+      - uses: ./.github/actions/setup-haskell-cached
+        id: setup
+        with:
+          ghc-version: '9.12.4'
+
+      - name: Cache cabal store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ runner.os }}-ghc-9.12.4-store-${{ hashFiles('cabal.project.freeze') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-9.12.4-store-
+
+      - name: Cache dist-newstyle
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: dist-newstyle
+          key: ${{ runner.os }}-ghc-9.12.4-dist-malgo-${{ hashFiles('cabal.project.freeze') }}-${{ hashFiles('src/**/*.hs', '*.cabal', 'package.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-9.12.4-dist-malgo-${{ hashFiles('cabal.project.freeze') }}-
+
+      - name: Build the Haskell malgo executable
+        run: cabal build exe:malgo
+
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
+        with:
+          lake-package-directory: lean
+          build: true
+          test: false
+
+      - name: Cross-implementation parity (eval, bigstep, fingerprint)
+        run: bash scripts/lean-parity.sh

@@ -10,6 +10,7 @@ import Malgo.Sequent.Core.Full
 import Malgo.Sequent.Core.Flat
 import Malgo.Sequent.Core.Join
 import Malgo.Sequent.Eval
+import Malgo.Sequent.BigStepEval
 
 /-! M1 mini-driver: a direct, in-memory compile pipeline up to Rename.
 
@@ -191,7 +192,9 @@ def compileAndEval (flag : Flag) (path : System.FilePath) : IO UInt32 := do
       MalgoM.io (seedMirror m)
     let linked := linkPrograms (deps.map (·.join) ++ [ir.join])
     let handlers := Malgo.Sequent.Eval.Handlers.real flag.programArgs
-    Malgo.Sequent.Eval.evalProgram ir.moduleName handlers linked
+    match flag.evalMode with
+    | .smallStep => Malgo.Sequent.Eval.evalProgram ir.moduleName handlers linked
+    | .bigStep => Malgo.Sequent.BigStepEval.bigStepEvalProgram ir.moduleName handlers linked
   return 0
 
 end Malgo.Driver

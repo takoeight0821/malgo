@@ -1,4 +1,5 @@
 import Malgo
+import Test.Fingerprint
 
 /-! Port of `app/malgo/Main.hs`: the `malgo` CLI.
 
@@ -163,6 +164,34 @@ private partial def parseLint (args : List String) (acc : LintAcc) : Except Stri
       | none => parseLint rest { acc with source := some (System.FilePath.mk a) }
       | some _ => .error s!"unexpected extra argument: {a}"
 
+/-! ## `dump` (hidden: cross-implementation IR-fingerprint parity tool) -/
+
+inductive DumpStage where
+  | flatFingerprint
+  | joinFingerprint
+  deriving BEq
+
+private structure DumpAcc where
+  source : Option System.FilePath := none
+  stage : Option DumpStage := none
+
+private partial def parseDump (args : List String) (acc : DumpAcc) : Except String DumpAcc :=
+  match args with
+  | [] => .ok acc
+  | a :: rest =>
+    let (name, inline) := splitInline a
+    if name == "--stage" then do
+      let (v, rest') ← takeValue "--stage" inline rest
+      let stage ← match v with
+        | "flat-fingerprint" => .ok .flatFingerprint
+        | "join-fingerprint" => .ok .joinFingerprint
+        | s => .error s!"Unknown stage: {s}"
+      parseDump rest' { acc with stage := some stage }
+    else if a.startsWith "-" && a != "-" then .error s!"unknown option: {a}"
+    else match acc.source with
+      | none => parseDump rest { acc with source := some (System.FilePath.mk a) }
+      | some _ => .error s!"unexpected extra argument: {a}"
+
 /-! ## Path resolution and dispatch -/
 
 /-- Port of Haskell `makeAbsolute`: resolve to an absolute, normalized path.
@@ -177,10 +206,6 @@ def makeAbsolute (p : System.FilePath) : IO System.FilePath := do
 def runEval (flag : Flag) (source : System.FilePath) : IO UInt32 := do
   match flag.target with
   | .eval =>
-    if flag.evalMode == .bigStep then
-      -- Silently falling back to small-step would misreport results.
-      IO.eprintln "malgo eval --eval-mode bigstep: the big-step evaluator is not yet ported (M2)."
-      return 1
     try
       Malgo.Driver.compileAndEval flag source
     catch e =>
@@ -210,6 +235,28 @@ def runCompile (source : System.FilePath) (outPath : Option System.FilePath)
 def runLint (source : System.FilePath) (_denyWarnings : Bool) : IO UInt32 := do
   IO.eprintln s!"malgo lint: the linter is not yet ported: {source}"
   return 1
+
+/-- Hidden developer subcommand mirroring Haskell `dumpFingerprint`: lower a
+single module (unlinked) through Parse → Rename → ToFun → ToCore → Flat →
+Join and print its canonical, format-immune IR fingerprint — used by
+`scripts/lean-parity.sh` to diff the two implementations' lowering without
+depending on uniq-numbering/formatting parity. -/
+def runDump (source : System.FilePath) (stage : DumpStage) : IO UInt32 := do
+  try
+    let ws ← Malgo.Workspace.setup
+    let cache : Malgo.Driver.InterfaceCache ← IO.mkRef {}
+    let flag : Flag :=
+      { noOptimize := false, lambdaLift := false, debugMode := false, testMode := false,
+        target := .eval, evalMode := .smallStep, useInfer := false, programArgs := [] }
+    let ir ← Malgo.MalgoM.run flag {} (Malgo.Driver.compileToJoin ws cache source)
+    IO.println <|
+      match stage with
+      | .flatFingerprint => Malgo.Test.Fingerprint.fingerprintFlat ir.flat
+      | .joinFingerprint => Malgo.Test.Fingerprint.fingerprintJoin ir.join
+    return 0
+  catch e =>
+    IO.eprintln (toString e)
+    return 1
 
 /-- Flag record for `eval`, built from the parsed options. -/
 private def evalFlag (acc : EvalAcc) : Flag :=
@@ -255,6 +302,15 @@ def run : List String → IO UInt32
           | some src => do
             let srcAbs ← makeAbsolute src
             runLint srcAbs acc.denyWarnings
+      | "dump" =>
+        match parseDump rest {} with
+        | .error e => parseError e
+        | .ok acc => match acc.source, acc.stage with
+          | none, _ => parseError "dump: missing SOURCE"
+          | _, none => parseError "dump: missing --stage"
+          | some src, some stage => do
+            let srcAbs ← makeAbsolute src
+            runDump srcAbs stage
       | other => parseError s!"unknown command: {other}"
 
 end Malgo.Cli

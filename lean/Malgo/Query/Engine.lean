@@ -8,6 +8,7 @@ import Malgo.Query
 import Malgo.Parser
 import Malgo.Rename.RnEnv
 import Malgo.Rename.Pass
+import Malgo.Elaborate
 import Malgo.Sequent.ToFun
 import Malgo.Sequent.ToCore
 import Malgo.Sequent.Core.Flat
@@ -159,7 +160,13 @@ partial def fetchLinkedProgram (ws : Workspace) (db : QueryDB) (modName : Module
   | none =>
     let (renamed, rnState) ← fetchRenamedModule ws db modName
     let mn := renamed.moduleName
-    let fn ← Sequent.ToFun.pass mn renamed.moduleDefinition
+    -- Elaborate (codata desugaring), gated on the malgo2025 feature, mirroring
+    -- Haskell `Query/Engine.hs`'s `LinkedProgram` handler. (infer-port adds the
+    -- `useInfer` branch chronologically after this, before ToFun.)
+    let bindGroup ← if (← Malgo.hasFeature .malgo2025)
+      then Malgo.Elaborate.pass mn renamed.moduleDefinition
+      else pure renamed.moduleDefinition
+    let fn ← Sequent.ToFun.pass mn bindGroup
     let core ← Sequent.ToCore.toCore mn fn
     let flat ← Sequent.Core.Flat.flatProgram mn core
     let program ← Sequent.Core.Join.joinProgram mn flat

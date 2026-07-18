@@ -85,6 +85,29 @@ def renameCases : List GoldenCase :=
     renameCase "Prelude" "runtime/malgo/Prelude.mlg" ] ++
   representatives.map (fun n => renameCase n (testcasePath n))
 
+/-! ## Elaborate gate (`sShow` of the elaborated BindGroup, per `ElaborateSpec`)
+
+Each case runs `compileToRenamed` then `Elaborate.pass` and dumps `sShow` of
+the resulting `BindGroup .rename` — exactly what the Haskell `ElaborateSpec`'s
+`driveElaborate` dumps. Only the 16 representatives get full goldens (no
+Builtin/Prelude here). -/
+
+private def elaborateGolden (path : System.FilePath) : IO String := do
+  try
+    let ws ← Workspace.setup
+    let cache ← IO.mkRef (← getPrebuilt)
+    let bg ← MalgoM.run flag {}
+      (do let (r, _) ← Malgo.Driver.compileToRenamed ws cache path
+          Malgo.Elaborate.pass r.moduleName r.moduleDefinition)
+    return sShow bg
+  catch e => return s!"ERROR: {toString e}"
+
+private def elaborateCase (name : String) (path : System.FilePath) : GoldenCase :=
+  { group := "Malgo.Elaborate", name, run := elaborateGolden path }
+
+def elaborateCases : List GoldenCase :=
+  representatives.map (fun n => elaborateCase n (testcasePath n))
+
 /-! ## ToFun gate (`sShow` of the Fun.Program, per `ToFunSpec`) -/
 
 private def toFunGolden (path : System.FilePath) : IO String := do
@@ -244,7 +267,7 @@ def enumerateTestcases : IO (List String) := do
 
 def cases : List GoldenCase :=
   [parserCase "Primitive", parserCase "HelloImport", parserCase "Eventually"]
-    ++ renameCases ++ toFunCases
+    ++ renameCases ++ elaborateCases ++ toFunCases
 
 end Malgo.Test
 

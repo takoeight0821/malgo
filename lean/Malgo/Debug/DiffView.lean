@@ -189,13 +189,37 @@ inductive CharClass where
   | punctC
   deriving DecidableEq, BEq
 
-/-- ASCII `Data.Char.isSpace`: space, tab, newline, vtab, formfeed, carriage return. -/
+/-- Port of `Data.Char.isSpace`. GHC's version is Unicode-aware (ASCII
+whitespace, plus every Unicode `White_Space` codepoint via `iswspace`);
+Lean's `Char.isWhitespace` (used by `isAlphaNumC`'s sibling below) covers
+only `' '`/`'\t'`/`'\r'`/`'\n'`, and Lean core has no Unicode
+general-category database to check the rest against. Since the
+`White_Space` set outside ASCII is small, fixed, and well documented
+(Unicode won't add or remove entries from it), the remaining codepoints are
+listed explicitly here rather than left unhandled. -/
 def isSpaceC (c : Char) : Bool :=
   let n := c.toNat
-  c == ' ' || (9 ≤ n && n ≤ 13)
+  c.isWhitespace || (9 ≤ n && n ≤ 13) ||
+    n == 0x0085 || n == 0x00A0 || n == 0x1680 ||
+    (0x2000 ≤ n && n ≤ 0x200A) ||
+    n == 0x2028 || n == 0x2029 || n == 0x202F || n == 0x205F || n == 0x3000
 
-/-- ASCII `Data.Char.isAlphaNum`. -/
-def isAlphaNumC (c : Char) : Bool := c.isAlpha || c.isDigit
+/-- Approximates `Data.Char.isAlphaNum`, which is Unicode-aware (every
+Unicode `Letter`/`Number` general category, e.g. CJK ideographs, Cyrillic,
+accented Latin — all "alphanumeric" there). Lean's `Char.isAlpha`/`isDigit`
+are ASCII-only and Lean core ships no Unicode category database, so exact
+parity isn't achievable without embedding one. Rather than silently
+classifying every non-ASCII "letter" as punctuation (`classify`'s `else`
+branch) — which merges word-like non-ASCII text with adjacent ASCII
+punctuation into one token, diverging from Haskell's tokenization — treat
+any non-ASCII codepoint that isn't recognized as whitespace (`isSpaceC`,
+checked first in `classify`) as identifier-like. This matches Haskell for
+the overwhelming majority of real text (any script's letters/digits);
+it's wrong only for non-ASCII codepoints that are genuinely punctuation
+(e.g. U+3002 CJK full stop), which fall on the `identC` side here instead
+of `punctC` — a narrower, more defensible mismatch than merging unrelated
+scripts and punctuation into a single diff token. -/
+def isAlphaNumC (c : Char) : Bool := c.isAlpha || c.isDigit || c.toNat ≥ 0x80
 
 def classify (c : Char) : CharClass :=
   if isSpaceC c then .spaceC

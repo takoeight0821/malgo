@@ -57,3 +57,10 @@ import Malgo.Driver
 import Malgo.Debug.DiffView
 import Malgo.Debug.PrettyIR
 import Malgo.Debug.Pipeline
+import Malgo.LSP.Json
+import Malgo.LSP.Server.JsonRpc
+import Malgo.LSP.Protocol
+import Malgo.LSP.Diagnostics
+import Malgo.LSP.Server
+import Malgo.LSP.Handlers
+import Malgo.LSP

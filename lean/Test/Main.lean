@@ -1,6 +1,7 @@
 import Malgo
 import Test.Golden
 import Test.Fingerprint
+import Test.LspSession
 
 /-! Test driver. Parser golden cases run the real C-style parser
 (`Malgo.Parser.pass`) and dump the parsed+resolved module with
@@ -343,6 +344,14 @@ def prettyIRCases (testcaseNames exampleNames : List String) : List GoldenCase :
   testcaseNames.map (fun n => prettyIRCase "testcases" n (testcasePath n)) ++
   exampleNames.map (fun n => prettyIRCase "examples" n (examplesDir / s!"{n}.mlg"))
 
+/-! ## LSP scripted stdio session gate (M7, authored fresh — no Haskell
+reference test exists; see `Test/LspSession.lean`'s module doc). -/
+
+def runLspSessionGate : IO Nat := do
+  match ← Malgo.Test.LspSession.run with
+  | .ok () => IO.println "ok Malgo.LSP/session"; return 0
+  | .error msg => IO.println s!"FAIL Malgo.LSP/session: {msg}"; return 1
+
 /-! ## Infer full-program gate (port of `Malgo.InferSpec`)
 
 Each testcase is driven Parse → Rename → Elaborate → Infer (via the engine's
@@ -588,4 +597,5 @@ def main (args : List String) : IO UInt32 := do
       ++ Malgo.Test.prettyIRCases names exampleNames
     let goldenCode ← Malgo.Test.runSuite cfg allCases
     let inferCode ← Malgo.Test.runInferGate cfg names
-    return (if goldenCode == 0 && inferCode == 0 then 0 else 1)
+    let lspFailures ← Malgo.Test.runLspSessionGate
+    return (if goldenCode == 0 && inferCode == 0 && lspFailures == 0 then 0 else 1)

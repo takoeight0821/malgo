@@ -269,6 +269,80 @@ def cases : List GoldenCase :=
   [parserCase "Primitive", parserCase "HelloImport", parserCase "Eventually"]
     ++ renameCases ++ elaborateCases ++ toFunCases
 
+/-! ## Lint gate (per `Malgo.LintSpec`)
+
+Each `test/Malgo/LintSpec/cases/*.mlg` runs `Malgo.Lint.lintFile` (a relative
+path, matching the Haskell spec's own `caseDir </> tc` — NOT the CLI's
+`makeAbsolute`, so the golden text's path prefix is `./test/...`, not an
+absolute path) and the golden is `unlines` of every diagnostic's rendered
+text (`unlines [] = ""`, matching a clean/parse-error case's empty golden). -/
+
+private def lintCaseDir : System.FilePath := System.FilePath.mk "./test/Malgo/LintSpec/cases"
+
+private def lintGolden (name : String) : IO String := do
+  try
+    let diags ← MalgoM.run flag {} (Malgo.Lint.lintFile (lintCaseDir / s!"{name}.mlg"))
+    return String.join (diags.map (fun d => Malgo.Doc.render (Malgo.Lint.prettyDiagnostic d) ++ "\n"))
+  catch e => return s!"ERROR: {toString e}"
+
+private def lintCase (name : String) : GoldenCase :=
+  { group := "Malgo.Lint", name, run := lintGolden name }
+
+/-- Base names of `test/Malgo/LintSpec/cases/*.mlg` (Haskell `listDirectory
+caseDir`), sorted for stable output. -/
+def enumerateLintCases : IO (List String) := do
+  let entries ← lintCaseDir.readDir
+  let names := entries.toList.filterMap fun e =>
+    if e.fileName.endsWith ".mlg" then (System.FilePath.mk e.fileName).fileStem else none
+  return (names.toArray.qsort (· < ·)).toList
+
+def lintCases (names : List String) : List GoldenCase := names.map lintCase
+
+/-! ## PrettyIR trace gate (port of `Malgo.Debug.PrettyIRSpec`)
+
+Every `.mlg` file under `test/testcases/malgo/` and `examples/malgo/` gets one
+golden covering the whole trace: every pipeline stage's rendered text, plus
+the unified diff between each adjacent pair. One golden per source file (not
+per file-per-stage) keeps the corpus-wide sweep from repeating the
+golden-output blowup already fixed once for the per-pass Spec suites. -/
+
+private def examplesDir : System.FilePath := System.FilePath.mk "examples/malgo"
+
+private def traceReport (srcPath : System.FilePath) : IO String := do
+  let stages ← Malgo.Debug.Pipeline.runTrace srcPath false false
+  let heading (label : String) : String := s!"=== {label} ==="
+  let stageSection := String.intercalate "\n\n"
+    (stages.map fun s => heading s.name ++ "\n" ++ s.rendered)
+  let diffSection := String.intercalate "\n\n"
+    ((stages.zip stages.tail).map fun (a, b) =>
+      heading s!"{a.name} -> {b.name}" ++ "\n" ++ Malgo.Debug.DiffView.renderUnifiedDiff a.rendered b.rendered)
+  return stageSection ++ "\n\n" ++ heading "DIFFS" ++ "\n\n" ++ diffSection
+
+private def prettyIRGolden (srcPath : System.FilePath) : IO String := do
+  try traceReport srcPath
+  catch e => return s!"ERROR: {toString e}"
+
+/-- Haskell's `golden` helper splits its description string on whitespace
+into separate path components (`words description`) before joining with the
+enclosing spec path — so `golden ("testcases " <> name) ...` lands at
+`.golden/Malgo.Debug.PrettyIR/testcases/<name>/golden`, a nested directory,
+not a literal space in one component. Mirror that with an explicit `/`
+(the same convention `bigStepEvalCases` already uses via `s!"golden/{n}"`). -/
+private def prettyIRCase (subdir name : String) (srcPath : System.FilePath) : GoldenCase :=
+  { group := "Malgo.Debug.PrettyIR", name := s!"{subdir}/{name}", run := prettyIRGolden srcPath }
+
+/-- Base names of `examples/malgo/*.mlg` (Haskell `listDirectory examplesDir`),
+sorted for stable output. -/
+def enumerateExamples : IO (List String) := do
+  let entries ← examplesDir.readDir
+  let names := entries.toList.filterMap fun e =>
+    if e.fileName.endsWith ".mlg" then (System.FilePath.mk e.fileName).fileStem else none
+  return (names.toArray.qsort (· < ·)).toList
+
+def prettyIRCases (testcaseNames exampleNames : List String) : List GoldenCase :=
+  testcaseNames.map (fun n => prettyIRCase "testcases" n (testcasePath n)) ++
+  exampleNames.map (fun n => prettyIRCase "examples" n (examplesDir / s!"{n}.mlg"))
+
 /-! ## Infer full-program gate (port of `Malgo.InferSpec`)
 
 Each testcase is driven Parse → Rename → Elaborate → Infer (via the engine's
@@ -504,10 +578,14 @@ def main (args : List String) : IO UInt32 := do
     let memo ← IO.mkRef ({} : Std.HashMap String Malgo.Driver.AllIR)
     let names ← Malgo.Test.enumerateTestcases
     let forthNames ← Malgo.Test.enumerateForthTestcases
+    let lintNames ← Malgo.Test.enumerateLintCases
+    let exampleNames ← Malgo.Test.enumerateExamples
     let allCases := Malgo.Test.cases ++ Malgo.Test.toCoreCases memo names
       ++ Malgo.Test.evalCases memo names
       ++ Malgo.Test.bigStepEvalCases memo names
       ++ Malgo.Test.forthCases memo forthNames
+      ++ Malgo.Test.lintCases lintNames
+      ++ Malgo.Test.prettyIRCases names exampleNames
     let goldenCode ← Malgo.Test.runSuite cfg allCases
     let inferCode ← Malgo.Test.runInferGate cfg names
     return (if goldenCode == 0 && inferCode == 0 then 0 else 1)

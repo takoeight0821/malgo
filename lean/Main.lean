@@ -249,9 +249,26 @@ def runCompile (source : System.FilePath) (outPath : Option System.FilePath)
     IO.eprintln (toString e)
     return 1
 
-def runLint (source : System.FilePath) (_denyWarnings : Bool) : IO UInt32 := do
-  IO.eprintln s!"malgo lint: the linter is not yet ported: {source}"
-  return 1
+/-- Port of the Haskell CLI's `Lint` arm: print every diagnostic to stderr,
+one per line (`hPutDoc` + a line-terminating `hPutStrLn ""` — NOT a blank
+separator line, just `prettyDiagnostic`'s own newline-free rendering
+followed by a single newline), then exit 1 if any diagnostic is
+`.error`-severity, or if `--deny-warnings` was passed and the diagnostic
+list is non-empty. -/
+def runLint (source : System.FilePath) (denyWarnings : Bool) : IO UInt32 := do
+  let lintFlag : Flag :=
+    { noOptimize := true, lambdaLift := false, debugMode := false, testMode := false,
+      target := .eval, evalMode := .smallStep, useInfer := false, programArgs := [] }
+  try
+    let diags ← Malgo.MalgoM.run lintFlag {} (Malgo.Lint.lintFile source)
+    for d in diags do
+      IO.eprintln (Malgo.Doc.render (Malgo.Lint.prettyDiagnostic d))
+    let hasError := diags.any (·.severity == .error)
+    if hasError || (denyWarnings && !diags.isEmpty) then return 1
+    return 0
+  catch e =>
+    IO.eprintln (toString e)
+    return 1
 
 /-- Hidden developer subcommand mirroring Haskell `dumpFingerprint`: lower a
 single module (unlinked) through Parse → Rename → ToFun → ToCore → Flat →

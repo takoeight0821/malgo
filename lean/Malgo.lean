@@ -1,4 +1,5 @@
 import Malgo.Prelude
+import Malgo.Doc
 import Malgo.Path
 import Malgo.SExpr
 import Malgo.Module
@@ -47,4 +48,12 @@ import Malgo.Backend.Zig.Toolchain
 import Malgo.Backend.Zig.RcCheck
 import Malgo.Backend.Zig.Emit
 import Malgo.Backend.Zig
+import Malgo.Lint.Diagnostic
+import Malgo.Lint.Traversal
+import Malgo.Lint.Rule
+import Malgo.Lint.Rules
+import Malgo.Lint
 import Malgo.Driver
+import Malgo.Debug.DiffView
+import Malgo.Debug.PrettyIR
+import Malgo.Debug.Pipeline

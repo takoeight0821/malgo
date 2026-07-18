@@ -14,6 +14,8 @@ import Malgo.Sequent.BigStepEval
 import Malgo.Query
 import Malgo.Query.Engine
 import Malgo.Backend.Scheme
+import Malgo.Backend.Zig
+import Malgo.Backend.Zig.Toolchain
 
 /-! M1 mini-driver: a direct, in-memory compile pipeline up to Rename.
 
@@ -226,6 +228,53 @@ def compileScheme (flag : Flag) (path : System.FilePath) : IO UInt32 := do
       for m in touched do
         MalgoM.io (seedMirrorFor ws m)
       MalgoM.io (IO.print (Malgo.Backend.Scheme.compileToScheme parsed.moduleName linked))
+  return 0
+
+/-- CLI entry for `malgo eval --target zig`: link exactly as `compileScheme`,
+then run the Zig lowering pipeline (`Malgo.Backend.Zig.compileToZigText`, which
+runs ClosureConv → Peephole → Perceus → Reuse, the linearity check, and Emit)
+and print the generated Zig source. Mirrors Haskell `Driver.compileFromAST`'s
+`TargetZig` branch. -/
+def compileZig (flag : Flag) (path : System.FilePath) : IO UInt32 := do
+  let ws ← Workspace.setup
+  MalgoM.run flag {} do
+    let db ← MalgoM.io Malgo.Query.newQueryDB
+    let text ← MalgoM.io (IO.FS.readFile path)
+    match ← Malgo.Parser.pass ws path text with
+    | (.error e, _) => throw (parseError e)
+    | (.ok parsed, _) =>
+      MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
+      let linked ← Malgo.Query.Engine.fetchLinkedProgram ws db parsed.moduleName
+      let touched := (← MalgoM.io db.cacheRenamedModule.get).keys
+      for m in touched do
+        MalgoM.io (seedMirrorFor ws m)
+      let zigText ← Malgo.Backend.Zig.compileToZigText parsed.moduleName linked
+      MalgoM.io (IO.print zigText)
+  return 0
+
+/-- CLI entry for `malgo compile SOURCE -o OUT`: link and lower to Zig exactly
+as `compileZig`, then write the generated source to `OUT.zig` and invoke the
+`zig` toolchain to produce a native executable at `OUT`. Mirrors Haskell
+`Driver.compileToExecutable` (cache root = the workspace dir). -/
+def compileToNativeExecutable (flag : Flag) (path : System.FilePath)
+    (outPath : System.FilePath) (optMode : Malgo.Backend.Zig.Toolchain.OptMode) : IO UInt32 := do
+  let ws ← Workspace.setup
+  MalgoM.run flag {} do
+    let db ← MalgoM.io Malgo.Query.newQueryDB
+    let text ← MalgoM.io (IO.FS.readFile path)
+    match ← Malgo.Parser.pass ws path text with
+    | (.error e, _) => throw (parseError e)
+    | (.ok parsed, _) =>
+      MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
+      let linked ← Malgo.Query.Engine.fetchLinkedProgram ws db parsed.moduleName
+      let touched := (← MalgoM.io db.cacheRenamedModule.get).keys
+      for m in touched do
+        MalgoM.io (seedMirrorFor ws m)
+      let zigText ← Malgo.Backend.Zig.compileToZigText parsed.moduleName linked
+      let zigPath := outPath.toString ++ ".zig"
+      MalgoM.io (IO.FS.writeFile zigPath zigText)
+      MalgoM.io (Malgo.Backend.Zig.Toolchain.buildExecutable
+        (toString ws.dir) zigPath outPath.toString optMode)
   return 0
 
 end Malgo.Driver

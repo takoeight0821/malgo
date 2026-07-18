@@ -156,6 +156,16 @@ def Block.stmts : Block → List Stmt
 def Block.terminator : Block → Terminator
   | .mk _ t => t
 
+-- `partial def`s over the IR (in ClosureConv/Peephole/Perceus/…) require
+-- `Inhabited` return types; these give every core node a canonical default.
+instance : Inhabited Path := ⟨.root default⟩
+instance : Inhabited Test := ⟨.kindIs default ""⟩
+instance : Inhabited Guard := ⟨.and []⟩
+instance : Inhabited Expr := ⟨.panicExpr ""⟩
+instance : Inhabited Stmt := ⟨.drop default⟩
+instance : Inhabited Terminator := ⟨.panic ""⟩
+instance : Inhabited Block := ⟨.mk [] (.panic "")⟩
+
 /-- How a function receives its `self` argument. `topLevelFn`s are called
 directly with the immortal `rt.no_self` sentinel and ignore it;
 `closureFn`s/`fieldFn`s receive the closure/record object itself and read

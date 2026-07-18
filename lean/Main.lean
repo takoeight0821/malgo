@@ -218,8 +218,16 @@ def runEval (flag : Flag) (source : System.FilePath) : IO UInt32 := do
       IO.eprintln (toString e)
       return 1
   | .zig =>
-    IO.eprintln "malgo eval --target zig: the Zig backend is not yet ported."
-    return 1
+    try
+      Malgo.Driver.compileZig flag source
+    catch e =>
+      IO.eprintln (toString e)
+      return 1
+
+def toToolchainOpt : OptMode → Malgo.Backend.Zig.Toolchain.OptMode
+  | .debug => .debug
+  | .releaseSafe => .releaseSafe
+  | .releaseFast => .releaseFast
 
 def runCompile (source : System.FilePath) (outPath : Option System.FilePath)
     (optMode : OptMode) : IO UInt32 := do
@@ -232,8 +240,14 @@ def runCompile (source : System.FilePath) (outPath : Option System.FilePath)
     IO.eprintln s!"malgo compile: refusing to overwrite the source file ({out})."
     IO.eprintln "Pass -o/--output to choose a different path."
     return 1
-  IO.eprintln s!"malgo compile: the Zig backend is not yet ported (would emit {out}, opt {optMode.toString})."
-  return 1
+  let flag : Flag :=
+    { noOptimize := false, lambdaLift := false, debugMode := false, testMode := false,
+      target := .zig, evalMode := .smallStep, useInfer := false, programArgs := [] }
+  try
+    Malgo.Driver.compileToNativeExecutable flag source out (toToolchainOpt optMode)
+  catch e =>
+    IO.eprintln (toString e)
+    return 1
 
 def runLint (source : System.FilePath) (_denyWarnings : Bool) : IO UInt32 := do
   IO.eprintln s!"malgo lint: the linter is not yet ported: {source}"

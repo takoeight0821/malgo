@@ -37,4 +37,14 @@ import Malgo.Query
 import Malgo.Query.Engine
 import Malgo.Backend.Scheme
 import Malgo.Backend.Zig.Ir
+import Malgo.Backend.Zig.Normalize
+import Malgo.Backend.Zig.ClosureConv
+import Malgo.Backend.Zig.Peephole
+import Malgo.Backend.Zig.Perceus
+import Malgo.Backend.Zig.Reuse
+import Malgo.Backend.Zig.Runtime
+import Malgo.Backend.Zig.Toolchain
+import Malgo.Backend.Zig.RcCheck
+import Malgo.Backend.Zig.Emit
+import Malgo.Backend.Zig
 import Malgo.Driver

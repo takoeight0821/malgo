@@ -78,7 +78,9 @@ def handleDidOpen (env : ServerEnv) (state : LspState) (uri : Uri) (content : St
   | some filePath =>
     logMessage env s!"didOpen: {filePath}"
     let diags ← checkFile state nuri filePath content
+    logMessage env s!"didOpen: checkFile returned {diags.length} diagnostics, publishing"
     publishDiagnostics env nuri diags
+    logMessage env "didOpen: publishDiagnostics returned"
 
 /-- Handle `textDocument/didChange`. Assumes full-document sync (only
 `contentChanges[0].text` is ever read, matching Haskell). -/

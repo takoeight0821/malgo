@@ -81,10 +81,15 @@ def readMessage (h : IO.FS.Stream) : IO (Option JsonRpcMessage) := do
     The length is the body's UTF-8 *byte* count, and the handle is flushed
     after every message. -/
 def sendMessage (h : IO.FS.Stream) (val : JValue) : IO Unit := do
+  IO.eprintln "sendMessage: encoding"
   let bodyBytes := (encodeJson val).toUTF8
+  IO.eprintln s!"sendMessage: encoded {bodyBytes.size} bytes, writing header"
   h.putStr s!"Content-Length: {bodyBytes.size}\r\n\r\n"
+  IO.eprintln "sendMessage: header written, writing body"
   h.write bodyBytes
+  IO.eprintln "sendMessage: body written, flushing"
   h.flush
+  IO.eprintln "sendMessage: flushed"
 
 /-- Send a JSON-RPC response (for a request with an id). -/
 def sendResponse (h : IO.FS.Stream) (reqId result : JValue) : IO Unit :=

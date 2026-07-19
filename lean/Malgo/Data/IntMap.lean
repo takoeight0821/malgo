@@ -28,6 +28,39 @@ def isEmpty : IntMap α → Bool
 private def prefixOf (key msk : Nat) : Nat :=
   key / (2 * msk)
 
+/-- `key` is actually stored somewhere in `t`. -/
+def HasKey (t : IntMap α) (key : Nat) : Prop :=
+  match t with
+  | .nil => False
+  | .tip k _ => key = k
+  | .bin _ _ l r => l.HasKey key ∨ r.HasKey key
+
+/-- Every mask nested inside `t` is strictly below `msk` — masks shrink
+strictly toward the leaves. -/
+def MaskBound (msk : Nat) : IntMap α → Prop
+  | .nil => True
+  | .tip _ _ => True
+  | .bin _ msk' _ _ => msk' < msk
+
+/-- Well-formedness: every `bin pfx msk l r` node's branch bit `msk` is a
+single bit, every key in `l`/`r` agrees with `pfx` above that bit and is
+routed to the correct side by it, and masks strictly shrink toward the
+leaves. Direct formalization of the doc comments on `bin` and `link`. -/
+inductive WF : IntMap α → Prop
+  | nil : WF .nil
+  | tip (k : Nat) (v : α) : WF (.tip k v)
+  | bin (pfx msk : Nat) (l r : IntMap α)
+      (hmsk : ∃ i, msk = 2 ^ i)
+      (hl_pfx : ∀ k, l.HasKey k → prefixOf k msk = pfx)
+      (hl_bit : ∀ k, l.HasKey k → k &&& msk == 0)
+      (hr_pfx : ∀ k, r.HasKey k → prefixOf k msk = pfx)
+      (hr_bit : ∀ k, r.HasKey k → ¬ (k &&& msk == 0))
+      (hl_bound : l.MaskBound msk) (hr_bound : r.MaskBound msk)
+      (hl : l.WF) (hr : r.WF) :
+      WF (.bin pfx msk l r)
+
+theorem wf_empty : (empty : IntMap α).WF := .nil
+
 def lookup? (key : Nat) : IntMap α → Option α
   | .nil => none
   | .tip k v => if key == k then some v else none
@@ -54,6 +87,28 @@ def insert (key : Nat) (val : α) : IntMap α → IntMap α
       .bin pfx msk (l.insert key val) r
     else
       .bin pfx msk l (r.insert key val)
+
+theorem lookup_link_self (p1 : Nat) (t1 : IntMap α) (p2 : Nat) (t2 : IntMap α) :
+    (link p1 t1 p2 t2).lookup? p1 = t1.lookup? p1 := by
+  simp only [link]
+  split <;> simp_all [lookup?, prefixOf]
+
+theorem lookup_insert (key : Nat) (val : α) (m : IntMap α) :
+    (m.insert key val).lookup? key = some val := by
+  induction m with
+  | nil => simp [insert, lookup?]
+  | tip k v =>
+    simp only [insert]
+    split
+    · simp [lookup?]
+    · rw [lookup_link_self]; simp [lookup?]
+  | bin pfx msk l r ihl ihr =>
+    simp only [insert]
+    split
+    · rw [lookup_link_self]; simp [lookup?]
+    · split
+      · simp_all [lookup?]
+      · simp_all [lookup?]
 
 def contains (key : Nat) (t : IntMap α) : Bool :=
   (t.lookup? key).isSome

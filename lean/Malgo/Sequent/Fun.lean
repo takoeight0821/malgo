@@ -47,7 +47,7 @@ instance : ToSExpr Literal where
   toSExpr
     | .int32 n => .atom (.int n.toInt (some "i32"))
     | .int64 n => .atom (.int n.toInt (some "i64"))
-    | .float n => .atom (.float n.toFloat)
+    | .float n => .atom (.float n)
     | .double n => .atom (.double n)
     | .char c => .atom (.char c)
     | .string s => .atom (.str s)

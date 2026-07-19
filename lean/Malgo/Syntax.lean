@@ -40,7 +40,7 @@ instance : ToSExpr (Literal k) where
   toSExpr
     | .int32 i => .list [.atom (.symbol "int32"), .atom (.int i.toInt none)]
     | .int64 i => .list [.atom (.symbol "int64"), .atom (.int i.toInt none)]
-    | .float f => .list [.atom (.symbol "float"), .atom (.float f.toFloat)]
+    | .float f => .list [.atom (.symbol "float"), .atom (.float f)]
     | .double d => .list [.atom (.symbol "double"), .atom (.double d)]
     | .char c => .list [.atom (.symbol "char"), .atom (.char c)]
     | .str s => .list [.atom (.symbol "string"), .atom (.str s)]

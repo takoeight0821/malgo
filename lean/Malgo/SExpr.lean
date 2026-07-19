@@ -36,7 +36,7 @@ def showLitChar (c : Char) : String :=
 inductive Atom where
   | symbol (s : String)
   | int (n : Int) (suffix : Option String)
-  | float (n : Float)
+  | float (n : Float32)
   | double (n : Float)
   | char (c : Char)
   | str (s : String)
@@ -57,7 +57,7 @@ def render : Atom → String
   | .symbol t => t
   | .int n none => toString n
   | .int n (some t) => toString n ++ "_" ++ t
-  | .float n => haskellShowFloat n ++ "_f32"
+  | .float n => haskellShowFloat32 n ++ "_f32"
   | .double n => haskellShowFloat n ++ "_f64"
   | .char c => "'" ++ showLitChar c ++ "'"
   | .str t => "\"" ++ String.join (t.toList.map showLitChar) ++ "\""

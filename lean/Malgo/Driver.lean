@@ -171,11 +171,29 @@ private def seedMirrorFor (ws : Workspace) (modName : ModuleName) : IO Unit := d
   let ap ← ws.getModulePath modName
   let target := ap.targetPath.toFilePath
   IO.FS.createDirAll (target.parent.getD (System.FilePath.mk "."))
-  -- Atomic tmp+rename: concurrent `malgo eval` runs (the golden sweep
-  -- scripts run cases in parallel) must not observe a half-written mirror.
-  let tmp := System.FilePath.mk s!"{target}.{ap.originPath.toFilePath.toString.hash}.tmp"
-  IO.FS.writeBinFile tmp (← IO.FS.readBinFile ap.originPath.toFilePath)
-  IO.FS.rename tmp target
+  -- Atomic tmp+rename via a uniquely-named temp file (same pattern as
+  -- `Resource.save`): concurrent `malgo eval` runs (the golden sweep
+  -- scripts run cases in parallel) must not observe a half-written mirror,
+  -- and must not race each other for the same temp filename either.
+  let bytes ← IO.FS.readBinFile ap.originPath.toFilePath
+  let mut written := false
+  for n in [0:1000] do
+    let tmp := System.FilePath.mk s!"{target}.{n}.tmp"
+    let handle? ← try
+        some <$> IO.FS.Handle.mk tmp .writeNew
+      catch _ => pure none
+    if let some handle := handle? then
+      try
+        handle.write bytes
+        handle.flush
+        IO.FS.rename tmp target
+      catch e =>
+        try IO.FS.removeFile tmp catch _ => pure ()
+        throw e
+      written := true
+      break
+  unless written do
+    throw (IO.userError s!"seedMirrorFor: could not create a temp file for {target}")
 
 /-- CLI entry for `malgo eval --target eval`: compile through the query
 engine (`Malgo.Query.Engine.fetchLinkedProgram` — memoized fetch, each
@@ -198,7 +216,8 @@ private def linkForCli (ws : Workspace) (path : System.FilePath) :
   let text ← MalgoM.io (IO.FS.readFile path)
   match ← Malgo.Parser.pass ws path text with
   | (.error e, _) => throw (parseError e)
-  | (.ok parsed, _) =>
+  | (.ok parsed, flags) =>
+    addFeatures flags
     MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
     let linked ← Malgo.Query.Engine.fetchLinkedProgram ws db parsed.moduleName
     -- Seed the `.mlg` mirror for every module the query touched (top module

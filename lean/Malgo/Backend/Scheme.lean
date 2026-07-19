@@ -90,12 +90,12 @@ def compileTag : Tag → String
   | .tag t => mangleText t
 
 /-- Compile a literal to a Scheme expression. Floats render via
-`haskellShowFloat` (the Haskell backend emits `show`'s output; Chez reads
-both fixed and `e`-notation). -/
+`haskellShowFloat`/`haskellShowFloat32` (the Haskell backend emits `show`'s
+output; Chez reads both fixed and `e`-notation). -/
 def compileLiteral : Literal → String
   | .int32 n => toString n.toInt
   | .int64 n => toString n.toInt
-  | .float f => Malgo.haskellShowFloat f.toFloat
+  | .float f => Malgo.haskellShowFloat32 f
   | .double d => Malgo.haskellShowFloat d
   | .char c => "#\\" ++ escapeChar c
   | .string t => "\"" ++ escapeString t ++ "\""
@@ -616,6 +616,7 @@ private def nm (s : String) : Name := { name := s, moduleName := .moduleName "t"
 #guard mangleId { name := "y", moduleName := .moduleName "t", sort := .internal 7 } == "y_7"
 #guard escapeString "a\"b\\c" == "a\\\"b\\\\c"
 #guard compileLiteral (.int32 (-5)) == "-5"
+#guard compileLiteral (.float 3.14) == "3.14"
 #guard compileLiteral (.string "hi\n") == "\"hi\\n\""
 #guard compileLiteral (.char ' ') == "#\\space"
 #guard compileStatement (.invoke r0 (nm "f") (nm "k")) == "(t_dot_f t_dot_k)"

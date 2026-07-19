@@ -65,7 +65,7 @@ def compileTag : Tag → String
 def compileLiteral : Literal → String
   | .int32 n => "rt.mkInt32(" ++ toString n.toInt ++ ")"
   | .int64 n => "rt.mkInt64(" ++ toString n.toInt ++ ")"
-  | .float f => "rt.mkFloat(" ++ Malgo.haskellShowFloat f.toFloat ++ ")"
+  | .float f => "rt.mkFloat(" ++ Malgo.haskellShowFloat32 f ++ ")"
   | .double d => "rt.mkDouble(" ++ Malgo.haskellShowFloat d ++ ")"
   | .char c => "rt.mkChar(" ++ toString c.toNat ++ ")"
   | .string s => "rt.mkString(" ++ zigStringLit s ++ ")"
@@ -73,7 +73,7 @@ def compileLiteral : Literal → String
 def literalEqExpr (scrutinee : String) : Literal → String
   | .int32 n => scrutinee ++ ".kind == .int32 and " ++ scrutinee ++ ".payload.int32 == " ++ toString n.toInt
   | .int64 n => scrutinee ++ ".kind == .int64 and " ++ scrutinee ++ ".payload.int64 == " ++ toString n.toInt
-  | .float f => scrutinee ++ ".kind == .float and " ++ scrutinee ++ ".payload.float == " ++ Malgo.haskellShowFloat f.toFloat
+  | .float f => scrutinee ++ ".kind == .float and " ++ scrutinee ++ ".payload.float == " ++ Malgo.haskellShowFloat32 f
   | .double d => scrutinee ++ ".kind == .double and " ++ scrutinee ++ ".payload.double == " ++ Malgo.haskellShowFloat d
   | .char c => scrutinee ++ ".kind == .char and " ++ scrutinee ++ ".payload.char == " ++ toString c.toNat
   | .string s => scrutinee ++ ".kind == .string and rt.stringEq(" ++ scrutinee ++ ".payload.string, " ++ zigStringLit s ++ ")"

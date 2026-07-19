@@ -67,7 +67,7 @@ def renderTag : Fun.Tag → Doc
 def renderLit : Fun.Literal → Doc
   | .int32 n => atom (toString n.toInt)
   | .int64 n => atom (toString n.toInt) ++ atom "L"
-  | .float f => atom (haskellShowFloat f.toFloat) ++ atom "f"
+  | .float f => atom (haskellShowFloat32 f) ++ atom "f"
   | .double d => atom (haskellShowFloat d)
   | .char c => squotes (fromString (String.singleton c))
   | .string s => dquotes (fromString s)
@@ -376,7 +376,7 @@ def renderZigIr (p : Ir.Program) : String :=
 def renderSynLit {k : Syntax.BoxKind} : Syntax.Literal k → Doc
   | .int32 n => atom (toString n.toInt)
   | .int64 n => atom (toString n.toInt) ++ atom "L"
-  | .float f => atom (haskellShowFloat f.toFloat) ++ atom "f"
+  | .float f => atom (haskellShowFloat32 f) ++ atom "f"
   | .double d => atom (haskellShowFloat d)
   | .char c => squotes (fromString (String.singleton c))
   | .str s => dquotes (fromString s)

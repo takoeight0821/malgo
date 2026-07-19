@@ -85,7 +85,8 @@ partial def fetchParsedModule (ws : Workspace) (db : QueryDB) (modName : ModuleN
     let (path, text) ← fetchSource ws db modName
     match ← Malgo.Parser.pass ws path text with
     | (.error e, _) => throw (parseError e)
-    | (.ok parsed, _) =>
+    | (.ok parsed, flags) =>
+      addFeatures flags
       db.cacheParsedModule.modify (·.insert modName parsed)
       return parsed
 

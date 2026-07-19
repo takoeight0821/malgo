@@ -20,8 +20,12 @@ private def lspBinPath : System.FilePath := System.FilePath.mk "lean/.lake/build
 /-- Wall-clock budget for the whole scripted session. Bounds a hang in
 `malgo-lsp` (a future regression in `checkFile`/`fetchRenamedModule`, or a
 build that never notices `exit`) to a fast, diagnosable failure instead of
-silently blocking `lake test` until CI's blanket 30-minute job timeout. -/
-private def sessionTimeoutMs : UInt32 := 20000
+silently blocking `lake test` until CI's blanket 30-minute job timeout.
+60s (not 20s) because a shared CI runner's `checkFile` round trip can take
+noticeably longer than on a local dev machine — CI hit this exact watchdog
+timeout (`FAIL Malgo.LSP/session: expected exit code 0, got 137`, 20s after
+`didOpen`) even though the identical session passes locally. -/
+private def sessionTimeoutMs : UInt32 := 60000
 
 private def frame (v : JValue) : ByteArray :=
   let body := (encodeJson v).toUTF8

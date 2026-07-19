@@ -55,26 +55,22 @@ plan's zero-external-Lake-deps decision):
 | `Parser/Prim.lean` | megaparsec's combinator primitives (`attempt`/`sepBy`/`chainl1`/etc.) |
 | `Sequent/Core/Json.lean` | the `.mlgi`/`.sqt` artifact codec (Haskell: the `binary` package) |
 
-## LSP server (`malgo-lsp/src/Malgo/LSP/*.hs` ↔ `lean/Malgo/LSP/*.lean`)
+## LSP server: not ported (removed 2026-07-19)
 
-| Haskell | Lean |
-|---|---|
-| `Json.hs` | `LSP/Json.lean` |
-| `Protocol.hs` | `LSP/Protocol.lean` |
-| `Server/JsonRpc.hs` | `LSP/Server/JsonRpc.lean` |
-| `Server.hs` | `LSP/Server.lean` |
-| `Diagnostics.hs` | `LSP/Diagnostics.lean` |
-| `Handlers.hs` | `LSP/Handlers.lean` |
-| `Malgo/LSP.hs` (dispatch) | `LSP.lean` |
-| `app/Main.hs` | `LspMain.lean` (the `malgo-lsp` executable) |
+`malgo-lsp/src/Malgo/LSP/*.hs` was ported to `lean/Malgo/LSP/*.lean` in M7,
+but the port has since been **removed**. `lean/Test/LspSession.lean`'s
+scripted stdio session reproducibly hung in CI (Linux runners only, never
+locally) on a stdout write partway through a session; two rounds of
+checkpoint-based narrowing localized it to `sendMessage`'s `IO.FS.Stream`
+write path but didn't find a root cause. Rather than ship a permanently
+flaky or disabled gate, the whole `malgo-lsp` executable and `LSP/*.lean`
+were deleted — see the "LSP removed" row in `lean/README.md`'s porting
+status table for the full account.
 
-Haskell's `malgo-lsp` has **zero tests** (`build-lsp.yml` only checks it
-compiles); `lean/Test/LspSession.lean` is a scripted stdio acceptance test
-authored fresh (spawns the real `malgo-lsp` binary, drives a real
-initialize→didOpen→publishDiagnostics→shutdown→exit session) — see M7's
-entry in `lean/README.md` for the full story, including the two
-Lean-runtime discoveries it took to get there (`IO.FS.Stream` vs `Handle`,
-and `Malgo.Monad.runCatching` for structured errors).
+Haskell's `malgo-lsp` is unaffected and is the only `malgo-lsp`
+implementation going forward. It still has **zero tests** (`build-lsp.yml`
+only checks it compiles) — that gap is now unaddressed by either
+implementation, not just Lean's.
 
 ## MET / debug tracer (`app/met/*.hs` ↔ `lean`)
 
@@ -92,7 +88,7 @@ are both present, toggled by inline JS instead of Haskell's server-side
 
 | Gate | Command | Status |
 |---|---|---|
-| Golden tests + infer + LSP session + MetPage | `cd lean && lake test` | 532/532 + 94/94 + 2/2 |
+| Golden tests + infer + MetPage | `cd lean && lake test` | 532/532 + 94/94 + 1/1 |
 | Cross-implementation parity | `bash scripts/lean-parity.sh [--mode error]` | 292/292 + 8/8 |
 | Self-hosted compiler (L1) | `MALGO=lean/.lake/build/bin/malgo scripts/selfhost-golden.sh` | 73/73 |
 | Self-hosted metacircular (L2) | `MALGO=lean/.lake/build/bin/malgo scripts/selfhost-level2.sh` | 5/5 |
@@ -123,9 +119,9 @@ being independently true:
    necessarily equal — just close enough that retiring Haskell isn't a
    regression for real users). No specific number is fixed here yet;
    set one before acting on this criterion.
-4. A human maintainer has actually used the Lean `malgo`/`malgo-lsp`
-   binaries for real work (editing/compiling real `.mlg` programs, not
-   just running the test suite) and hit no surprises.
+4. A human maintainer has actually used the Lean `malgo` binary for real
+   work (editing/compiling real `.mlg` programs, not just running the test
+   suite) and hit no surprises.
 
 When (and only when) all four hold: flip `lean/ci-gates.env` /
 `.github/workflows/lean.yml` so the Lean build becomes the default CI

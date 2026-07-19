@@ -157,9 +157,9 @@ bash scripts/selfhost-level2.sh
 ## Lean 4 port (`lean/`)
 
 A full second implementation of Malgo — parser through every backend
-(Eval/Scheme/Zig), the query-based compilation engine, the linter, the
-LSP server, and the MET debug tracer (`malgo debug-trace`) — exists in
-Lean 4 under `lean/`, at parity with this Haskell implementation (which
+(Eval/Scheme/Zig), the query-based compilation engine, the linter, and
+the MET debug tracer (`malgo debug-trace`) — exists in Lean 4 under
+`lean/`, at parity with this Haskell implementation (which
 remains the semantic oracle: the committed `.golden/` tree, the
 self-hosted-compiler stress test, and `scripts/zig-golden.sh` gate both
 implementations, not just this one). See `lean/README.md` for build

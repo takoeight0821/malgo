@@ -48,26 +48,6 @@ def run (flag : Flag) (features : FeatureFlags) (act : MalgoM α) : IO α := do
   }
   (ReaderT.run act ctx).toIO fun e => IO.userError e.render
 
-/-- Like `run`, but returns the structured `CompileError` on failure instead
-of collapsing it into an opaque `IO.userError` string. Needed by any caller
-that inspects a failure's `range?`/`passName` rather than just displaying
-it — the LSP's diagnostics (`Malgo.LSP.Diagnostics.compileToDiagnostics`)
-are the motivating case: a renamed error's `range?` (populated by
-`Malgo.Pass.wrapError`) is exactly what turns into the LSP `Diagnostic`'s
-position, and that's lost once `render`ed to text. `EIO.toBaseIO` (Lean
-core) is the one primitive that unwraps an `EIO` action while keeping the
-original error type instead of stringifying it. -/
-def runCatching (flag : Flag) (features : FeatureFlags) (act : MalgoM α) :
-    IO (Except CompileError α) := do
-  let ctx : Ctx := {
-    flag
-    workspace := ← Workspace.setup
-    uniqRef := ← IO.mkRef 0
-    featuresRef := ← IO.mkRef features
-    pragmaRef := ← IO.mkRef {}
-  }
-  (ReaderT.run act ctx).toBaseIO
-
 end MalgoM
 
 def getFlag : MalgoM Flag :=

@@ -46,6 +46,7 @@ import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirecto
 import System.FilePath (makeRelative, takeDirectory, takeFileName)
 import System.FilePath qualified as F
 import System.FilePath qualified as FP
+import System.Environment (lookupEnv)
 import System.IO (hClose, openBinaryTempFile)
 import Text.Megaparsec.Pos (initialPos)
 
@@ -104,8 +105,11 @@ getWorkspace = do
 runWorkspaceOnPwd :: (IOE :> es) => Eff (Workspace : es) a -> Eff es a
 runWorkspaceOnPwd action = do
   pwd <- liftIO getCurrentDirectory
-  liftIO $ createDirectoryIfMissing True $ pwd F.</> ".malgo-work"
-  workspaceDir <- liftIO $ makeAbsolute $ pwd F.</> ".malgo-work"
+  -- The work-dir name is overridable so the Haskell and Lean toolchains can
+  -- coexist in one checkout (the Lean port defaults to ".malgo-work-lean").
+  workDirName <- liftIO $ fromMaybe ".malgo-work" <$> lookupEnv "MALGO_WORK_DIR"
+  liftIO $ createDirectoryIfMissing True $ pwd F.</> workDirName
+  workspaceDir <- liftIO $ makeAbsolute $ pwd F.</> workDirName
   modulePathMap <- newIORef mempty
   evalStaticRep (Workspace $ WorkspaceHolder workspaceDir modulePathMap) action
 

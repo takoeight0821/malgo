@@ -39,6 +39,11 @@ data CompileOpt = CompileOpt
     optMode :: Zig.OptMode
   }
 
+data DumpOpt = DumpOpt
+  { srcPath :: FilePath,
+    stage :: Driver.DumpStage
+  }
+
 main :: IO ()
 main = do
   command <- parseCommand
@@ -77,7 +82,24 @@ main = do
         hPutStrLn stderr ""
       let hasError = any (\Diagnostic {severity} -> severity == Error) diags
       when (hasError || (opt.denyWarnings && not (null diags))) exitFailure
+    Dump opt ->
+      Driver.dumpFingerprint opt.stage opt.srcPath
+        & runMalgoM dumpFlag
   where
+    -- Mirror TestUtils.flag: the fingerprint goldens were produced under
+    -- testMode with no elaboration, and 'dumpFingerprint' must reproduce
+    -- them for cross-implementation parity.
+    dumpFlag =
+      Flag
+        { Flag.noOptimize = False,
+          Flag.lambdaLift = False,
+          Flag.debugMode = False,
+          Flag.testMode = True,
+          Flag.target = TargetEval,
+          Flag.evalMode = EvalSmallStep,
+          Flag.useInfer = False,
+          Flag.programArgs = []
+        }
     lintFlag =
       Flag
         { Flag.noOptimize = True,
@@ -168,16 +190,35 @@ compileOpt =
   )
     <**> helper
 
+dumpStageOpt :: Parser Driver.DumpStage
+dumpStageOpt =
+  option
+    (eitherReader parseStage)
+    (long "stage" <> metavar "STAGE" <> help "flat-fingerprint or join-fingerprint")
+  where
+    parseStage "flat-fingerprint" = Right Driver.FlatFingerprint
+    parseStage "join-fingerprint" = Right Driver.JoinFingerprint
+    parseStage s = Left $ "Unknown dump stage: " <> s
+
+dumpOpt :: Parser DumpOpt
+dumpOpt =
+  ( DumpOpt
+      <$> strArgument (metavar "SOURCE" <> help "Source file (relative path)" <> action "file")
+      <*> dumpStageOpt
+  )
+    <**> helper
+
 data Command
   = Eval EvalOpt
   | Compile CompileOpt
   | Lint LintOpt
+  | Dump DumpOpt
 
 parseCommand :: IO Command
 parseCommand = do
   command <-
     execParser
-      ( info (subparser (eval <> compile <> lint) <**> helper)
+      ( info (subparser (eval <> compile <> lint <> dump) <**> helper)
           $ fullDesc
           <> header "malgo programming language"
       )
@@ -191,6 +232,9 @@ parseCommand = do
     Lint opt -> do
       srcPath <- makeAbsolute opt.srcPath
       pure $ Lint opt {srcPath = srcPath}
+    Dump opt -> do
+      srcPath <- makeAbsolute opt.srcPath
+      pure $ Dump opt {srcPath = srcPath}
   where
     eval =
       command "eval"
@@ -207,3 +251,10 @@ parseCommand = do
         $ info (Lint <$> lintOpt)
         $ fullDesc
         <> progDesc "Lint a malgo program for stylistic issues"
+    -- Hidden developer subcommand: print a format-immune IR fingerprint for
+    -- cross-implementation (Haskell vs Lean) parity checking.
+    dump =
+      command "dump"
+        $ info (Dump <$> dumpOpt)
+        $ fullDesc
+        <> progDesc "Dump a format-immune IR fingerprint (internal parity tool)"

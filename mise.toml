@@ -24,7 +24,7 @@ chezscheme = "latest"
 zig = "0.16.0"
 
 [env]
-_.path = ["~/.ghcup/bin", "~/.local/bin", "~/.cabal/bin"]
+_.path = ["~/.ghcup/bin", "~/.local/bin", "~/.cabal/bin", "~/.elan/bin"]
 
 [tasks.setup]
 description = "Setup tools"
@@ -37,6 +37,21 @@ run = [
     "cabal install hpack --overwrite-policy=always --ignore-project",
     "cabal install ormolu --overwrite-policy=always --ignore-project",
 ]
+
+[tasks.lean-setup]
+description = "Install elan (Lean toolchain manager); the toolchain itself is pinned by lean/lean-toolchain"
+run = "command -v elan >/dev/null 2>&1 || curl -sSf https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none"
+
+[tasks.lean-build]
+description = "Build the Lean 4 port (lean/)"
+dir = "lean"
+run = "lake build"
+
+[tasks.lean-test]
+description = "Run the Lean 4 port's test suite (extra args after --, e.g. mise run lean-test -- --match PAT)"
+depends = ["lean-build"]
+dir = "lean"
+run = "lake test --"
 
 [tasks.setup-hls]
 description = "Setup HLS (requires HLS support for the project's GHC version)"

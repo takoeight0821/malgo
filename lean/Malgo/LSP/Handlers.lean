@@ -48,11 +48,19 @@ package-relative name. -/
 def checkFile (state : LspState) (nuri : NormalizedUri) (filePath : String) (content : String) :
     IO (List Diagnostic) := do
   let modName := ModuleName.moduleName filePath
+  IO.eprintln "checkFile: entering runLspCompile"
   let result ← runLspCompile do
+    MalgoM.io (IO.eprintln "checkFile: Workspace.setup done, updateSource next")
     MalgoM.io (Malgo.Query.Engine.updateSource state.db modName (System.FilePath.mk filePath) content)
+    MalgoM.io (IO.eprintln "checkFile: updateSource done")
     MalgoM.io (Malgo.Query.Engine.invalidateModule state.db modName)
+    MalgoM.io (IO.eprintln "checkFile: invalidateModule done")
     let ws ← getWorkspace
-    Malgo.Query.Engine.fetchRenamedModule ws state.db modName
+    MalgoM.io (IO.eprintln "checkFile: getWorkspace done, fetchRenamedModule next")
+    let r ← Malgo.Query.Engine.fetchRenamedModule ws state.db modName
+    MalgoM.io (IO.eprintln "checkFile: fetchRenamedModule done")
+    pure r
+  IO.eprintln "checkFile: runLspCompile returned"
   match result with
   | .error diags =>
     state.renamedCache.modify (·.erase nuri)

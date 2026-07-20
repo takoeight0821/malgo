@@ -89,66 +89,100 @@ level2_cases=(
 )
 
 total_cases=${#level2_cases[@]}
-log "starting Level 2 metacircular checks: ${total_cases} cases"
+log "starting Level 2 metacircular checks: ${total_cases} cases (parallel)"
 log "command: scheme --script main.scm runtime/malgo/compiler/Main.mlg <case.mlg>"
 
-pass=0
-fail=0
-timeout_count=0
+results_dir="$MALGO_WORK_DIR/level2-results"
+rm -rf "$results_dir"
+mkdir -p "$results_dir"
 
-for dir in "${level2_cases[@]}"; do
-  src="test/testcases/malgo/$dir.mlg"
-  expected=".golden/Malgo.Sequent.Eval/$dir/golden"
+# Runs one case in isolation, writing its interleaved log to <dir>.log and
+# its final status (pass/fail/timeout/skip) to <dir>.status. Invoked as a
+# background job per case so all cases run concurrently; the caller
+# collects logs/status after `wait` to keep output deterministic despite
+# the parallel execution.
+run_case() {
+  local dir="$1"
+  local src="test/testcases/malgo/$dir.mlg"
+  local expected=".golden/Malgo.Sequent.Eval/$dir/golden"
+  local status_file="$results_dir/$dir.status"
 
   if [[ ! -f "$src" ]]; then
     log "skip (no source): $dir"
-    continue
+    printf 'skip\n' >"$status_file"
+    return 0
   fi
   if [[ ! -f "$expected" ]]; then
     log "skip (no golden): $dir"
-    continue
+    printf 'skip\n' >"$status_file"
+    return 0
   fi
 
-  case_start=$SECONDS
+  local case_start=$SECONDS
   log "start: $dir"
+  local out err
   out=$(mktemp)
   err=$(mktemp)
 
   if printf 'Hello\n' | timeout "$CASE_TIMEOUT" $SCHEME --script "$SCHEME_MAIN" \
       runtime/malgo/compiler/Main.mlg "$src" >"$out" 2>"$err"; then
-    case_elapsed=$((SECONDS - case_start))
+    local case_elapsed=$((SECONDS - case_start))
     if cmp -s "$out" "$expected"; then
       log "pass: $dir (${case_elapsed}s)"
-      pass=$((pass + 1))
+      printf 'pass\n' >"$status_file"
     else
-      case_elapsed=$((SECONDS - case_start))
       log "fail(mismatch): $dir (${case_elapsed}s)"
+      local out_lines err_lines out_first err_first
       out_lines=$(wc -l < "$out" | tr -d ' ')
       err_lines=$(wc -l < "$err" | tr -d ' ')
       out_first=$(head -n 3 "$out" | tr '\n' '|')
       err_first=$(head -n 3 "$err" | tr '\n' '|')
       printf '%s :: MISMATCH :: stdout(%s lines): %s | stderr(%s lines): %s\n' \
         "$dir" "$out_lines" "$out_first" "$err_lines" "$err_first"
-      fail=$((fail + 1))
+      printf 'fail\n' >"$status_file"
     fi
   else
-    status=$?
-    case_elapsed=$((SECONDS - case_start))
-    if [[ $status -eq 124 ]]; then
+    local case_status=$?
+    local case_elapsed=$((SECONDS - case_start))
+    if [[ $case_status -eq 124 ]]; then
       log "fail(timeout): $dir (${case_elapsed}s)"
       printf '%s :: TIMEOUT\n' "$dir"
-      timeout_count=$((timeout_count + 1))
-      fail=$((fail + 1))
+      printf 'timeout\n' >"$status_file"
     else
+      local first
       first=$(head -n 1 "$err")
       [[ -n "$first" ]] || first=$(head -n 1 "$out")
       [[ -n "$first" ]] || first="<empty>"
-      log "fail(error $status): $dir (${case_elapsed}s)"
+      log "fail(error $case_status): $dir (${case_elapsed}s)"
       printf '%s :: ERR :: %s\n' "$dir" "$first"
-      fail=$((fail + 1))
+      printf 'fail\n' >"$status_file"
     fi
   fi
   rm -f "$out" "$err"
+}
+
+pids=()
+for dir in "${level2_cases[@]}"; do
+  run_case "$dir" >"$results_dir/$dir.log" 2>&1 &
+  pids+=("$!")
+done
+
+for pid in "${pids[@]}"; do
+  wait "$pid" || true
+done
+
+pass=0
+fail=0
+timeout_count=0
+
+for dir in "${level2_cases[@]}"; do
+  cat "$results_dir/$dir.log"
+  case "$(cat "$results_dir/$dir.status" 2>/dev/null || echo fail)" in
+    pass) pass=$((pass + 1)) ;;
+    skip) ;;
+    timeout) timeout_count=$((timeout_count + 1)); fail=$((fail + 1)) ;;
+    *) fail=$((fail + 1)) ;;
+  esac
 done
 
 printf 'PASS: %s\nFAIL: %s\nTIMEOUT: %s\n' "$pass" "$fail" "$timeout_count"

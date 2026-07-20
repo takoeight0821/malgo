@@ -229,64 +229,109 @@ private def sym (s : String) : SExpr := .atom (.symbol s)
 
 mutual
 
-partial def CoPat.dump [ToSExpr (XId p)] : CoPat p → SExpr
+def CoPat.dump [ToSExpr (XId p)] : CoPat p → SExpr
   | .hole _ => sym "#"
   | .apply _ cp pat => .list [sym "apply", cp.dump, pat.dump]
   | .project _ cp field => .list [sym "project", cp.dump, .atom (.str field)]
+termination_by cp => sizeOf cp
 
-partial def Ty.dump [ToSExpr (XId p)] : Ty p → SExpr
+def Ty.dump [ToSExpr (XId p)] : Ty p → SExpr
   | .app _ t ts => .list [sym "app", t.dump, .list (ts.map Ty.dump)]
   | .var _ v => toSExpr v
   | .con _ c => toSExpr c
   | .arr _ t1 t2 => .list [sym "->", t1.dump, t2.dump]
   | .tuple _ ts => .list (sym "tuple" :: ts.map Ty.dump)
   | .record _ kvs rowTail =>
-    .list (sym "record" :: kvs.map (fun (k, v) => .list [toSExpr k, v.dump]) ++
-      (rowTail.map fun r => [SExpr.list [sym "row", r.dump]]).getD [])
+    .list (sym "record" :: kvs.attach.map (fun ⟨kv, hkv⟩ => .list [toSExpr kv.1, kv.2.dump]) ++
+      (match rowTail with
+        | some r => [SExpr.list [sym "row", r.dump]]
+        | none => []))
   | .block _ t => .list [sym "block", t.dump]
   | .bottom _ => sym "_|_"
   | .tilde _ t => .list [sym "~", t.dump]
   | .variant _ cases rowTail =>
-    .list (sym "variant" :: cases.map (fun (k, ts) => .list (toSExpr k :: ts.map Ty.dump)) ++
-      (rowTail.map fun r => [SExpr.list [sym "row", r.dump]]).getD [])
+    .list (sym "variant" :: cases.attach.map
+        (fun ⟨kts, hkts⟩ => .list (toSExpr kts.1 :: kts.2.attach.map fun ⟨t, ht⟩ => Ty.dump t)) ++
+      (match rowTail with
+        | some r => [SExpr.list [sym "row", r.dump]]
+        | none => []))
+termination_by t => sizeOf t
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hkv) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_lt_of_mem_snd_of_mem ht hkts) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def Expr.dump [ToSExpr (XId p)] : Expr p → SExpr
+def Expr.dump [ToSExpr (XId p)] : Expr p → SExpr
   | .var _ id => toSExpr id
   | .unboxed _ l => toSExpr l
   | .boxed _ l => toSExpr l
   | .apply _ e1 e2 => .list [sym "apply", e1.dump, e2.dump]
   | .opApp _ op e1 e2 => .list [sym "opapp", toSExpr op, e1.dump, e2.dump]
   | .project _ e k => .list [sym "project", e.dump, .atom (.str k)]
-  | .fn _ cs => .list [sym "fn", .list (cs.toList.map Clause.dump)]
+  | .fn _ cs => .list [sym "fn", .list (cs.toList.attach.map fun ⟨c, hc⟩ => Clause.dump c)]
   | .tuple _ es => .list (sym "tuple" :: es.map Expr.dump)
-  | .record _ kvs => .list (sym "record" :: kvs.map fun (k, v) => .list [toSExpr k, v.dump])
+  | .record _ kvs =>
+    .list (sym "record" :: kvs.attach.map fun ⟨kv, hkv⟩ => .list [toSExpr kv.1, kv.2.dump])
   | .list _ es => .list (sym "list" :: es.map Expr.dump)
   | .ann _ e t => .list [sym "ann", e.dump, t.dump]
-  | .seq _ ss => .list (sym "seq" :: ss.toList.map Stmt.dump)
+  | .seq _ ss => .list (sym "seq" :: ss.toList.attach.map fun ⟨s, hs⟩ => Stmt.dump s)
   | .parens _ e => .list [sym "parens", e.dump]
   | .codata _ clauses =>
-    .list (sym "codata" :: clauses.map fun (cp, e) => .list [cp.dump, e.dump])
+    .list (sym "codata" :: clauses.attach.map fun ⟨ce, hce⟩ => .list [ce.1.dump, ce.2.dump])
   | .label _ name body => .list [sym "label", toSExpr name, body.dump]
   | .goto _ value label => .list [sym "goto", value.dump, label.dump]
+termination_by e => sizeOf e
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hkv) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_fst_lt_of_mem hce) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hce) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_lt_of_mem_toList hc) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_lt_of_mem_toList hs) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def Stmt.dump [ToSExpr (XId p)] : Stmt p → SExpr
+def Stmt.dump [ToSExpr (XId p)] : Stmt p → SExpr
   | .letS _ id e => .list [sym "let", toSExpr id, e.dump]
   | .letPS _ pat e => .list [sym "let", pat.dump, e.dump]
   | .withS _ none e => .list [sym "with", e.dump]
   | .withS _ (some id) e => .list [sym "with", toSExpr id, e.dump]
   | .noBind _ e => .list [sym "do", e.dump]
+termination_by s => sizeOf s
 
-partial def Clause.dump [ToSExpr (XId p)] : Clause p → SExpr
-  | .mk _ pats body => .list [sym "clause", .list (pats.toList.map Pat.dump), body.dump]
+def Clause.dump [ToSExpr (XId p)] : Clause p → SExpr
+  | .mk _ pats body =>
+    .list [sym "clause", .list (pats.toList.attach.map fun ⟨pt, hpt⟩ => Pat.dump pt), body.dump]
+termination_by c => sizeOf c
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_lt_of_mem_toList hpt) (by omega)
 
-partial def Pat.dump [ToSExpr (XId p)] : Pat p → SExpr
+def Pat.dump [ToSExpr (XId p)] : Pat p → SExpr
   | .var _ id => toSExpr id
   | .con _ id ps => .list [sym "con", toSExpr id, .list (ps.map Pat.dump)]
   | .tuple _ ps => .list (sym "tuple" :: ps.map Pat.dump)
-  | .record _ kps => .list (sym "record" :: kps.map fun (k, pat) => .list [toSExpr k, pat.dump])
+  | .record _ kps =>
+    .list (sym "record" :: kps.attach.map fun ⟨kp, hkp⟩ => .list [toSExpr kp.1, kp.2.dump])
   | .list _ ps => .list (sym "list" :: ps.map Pat.dump)
   | .unboxed _ l => .list [sym "unboxed", toSExpr l]
   | .boxed _ l => .list [sym "boxed", toSExpr l]
+termination_by pt => sizeOf pt
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hkp) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
 end
 
@@ -337,23 +382,32 @@ instance [ToSExpr (XId p)] [ToSExpr (XModule p)] : ToSExpr (Module p) where
 /-! ## Free variables and bound variables -/
 
 /-- Variables bound by a pattern. -/
-partial def Pat.boundVars [Ord (XId p)] : Pat p → Std.TreeSet (XId p)
+def Pat.boundVars [Ord (XId p)] : Pat p → Std.TreeSet (XId p)
   | .var _ x => ({} : Std.TreeSet (XId p)).insert x
   | .con _ _ ps => ps.foldl (fun acc pat => acc.merge pat.boundVars) {}
   | .tuple _ ps => ps.foldl (fun acc pat => acc.merge pat.boundVars) {}
-  | .record _ kps => kps.foldl (fun acc (_, pat) => acc.merge pat.boundVars) {}
+  | .record _ kps => kps.foldl (fun acc (kp : String × Pat p) => acc.merge kp.2.boundVars) {}
   | .list _ ps => ps.foldl (fun acc pat => acc.merge pat.boundVars) {}
   | .unboxed _ _ => {}
   | .boxed _ _ => {}
+termination_by pt => sizeOf pt
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem h) (by omega))
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-private partial def CoPat.boundVars [Ord (XId p)] : CoPat p → Std.TreeSet (XId p)
+private def CoPat.boundVars [Ord (XId p)] : CoPat p → Std.TreeSet (XId p)
   | .hole _ => {}
   | .apply _ cp pat => cp.boundVars.merge pat.boundVars
   | .project _ cp _ => cp.boundVars
 
 mutual
 
-partial def Expr.freevars [Ord (XId p)] : Expr p → Std.TreeSet (XId p)
+def Expr.freevars [Ord (XId p)] : Expr p → Std.TreeSet (XId p)
   | .var _ v => ({} : Std.TreeSet (XId p)).insert v
   | .unboxed _ _ => {}
   | .boxed _ _ => {}
@@ -361,24 +415,43 @@ partial def Expr.freevars [Ord (XId p)] : Expr p → Std.TreeSet (XId p)
   | .opApp _ op e1 e2 => (e1.freevars.merge e2.freevars).insert op
   | .project _ e _ => e.freevars
   | .fn _ cs =>
-    cs.toList.foldl (init := {}) fun acc c =>
-      match c with
-      | .mk _ pats e =>
-        acc.merge <|
-          pats.toList.foldl (fun fv pat => fv.eraseMany pat.boundVars.toList) e.freevars
+    cs.toList.attach.foldl (init := {}) fun acc ⟨c, hc⟩ => acc.merge (Clause.clauseFreevars c)
   | .tuple _ es => es.foldl (fun acc e => acc.merge e.freevars) {}
-  | .record _ kvs => kvs.foldl (fun acc (_, e) => acc.merge e.freevars) {}
+  | .record _ kvs => kvs.foldl (fun acc (kv : String × Expr p) => acc.merge kv.2.freevars) {}
   | .list _ es => es.foldl (fun acc e => acc.merge e.freevars) {}
   | .ann _ e _ => e.freevars
   | .seq _ ss => freevarsStmts ss.head ss.tail
   | .parens _ e => e.freevars
   | .codata _ clauses =>
-    clauses.foldl (init := {}) fun acc (copat, e) =>
-      acc.merge (e.freevars.eraseMany copat.boundVars.toList)
+    clauses.attach.foldl (init := {}) fun acc ⟨ce, hce⟩ =>
+      acc.merge (ce.2.freevars.eraseMany ce.1.boundVars.toList)
   | .label _ name body => body.freevars.erase name
   | .goto _ value label => value.freevars.merge label.freevars
+termination_by e => sizeOf e
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_lt_of_mem_toList hc) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_fst_lt_of_mem hce) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hce) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_head_add_tail_lt ss) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem h) (by omega))
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-private partial def freevarsStmts [Ord (XId p)] (s : Stmt p) (ss : List (Stmt p)) :
+/-- Free variables of a single `fn` clause: the body's free variables minus
+whatever the clause's patterns bind. Factored out of `Expr.freevars`'s
+`.fn` case (rather than nested inline) so the recursive call into `body`
+is a direct equation-arm match on `Clause`, which the termination checker
+can follow -- nested inside a `foldl`'s lambda, it couldn't. -/
+private def Clause.clauseFreevars [Ord (XId p)] : Clause p → Std.TreeSet (XId p)
+  | .mk _ pats body =>
+    pats.toList.foldl (fun fv pat => fv.eraseMany pat.boundVars.toList) body.freevars
+termination_by c => sizeOf c
+
+private def freevarsStmts [Ord (XId p)] (s : Stmt p) (ss : List (Stmt p)) :
     Std.TreeSet (XId p) :=
   let rest := match ss with
     | [] => {}
@@ -389,6 +462,7 @@ private partial def freevarsStmts [Ord (XId p)] (s : Stmt p) (ss : List (Stmt p)
   | .withS _ none e => e.freevars.merge rest
   | .withS _ (some x) e => e.freevars.merge (rest.erase x)
   | .noBind _ e => e.freevars.merge rest
+termination_by sizeOf s + sizeOf ss
 
 end
 

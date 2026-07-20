@@ -17,7 +17,7 @@ open Malgo.Sequent.Fun
 /-- Structural test for a curried-constructor definition
 (`\p1 -> .. -> \pn -> Construct tag [p1..pn]`). Also matches plain
 tuple-returning functions of the same shape (sound to inline either way). -/
-partial def peel (params : List Name) : Expr → Option (Tag × Nat)
+def peel (params : List Name) : Expr → Option (Tag × Nat)
   | .lambda _ [p] b => peel (params ++ [p]) b
   | .construct _ tag args =>
     if args.length == params.length
@@ -49,14 +49,15 @@ def trySaturate (ctorTable : Std.TreeMap Name (Tag × Nat)) (expr : Expr) : Opti
 
 mutual
 
-partial def goExpr (ctorTable : Std.TreeMap Name (Tag × Nat)) (expr : Expr) : Expr :=
+def goExpr (ctorTable : Std.TreeMap Name (Tag × Nat)) (expr : Expr) : Expr :=
   let expr' := match expr with
     | .var .. => expr
     | .literal .. => expr
     | .construct r tag args => .construct r tag (args.map (goExpr ctorTable))
     | .«let» r n v b => .«let» r n (goExpr ctorTable v) (goExpr ctorTable b)
     | .lambda r ps b => .lambda r ps (goExpr ctorTable b)
-    | .object r fields => .object r (fields.map (fun (k, v) => (k, goExpr ctorTable v)))
+    | .object r fields =>
+      .object r (fields.attach.map fun ⟨kv, hkv⟩ => (kv.1, goExpr ctorTable kv.2))
     | .apply r fn args => .apply r (goExpr ctorTable fn) (args.map (goExpr ctorTable))
     | .project r e field => .project r (goExpr ctorTable e) field
     | .primitive r op args => .primitive r op (args.map (goExpr ctorTable))
@@ -66,9 +67,18 @@ partial def goExpr (ctorTable : Std.TreeMap Name (Tag × Nat)) (expr : Expr) : E
   match trySaturate ctorTable expr' with
   | some rewritten => rewritten
   | none => expr'
+termination_by sizeOf expr
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hkv) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def goBranch (ctorTable : Std.TreeMap Name (Tag × Nat)) : Branch → Branch
+def goBranch (ctorTable : Std.TreeMap Name (Tag × Nat)) : Branch → Branch
   | .branch r p b => .branch r p (goExpr ctorTable b)
+termination_by b => sizeOf b
 
 end
 

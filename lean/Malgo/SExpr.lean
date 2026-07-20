@@ -92,7 +92,7 @@ private def Inter.width : Inter → Nat
   | .empty => 2
   | .list w _ _ => w + 2
 
-private partial def toInter : SExpr → Inter
+private def toInter : SExpr → Inter
   | .atom a => .atom a.render
   | .list [] => .empty
   | .list (x :: xs) =>
@@ -103,7 +103,8 @@ private partial def toInter : SExpr → Inter
 
 /-- s-cargot `indentPrintSExpr'` specialized to `basicPrint`:
 `swingIndent = Swing`, `indentAmount = 2`, `maxWidth = 80`. -/
-private partial def pp (maxWidth ind : Nat) : Inter → String
+private def pp (maxWidth ind : Nat) (i : Inter) : String :=
+  match i with
   | .empty => "()"
   | .atom t => t
   | .list contentWidth hd items =>
@@ -118,6 +119,13 @@ private partial def pp (maxWidth ind : Nat) : Inter → String
       else
         " " ++ " ".intercalate (items.toList.map (pp maxWidth (ind + 1)))
     "(" ++ hdStr ++ body ++ ")"
+termination_by i
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (Array.sizeOf_lt_of_mem (Array.mem_toList_iff.mp h)) (by omega))
 
 /-- s-cargot `encodeOne (basicPrint atomToText)`. -/
 def encodeOne (e : SExpr) : String :=

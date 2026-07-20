@@ -104,53 +104,6 @@ def blockLines : List Doc → Doc
 def hangEq (pre body : Doc) : Doc :=
   group (pre <+> atom "=" ++ nest 2 (line ++ body))
 
-/-- Termination helper: a pair's second component is never bigger than the
-pair itself. Building block for justifying recursion into the value half
-of `(String × _)`/`(String × _ × _)` fields below (every IR's `object`/
-`record`/`variant`/`cocase`-style named-fields list), composed via
-`Nat.le_trans` for triples. -/
-private theorem sizeOf_snd_le {α β : Type} [SizeOf α] [SizeOf β] (p : α × β) :
-    sizeOf p.snd ≤ sizeOf p := by
-  cases p with
-  | mk a b => simp
-
-private theorem sizeOf_snd_lt_of_mem {α β : Type} [SizeOf α] [SizeOf β] {p : α × β}
-    {l : List (α × β)} (h : p ∈ l) : sizeOf p.snd < sizeOf l :=
-  Nat.lt_of_le_of_lt (sizeOf_snd_le p) (List.sizeOf_lt_of_mem h)
-
-private theorem sizeOf_snd_snd_lt_of_mem {α β γ : Type} [SizeOf α] [SizeOf β] [SizeOf γ]
-    {p : α × β × γ} {l : List (α × β × γ)} (h : p ∈ l) : sizeOf p.2.2 < sizeOf l :=
-  Nat.lt_of_le_of_lt (Nat.le_trans (sizeOf_snd_le p.2) (sizeOf_snd_le p)) (List.sizeOf_lt_of_mem h)
-
-private theorem sizeOf_fst_le {α β : Type} [SizeOf α] [SizeOf β] (p : α × β) :
-    sizeOf p.fst ≤ sizeOf p := by
-  cases p with
-  | mk a b => simp <;> omega
-
-private theorem sizeOf_fst_lt_of_mem {α β : Type} [SizeOf α] [SizeOf β] {p : α × β}
-    {l : List (α × β)} (h : p ∈ l) : sizeOf p.fst < sizeOf l :=
-  Nat.lt_of_le_of_lt (sizeOf_fst_le p) (List.sizeOf_lt_of_mem h)
-
-/-- Two-level version of `sizeOf_snd_lt_of_mem`: for a doubly-nested field
-like `variant`'s `List (String × List (Ty p))`, bounds an element of the
-INNER list against the OUTER list's size. -/
-private theorem sizeOf_lt_of_mem_snd_of_mem {α γ : Type} [SizeOf α] [SizeOf γ]
-    {x : γ} {p : α × List γ} {l : List (α × List γ)} (hx : x ∈ p.snd) (hp : p ∈ l) :
-    sizeOf x < sizeOf l :=
-  Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem hx) (Nat.le_trans (sizeOf_snd_le p) (Nat.le_of_lt (List.sizeOf_lt_of_mem hp)))
-
-/-- `NEList.toList`'s recursion target — every element is either the head
-or in the tail, both strictly smaller than the whole `NEList`. Needed since
-`renderExprSyn`'s `.fn`/`.seq` cases recurse via `cs.toList.map _`. -/
-private theorem sizeOf_lt_of_mem_toList {α : Type} [SizeOf α] {x : α} {xs : NEList α}
-    (h : x ∈ xs.toList) : sizeOf x < sizeOf xs := by
-  cases xs with
-  | mk head tail =>
-    simp only [NEList.toList, List.mem_cons] at h
-    cases h with
-    | inl h => subst h; simp; omega
-    | inr h => exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by simp)
-
 def renderPattern : Fun.Pattern → Doc
   | .pvar _ name => renderName name
   | .pliteral _ lit => renderLit lit

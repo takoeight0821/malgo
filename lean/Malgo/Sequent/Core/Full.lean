@@ -82,7 +82,7 @@ private def sym (s : String) : SExpr := .atom (.symbol s)
 
 mutual
 
-partial def Producer.toSExpr : Producer → SExpr
+def Producer.toSExpr : Producer → SExpr
   | .var _ name => Malgo.toSExpr name
   | .literal _ literal => Malgo.toSExpr literal
   | .construct _ tag producers consumers =>
@@ -91,15 +91,24 @@ partial def Producer.toSExpr : Producer → SExpr
   | .lambda _ names statement =>
     .list [sym "lambda", .list (names.map Malgo.toSExpr), statement.toSExpr]
   | .object _ kvs =>
-    .list ((sortAssocAscending kvs).map fun (k, name, statement) =>
-      .list [sym k, .list [Malgo.toSExpr name, statement.toSExpr]])
+    .list ((sortAssocAscending kvs).attach.map fun ⟨kns, hkns⟩ =>
+      .list [sym kns.1, .list [Malgo.toSExpr kns.2.1, kns.2.2.toSExpr]])
   | .«do» _ name statement => .list [sym "do", Malgo.toSExpr name, statement.toSExpr]
   | .mu _ name statement => .list [sym "mu", Malgo.toSExpr name, statement.toSExpr]
   | .cocase _ branches =>
-    .list (sym "cocase" :: branches.map fun (d, vars, s) =>
-      .list [Malgo.toSExpr d, .list (vars.map Malgo.toSExpr), s.toSExpr])
+    .list (sym "cocase" :: branches.attach.map fun ⟨dvs, hdvs⟩ =>
+      .list [Malgo.toSExpr dvs.1, .list (dvs.2.1.map Malgo.toSExpr), dvs.2.2.toSExpr])
+termination_by p => sizeOf p
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem (mem_sortAssocAscending hkns)) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def Consumer.toSExpr : Consumer → SExpr
+def Consumer.toSExpr : Consumer → SExpr
   | .label _ name => Malgo.toSExpr name
   | .apply _ producers consumers =>
     .list [sym "apply", .list (producers.map Producer.toSExpr), .list (consumers.map Consumer.toSExpr)]
@@ -109,8 +118,15 @@ partial def Consumer.toSExpr : Consumer → SExpr
   | .select _ branches => .list (sym "select" :: branches.map Branch.toSExpr)
   | .destructor _ name producers consumer =>
     .list [sym "destructor", Malgo.toSExpr name, .list (producers.map Producer.toSExpr), consumer.toSExpr]
+termination_by c => sizeOf c
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def Statement.toSExpr : Statement → SExpr
+def Statement.toSExpr : Statement → SExpr
   | .cut producer consumer => .list [sym "cut", producer.toSExpr, consumer.toSExpr]
   | .primitive _ name producers consumer =>
     .list [sym "prim", Malgo.toSExpr name, .list (producers.map Producer.toSExpr), consumer.toSExpr]
@@ -120,9 +136,17 @@ partial def Statement.toSExpr : Statement → SExpr
   | .binOp _ op lhs rhs consumer =>
     .list [sym "binop", Malgo.toSExpr op, lhs.toSExpr, rhs.toSExpr, consumer.toSExpr]
   | .ifz _ cond thenS elseS => .list [sym "ifz", cond.toSExpr, thenS.toSExpr, elseS.toSExpr]
+termination_by s => sizeOf s
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def Branch.toSExpr : Branch → SExpr
+def Branch.toSExpr : Branch → SExpr
   | .branch _ pattern statement => .list [Malgo.toSExpr pattern, statement.toSExpr]
+termination_by b => sizeOf b
 
 end
 

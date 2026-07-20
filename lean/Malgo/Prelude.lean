@@ -110,6 +110,48 @@ theorem mem_sortAssocAscending {κ α : Type} [Ord κ] {xs : List (κ × α)} {p
     | inl h' => exact List.mem_cons.mpr (Or.inl h')
     | inr h' => exact List.mem_cons.mpr (Or.inr (ih h'))
 
+/-! ## `sizeOf`/termination helpers
+
+Reused across every hand-written `termination_by`/`decreasing_by` proof
+for a `partial def` whose recursion is hidden behind a pair/triple
+destructuring lambda (`fun (k, v) => ...`) or an opaque function call
+before a `.map` (`sortAssocAscending`/`NEList.toList`) — both patterns
+recur throughout the sequent IRs' `object`/`record`/`cocase`-style
+named-fields lists. -/
+
+/-- A pair's second component is never bigger than the pair itself. -/
+theorem sizeOf_snd_le {α β : Type} [SizeOf α] [SizeOf β] (p : α × β) :
+    sizeOf p.snd ≤ sizeOf p := by
+  cases p with
+  | mk a b => simp
+
+theorem sizeOf_snd_lt_of_mem {α β : Type} [SizeOf α] [SizeOf β] {p : α × β}
+    {l : List (α × β)} (h : p ∈ l) : sizeOf p.snd < sizeOf l :=
+  Nat.lt_of_le_of_lt (sizeOf_snd_le p) (List.sizeOf_lt_of_mem h)
+
+/-- Composed via `Nat.le_trans` for the third component of a triple. -/
+theorem sizeOf_snd_snd_lt_of_mem {α β γ : Type} [SizeOf α] [SizeOf β] [SizeOf γ]
+    {p : α × β × γ} {l : List (α × β × γ)} (h : p ∈ l) : sizeOf p.2.2 < sizeOf l :=
+  Nat.lt_of_le_of_lt (Nat.le_trans (sizeOf_snd_le p.2) (sizeOf_snd_le p)) (List.sizeOf_lt_of_mem h)
+
+theorem sizeOf_fst_le {α β : Type} [SizeOf α] [SizeOf β] (p : α × β) :
+    sizeOf p.fst ≤ sizeOf p := by
+  cases p with
+  | mk a b => simp <;> omega
+
+theorem sizeOf_fst_lt_of_mem {α β : Type} [SizeOf α] [SizeOf β] {p : α × β}
+    {l : List (α × β)} (h : p ∈ l) : sizeOf p.fst < sizeOf l :=
+  Nat.lt_of_le_of_lt (sizeOf_fst_le p) (List.sizeOf_lt_of_mem h)
+
+/-- Two-level version of `sizeOf_snd_lt_of_mem`: for a doubly-nested field
+like `List (String × List α)`, bounds an element of the INNER list
+against the OUTER list's size. -/
+theorem sizeOf_lt_of_mem_snd_of_mem {α γ : Type} [SizeOf α] [SizeOf γ]
+    {x : γ} {p : α × List γ} {l : List (α × List γ)} (hx : x ∈ p.snd) (hp : p ∈ l) :
+    sizeOf x < sizeOf l :=
+  Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem hx)
+    (Nat.le_trans (sizeOf_snd_le p) (Nat.le_of_lt (List.sizeOf_lt_of_mem hp)))
+
 /-- Haskell `Data.List.NonEmpty`. -/
 structure NEList (α : Type u) where
   head : α
@@ -133,6 +175,17 @@ def ofList : List α → Option (NEList α)
 instance [Inhabited α] : Inhabited (NEList α) := ⟨⟨default, []⟩⟩
 
 end NEList
+
+/-- `NEList.toList`'s recursion target — every element is either the head
+or in the tail, both strictly smaller than the whole `NEList`. -/
+theorem sizeOf_lt_of_mem_toList {α : Type} [SizeOf α] {x : α} {xs : NEList α}
+    (h : x ∈ xs.toList) : sizeOf x < sizeOf xs := by
+  cases xs with
+  | mk head tail =>
+    simp only [NEList.toList, List.mem_cons] at h
+    cases h with
+    | inl h => subst h; simp; omega
+    | inr h => exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by simp)
 
 /-- Replaces Haskell's `prettyprinter`-based `Pretty`. Rendering is plain
 `String`; layout combinators are introduced only if a golden demands them. -/

@@ -118,13 +118,23 @@ instance : FromJson Literal where
       | other => .error s!"Literal: unknown tag {other}"
     | _ => .error "Literal: expected a 2-element array"
 
-partial def patternToJson : Pattern → Json
+def patternToJson : Pattern → Json
   | .pvar r name => Json.arr #[Json.str "pvar", toJson r, toJson name]
   | .pliteral r lit => Json.arr #[Json.str "plit", toJson r, toJson lit]
-  | .destruct r tag pats => Json.arr #[Json.str "destruct", toJson r, toJson tag, jList patternToJson pats]
+  | .destruct r tag pats =>
+    Json.arr #[Json.str "destruct", toJson r, toJson tag,
+      Json.arr (pats.attach.map fun ⟨p, hp⟩ => patternToJson p).toArray]
   | .expand r fields =>
     Json.arr #[Json.str "expand", toJson r,
-      jList (fun (k, p) => Json.arr #[Json.str k, patternToJson p]) fields]
+      Json.arr (fields.attach.map fun ⟨kp, hkp⟩ =>
+        Json.arr #[Json.str kp.1, patternToJson kp.2]).toArray]
+termination_by pt => sizeOf pt
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hkp) (by omega)
+    | exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem hp) (by omega)
 
 partial def patternFromJson (j : Json) : Except String Pattern := do
   match (← j.getArr?).toList with
@@ -148,41 +158,75 @@ instance : FromJson Pattern := ⟨patternFromJson⟩
 
 mutual
 
-partial def producerToJson : Producer → Json
+def producerToJson : Producer → Json
   | .var r name => Json.arr #[Json.str "var", toJson r, toJson name]
   | .literal r lit => Json.arr #[Json.str "lit", toJson r, toJson lit]
   | .construct r tag ps cs =>
-    Json.arr #[Json.str "con", toJson r, toJson tag, jList producerToJson ps, jList toJson cs]
+    Json.arr #[Json.str "con", toJson r, toJson tag,
+      Json.arr (ps.attach.map fun ⟨p, hp⟩ => producerToJson p).toArray, jList toJson cs]
   | .lambda r names s => Json.arr #[Json.str "lam", toJson r, jList toJson names, statementToJson s]
   | .object r fields =>
     Json.arr #[Json.str "obj", toJson r,
-      jList (fun (k, name, s) => Json.arr #[Json.str k, toJson name, statementToJson s]) fields]
+      Json.arr (fields.attach.map fun ⟨kns, hkns⟩ =>
+        Json.arr #[Json.str kns.1, toJson kns.2.1, statementToJson kns.2.2]).toArray]
   | .mu r name s => Json.arr #[Json.str "mu", toJson r, toJson name, statementToJson s]
   | .cocase r branches =>
     Json.arr #[Json.str "cocase", toJson r,
-      jList (fun (d, vars, s) => Json.arr #[Json.str d, jList toJson vars, statementToJson s]) branches]
+      Json.arr (branches.attach.map fun ⟨dvs, hdvs⟩ =>
+        Json.arr #[Json.str dvs.1, jList toJson dvs.2.1, statementToJson dvs.2.2]).toArray]
+termination_by p => sizeOf p
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hkns) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
+    | exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem hp) (by omega)
 
-partial def consumerToJson : Consumer → Json
+def consumerToJson : Consumer → Json
   | .label r name => Json.arr #[Json.str "label", toJson r, toJson name]
-  | .apply r ps cs => Json.arr #[Json.str "apply", toJson r, jList producerToJson ps, jList toJson cs]
+  | .apply r ps cs =>
+    Json.arr #[Json.str "apply", toJson r,
+      Json.arr (ps.attach.map fun ⟨p, hp⟩ => producerToJson p).toArray, jList toJson cs]
   | .project r field ret => Json.arr #[Json.str "proj", toJson r, Json.str field, toJson ret]
   | .«then» r name s => Json.arr #[Json.str "then", toJson r, toJson name, statementToJson s]
   | .finish r => Json.arr #[Json.str "finish", toJson r]
-  | .select r branches => Json.arr #[Json.str "select", toJson r, jList branchToJson branches]
+  | .select r branches =>
+    Json.arr #[Json.str "select", toJson r,
+      Json.arr (branches.attach.map fun ⟨b, hb⟩ => branchToJson b).toArray]
   | .destructor r name ps c =>
-    Json.arr #[Json.str "destr", toJson r, Json.str name, jList producerToJson ps, toJson c]
+    Json.arr #[Json.str "destr", toJson r, Json.str name,
+      Json.arr (ps.attach.map fun ⟨p, hp⟩ => producerToJson p).toArray, toJson c]
+termination_by c => sizeOf c
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem hp) (by omega)
+    | exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem hb) (by omega)
 
-partial def statementToJson : Statement → Json
+def statementToJson : Statement → Json
   | .cut p c => Json.arr #[Json.str "cut", producerToJson p, toJson c]
   | .join r name c s => Json.arr #[Json.str "join", toJson r, toJson name, consumerToJson c, statementToJson s]
-  | .primitive r name ps c => Json.arr #[Json.str "prim", toJson r, Json.str name, jList producerToJson ps, toJson c]
+  | .primitive r name ps c =>
+    Json.arr #[Json.str "prim", toJson r, Json.str name,
+      Json.arr (ps.attach.map fun ⟨p, hp⟩ => producerToJson p).toArray, toJson c]
   | .invoke r name c => Json.arr #[Json.str "invoke", toJson r, toJson name, toJson c]
-  | .externalCall r name ps c => Json.arr #[Json.str "extern", toJson r, Json.str name, jList producerToJson ps, toJson c]
+  | .externalCall r name ps c =>
+    Json.arr #[Json.str "extern", toJson r, Json.str name,
+      Json.arr (ps.attach.map fun ⟨p, hp⟩ => producerToJson p).toArray, toJson c]
   | .binOp r op l rhs c => Json.arr #[Json.str "binop", toJson r, Json.str op, producerToJson l, producerToJson rhs, toJson c]
   | .ifz r cond t e => Json.arr #[Json.str "ifz", toJson r, producerToJson cond, statementToJson t, statementToJson e]
+termination_by s => sizeOf s
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem hp) (by omega)
 
-partial def branchToJson : Branch → Json
+def branchToJson : Branch → Json
   | .branch r pat s => Json.arr #[Json.str "branch", toJson r, patternToJson pat, statementToJson s]
+termination_by b => sizeOf b
 
 end
 

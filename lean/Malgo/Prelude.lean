@@ -187,6 +187,14 @@ theorem sizeOf_lt_of_mem_toList {α : Type} [SizeOf α] {x : α} {xs : NEList α
     | inl h => subst h; simp; omega
     | inr h => exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by simp)
 
+/-- Bounds the combined size of an `NEList`'s two projections — needed when
+a caller destructures `xs` into `xs.head`/`xs.tail` and hands both to a
+function whose own termination measure sums its two arguments. -/
+theorem sizeOf_head_add_tail_lt {α : Type} [SizeOf α] (xs : NEList α) :
+    sizeOf xs.head + sizeOf xs.tail < sizeOf xs := by
+  cases xs with
+  | mk head tail => simp
+
 /-- Replaces Haskell's `prettyprinter`-based `Pretty`. Rendering is plain
 `String`; layout combinators are introduced only if a golden demands them. -/
 class Pretty (α : Type u) where

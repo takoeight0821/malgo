@@ -1,3 +1,5 @@
+import Std.Data.TreeSet
+
 /-! Port of `src/Malgo/Prelude.hs`: source positions, ranges, the `Pretty`
 class, and the compiler-wide `Flag` record. The Haskell module is mostly
 re-exports; only the project-defined pieces are ported. -/
@@ -109,6 +111,108 @@ theorem mem_sortAssocAscending {κ α : Type} [Ord κ] {xs : List (κ × α)} {p
     cases mem_insertAssocAscending x (xs.foldr insertAssocAscending []) h with
     | inl h' => exact List.mem_cons.mpr (Or.inl h')
     | inr h' => exact List.mem_cons.mpr (Or.inr (ih h'))
+
+/-! ## `Std.TreeSet` size/membership helpers
+
+`Std.TreeSet`/`TreeMap` expose no direct "membership-subset implies size
+monotonicity" lemma (`s ⊆ t → s.size ≤ t.size`), and no `TreeSet`-level
+extensionality principle usable without `LawfulEqCmp` (which a key type
+like `ModuleName` can genuinely fail — two `ModuleName.artifact` values
+with the same `relPath` but different other `ArtifactPath` fields compare
+`.eq` without being `=`). Both facts below are derived purely from
+existing size/diff/inter identities (`isEmpty_diff_iff`,
+`size_diff_add_size_inter_eq_size_left`, `size_inter_le_size_right`,
+`size_erase`), so they need only `[Std.TransCmp cmp]`. -/
+
+theorem Std.TreeSet.size_le_of_forall_mem {α : Type} {cmp : α → α → Ordering}
+    [Std.TransCmp cmp] {s t : Std.TreeSet α cmp} (h : ∀ x, x ∈ s → x ∈ t) :
+    s.size ≤ t.size := by
+  have hempty : (s \ t).isEmpty = true := Std.TreeSet.isEmpty_diff_iff.mpr h
+  have hsize0 : (s \ t).size = 0 := by
+    have hb := Std.TreeSet.isEmpty_eq_size_eq_zero (t := s \ t)
+    rw [hempty] at hb
+    simpa using hb.symm
+  have heq := Std.TreeSet.size_diff_add_size_inter_eq_size_left (t₁ := s) (t₂ := t)
+  rw [hsize0, Nat.zero_add] at heq
+  calc s.size = (s ∩ t).size := heq.symm
+    _ ≤ t.size := Std.TreeSet.size_inter_le_size_right
+
+/-- Strict version: needed whenever a decreasing measure is a `TreeSet`
+size that must shrink by at least the one known witness `x`. -/
+theorem Std.TreeSet.size_lt_of_forall_mem_of_not_mem {α : Type} {cmp : α → α → Ordering}
+    [Std.TransCmp cmp] {s t : Std.TreeSet α cmp} {x : α}
+    (h : ∀ y, y ∈ s → y ∈ t) (hx : x ∈ t) (hxs : x ∉ s) :
+    s.size < t.size := by
+  have hle : s.size ≤ (t.erase x).size := by
+    apply Std.TreeSet.size_le_of_forall_mem
+    intro y hy
+    rw [Std.TreeSet.mem_erase]
+    refine ⟨?_, h y hy⟩
+    intro hceq
+    exact hxs ((Std.TreeSet.mem_congr hceq).mpr hy)
+  have hcontains : t.contains x = true := Std.TreeSet.mem_iff_contains.mp hx
+  have herase : (t.erase x).size < t.size := by
+    rw [Std.TreeSet.size_erase, if_pos hcontains]
+    have hpos : 0 < t.size := by
+      rcases Nat.eq_zero_or_pos t.size with h0 | hpos
+      · exfalso
+        have hempty : t.isEmpty = true := by
+          simp [Std.TreeSet.isEmpty_eq_size_eq_zero, h0]
+        rw [Std.TreeSet.isEmpty_iff_forall_not_mem] at hempty
+        exact hempty x hx
+      · exact hpos
+    omega
+  omega
+
+/-- Membership in a `cond`-filtered insert-`foldl` (the
+`depsOf.foldl (init:={}) fun s m ds => if cond m ds then s.insert m else
+s` shape `Query.Engine.reverseDepClosureGo` and similar passes build a
+result set with) implies membership in the seed set or a witness pair
+from the source list — analogous to `mem_sortAssocAscending` above, but
+for `Std.TreeMap.foldl`/`Std.TreeSet.insert` instead of `List`. -/
+theorem mem_foldl_filter_insert {α β : Type} {cmp : α → α → Ordering} [Std.TransCmp cmp]
+    (cond : α × β → Bool) (x : α) :
+    ∀ (xs : List (α × β)) (s0 : Std.TreeSet α cmp),
+      x ∈ xs.foldl (fun s p => if cond p then s.insert p.1 else s) s0 →
+      x ∈ s0 ∨ ∃ p ∈ xs, cond p = true ∧ cmp p.1 x = .eq
+  | [], s0, h => Or.inl h
+  | p :: rest, s0, h => by
+    simp only [List.foldl_cons] at h
+    rcases mem_foldl_filter_insert cond x rest _ h with h1 | h2
+    · by_cases hc : cond p = true
+      · simp only [hc, if_true] at h1
+        rw [Std.TreeSet.mem_insert] at h1
+        rcases h1 with h1 | h1
+        · exact Or.inr ⟨p, List.mem_cons_self .., hc, h1⟩
+        · exact Or.inl h1
+      · simp only [hc] at h1
+        exact Or.inl h1
+    · obtain ⟨q, hq, hqc, hqx⟩ := h2
+      exact Or.inr ⟨q, List.mem_cons_of_mem _ hq, hqc, hqx⟩
+
+theorem mem_foldl_insert_of_mem_init {α β : Type} {cmp : α → α → Ordering} [Std.TransCmp cmp] :
+    ∀ (xs : List (α × β)) (s0 : Std.TreeSet α cmp) (x : α), x ∈ s0 →
+      x ∈ xs.foldl (fun s p => s.insert p.1) s0
+  | [], s0, x, h => h
+  | p :: rest, s0, x, h => by
+    simp only [List.foldl_cons]
+    exact mem_foldl_insert_of_mem_init rest (s0.insert p.1) x
+      (by rw [Std.TreeSet.mem_insert]; exact Or.inr h)
+
+/-- Companion to `mem_foldl_filter_insert`: a plain (unfiltered)
+insert-`foldl` carries every key from its source list forward. -/
+theorem mem_foldl_insert_forward {α β : Type} {cmp : α → α → Ordering} [Std.TransCmp cmp]
+    (x : α) :
+    ∀ (xs : List (α × β)) (s0 : Std.TreeSet α cmp) (p : α × β), p ∈ xs → cmp p.1 x = .eq →
+      x ∈ xs.foldl (fun s p => s.insert p.1) s0
+  | p :: rest, s0, q, hq, heq => by
+    rcases List.mem_cons.mp hq with hq | hq
+    · simp only [List.foldl_cons]
+      apply mem_foldl_insert_of_mem_init rest (s0.insert p.1) x
+      rw [Std.TreeSet.mem_insert]
+      exact Or.inl (hq ▸ heq)
+    · simp only [List.foldl_cons]
+      exact mem_foldl_insert_forward x rest (s0.insert p.1) q hq heq
 
 /-! ## `sizeOf`/termination helpers
 

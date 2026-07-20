@@ -247,17 +247,148 @@ def updateSource (db : QueryDB) (modName : ModuleName) (path : System.FilePath) 
     IO Unit :=
   db.sourceMap.modify (·.insert modName (path, text))
 
+/-- Every key `depsOf` maps. `reverseDepClosureGo`'s `acc`/`frontier`/`next`
+sets are always drawn from this fixed universe, which is what makes
+termination provable: `acc`'s complement within it can only shrink. -/
+private def depsUniverse (depsOf : Std.TreeMap ModuleName (Std.TreeSet ModuleName)) :
+    Std.TreeSet ModuleName :=
+  depsOf.foldl (init := (∅ : Std.TreeSet ModuleName)) fun s m _ => s.insert m
+
+/-- One step of the reverse-dependency BFS: every module (other than
+`target`, not already in `acc`) whose own deps intersect `frontier`.
+Factored out of `reverseDepClosureGo` so its termination proof can name
+this computation directly instead of re-deriving it from an inline
+`let`. -/
+private def nextOf (depsOf : Std.TreeMap ModuleName (Std.TreeSet ModuleName))
+    (target : ModuleName) (acc frontier : Std.TreeSet ModuleName) : Std.TreeSet ModuleName :=
+  depsOf.foldl (init := (∅ : Std.TreeSet ModuleName)) fun s m ds =>
+    if m != target && !acc.contains m && ds.toList.any frontier.contains
+    then s.insert m else s
+
+private theorem mem_nextOf_elim (depsOf : Std.TreeMap ModuleName (Std.TreeSet ModuleName))
+    (target : ModuleName) (acc frontier : Std.TreeSet ModuleName) {x : ModuleName}
+    (hx : x ∈ nextOf depsOf target acc frontier) :
+    ∃ p ∈ depsOf.toList,
+      (p.1 != target && !acc.contains p.1 && p.2.toList.any frontier.contains) = true ∧
+        compare p.1 x = .eq := by
+  unfold nextOf at hx
+  rw [Std.TreeMap.foldl_eq_foldl_toList] at hx
+  rcases mem_foldl_filter_insert _ x depsOf.toList (∅ : Std.TreeSet ModuleName) hx with h1 | h2
+  · simp at h1
+  · exact h2
+
+/-- Every module `nextOf` adds is a key of `depsOf`, hence in
+`depsUniverse`. -/
+private theorem next_subset_universe (depsOf : Std.TreeMap ModuleName (Std.TreeSet ModuleName))
+    (target : ModuleName) (acc frontier : Std.TreeSet ModuleName) {x : ModuleName}
+    (hx : x ∈ nextOf depsOf target acc frontier) :
+    x ∈ depsUniverse depsOf := by
+  obtain ⟨p, hp, _hpc, hpx⟩ := mem_nextOf_elim depsOf target acc frontier hx
+  have hkey : p.1 ∈ depsUniverse depsOf := by
+    unfold depsUniverse
+    rw [Std.TreeMap.foldl_eq_foldl_toList]
+    exact mem_foldl_insert_forward p.1 depsOf.toList (∅ : Std.TreeSet ModuleName) p hp
+      Std.ReflCmp.compare_self
+  exact (Std.TreeSet.mem_congr hpx).mp hkey
+
+/-- Every module `nextOf` adds is disjoint from the current `acc` (the
+filter's own `!acc.contains m` guard). -/
+private theorem next_disjoint_acc (depsOf : Std.TreeMap ModuleName (Std.TreeSet ModuleName))
+    (target : ModuleName) (acc frontier : Std.TreeSet ModuleName) {x : ModuleName}
+    (hx : x ∈ nextOf depsOf target acc frontier) :
+    x ∉ acc := by
+  obtain ⟨p, _hp, hpc, hpx⟩ := mem_nextOf_elim depsOf target acc frontier hx
+  have hnc : ¬ acc.contains p.1 := by
+    have h := hpc
+    simp only [Bool.and_eq_true, Bool.not_eq_true'] at h
+    simp [h.1.2]
+  rw [Std.TreeSet.mem_iff_contains, ← Std.TreeSet.contains_congr hpx]
+  simpa using hnc
+
+/-- The decreasing measure `reverseDepClosureGo`'s termination proof
+needs: adding a nonempty, `acc`-disjoint `next` (drawn from the fixed
+`depsUniverse`) strictly shrinks `acc`'s complement within that universe.
+Built from `Std.TreeSet.size_lt_of_forall_mem_of_not_mem` (`Prelude.lean`)
+with `next`'s own witness element as the one known shrinking point. -/
+private theorem depsUniverse_diff_acc_union_next_lt
+    (depsOf : Std.TreeMap ModuleName (Std.TreeSet ModuleName))
+    (target : ModuleName) (acc frontier : Std.TreeSet ModuleName)
+    (hne : ¬ (nextOf depsOf target acc frontier).isEmpty) :
+    (depsUniverse depsOf \ (acc.union (nextOf depsOf target acc frontier))).size <
+      (depsUniverse depsOf \ acc).size := by
+  have hne' : (nextOf depsOf target acc frontier).isEmpty = false := by
+    cases h : (nextOf depsOf target acc frontier).isEmpty with
+    | true => exact absurd h hne
+    | false => rfl
+  obtain ⟨x, hxnext⟩ := Std.TreeSet.isEmpty_eq_false_iff_exists_mem.mp hne'
+  have hxu : x ∈ depsUniverse depsOf := next_subset_universe depsOf target acc frontier hxnext
+  have hxacc : x ∉ acc := next_disjoint_acc depsOf target acc frontier hxnext
+  have hxdiff : x ∈ depsUniverse depsOf \ acc := Std.TreeSet.mem_diff_iff.mpr ⟨hxu, hxacc⟩
+  refine Std.TreeSet.size_lt_of_forall_mem_of_not_mem
+    (s := depsUniverse depsOf \ (acc.union (nextOf depsOf target acc frontier)))
+    (t := depsUniverse depsOf \ acc) (x := x) ?_ hxdiff ?_
+  · intro y hy
+    rw [Std.TreeSet.mem_diff_iff] at hy ⊢
+    refine ⟨hy.1, ?_⟩
+    intro hyacc
+    exact hy.2 (Std.TreeSet.mem_union_of_left hyacc)
+  · rw [Std.TreeSet.mem_diff_iff]
+    intro hcon
+    exact hcon.2 (Std.TreeSet.mem_union_of_right hxnext)
+
 /-- Transitive set of modules depending on `target`, from a forward dep-edge
 map `M ↦ M's deps`. Excludes `target`. Pure — unit-testable without a
-populated `QueryDB` (port of `reverseDepClosure`). -/
-private partial def reverseDepClosureGo (depsOf : Std.TreeMap ModuleName (Std.TreeSet ModuleName))
+populated `QueryDB` (port of `reverseDepClosure`).
+
+Terminates because `depsUniverse depsOf \ acc` strictly shrinks whenever
+`nextOf` is nonempty (`depsUniverse_diff_acc_union_next_lt`), and
+`frontier.size` strictly shrinks to 0 on the one further step where
+`nextOf` is empty (`acc` unchanged, `frontier` becomes that empty
+`next`) — a lexicographic pair of the two. -/
+private def reverseDepClosureGo (depsOf : Std.TreeMap ModuleName (Std.TreeSet ModuleName))
     (target : ModuleName) (acc frontier : Std.TreeSet ModuleName) : Std.TreeSet ModuleName :=
   if frontier.isEmpty then acc
   else
-    let next : Std.TreeSet ModuleName := depsOf.foldl (init := {}) fun s m ds =>
-      if m != target && !acc.contains m && ds.toList.any frontier.contains
-      then s.insert m else s
+    let next := nextOf depsOf target acc frontier
     reverseDepClosureGo depsOf target (acc.union next) next
+termination_by ((depsUniverse depsOf \ acc).size, frontier.size)
+decreasing_by
+  rename_i hfrontier
+  simp only [Bool.not_eq_true] at hfrontier
+  cases hemp : (nextOf depsOf target acc frontier).isEmpty with
+  | false =>
+    apply Prod.Lex.left
+    exact depsUniverse_diff_acc_union_next_lt depsOf target acc frontier (by simp [hemp])
+  | true =>
+    have hle1 : (depsUniverse depsOf \ (acc.union (nextOf depsOf target acc frontier))).size ≤
+        (depsUniverse depsOf \ acc).size := by
+      apply Std.TreeSet.size_le_of_forall_mem
+      intro y hy
+      rw [Std.TreeSet.mem_diff_iff] at hy ⊢
+      exact ⟨hy.1, fun hcon => hy.2 (Std.TreeSet.mem_union_of_left hcon)⟩
+    have hle2 : (depsUniverse depsOf \ acc).size ≤
+        (depsUniverse depsOf \ (acc.union (nextOf depsOf target acc frontier))).size := by
+      apply Std.TreeSet.size_le_of_forall_mem
+      intro y hy
+      rw [Std.TreeSet.mem_diff_iff] at hy ⊢
+      refine ⟨hy.1, ?_⟩
+      intro hcon
+      rcases Std.TreeSet.mem_union_iff.mp hcon with hcon | hcon
+      · exact hy.2 hcon
+      · rw [Std.TreeSet.isEmpty_iff_forall_not_mem] at hemp
+        exact hemp y hcon
+    have heq : (depsUniverse depsOf \ (acc.union (nextOf depsOf target acc frontier))).size =
+        (depsUniverse depsOf \ acc).size := Nat.le_antisymm hle1 hle2
+    rw [heq]
+    apply Prod.Lex.right
+    have hnsize : (nextOf depsOf target acc frontier).size = 0 := by
+      rw [Std.TreeSet.isEmpty_eq_size_eq_zero] at hemp
+      simpa using hemp
+    have hfsize : frontier.size ≠ 0 := by
+      intro hz
+      rw [Std.TreeSet.isEmpty_eq_size_eq_zero, hz] at hfrontier
+      simp at hfrontier
+    omega
 
 def reverseDepClosure (depsOf : Std.TreeMap ModuleName (Std.TreeSet ModuleName))
     (target : ModuleName) : Std.TreeSet ModuleName :=

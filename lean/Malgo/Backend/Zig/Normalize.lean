@@ -33,7 +33,7 @@ private def substName (src tgt n : Name) : Name :=
 mutual
 
 /-- Substitute one `Name` for another throughout a `Statement`. -/
-partial def substStatement (src tgt : Name) : Statement → Statement
+def substStatement (src tgt : Name) : Statement → Statement
   | .cut p k => .cut (substProducer src tgt p) (substName src tgt k)
   -- `name` is a fresh binder here; it can never equal `src` because `src`
   -- was already bound (and eliminated) further out.
@@ -48,20 +48,32 @@ partial def substStatement (src tgt : Name) : Statement → Statement
     .binOp range op (substProducer src tgt lhs) (substProducer src tgt rhs) (substName src tgt k)
   | .ifz range cond t e =>
     .ifz range (substProducer src tgt cond) (substStatement src tgt t) (substStatement src tgt e)
+termination_by s => sizeOf s
 
-partial def substProducer (src tgt : Name) : Producer → Producer
+def substProducer (src tgt : Name) : Producer → Producer
   | .var range n => .var range (substName src tgt n)
   | .literal range lit => .literal range lit
   | .construct range tag ps ks =>
     .construct range tag (ps.map (substProducer src tgt)) (ks.map (substName src tgt))
   | .lambda range names stmt => .lambda range names (substStatement src tgt stmt)
   | .object range fields =>
-    .object range (fields.map (fun (k, ret, s) => (k, ret, substStatement src tgt s)))
+    .object range (fields.attach.map fun ⟨krs, hkrs⟩ =>
+      (krs.1, krs.2.1, substStatement src tgt krs.2.2))
   | .mu range name stmt => .mu range name (substStatement src tgt stmt)
   | .cocase range branches =>
-    .cocase range (branches.map (fun (d, vs, s) => (d, vs, substStatement src tgt s)))
+    .cocase range (branches.attach.map fun ⟨dvs, hdvs⟩ =>
+      (dvs.1, dvs.2.1, substStatement src tgt dvs.2.2))
+termination_by p => sizeOf p
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hkrs) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def substConsumer (src tgt : Name) : Consumer → Consumer
+def substConsumer (src tgt : Name) : Consumer → Consumer
   | .label range n => .label range (substName src tgt n)
   | .apply range ps ks =>
     .apply range (ps.map (substProducer src tgt)) (ks.map (substName src tgt))
@@ -71,9 +83,11 @@ partial def substConsumer (src tgt : Name) : Consumer → Consumer
   | .select range branches => .select range (branches.map (substBranch src tgt))
   | .destructor range name ps k =>
     .destructor range name (ps.map (substProducer src tgt)) (substName src tgt k)
+termination_by c => sizeOf c
 
-partial def substBranch (src tgt : Name) : Branch → Branch
+def substBranch (src tgt : Name) : Branch → Branch
   | .branch range pat stmt => .branch range pat (substStatement src tgt stmt)
+termination_by b => sizeOf b
 
 end
 

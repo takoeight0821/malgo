@@ -84,7 +84,7 @@ def lcsPath (eq : α → α → Bool) (as bs : List α) : List DI :=
     | _, _ => false
   lcsLoop cd lena lenb [addsnake cd ⟨0, 0, []⟩]
 
-private partial def markup (eq : α → α → Bool) :
+private def markup (eq : α → α → Bool) :
     List α → List α → List DI → List (PolyDiff α α)
   | x :: xs, y :: ys, ds =>
     if eq x y then PolyDiff.both x y :: markup eq xs ys ds
@@ -102,28 +102,67 @@ def getDiffBy (eq : α → α → Bool) (as bs : List α) : List (PolyDiff α α
 def getDiff [BEq α] (as bs : List α) : List (PolyDiff α α) :=
   getDiffBy (· == ·) as bs
 
-private partial def goFirsts : List (PolyDiff α α) → List α × List (PolyDiff α α)
+private def goFirsts : List (PolyDiff α α) → List α × List (PolyDiff α α)
   | PolyDiff.first x :: xs => let (fs, rest) := goFirsts xs; (x :: fs, rest)
   | xs => ([], xs)
 
-private partial def goSeconds : List (PolyDiff α α) → List α × List (PolyDiff α α)
+private def goSeconds : List (PolyDiff α α) → List α × List (PolyDiff α α)
   | PolyDiff.second x :: xs => let (fs, rest) := goSeconds xs; (x :: fs, rest)
   | xs => ([], xs)
 
-private partial def goBoth : List (PolyDiff α α) → List (α × α) × List (PolyDiff α α)
+private def goBoth : List (PolyDiff α α) → List (α × α) × List (PolyDiff α α)
   | PolyDiff.both x y :: xs => let (fs, rest) := goBoth xs; ((x, y) :: fs, rest)
   | xs => ([], xs)
 
-private partial def groupGo : List (PolyDiff α α) → List (PolyDiff (List α) (List α))
+/-- `goFirsts` only ever peels a `first`-tagged prefix off the front and
+returns the untouched remainder — its second component is never bigger
+than the input. Termination-only helper for `groupGo`. -/
+private theorem goFirsts_snd_sizeOf_le : (xs : List (PolyDiff α α)) → sizeOf (goFirsts xs).2 ≤ sizeOf xs
+  | [] => by simp [goFirsts]
+  | .first _ :: xs => by
+    simp only [goFirsts]
+    have := goFirsts_snd_sizeOf_le xs
+    simp_wf
+    omega
+  | .second _ :: _ => by simp [goFirsts]
+  | .both _ _ :: _ => by simp [goFirsts]
+
+private theorem goSeconds_snd_sizeOf_le : (xs : List (PolyDiff α α)) → sizeOf (goSeconds xs).2 ≤ sizeOf xs
+  | [] => by simp [goSeconds]
+  | .first _ :: _ => by simp [goSeconds]
+  | .second _ :: xs => by
+    simp only [goSeconds]
+    have := goSeconds_snd_sizeOf_le xs
+    simp_wf
+    omega
+  | .both _ _ :: _ => by simp [goSeconds]
+
+private theorem goBoth_snd_sizeOf_le : (xs : List (PolyDiff α α)) → sizeOf (goBoth xs).2 ≤ sizeOf xs
+  | [] => by simp [goBoth]
+  | .first _ :: _ => by simp [goBoth]
+  | .second _ :: _ => by simp [goBoth]
+  | .both _ _ :: xs => by
+    simp only [goBoth]
+    have := goBoth_snd_sizeOf_le xs
+    simp_wf
+    omega
+
+private def groupGo : List (PolyDiff α α) → List (PolyDiff (List α) (List α))
   | PolyDiff.first x :: xs =>
-    let (fs, rest) := goFirsts xs; PolyDiff.first (x :: fs) :: groupGo rest
+    PolyDiff.first (x :: (goFirsts xs).1) :: groupGo (goFirsts xs).2
   | PolyDiff.second x :: xs =>
-    let (fs, rest) := goSeconds xs; PolyDiff.second (x :: fs) :: groupGo rest
+    PolyDiff.second (x :: (goSeconds xs).1) :: groupGo (goSeconds xs).2
   | PolyDiff.both x y :: xs =>
-    let (fs, rest) := goBoth xs
-    let (fxs, fys) := fs.unzip
-    PolyDiff.both (x :: fxs) (y :: fys) :: groupGo rest
+    let (fxs, fys) := (goBoth xs).1.unzip
+    PolyDiff.both (x :: fxs) (y :: fys) :: groupGo (goBoth xs).2
   | [] => []
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_le_of_lt (goFirsts_snd_sizeOf_le xs) (by omega)
+    | exact Nat.lt_of_le_of_lt (goSeconds_snd_sizeOf_le xs) (by omega)
+    | exact Nat.lt_of_le_of_lt (goBoth_snd_sizeOf_le xs) (by omega)
 
 def getGroupedDiffBy (eq : α → α → Bool) (as bs : List α) :
     List (PolyDiff (List α) (List α)) :=
@@ -271,7 +310,7 @@ private def pairLines (bs as : List String) : List (LineTag × List Span) :=
     ++ bTail.map (fun l => (LineTag.removed, [⟨.removed, l⟩]))
     ++ aTail.map (fun l => (LineTag.added, [⟨.added, l⟩]))
 
-private partial def pairedGo :
+private def pairedGo :
     List (PolyDiff (List String) (List String)) → List (LineTag × List Span)
   | [] => []
   | .both bs _ :: rest =>
@@ -317,7 +356,7 @@ private def pairRows (bs as : List String) : List SideBySideRow :=
     ++ bTail.map (fun l => ⟨some .removed, some [⟨.removed, l⟩], none, none⟩)
     ++ aTail.map (fun l => ⟨none, none, some .added, some [⟨.added, l⟩]⟩)
 
-private partial def sbsGo :
+private def sbsGo :
     List (PolyDiff (List String) (List String)) → List SideBySideRow
   | [] => []
   | .both bs _ :: rest =>

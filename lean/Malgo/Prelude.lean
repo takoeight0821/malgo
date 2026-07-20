@@ -69,6 +69,47 @@ Lean (a `Std.TreeMap` cannot nest inside a recursive inductive). -/
 def sortAssocAscending [Ord κ] (xs : List (κ × α)) : List (κ × α) :=
   xs.foldr insertAssocAscending []
 
+private theorem mem_insertAssocAscending {κ α : Type} [Ord κ] (x : κ × α) :
+    ∀ (ys : List (κ × α)) {y}, y ∈ insertAssocAscending x ys → y = x ∨ y ∈ ys
+  | [], y, h => by
+    simp only [insertAssocAscending, List.mem_singleton] at h
+    exact Or.inl h
+  | y' :: ys, y, h => by
+    simp only [insertAssocAscending] at h
+    cases hc : compare x.1 y'.1 with
+    | gt =>
+      rw [hc] at h
+      cases h with
+      | head => exact Or.inr (List.mem_cons.mpr (Or.inl rfl))
+      | tail _ h =>
+        cases mem_insertAssocAscending x ys h with
+        | inl h' => exact Or.inl h'
+        | inr h' => exact Or.inr (List.mem_cons.mpr (Or.inr h'))
+    | eq =>
+      rw [hc] at h
+      cases h with
+      | head => exact Or.inr (List.mem_cons.mpr (Or.inl rfl))
+      | tail _ h => exact Or.inr (List.mem_cons.mpr (Or.inr h))
+    | lt =>
+      rw [hc] at h
+      cases h with
+      | head => exact Or.inl rfl
+      | tail _ h => exact Or.inr h
+
+/-- `sortAssocAscending` only ever keeps or drops elements of its input
+(dropping shadowed duplicate keys) — it never invents a new pair. Lets a
+termination proof recurse into a `sortAssocAscending`-filtered field
+exactly as if it had recursed into the field directly. -/
+theorem mem_sortAssocAscending {κ α : Type} [Ord κ] {xs : List (κ × α)} {p : κ × α}
+    (h : p ∈ sortAssocAscending xs) : p ∈ xs := by
+  induction xs with
+  | nil => simp [sortAssocAscending] at h
+  | cons x xs ih =>
+    simp only [sortAssocAscending, List.foldr_cons] at h
+    cases mem_insertAssocAscending x (xs.foldr insertAssocAscending []) h with
+    | inl h' => exact List.mem_cons.mpr (Or.inl h')
+    | inr h' => exact List.mem_cons.mpr (Or.inr (ih h'))
+
 /-- Haskell `Data.List.NonEmpty`. -/
 structure NEList (α : Type u) where
   head : α

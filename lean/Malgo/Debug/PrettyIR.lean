@@ -104,12 +104,67 @@ def blockLines : List Doc → Doc
 def hangEq (pre body : Doc) : Doc :=
   group (pre <+> atom "=" ++ nest 2 (line ++ body))
 
-partial def renderPattern : Fun.Pattern → Doc
+/-- Termination helper: a pair's second component is never bigger than the
+pair itself. Building block for justifying recursion into the value half
+of `(String × _)`/`(String × _ × _)` fields below (every IR's `object`/
+`record`/`variant`/`cocase`-style named-fields list), composed via
+`Nat.le_trans` for triples. -/
+private theorem sizeOf_snd_le {α β : Type} [SizeOf α] [SizeOf β] (p : α × β) :
+    sizeOf p.snd ≤ sizeOf p := by
+  cases p with
+  | mk a b => simp
+
+private theorem sizeOf_snd_lt_of_mem {α β : Type} [SizeOf α] [SizeOf β] {p : α × β}
+    {l : List (α × β)} (h : p ∈ l) : sizeOf p.snd < sizeOf l :=
+  Nat.lt_of_le_of_lt (sizeOf_snd_le p) (List.sizeOf_lt_of_mem h)
+
+private theorem sizeOf_snd_snd_lt_of_mem {α β γ : Type} [SizeOf α] [SizeOf β] [SizeOf γ]
+    {p : α × β × γ} {l : List (α × β × γ)} (h : p ∈ l) : sizeOf p.2.2 < sizeOf l :=
+  Nat.lt_of_le_of_lt (Nat.le_trans (sizeOf_snd_le p.2) (sizeOf_snd_le p)) (List.sizeOf_lt_of_mem h)
+
+private theorem sizeOf_fst_le {α β : Type} [SizeOf α] [SizeOf β] (p : α × β) :
+    sizeOf p.fst ≤ sizeOf p := by
+  cases p with
+  | mk a b => simp <;> omega
+
+private theorem sizeOf_fst_lt_of_mem {α β : Type} [SizeOf α] [SizeOf β] {p : α × β}
+    {l : List (α × β)} (h : p ∈ l) : sizeOf p.fst < sizeOf l :=
+  Nat.lt_of_le_of_lt (sizeOf_fst_le p) (List.sizeOf_lt_of_mem h)
+
+/-- Two-level version of `sizeOf_snd_lt_of_mem`: for a doubly-nested field
+like `variant`'s `List (String × List (Ty p))`, bounds an element of the
+INNER list against the OUTER list's size. -/
+private theorem sizeOf_lt_of_mem_snd_of_mem {α γ : Type} [SizeOf α] [SizeOf γ]
+    {x : γ} {p : α × List γ} {l : List (α × List γ)} (hx : x ∈ p.snd) (hp : p ∈ l) :
+    sizeOf x < sizeOf l :=
+  Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem hx) (Nat.le_trans (sizeOf_snd_le p) (Nat.le_of_lt (List.sizeOf_lt_of_mem hp)))
+
+/-- `NEList.toList`'s recursion target — every element is either the head
+or in the tail, both strictly smaller than the whole `NEList`. Needed since
+`renderExprSyn`'s `.fn`/`.seq` cases recurse via `cs.toList.map _`. -/
+private theorem sizeOf_lt_of_mem_toList {α : Type} [SizeOf α] {x : α} {xs : NEList α}
+    (h : x ∈ xs.toList) : sizeOf x < sizeOf xs := by
+  cases xs with
+  | mk head tail =>
+    simp only [NEList.toList, List.mem_cons] at h
+    cases h with
+    | inl h => subst h; simp; omega
+    | inr h => exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by simp)
+
+def renderPattern : Fun.Pattern → Doc
   | .pvar _ name => renderName name
   | .pliteral _ lit => renderLit lit
   | .destruct _ tag pats => renderTag tag ++ renderArgs (pats.map renderPattern)
   | .expand _ fields =>
-    braceList ((sortAssocAscending fields).map fun (k, v) => fromString k <+> atom "=" <+> renderPattern v)
+    braceList ((sortAssocAscending fields).attach.map fun ⟨kv, hkv⟩ =>
+      fromString kv.1 <+> atom "=" <+> renderPattern kv.2)
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem (mem_sortAssocAscending hkv)) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
 /-- One blank line between each top-level definition. -/
 def renderDefs (ds : List Doc) : String :=
@@ -119,7 +174,7 @@ def renderDefs (ds : List Doc) : String :=
 
 mutual
 
-partial def renderExpr : Fun.Expr → Doc
+def renderExpr : Fun.Expr → Doc
   | .var _ name => renderName name
   | .literal _ lit => renderLit lit
   | .construct _ tag args => renderTag tag ++ renderArgs (args.map renderExpr)
@@ -130,7 +185,8 @@ partial def renderExpr : Fun.Expr → Doc
   | .lambda _ params body =>
     group (atom "\\" ++ hsep (params.map renderName) <+> atom "->" ++ nest 2 (line ++ renderExpr body))
   | .object _ fields =>
-    braceList ((sortAssocAscending fields).map fun (k, v) => fromString k <+> atom "=" <+> renderExpr v)
+    braceList ((sortAssocAscending fields).attach.map fun ⟨kv, hkv⟩ =>
+      fromString kv.1 <+> atom "=" <+> renderExpr kv.2)
   | .apply _ callee args => renderExpr callee ++ renderArgs (args.map renderExpr)
   | .project _ callee field => renderExpr callee ++ atom "." ++ fromString field
   | .primitive _ op args => atom "#" ++ fromString op ++ renderArgs (args.map renderExpr)
@@ -138,9 +194,18 @@ partial def renderExpr : Fun.Expr → Doc
     atom "case" <+> renderExpr scrutinee <+> atom "of" <+> blockLines (branches.map renderBranch)
   | .invoke _ name => atom "invoke" <+> renderName name
   | .fix _ name body => hangEq (atom "fix" <+> renderName name) (renderExpr body)
+termination_by e => sizeOf e
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem (mem_sortAssocAscending hkv)) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderBranch : Fun.Branch → Doc
+def renderBranch : Fun.Branch → Doc
   | .branch _ pat body => group (renderPattern pat <+> atom "->" ++ nest 2 (line ++ renderExpr body))
+termination_by b => sizeOf b
 
 end
 
@@ -151,7 +216,7 @@ def renderFun (p : Fun.Program) : String :=
 
 mutual
 
-partial def renderFullStmt : Full.Statement → Doc
+def renderFullStmt : Full.Statement → Doc
   | .cut p c => renderFullProd p <+> atom "~" <+> renderFullCons c
   | .primitive _ name ps c =>
     atom "#" ++ fromString name ++ renderArgs (ps.map renderFullProd) <+> atom "~" <+> renderFullCons c
@@ -162,23 +227,39 @@ partial def renderFullStmt : Full.Statement → Doc
     parens (renderFullProd l <+> fromString op <+> renderFullProd r) <+> atom "~" <+> renderFullCons c
   | .ifz _ cond t e =>
     atom "if0" <+> renderFullProd cond <+> atom "then" <+> block (renderFullStmt t) <+> atom "else" <+> block (renderFullStmt e)
+termination_by s => sizeOf s
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderFullProd : Full.Producer → Doc
+def renderFullProd : Full.Producer → Doc
   | .var _ name => renderName name
   | .literal _ lit => renderLit lit
   | .construct _ tag ps cs => renderTag tag ++ renderArgs ((ps.map renderFullProd) ++ (cs.map renderFullCons))
   | .lambda _ params stmt =>
     group (atom "\\" ++ hsep (params.map renderName) <+> atom "." <+> block (renderFullStmt stmt))
   | .object _ fields =>
-    braceList ((sortAssocAscending fields).map fun (k, ret, stmt) =>
-      fromString k ++ renderArgs [renderName ret] <+> atom "=" <+> block (renderFullStmt stmt))
+    braceList ((sortAssocAscending fields).attach.map fun ⟨krs, hkrs⟩ =>
+      fromString krs.1 ++ renderArgs [renderName krs.2.1] <+> atom "=" <+> block (renderFullStmt krs.2.2))
   | .«do» _ name stmt => atom "do" <+> renderName name <+> atom "." <+> block (renderFullStmt stmt)
   | .mu _ name stmt => atom "mu" <+> renderName name <+> atom "." <+> block (renderFullStmt stmt)
   | .cocase _ branches =>
-    atom "cocase" <+> blockLines (branches.map fun (d, vs, s) =>
-      group (atom "." ++ fromString d ++ renderArgs (vs.map renderName) <+> atom "->" ++ nest 2 (line ++ renderFullStmt s)))
+    atom "cocase" <+> blockLines (branches.attach.map fun ⟨dvs, hdvs⟩ =>
+      group (atom "." ++ fromString dvs.1 ++ renderArgs (dvs.2.1.map renderName) <+> atom "->" ++ nest 2 (line ++ renderFullStmt dvs.2.2)))
+termination_by p => sizeOf p
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem (mem_sortAssocAscending hkrs)) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderFullCons : Full.Consumer → Doc
+def renderFullCons : Full.Consumer → Doc
   | .label _ name => renderName name
   | .apply _ ps cs => renderArgs ((ps.map renderFullProd) ++ (cs.map renderFullCons))
   | .project _ field c => atom "." ++ fromString field <+> atom "->" <+> renderFullCons c
@@ -187,9 +268,17 @@ partial def renderFullCons : Full.Consumer → Doc
   | .select _ branches => atom "select" <+> blockLines (branches.map renderFullBranch)
   | .destructor _ name ps c =>
     atom "." ++ fromString name ++ renderArgs (ps.map renderFullProd) <+> atom "->" <+> renderFullCons c
+termination_by c => sizeOf c
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderFullBranch : Full.Branch → Doc
+def renderFullBranch : Full.Branch → Doc
   | .branch _ pat stmt => group (renderPattern pat <+> atom "->" ++ nest 2 (line ++ renderFullStmt stmt))
+termination_by b => sizeOf b
 
 end
 
@@ -201,7 +290,7 @@ def renderCoreFull (p : Full.Program) : String :=
 
 mutual
 
-partial def renderFlatStmt : Flat.Statement → Doc
+def renderFlatStmt : Flat.Statement → Doc
   | .cut p c => renderFlatProd p <+> atom "~" <+> renderFlatCons c
   | .join _ name c s =>
     group (atom "join" <+> renderName name <+> atom "=" <+> renderFlatCons c) ++ line ++ atom "in" <+> renderFlatStmt s
@@ -214,22 +303,38 @@ partial def renderFlatStmt : Flat.Statement → Doc
     parens (renderFlatProd l <+> fromString op <+> renderFlatProd r) <+> atom "~" <+> renderFlatCons c
   | .ifz _ cond t e =>
     atom "if0" <+> renderFlatProd cond <+> atom "then" <+> block (renderFlatStmt t) <+> atom "else" <+> block (renderFlatStmt e)
+termination_by s => sizeOf s
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderFlatProd : Flat.Producer → Doc
+def renderFlatProd : Flat.Producer → Doc
   | .var _ name => renderName name
   | .literal _ lit => renderLit lit
   | .construct _ tag ps cs => renderTag tag ++ renderArgs ((ps.map renderFlatProd) ++ (cs.map renderFlatCons))
   | .lambda _ params stmt =>
     group (atom "\\" ++ hsep (params.map renderName) <+> atom "." <+> block (renderFlatStmt stmt))
   | .object _ fields =>
-    braceList ((sortAssocAscending fields).map fun (k, ret, stmt) =>
-      fromString k ++ renderArgs [renderName ret] <+> atom "=" <+> block (renderFlatStmt stmt))
+    braceList ((sortAssocAscending fields).attach.map fun ⟨krs, hkrs⟩ =>
+      fromString krs.1 ++ renderArgs [renderName krs.2.1] <+> atom "=" <+> block (renderFlatStmt krs.2.2))
   | .mu _ name stmt => atom "mu" <+> renderName name <+> atom "." <+> block (renderFlatStmt stmt)
   | .cocase _ branches =>
-    atom "cocase" <+> blockLines (branches.map fun (d, vs, s) =>
-      group (atom "." ++ fromString d ++ renderArgs (vs.map renderName) <+> atom "->" ++ nest 2 (line ++ renderFlatStmt s)))
+    atom "cocase" <+> blockLines (branches.attach.map fun ⟨dvs, hdvs⟩ =>
+      group (atom "." ++ fromString dvs.1 ++ renderArgs (dvs.2.1.map renderName) <+> atom "->" ++ nest 2 (line ++ renderFlatStmt dvs.2.2)))
+termination_by p => sizeOf p
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem (mem_sortAssocAscending hkrs)) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderFlatCons : Flat.Consumer → Doc
+def renderFlatCons : Flat.Consumer → Doc
   | .label _ name => renderName name
   | .apply _ ps cs => renderArgs ((ps.map renderFlatProd) ++ (cs.map renderFlatCons))
   | .project _ field c => atom "." ++ fromString field <+> atom "->" <+> renderFlatCons c
@@ -238,9 +343,17 @@ partial def renderFlatCons : Flat.Consumer → Doc
   | .select _ branches => atom "select" <+> blockLines (branches.map renderFlatBranch)
   | .destructor _ name ps c =>
     atom "." ++ fromString name ++ renderArgs (ps.map renderFlatProd) <+> atom "->" <+> renderFlatCons c
+termination_by c => sizeOf c
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderFlatBranch : Flat.Branch → Doc
+def renderFlatBranch : Flat.Branch → Doc
   | .branch _ pat stmt => group (renderPattern pat <+> atom "->" ++ nest 2 (line ++ renderFlatStmt stmt))
+termination_by b => sizeOf b
 
 end
 
@@ -252,7 +365,7 @@ def renderFlat (p : Flat.Program) : String :=
 
 mutual
 
-partial def renderJoinStmt : Join.Statement → Doc
+def renderJoinStmt : Join.Statement → Doc
   | .cut p ret => renderJoinProd p <+> atom "~" <+> renderName ret
   | .join _ name c s =>
     group (atom "join" <+> renderName name <+> atom "=" <+> renderJoinCons c) ++ line ++ atom "in" <+> renderJoinStmt s
@@ -265,22 +378,38 @@ partial def renderJoinStmt : Join.Statement → Doc
     parens (renderJoinProd l <+> fromString op <+> renderJoinProd r) <+> atom "~" <+> renderName ret
   | .ifz _ cond t e =>
     atom "if0" <+> renderJoinProd cond <+> atom "then" <+> block (renderJoinStmt t) <+> atom "else" <+> block (renderJoinStmt e)
+termination_by s => sizeOf s
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderJoinProd : Join.Producer → Doc
+def renderJoinProd : Join.Producer → Doc
   | .var _ name => renderName name
   | .literal _ lit => renderLit lit
   | .construct _ tag ps rets => renderTag tag ++ renderArgs ((ps.map renderJoinProd) ++ (rets.map renderName))
   | .lambda _ params stmt =>
     group (atom "\\" ++ hsep (params.map renderName) <+> atom "." <+> block (renderJoinStmt stmt))
   | .object _ fields =>
-    braceList ((sortAssocAscending fields).map fun (k, ret, stmt) =>
-      fromString k ++ renderArgs [renderName ret] <+> atom "=" <+> block (renderJoinStmt stmt))
+    braceList ((sortAssocAscending fields).attach.map fun ⟨krs, hkrs⟩ =>
+      fromString krs.1 ++ renderArgs [renderName krs.2.1] <+> atom "=" <+> block (renderJoinStmt krs.2.2))
   | .mu _ name stmt => atom "mu" <+> renderName name <+> atom "." <+> block (renderJoinStmt stmt)
   | .cocase _ branches =>
-    atom "cocase" <+> blockLines (branches.map fun (d, vs, s) =>
-      group (atom "." ++ fromString d ++ renderArgs (vs.map renderName) <+> atom "->" ++ nest 2 (line ++ renderJoinStmt s)))
+    atom "cocase" <+> blockLines (branches.attach.map fun ⟨dvs, hdvs⟩ =>
+      group (atom "." ++ fromString dvs.1 ++ renderArgs (dvs.2.1.map renderName) <+> atom "->" ++ nest 2 (line ++ renderJoinStmt dvs.2.2)))
+termination_by p => sizeOf p
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem (mem_sortAssocAscending hkrs)) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderJoinCons : Join.Consumer → Doc
+def renderJoinCons : Join.Consumer → Doc
   | .label _ name => renderName name
   | .apply _ ps rets => renderArgs ((ps.map renderJoinProd) ++ (rets.map renderName))
   | .project _ field ret => atom "." ++ fromString field <+> atom "->" <+> renderName ret
@@ -289,9 +418,17 @@ partial def renderJoinCons : Join.Consumer → Doc
   | .select _ branches => atom "select" <+> blockLines (branches.map renderJoinBranch)
   | .destructor _ name ps ret =>
     atom "." ++ fromString name ++ renderArgs (ps.map renderJoinProd) <+> atom "->" <+> renderName ret
+termination_by c => sizeOf c
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderJoinBranch : Join.Branch → Doc
+def renderJoinBranch : Join.Branch → Doc
   | .branch _ pat stmt => group (renderPattern pat <+> atom "->" ++ nest 2 (line ++ renderJoinStmt stmt))
+termination_by b => sizeOf b
 
 end
 
@@ -301,7 +438,7 @@ def renderJoin (p : Join.Program) : String :=
 
 /-! ## Zig backend ANF IR -/
 
-partial def renderPath : Ir.Path → Doc
+def renderPath : Ir.Path → Doc
   | .root n => renderName n
   | .field p i => renderPath p ++ atom "." ++ atom (toString i)
 
@@ -337,10 +474,10 @@ def renderStmt : Ir.Stmt → Doc
 
 mutual
 
-partial def renderBlock : Ir.Block → Doc
+def renderBlock : Ir.Block → Doc
   | .mk stmts term => vsepHard ((stmts.map renderStmt) ++ [renderTerm term])
 
-partial def renderTerm : Ir.Terminator → Doc
+def renderTerm : Ir.Terminator → Doc
   | .applyCo k v => atom "return" <+> renderName k ++ renderArgs [renderName v]
   | .callClosure f args => atom "return" <+> renderName f ++ renderArgs (args.map renderName)
   | .staticCall fn args => atom "return" <+> renderName fn ++ renderArgs (args.map renderName)
@@ -396,65 +533,108 @@ def renderImport (m : ModuleName) (importList : Syntax.ImportList) : Doc :=
 
 mutual
 
-partial def renderExprSyn {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.Expr p → Doc
+def renderExprSyn {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.Expr p → Doc
   | .var _ id => renderId id
   | .unboxed _ l => renderSynLit l
   | .boxed _ l => renderSynLit l
   | .apply _ e1 e2 => renderExprSyn e1 ++ renderArgs [renderExprSyn e2]
   | .opApp _ op e1 e2 => renderExprSyn e1 <+> renderId op <+> renderExprSyn e2
   | .project _ e k => renderExprSyn e ++ atom "." ++ fromString k
-  | .fn _ cs => atom "fn" <+> blockLines (punctuate (atom " |") (cs.toList.map renderClause))
+  | .fn _ cs =>
+    atom "fn" <+> blockLines (punctuate (atom " |") (cs.toList.attach.map fun ⟨c, hc⟩ => renderClause c))
   | .tuple _ es => renderArgs (es.map renderExprSyn)
-  | .record _ kvs => braceList (kvs.map fun (k, v) => fromString k <+> atom "=" <+> renderExprSyn v)
+  | .record _ kvs =>
+    braceList (kvs.attach.map fun ⟨kv, hkv⟩ => fromString kv.1 <+> atom "=" <+> renderExprSyn kv.2)
   | .list _ es => list (es.map renderExprSyn)
   | .ann _ e t => renderExprSyn e <+> atom ":" <+> renderType t
-  | .seq _ ss => blockLines (ss.toList.map renderStmtSyn)
+  | .seq _ ss => blockLines (ss.toList.attach.map fun ⟨s, hs⟩ => renderStmtSyn s)
   | .parens _ e => parens (renderExprSyn e)
   | .codata _ clauses =>
-    atom "codata" <+> blockLines (clauses.map fun (cp, e) =>
-      group (renderCoPat cp <+> atom "->" ++ nest 2 (line ++ renderExprSyn e)))
+    atom "codata" <+> blockLines (clauses.attach.map fun ⟨ce, hce⟩ =>
+      group (renderCoPat ce.1 <+> atom "->" ++ nest 2 (line ++ renderExprSyn ce.2)))
   | .label _ name body => atom "label" <+> renderId name <+> atom "." <+> renderExprSyn body
   | .goto _ value label => atom "goto" <+> renderExprSyn value <+> renderExprSyn label
+termination_by e => sizeOf e
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hkv) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_fst_lt_of_mem hce) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hce) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_lt_of_mem_toList hc) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_lt_of_mem_toList hs) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderType {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.Ty p → Doc
+def renderType {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.Ty p → Doc
   | .app _ t ts => renderType t ++ renderArgs (ts.map renderType)
   | .var _ v => renderId v
   | .con _ c => renderId c
   | .arr _ t1 t2 => renderType t1 <+> atom "->" <+> renderType t2
   | .tuple _ ts => renderArgs (ts.map renderType)
   | .record _ kvs rowTail =>
-    braceList ((kvs.map fun (k, v) => fromString k <+> atom ":" <+> renderType v) ++
+    braceList ((kvs.attach.map fun ⟨kv, hkv⟩ => fromString kv.1 <+> atom ":" <+> renderType kv.2) ++
       (match rowTail with | some r => [atom "|" <+> renderType r] | none => []))
   | .block _ t => block (renderType t)
   | .bottom _ => atom "!"
   | .tilde _ t => atom "~" ++ renderType t
   | .variant _ cases rowTail =>
-    list ((cases.map fun (k, ts) => fromString k ++ renderArgs (ts.map renderType)) ++
+    list ((cases.attach.map fun ⟨kts, hkts⟩ =>
+        fromString kts.1 ++ renderArgs (kts.2.attach.map fun ⟨t, ht⟩ => renderType t)) ++
       (match rowTail with | some r => [atom "|" <+> renderType r] | none => []))
+termination_by t => sizeOf t
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hkv) (by omega)
+    | exact Nat.lt_of_lt_of_le (sizeOf_lt_of_mem_snd_of_mem ht hkts) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderStmtSyn {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.Stmt p → Doc
+def renderStmtSyn {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.Stmt p → Doc
   | .letS _ var body => hangEq (atom "let" <+> renderId var) (renderExprSyn body)
   | .letPS _ pat body => hangEq (atom "let" <+> renderPat pat) (renderExprSyn body)
   | .withS _ none body => atom "with" <+> renderExprSyn body
   | .withS _ (some var) body => hangEq (atom "with" <+> renderId var) (renderExprSyn body)
   | .noBind _ body => renderExprSyn body
+termination_by s => sizeOf s
 
-partial def renderClause {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.Clause p → Doc
-  | .mk _ pats body => group (hsep (pats.toList.map renderPat) <+> atom "->" ++ nest 2 (line ++ renderExprSyn body))
+def renderClause {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.Clause p → Doc
+  | .mk _ pats body =>
+    group (hsep (pats.toList.attach.map fun ⟨pt, hpt⟩ => renderPat pt) <+> atom "->" ++
+      nest 2 (line ++ renderExprSyn body))
+termination_by c => sizeOf c
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_lt_of_mem_toList hpt) (by omega)
 
-partial def renderPat {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.Pat p → Doc
+def renderPat {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.Pat p → Doc
   | .var _ id => renderId id
   | .con _ id ps => renderId id ++ renderArgs (ps.map renderPat)
   | .tuple _ ps => renderArgs (ps.map renderPat)
-  | .record _ kps => braceList (kps.map fun (k, pt) => fromString k <+> atom "=" <+> renderPat pt)
+  | .record _ kps =>
+    braceList (kps.attach.map fun ⟨kp, hkp⟩ => fromString kp.1 <+> atom "=" <+> renderPat kp.2)
   | .list _ ps => list (ps.map renderPat)
   | .unboxed _ l => renderSynLit l
   | .boxed _ l => renderSynLit l
+termination_by pt => sizeOf pt
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hkp) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def renderCoPat {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.CoPat p → Doc
+def renderCoPat {p : Syntax.Phase} [RenderId (Syntax.XId p)] : Syntax.CoPat p → Doc
   | .hole _ => atom "#"
   | .apply _ cp pt => renderCoPat cp ++ renderArgs [renderPat pt]
   | .project _ cp field => renderCoPat cp ++ atom "." ++ fromString field
+termination_by cp => sizeOf cp
 
 end
 

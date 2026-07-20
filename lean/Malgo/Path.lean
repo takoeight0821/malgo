@@ -25,6 +25,14 @@ instance : BEq (Path b t) := ⟨fun a b => a.toFilePath == b.toFilePath⟩
 
 instance : Ord (Path b t) := ⟨fun a b => compare a.toFilePath.toString b.toFilePath.toString⟩
 
+/-- `Path`'s `Ord` is exactly `compareOn (·.toFilePath.toString)`, so its
+`Std.TransCmp` proof obligations are inherited for free from `String`'s
+(via `Std`'s generic "compare via a projection" combinator) — riding on
+this unblocks any `Std.TreeMap`/`TreeSet` proof keyed by `Path`,
+`ArtifactPath`, or (transitively) `ModuleName`. -/
+instance : Std.TransOrd (Path b t) :=
+  inferInstanceAs (Std.TransCmp (compareOn (fun p : Path b t => p.toFilePath.toString)))
+
 instance : ToString (Path b t) := ⟨fun p => p.toFilePath.toString⟩
 
 private def dropTrailingPathSeparator (fp : System.FilePath) : System.FilePath :=

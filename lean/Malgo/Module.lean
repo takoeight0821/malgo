@@ -29,6 +29,11 @@ instance : BEq ArtifactPath := ⟨fun a b => a.relPath == b.relPath⟩
 
 instance : Ord ArtifactPath := ⟨fun a b => compare a.relPath b.relPath⟩
 
+/-- Same "compare via a projection" trick as `Path`'s `Std.TransOrd`
+instance: `ArtifactPath`'s `Ord` is exactly `compareOn relPath`. -/
+instance : Std.TransOrd ArtifactPath :=
+  inferInstanceAs (Std.TransCmp (compareOn ArtifactPath.relPath))
+
 end ArtifactPath
 
 inductive ModuleName where
@@ -42,6 +47,43 @@ inductive ModuleName where
   deriving BEq, Ord, Repr
 
 namespace ModuleName
+
+/-- `deriving Ord`'s generated `compare` is a plain `match` on both
+constructors, so it iota-reduces under `cases <;> simp` exactly like
+`Option`'s hand-written instance (Std's own template for a small sum
+type) — the ordering laws hold for the same reason `Option`'s do,
+falling through to `String`'s/`ArtifactPath`'s `Std.TransOrd` on the
+three same-constructor cases.
+
+Lean's typeclass search indexes instances by their literal head symbol,
+not up to unfolding: `Std.TransOrd String`'s registered head is
+`@Ord.compare String _`, so once `Ord.compare`'s cascading unfold (below)
+reduces every same-constructor case down to a raw `String.compare` call
+(`ModuleName`/`ArtifactPath`'s fields all bottom out at `String`),
+searches for `Std.TransCmp String.compare` miss it even though the two
+are definitionally identical. These two instances re-register the same
+proof under the head that's actually needed. -/
+instance : Std.OrientedCmp String.compare :=
+  inferInstanceAs (Std.OrientedCmp (compare : String → String → Ordering))
+
+instance : Std.TransCmp String.compare :=
+  inferInstanceAs (Std.TransCmp (compare : String → String → Ordering))
+
+instance : Std.OrientedOrd ModuleName where
+  eq_swap {a b} := by
+    cases a <;> cases b <;>
+      simp only [Ord.compare, instOrdModuleName.ord, Ordering.then_eq] <;>
+      first
+        | rfl
+        | exact Std.OrientedCmp.eq_swap
+
+instance : Std.TransOrd ModuleName where
+  isLE_trans {a b c} hab hbc := by
+    cases a <;> cases b <;> cases c <;>
+      (try (simp_all [Ord.compare, instOrdModuleName.ord, Ordering.then_eq]; done))
+    all_goals
+      simp only [Ord.compare, instOrdModuleName.ord, Ordering.then_eq] at *
+      apply Std.TransCmp.isLE_trans <;> assumption
 
 def toStr : ModuleName → String
   | .moduleName raw => raw

@@ -107,17 +107,28 @@ instance : Inhabited Range := ⟨{ start := default, stop := default }⟩
 instance {p} : Inhabited (Pat p) := ⟨.unboxed default (.int32 0)⟩
 instance {p} : Inhabited (CoPat p) := ⟨.hole default⟩
 
+/-- Termination helper: a pair's second component is strictly smaller than
+any list it's a member of — used to justify recursing into the value half
+of a `(String × _)` field below (the record/variant fields the parser
+attaches names to). -/
+private theorem sizeOf_snd_lt_of_mem {α β : Type} [SizeOf α] [SizeOf β] {p : α × β}
+    {l : List (α × β)} (h : p ∈ l) : sizeOf p.snd < sizeOf l := by
+  have h1 : sizeOf p.snd < sizeOf p := by
+    cases p with
+    | mk a b => simp; omega
+  exact Nat.lt_trans h1 (List.sizeOf_lt_of_mem h)
+
 /-- Free type variables of a parse-phase type (lowercase-initial `TyVar`s).
 Returned as a `TreeSet` so `.toList` is ascending, matching Haskell's
 `Set.toList` — the order in which they receive uniqs. -/
-partial def getTyVars : Ty .parse → Std.TreeSet String
+def getTyVars : Ty .parse → Std.TreeSet String
   | .app _ t ts => ts.foldl (fun acc x => acc.merge (getTyVars x)) (getTyVars t)
   | .var _ v => if startsUpper v then {} else ({} : Std.TreeSet String).insert v
   | .con e _ => nomatch e
   | .arr _ t1 t2 => (getTyVars t1).merge (getTyVars t2)
   | .tuple _ ts => ts.foldl (fun acc x => acc.merge (getTyVars x)) {}
   | .record _ kvs rowTail =>
-    let base := kvs.foldl (fun acc (_, v) => acc.merge (getTyVars v)) {}
+    let base := kvs.foldl (fun acc kv => acc.merge (getTyVars kv.2)) {}
     match rowTail with
     | some r => base.merge (getTyVars r)
     | none => base
@@ -125,38 +136,65 @@ partial def getTyVars : Ty .parse → Std.TreeSet String
   | .bottom _ => {}
   | .tilde _ t => getTyVars t
   | .variant _ cases rowTail =>
-    let base := cases.foldl (fun acc (_, ts) => acc.merge (ts.foldl (fun a x => a.merge (getTyVars x)) {})) {}
+    let base := cases.foldl (fun acc kts => acc.merge (kts.2.foldl (fun a x => a.merge (getTyVars x)) {})) {}
     match rowTail with
     | some r => base.merge (getTyVars r)
     | none => base
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem h) (by omega))
+    | (rename_i h2 h1
+       exact Nat.lt_of_lt_of_le
+         (Nat.lt_trans (List.sizeOf_lt_of_mem h1) (sizeOf_snd_lt_of_mem h2)) (by omega))
 
 /-- Rewrite uppercase-initial `VarP` to nullary `ConP` (the parser cannot
 tell them apart). Pure; mirrors Haskell `resolveConP`. -/
-partial def resolveConP : Pat .parse → Pat .parse
+def resolveConP : Pat .parse → Pat .parse
   | .var pos name => if startsUpper name then .con pos name [] else .var pos name
   | .con pos name params => .con pos name (params.map resolveConP)
   | .tuple pos params => .tuple pos (params.map resolveConP)
-  | .record pos kvs => .record pos (kvs.map (fun (k, v) => (k, resolveConP v)))
+  | .record pos kvs => .record pos (kvs.map (fun kv => (kv.1, resolveConP kv.2)))
   | .list pos params => .list pos (params.map resolveConP)
   | .unboxed pos x => .unboxed pos x
   | .boxed pos x => .boxed pos x
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem h) (by omega))
 
 /-- Variables a pattern binds, left-to-right (the uniq-assignment order). -/
-partial def patVars : Pat .parse → List String
+def patVars : Pat .parse → List String
   | .var _ x => [x]
   | .con _ _ xs => xs.flatMap patVars
   | .tuple _ xs => xs.flatMap patVars
-  | .record _ kvs => kvs.flatMap (fun (_, p) => patVars p)
+  | .record _ kvs => kvs.flatMap (fun kv => patVars kv.2)
   | .list _ xs => xs.flatMap patVars
   | .unboxed _ _ => []
   | .boxed _ _ => []
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem h) (by omega))
 
-partial def resolveCoConP : CoPat .parse → CoPat .parse
+def resolveCoConP : CoPat .parse → CoPat .parse
   | .hole x => .hole x
   | .apply x cp pat => .apply x (resolveCoConP cp) (resolveConP pat)
   | .project x cp field => .project x (resolveCoConP cp) field
 
-partial def coPatVars : CoPat .parse → List String
+def coPatVars : CoPat .parse → List String
   | .hole _ => []
   | .apply _ cp pat => coPatVars cp ++ patVars pat
   | .project _ cp _ => coPatVars cp

@@ -41,7 +41,7 @@ ParserPass → RenamePass → [InferPass] → [RefinePass]
     ↓
 ToFunPass → ToCorePass → FlatPass → JoinPass
     ↓
-EvalPass (Interpreter) | SchemePass (--target scheme) | ZigPass (--target zig / malgo compile)
+EvalPass (Interpreter) | ZigPass (--target zig / malgo compile)
 ```
 
 **Note**: InferPass and RefinePass can be skipped for fast evaluation without type checking.
@@ -50,8 +50,8 @@ EvalPass (Interpreter) | SchemePass (--target scheme) | ZigPass (--target zig / 
 conversion: it inlines a fully(-or-over-)saturated call of a data constructor
 (`Cons x xs`, or `Cons (f x) (mapList f xs)` — arguments need not be
 immediate) directly into `Fun.Construct`, instead of invoking the
-constructor's own curried closure. This is shared by every backend
-(Eval/Scheme/Zig) and every direct caller of `toCore`, not Zig-specific.
+constructor's own curried closure. This is shared by both backends
+(Eval/Zig) and every direct caller of `toCore`, not Zig-specific.
 
 ### Zig Backend (native executables)
 
@@ -105,7 +105,7 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
   binary keeps emitting the previous runtime text. Haskell's `embedStringFile`
   has no such problem. CI does this unconditionally in `lean-zig-golden`.
 - The interpreter (`Malgo.Sequent.Eval`) is the semantic oracle: any observable
-  divergence in the Zig backend is a bug, matched against Eval.hs, not Scheme.
+  divergence in the Zig backend is a bug, matched against Eval.hs.
 
 ### Intermediate Representations
 
@@ -181,7 +181,7 @@ bash scripts/selfhost-level2.sh
 ## Lean 4 port (`lean/`)
 
 A full second implementation of Malgo — parser through every backend
-(Eval/Scheme/Zig), the query-based compilation engine, the linter, and
+(Eval/Zig), the query-based compilation engine, the linter, and
 the MET debug tracer (`malgo debug-trace`) — exists in Lean 4 under
 `lean/`, at parity with this Haskell implementation (which
 remains the semantic oracle: the committed `.golden/` tree, the

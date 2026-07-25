@@ -1,5 +1,4 @@
--- | ZigPass translates Join IR to Zig source code, mirroring
--- 'Malgo.Backend.Scheme.SchemePass'\'s shape exactly.
+-- | ZigPass translates Join IR to Zig source code.
 module Malgo.Backend.Zig
   ( ZigPass (..),
     ZigStages (..),

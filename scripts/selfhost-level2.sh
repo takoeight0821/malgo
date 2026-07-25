@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # selfhost-level2.sh — Level 2 metacircular interpreter test
 #
-# Level 1: main.scm (Scheme) evaluates a .mlg program directly
-# Level 2: main.scm evaluates Main.mlg which evaluates a .mlg program
+# Level 1: malgoc (Main.mlg compiled to a native binary via the Zig backend)
+#          evaluates a .mlg program directly
+# Level 2: malgoc evaluates Main.mlg, which evaluates a .mlg program
 #
 # This script verifies the metacircular property: the Malgo evaluator
 # written in Malgo can evaluate itself while correctly running programs.

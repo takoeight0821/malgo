@@ -129,11 +129,10 @@ targetOpt =
     (eitherReader parseTarget)
     ( long "target"
         <> value TargetEval
-        <> help "Compilation target: eval (default), scheme, or zig"
+        <> help "Compilation target: eval (default) or zig"
     )
   where
     parseTarget "eval" = Right TargetEval
-    parseTarget "scheme" = Right TargetScheme
     parseTarget "zig" = Right TargetZig
     parseTarget t = Left $ "Unknown target: " <> t
 

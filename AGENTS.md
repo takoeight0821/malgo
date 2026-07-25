@@ -99,6 +99,11 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
 - Runtime unit tests: `zig test -lc runtime/zig/runtime.zig` (`-lc` is required on
   Linux since the runtime calls `std.c.write`/`std.c.getenv` directly; macOS
   masks this because it always links libc via libSystem).
+- **After editing `runtime/zig/runtime.zig`, run `mise run lean-bust-runtime`
+  before rebuilding the Lean port.** Lake does not reliably track the
+  `include_str` that embeds it, so `lake build` can report success while the
+  binary keeps emitting the previous runtime text. Haskell's `embedStringFile`
+  has no such problem. CI does this unconditionally in `lean-zig-golden`.
 - The interpreter (`Malgo.Sequent.Eval`) is the semantic oracle: any observable
   divergence in the Zig backend is a bug, matched against Eval.hs, not Scheme.
 

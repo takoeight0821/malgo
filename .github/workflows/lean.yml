@@ -128,10 +128,32 @@ jobs:
           build: true
           test: false
 
+      # Lake's tracking of `include_str` is not reliable: measured on one edit,
+      # changing runtime.zig rebuilt Runtime.olean but reverting that change did
+      # not, and `lake build` reported success while the binary kept embedding
+      # the old runtime text. Combined with lean-action's .lake cache, a PR that
+      # touches only runtime.zig would otherwise compile all 73 cases against
+      # the PREVIOUS runtime and report green. Runs after lean-action because
+      # that is what restores the cache; rebuilding one module is negligible
+      # against this job's Zig toolchain time. Unconditional on purpose — a
+      # "did runtime.zig change?" guard reintroduces the bug it fixes.
+      # See lean/Malgo/Backend/Zig/Runtime.lean.
+      - name: Rebuild the embedded Zig runtime
+        run: |
+          rm -f lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.olean \
+                lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.trace \
+                lean/.lake/build/ir/Malgo/Backend/Zig/Runtime.c
+          cd lean && lake build malgo
+
       # Also caches Zig's own global cache directory, keyed on the Zig version.
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: '0.16.0'
+
+      # runtime.zig is shared by both implementations but its unit tests only
+      # ran in build.yml, which will not survive the Haskell retirement.
+      - name: Run Zig runtime unit tests
+        run: zig test -lc runtime/zig/runtime.zig
 
       - name: Zig backend golden parity sweep (Lean malgo compile)
         env:

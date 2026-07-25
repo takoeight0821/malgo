@@ -88,9 +88,14 @@ Malgo ソースに定義があるにもかかわらずビルトインとして�
 
 ### 背景
 
-Level 1（Haskell 評価器）では通る変更が、Level 2（Scheme → Malgo → Malgo）
-では失敗することがある。評価意味論が異なるため、自己ホスト型コンパイラを
-変更したら必ず Level 2 を手動確認する。
+Level 1 では通る変更が、Level 2（Malgo → Malgo → Malgo）では失敗する
+ことがある。評価意味論が異なるため、自己ホスト型コンパイラを変更したら
+必ず Level 2 を手動確認する。
+
+Level 1/2 はどちらも Zig バックエンド経由で走る。`Main.mlg` を
+`malgo compile` でネイティブバイナリにし、そのバイナリが評価器になる。
+以前は Scheme バックエンド経由だったが、`malgo_read_file` の実装により
+移行した（Scheme バックエンドは削除済み）。
 
 ### 手順
 
@@ -102,15 +107,17 @@ for f in runtime/malgo/Builtin.mlg runtime/malgo/Prelude.mlg \
   cabal exec malgo -- eval "$f" </dev/null >/dev/null
 done
 
-# 2. Level 1 評価器を Scheme にコンパイル
-cabal exec malgo -- eval --target scheme runtime/malgo/compiler/Main.mlg > /tmp/main.scm
+# 2. Level 1 評価器をネイティブバイナリにコンパイル
+cabal exec malgo -- compile runtime/malgo/compiler/Main.mlg -o /tmp/malgoc --opt release-fast
 
 # 3. Level 2 テスト（例: Echo）
-printf 'Hello\n' | scheme --script /tmp/main.scm \
+printf 'Hello\n' | /tmp/malgoc \
   runtime/malgo/compiler/Main.mlg test/testcases/malgo/Echo.mlg
 
 # 4. フルスクリプト
-PRECOMPILE_TIMEOUT=300 CASE_TIMEOUT=600 bash scripts/selfhost-level2.sh
+PRECOMPILE_TIMEOUT=300 CASE_TIMEOUT=1200 bash scripts/selfhost-level2.sh
 ```
 
-Level 2 は Level 1 より 50〜200 倍遅い。タイムアウトは余裕を持たせること。
+Level 2 は Level 1 より 50〜200 倍遅く、さらに Zig バックエンドは同じ
+ケースで Chez Scheme の約7.5倍遅い（実測: Fib で 220秒 対 29秒）。
+タイムアウトは余裕を持たせること。改善は #385 で追跡している。

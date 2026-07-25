@@ -13,9 +13,10 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
 MALGO=${MALGO:-cabal exec malgo --}
-SCHEME=${SCHEME:-scheme}
-# Level 2 is ~50–200x slower than Level 1; use a generous timeout
-CASE_TIMEOUT=${CASE_TIMEOUT:-300}
+# Level 2 is ~50-200x slower than Level 1, and the Zig backend is a further
+# ~7.5x slower per case than the Chez Scheme path it replaced (measured:
+# 220s vs 29s on Fib, on an M-series Mac). Budget accordingly.
+CASE_TIMEOUT=${CASE_TIMEOUT:-1200}
 PRECOMPILE_TIMEOUT=${PRECOMPILE_TIMEOUT:-180}
 KEEP_WORK=${KEEP_WORK:-0}
 MALGO_WORK_DIR=${MALGO_WORK_DIR:-.malgo-work}
@@ -69,14 +70,18 @@ done
 
 log "precompile phase complete (${#precompile[@]} files)"
 
-SCHEME_MAIN="$MALGO_WORK_DIR/main.scm"
+NATIVE_MAIN="$MALGO_WORK_DIR/malgoc"
 mkdir -p "$MALGO_WORK_DIR"
-log "compiling Main.mlg to Scheme (Level 1 evaluator)"
-if ! $MALGO eval --target scheme runtime/malgo/compiler/Main.mlg > "$SCHEME_MAIN"; then
-  log "Scheme compilation failed"
+if ! command -v zig >/dev/null 2>&1; then
+  echo "zig not found on PATH (set ZIG_BIN_DIR or run 'mise install' / activate mise)." >&2
   exit 1
 fi
-log "Scheme compilation done: $SCHEME_MAIN"
+log "compiling Main.mlg to a native binary (Level 1 evaluator) via the Zig backend"
+if ! $MALGO compile runtime/malgo/compiler/Main.mlg -o "$NATIVE_MAIN" --opt release-fast; then
+  log "native compilation failed"
+  exit 1
+fi
+log "native compilation done: $NATIVE_MAIN"
 
 # Level 2 test cases: a small subset of simple programs that complete quickly
 # even when interpreted by an interpreter.
@@ -90,7 +95,7 @@ level2_cases=(
 
 total_cases=${#level2_cases[@]}
 log "starting Level 2 metacircular checks: ${total_cases} cases (parallel)"
-log "command: scheme --script main.scm runtime/malgo/compiler/Main.mlg <case.mlg>"
+log "command: ./malgoc runtime/malgo/compiler/Main.mlg <case.mlg>"
 
 results_dir="$MALGO_WORK_DIR/level2-results"
 rm -rf "$results_dir"
@@ -124,7 +129,7 @@ run_case() {
   out=$(mktemp)
   err=$(mktemp)
 
-  if printf 'Hello\n' | timeout "$CASE_TIMEOUT" $SCHEME --script "$SCHEME_MAIN" \
+  if printf 'Hello\n' | timeout "$CASE_TIMEOUT" "$NATIVE_MAIN" \
       runtime/malgo/compiler/Main.mlg "$src" >"$out" 2>"$err"; then
     local case_elapsed=$((SECONDS - case_start))
     if cmp -s "$out" "$expected"; then

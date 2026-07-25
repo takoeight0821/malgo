@@ -748,6 +748,22 @@ fn writeAllFd(fd: c_int, bytes: []const u8) void {
     }
 }
 
+/// `writeAllFd` returns silently on a short or failed write, which is the
+/// right call for stdout/stderr but not for a file the program believes it
+/// wrote. Fatal instead.
+fn writeAllFdChecked(fd: c_int, bytes: []const u8, comptime what: []const u8) void {
+    var off: usize = 0;
+    while (off < bytes.len) {
+        const n = std.c.write(fd, bytes.ptr + off, bytes.len - off);
+        if (n < 0) {
+            if (std.c.errno(n) == .INTR) continue;
+            panic(what);
+        }
+        if (n == 0) panic(what);
+        off += @intCast(n);
+    }
+}
+
 fn writeStdout(bytes: []const u8) void {
     writeAllFd(1, bytes);
 }
@@ -1330,13 +1346,42 @@ pub fn malgo_panic(args: []const Value) Value {
     panic(asStr(args[0]));
 }
 
+/// The interpreter oracle (`Malgo.Sequent.Eval`'s `malgo_read_file`) calls
+/// `BS.readFile` with no error handling, so a missing file kills the process
+/// with an uncaught IOException. Panicking here matches that: both die
+/// nonzero with a message on stderr, and `zig-golden.sh` compares stdout.
 pub fn malgo_read_file(args: []const Value) Value {
-    _ = args;
-    panicUnimplemented("malgo_read_file");
+    // `asStr` yields a non-NUL-terminated slice; open(2) needs a sentinel.
+    // The scratch arena is bulk-freed at exit and exempt from the leak check.
+    const path = scratch().dupeZ(u8, asStr(args[0])) catch @panic("Malgo: out of memory");
+    const fd = std.c.open(path, .{ .ACCMODE = .RDONLY });
+    if (fd < 0) panic("readFile: cannot open file");
+    defer _ = std.c.close(fd);
+    var out: std.ArrayList(u8) = .empty;
+    var buf: [8192]u8 = undefined;
+    while (true) {
+        const n = std.c.read(fd, &buf, buf.len);
+        if (n < 0) {
+            if (std.c.errno(n) == .INTR) continue;
+            panic("readFile: read error");
+        }
+        if (n == 0) break;
+        out.appendSlice(scratch(), buf[0..@intCast(n)]) catch @panic("Malgo: out of memory");
+    }
+    return mkString(out.items);
 }
+
 pub fn malgo_write_file(args: []const Value) Value {
-    _ = args;
-    panicUnimplemented("malgo_write_file");
+    const path = scratch().dupeZ(u8, asStr(args[0])) catch @panic("Malgo: out of memory");
+    const fd = std.c.open(
+        path,
+        .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true },
+        @as(std.c.mode_t, 0o644),
+    );
+    if (fd < 0) panic("writeFile: cannot open file");
+    defer _ = std.c.close(fd);
+    writeAllFdChecked(fd, asStr(args[1]), "writeFile: write error");
+    return unitValue();
 }
 
 fn isReadsSpace(c: u8) bool {
@@ -1678,6 +1723,88 @@ test "applyDestructor dispatches to the matching branch" {
     try std.testing.expectEqual(@as(i32, 99), result.payload.int32);
     drop(result);
     try std.testing.expectEqual(before, g_live_objects);
+}
+
+// Zig only semantically analyses what is reachable, so a `pub fn` that no
+// test and no generated program happens to reference is never typechecked --
+// `zig test` passes and the breakage surfaces later as a `zig build-exe`
+// failure inside `malgo compile`. That is not hypothetical: the first draft
+// of `malgo_read_file` below used `std.posix.open`, which does not exist in
+// Zig 0.16, and the suite stayed green until a test referenced it. This
+// forces every declaration in the file to be analysed.
+test "every declaration typechecks" {
+    std.testing.refAllDecls(@This());
+}
+
+// --- File I/O ---
+
+test "writeFile then readFile round-trips, owning only the returned string" {
+    initHeap();
+    const before = g_live_objects;
+
+    const path = mkString("malgo-runtime-test-roundtrip.txt");
+    const body = mkString("hello\nfile\n");
+    const unit = malgo_write_file(&[_]Value{ path, body });
+    const read = malgo_read_file(&[_]Value{path});
+
+    try std.testing.expect(stringEq(asStr(read), "hello\nfile\n"));
+
+    // Primitives borrow their arguments and return an owned value
+    // (`Ir.Prim`: "borrows its arguments, returns owned"), so the caller
+    // still owns `path`/`body` here and nothing was consumed under us.
+    drop(read);
+    drop(unit);
+    drop(body);
+    drop(path);
+    try std.testing.expectEqual(before, g_live_objects);
+
+    _ = std.c.unlink("malgo-runtime-test-roundtrip.txt");
+}
+
+test "readFile of an empty file yields an empty string" {
+    initHeap();
+    const before = g_live_objects;
+
+    const path = mkString("malgo-runtime-test-empty.txt");
+    const empty = mkString("");
+    const unit = malgo_write_file(&[_]Value{ path, empty });
+    const read = malgo_read_file(&[_]Value{path});
+
+    try std.testing.expectEqual(@as(usize, 0), asStr(read).len);
+
+    drop(read);
+    drop(unit);
+    drop(empty);
+    drop(path);
+    try std.testing.expectEqual(before, g_live_objects);
+
+    _ = std.c.unlink("malgo-runtime-test-empty.txt");
+}
+
+test "readFile reads back a payload larger than one read buffer" {
+    initHeap();
+    const before = g_live_objects;
+
+    // 8192 is the read chunk size; go past it so the accumulate loop runs
+    // more than once.
+    var big: [20000]u8 = undefined;
+    for (&big, 0..) |*b, i| b.* = @intCast('a' + (i % 26));
+
+    const path = mkString("malgo-runtime-test-big.txt");
+    const body = mkString(&big);
+    const unit = malgo_write_file(&[_]Value{ path, body });
+    const read = malgo_read_file(&[_]Value{path});
+
+    try std.testing.expectEqual(@as(usize, big.len), asStr(read).len);
+    try std.testing.expect(stringEq(asStr(read), &big));
+
+    drop(read);
+    drop(unit);
+    drop(body);
+    drop(path);
+    try std.testing.expectEqual(before, g_live_objects);
+
+    _ = std.c.unlink("malgo-runtime-test-big.txt");
 }
 
 fn structToText(s: Struct) []const u8 {

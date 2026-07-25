@@ -93,7 +93,10 @@ jobs:
     needs: gates
     if: needs.gates.outputs.selfhost == '1'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # This one job runs both levels, and L2 through the Zig backend is ~7.5x
+    # slower per case than the Chez Scheme path it replaced (measured locally:
+    # 220s vs 29s on Fib).
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -103,16 +106,17 @@ jobs:
           build: true
           test: false
 
-      - name: Install Chez Scheme
-        run: sudo apt-get install -y chezscheme
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: '0.16.0'
 
-      - name: Self-hosted golden (Level 1 — Malgo-in-Malgo compiler under Chez)
+      - name: Self-hosted golden (Level 1 — Malgo-in-Malgo compiler, Zig backend)
         run: MALGO=lean/.lake/build/bin/malgo MALGO_WORK_DIR=.malgo-work-lean bash scripts/selfhost-golden.sh
 
       - name: Self-hosted metacircular (Level 2)
         run: |
           MALGO=lean/.lake/build/bin/malgo MALGO_WORK_DIR=.malgo-work-lean \
-          CASE_TIMEOUT=600 PRECOMPILE_TIMEOUT=300 bash scripts/selfhost-level2.sh
+          CASE_TIMEOUT=1200 PRECOMPILE_TIMEOUT=300 bash scripts/selfhost-level2.sh
 
   lean-zig-golden:
     needs: gates

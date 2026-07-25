@@ -136,11 +136,17 @@ Malgo has two self-hosting levels, each tested by a CI job:
 | Level 1 | The Malgo evaluator written in Malgo (`runtime/malgo/compiler/`) evaluates arbitrary Malgo programs | `scripts/selfhost-golden.sh` | `self-hosted golden` |
 | Level 2 | Level 1 evaluator evaluates `Main.mlg` which evaluates a Malgo program (metacircular interpreter) | `scripts/selfhost-level2.sh` | `self-hosted level 2 metacircular` |
 
+Both levels run through the **Zig backend**: `Main.mlg` is compiled to a native
+binary with `malgo compile --opt release-fast` and that binary is the evaluator.
+They used to go through the Scheme backend; the switch became possible once
+`malgo_read_file` was implemented in `runtime/zig/runtime.zig`, which was the
+only runtime primitive the self-hosted compiler still lacked.
+
 ```bash
-# Level 1: scheme --script main.scm <testcase.mlg>
+# Level 1: ./malgoc <testcase.mlg>
 bash scripts/selfhost-golden.sh
 
-# Level 2: scheme --script main.scm runtime/malgo/compiler/Main.mlg <testcase.mlg>
+# Level 2: ./malgoc runtime/malgo/compiler/Main.mlg <testcase.mlg>
 # In level 2, the inner Main.mlg's applyBuiltin "getRawArgs" drops the first
 # arg (which is Main.mlg's own path) so that the inner sees only the test case
 # argument. parseIntString32/64 are added to the inner evaluator's makeBaseEnv

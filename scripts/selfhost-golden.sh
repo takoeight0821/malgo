@@ -5,7 +5,6 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
 MALGO=${MALGO:-cabal exec malgo --}
-SCHEME=${SCHEME:-scheme}
 CASE_TIMEOUT=${CASE_TIMEOUT:-20}
 PRECOMPILE_TIMEOUT=${PRECOMPILE_TIMEOUT:-180}
 KEEP_WORK=${KEEP_WORK:-0}
@@ -61,14 +60,18 @@ done
 
 log "precompile phase complete (${#precompile[@]} files)"
 
-SCHEME_MAIN="$MALGO_WORK_DIR/main.scm"
+NATIVE_MAIN="$MALGO_WORK_DIR/malgoc"
 mkdir -p "$MALGO_WORK_DIR"
-log "compiling Main.mlg to Scheme"
-if ! $MALGO eval --target scheme runtime/malgo/compiler/Main.mlg > "$SCHEME_MAIN"; then
-  log "Scheme compilation failed"
+if ! command -v zig >/dev/null 2>&1; then
+  echo "zig not found on PATH (set ZIG_BIN_DIR or run 'mise install' / activate mise)." >&2
   exit 1
 fi
-log "Scheme compilation done"
+log "compiling Main.mlg to a native binary via the Zig backend"
+if ! $MALGO compile runtime/malgo/compiler/Main.mlg -o "$NATIVE_MAIN" --opt release-fast; then
+  log "native compilation failed"
+  exit 1
+fi
+log "native compilation done"
 
 mapfile -t cases < <(find .golden/Malgo.Sequent.Eval -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
 total_cases=${#cases[@]}
@@ -98,7 +101,7 @@ for i in "${!cases[@]}"; do
     log "[$index/$total_cases] start: $dir"
     out=$(mktemp)
     err=$(mktemp)
-    if printf 'Hello\n' | timeout "$CASE_TIMEOUT" $SCHEME --script "$SCHEME_MAIN" "$src" >"$out" 2>"$err"; then
+    if printf 'Hello\n' | timeout "$CASE_TIMEOUT" "$NATIVE_MAIN" "$src" >"$out" 2>"$err"; then
       case_elapsed=$((SECONDS - case_start))
       if cmp -s "$out" "$expected"; then
         log "[$index/$total_cases] pass: $dir (${case_elapsed}s)"

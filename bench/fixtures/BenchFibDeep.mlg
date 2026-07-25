@@ -1,0 +1,34 @@
+module {..} = import "../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../runtime/malgo/Prelude.mlg"
+
+-- The deep counterpart to `BenchFib.mlg`, and a demonstration as much as a
+-- benchmark: `fib 25` is ~18.8 million dispatches (measured via
+-- MALGO_RC_STATS), which under the pre-#360 calling convention would have
+-- needed ~1.85 GB of native stack — every reduction step left a frame that
+-- was never popped. It could not run at any stack size. With `rt.run`'s
+-- trampoline it completes in well under a second.
+--
+-- Unlike `BenchFib.mlg` this has no "before" measurement to compare against,
+-- because there was no before. Its value is (a) a dispatch-bound workload
+-- long enough that hyperfine measures the program rather than `execve`, and
+-- (b) a canary: if native stack ever creeps back in proportional to
+-- reduction steps, this fixture is the first thing to crash.
+
+infix 4 (<=)
+def (<=) = { x y -> leInt32 x y }
+
+infixl 6 (+)
+def (+) = { x y -> addInt32 x y }
+
+infixl 6 (-)
+def (-) = { x y -> subInt32 x y }
+
+def fib = { n ->
+  if (n <= 1)
+    { n }
+    { fib (n - 1) + fib (n - 2) }
+}
+
+def main = {
+  fib 25 |> toStringInt32 |> putStrLn
+}

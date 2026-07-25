@@ -83,7 +83,7 @@ pass" primitive over the backend IR itself, used by `Perceus` and `Emit`.
 ## Calling convention
 
 Every generated Zig function shares one signature,
-`fn (self: rt.Value, args: []const rt.Value) rt.Value`:
+`fn (self: rt.Value, args: []const rt.Value) rt.Action`:
 
 - A closure or record field or codata branch receives the closure/record/codata
   object itself as `self` and reads its captures out of it
@@ -95,6 +95,38 @@ Self-passing is what makes Perceus's "a call consumes one reference of the calle
 rule implementable: the callee dups the captures it still needs, then drops `self`
 itself — the caller has no post-call point to do either, since every call in this IR
 is a tail call.
+
+### Trampoline
+
+A generated function never *performs* a call. It returns an `rt.Action` — either
+`{code, self, argv}` naming the call to make next, or `done(v)` carrying the finished
+value — and `rt.run` dispatches in a loop until something is `done`.
+
+This is not a stylistic choice. Zig does not guarantee tail-call optimization, so
+emitting these tail calls as native `return f(...)` meant nothing ever returned until
+the program exited: the stack grew by one frame (~98.6 bytes, measured) per reduction
+step, and any program of more than ~150k steps died with SIGSEGV — `fib 16` was enough
+([issue #360](https://github.com/takoeight0821/malgo/issues/360)). `@call(.always_tail)`
+is not a substitute: Zig requires the callee's signature to match the caller's, which
+rules out helpers like `applyCovalue(Value, Value)`, and a genuine tail call would
+release the frame holding the `&[_]rt.Value{...}` argument slice before the callee read
+it. An `Action` carries its arguments in a fixed inline array (`MAX_ARGS`, currently 4;
+the front end tops out at 2) precisely so no argument outlives its storage.
+
+**An Action is a move, not a borrow.** It carries exactly the references a direct call
+would have transferred — one of the callee into `self`, one of each operand into
+`argv` — and `rt.run` is strictly RC-neutral: no dup, no drop, and it never discards an
+Action without dispatching it. That is why the IR and every RC pass
+(`Perceus`, `RcCheck`, `Reuse`) are untouched by this: they model a single frame and
+only assert that a terminator's operands leave it, which is still true when they leave
+into an Action.
+
+Native stack is now O(maximum dynamic `Force` nesting depth) rather than O(total
+reduction steps). `Ir.Force` is an expression in the middle of a block, so `rt.forceField`
+has to return a plain value and runs a *nested* trampoline to get one — three frames per
+nesting level. In the current corpus record fields are only ever forced as siblings
+(depth 1); `MALGO_RC_STATS=1` reports `force_depth_max` so this stays measured rather
+than assumed.
 
 ## Data representation
 

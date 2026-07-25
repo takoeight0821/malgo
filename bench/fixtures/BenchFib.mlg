@@ -6,13 +6,14 @@ module {..} = import "../../runtime/malgo/Prelude.mlg"
 -- example under `examples/malgo/Fib.mlg` only computes `fib 5`, too small
 -- to produce a stable wall-clock difference between implementations).
 --
--- `n = 15` is deliberate, not arbitrary: `fib 18`/`fib 20` reproducibly
--- SIGSEGV when compiled via the Zig backend (`--opt release-fast`), on
--- BOTH the Haskell- and Lean-compiled binaries identically — confirmed a
--- pre-existing bug in the Zig backend's original (Haskell) design,
--- faithfully reproduced by the Lean port, not a Lean-specific regression.
--- Out of scope to fix here; `n = 15` is the largest value confirmed to run
--- cleanly on both toolchains via both `eval` and `compile`.
+-- `n = 15` is kept as the throughput baseline: it is the value every
+-- lean-vs-haskell measurement so far has used, so changing it would break
+-- comparability with `bench/lean-vs-haskell.md`. It used to be a hard
+-- ceiling — `fib 16` and up SIGSEGV'd when compiled via the Zig backend
+-- (issue #360; the earlier comment here said the threshold was 18/20, which
+-- was wrong) — but the `rt.run` trampoline removed that limit entirely. See
+-- `BenchFibDeep.mlg` for the fixture that exercises the depth this one
+-- deliberately avoids.
 
 infix 4 (<=)
 def (<=) = { x y -> leInt32 x y }

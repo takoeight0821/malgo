@@ -33,7 +33,39 @@ pub const Tag = union(enum) { tuple: void, named: []const u8 };
 /// caller has no post-call point to do either, since every call is a tail
 /// call. Top-level definitions are called directly with the `no_self`
 /// sentinel and ignore it.
-pub const CodeFn = *const fn (self: Value, args: []const Value) Value;
+///
+/// Generated code never *performs* a call: it returns an `Action` naming
+/// the call it wants, and `run` below dispatches it in a loop. Zig does
+/// not guarantee tail-call optimization, so emitting these tail calls as
+/// native `return f(...)` grew the stack by one frame per reduction step
+/// -- ~98.6 bytes each, never popped until the program exited, which
+/// SIGSEGV'd any program of more than ~150k steps (issue #360). Same
+/// reasoning as `g_free_worklist`'s iterative free below: a structurally
+/// recursive process gets an explicit loop rather than the native stack.
+pub const CodeFn = *const fn (self: Value, args: []const Value) Action;
+
+/// Maximum number of arguments at any call site. The front end cannot
+/// currently produce more than 2 (`ToFun` builds only single-parameter
+/// lambdas and singleton applies; `ToCore` appends exactly one consumer,
+/// giving `TCallClosure f [arg, kont]`), but nothing in the IR enforces
+/// that, so this is generous. `Malgo.Backend.Zig.Emit` mirrors the number
+/// to reject an over-arity call site with a readable message; `mkAction`'s
+/// `rcInvariant` below is the authoritative backstop if the two drift.
+pub const MAX_ARGS: usize = 4;
+
+/// What a generated function returns instead of calling: either the next
+/// call to perform (`code != null`) or the finished value (`code == null`,
+/// result in `argv[0]`).
+///
+/// An Action is a **move, not a borrow**. It carries exactly the references
+/// a direct call would have transferred: one of the callee into `self`, one
+/// of each operand into `argv[0..argc]`. See `run` for the full contract.
+pub const Action = struct {
+    code: ?CodeFn,
+    self: Value,
+    argv: [MAX_ARGS]Value,
+    argc: usize,
+};
 
 pub const Struct = struct { tag: Tag, fields: []const Value };
 pub const Closure = struct { code: CodeFn, captures: []const Value };
@@ -93,6 +125,18 @@ pub var g_total_allocs: usize = 0;
 /// Times 'dropReuse' recycled an Object in place instead of freeing it.
 /// Reported alongside `g_total_allocs`.
 pub var g_reuse_hits: usize = 0;
+
+/// Actions dispatched by `run`. Reported alongside `g_total_allocs`: a
+/// deterministic, machine-independent reduction-step count, so a pass that
+/// accidentally doubles the work shows up here even when wall-clock noise
+/// hides it.
+pub var g_dispatches: usize = 0;
+
+/// Current and high-water nesting depth of `forceField`'s nested `run`.
+/// The trampoline makes native stack O(this), not O(reduction steps), so
+/// the high-water mark is the quantity worth watching.
+pub var g_force_depth: usize = 0;
+pub var g_force_depth_max: usize = 0;
 
 /// Set from the MALGO_RC_TRACE environment variable at startup. When true,
 /// every `*Named` wrapper below (see "Named RC tracing" further down) emits
@@ -511,13 +555,69 @@ pub fn mkRecordNamed(fields: []const NamedField, captures: []const Value, names:
 
 // ===== Dispatch =====
 
-pub fn applyCovalue(covalue: Value, value: Value) Value {
+/// Package a call as an `Action` for `run` to dispatch. Takes ownership of
+/// `self` and every element of `args` on the caller's behalf -- see `run`.
+fn mkAction(code: CodeFn, self: Value, args: []const Value) Action {
+    rcInvariant(args.len <= MAX_ARGS, "call arity exceeds MAX_ARGS");
+    var action = Action{ .code = code, .self = self, .argv = undefined, .argc = args.len };
+    for (args, 0..) |a, i| action.argv[i] = a;
+    return action;
+}
+
+/// The finished value: what a generated function returns for Join IR's
+/// `Finish` (`Ir.TReturn`).
+pub fn done(value: Value) Action {
+    var action = Action{ .code = null, .self = no_self, .argv = undefined, .argc = 1 };
+    action.argv[0] = value;
+    return action;
+}
+
+/// A direct call to a lifted top-level function (`Ir.TStaticCall`), whose
+/// `self` is the immortal `no_self` sentinel.
+pub fn staticCall(code: CodeFn, args: []const Value) Action {
+    return mkAction(code, no_self, args);
+}
+
+/// The trampoline. Dispatches actions until one is `done`, and returns the
+/// single owned reference that one carries.
+///
+/// **`run` is strictly RC-neutral.** Between receiving an Action and
+/// dispatching it, it performs no `dup`, no `drop`, and no read of any
+/// `Value`'s payload; it never discards an Action without dispatching it
+/// (that would leak every reference the Action carries). Ownership passes
+/// straight through: the references a generated function moved into the
+/// Action are the ones the callee receives as `self`/`args`. This is what
+/// keeps `Malgo.Backend.Zig.Perceus` and `RcCheck` sound unchanged -- both
+/// model only a single frame, and "these references leave this frame here"
+/// is still true when they leave into an Action.
+///
+/// Nesting `run` is legal and costs one native frame per nesting level;
+/// `forceField` is the only nesting site today, and any future synchronous
+/// helper counts against the same budget.
+pub fn run(code: CodeFn, self: Value, args: []const Value) Value {
+    var cur = mkAction(code, self, args);
+    while (cur.code) |c| {
+        // Deliberately not `cur = c(...)`: Zig's result-location semantics
+        // would let the callee build its returned Action directly into
+        // `cur` while `args` still points into `cur.argv`. A separate slot
+        // makes that aliasing impossible.
+        const next = c(cur.self, cur.argv[0..cur.argc]);
+        cur = next;
+        g_dispatches += 1;
+    }
+    return cur.argv[0];
+}
+
+pub fn applyCovalue(covalue: Value, value: Value) Action {
     return callClosure(covalue, &[_]Value{value});
 }
 
-pub fn callClosure(closure: Value, args: []const Value) Value {
+pub fn callClosure(closure: Value, args: []const Value) Action {
     if (closure.kind != .closure) panic("callClosure: value is not a function");
-    return closure.payload.closure.code(closure, args);
+    // Resolved eagerly, while the caller's reference to `closure` is still
+    // being moved in: the code pointer must be read before ownership of the
+    // closure object passes into the Action.
+    return mkAction(closure.payload.closure.code, closure, args);
 }
 
 /// The captures slice of a closure/record/codata value, read by the
@@ -531,28 +631,28 @@ pub fn capturesOf(v: Value) []const Value {
     };
 }
 
-pub fn applyDestructor(codata: Value, name: []const u8, args: []const Value) Value {
+pub fn applyDestructor(codata: Value, name: []const u8, args: []const Value) Action {
     if (codata.kind != .codata) panic("applyDestructor: value is not codata");
     for (codata.payload.codata.branches) |branch| {
-        if (stringEq(branch.name, name)) return branch.code(codata, args);
+        if (stringEq(branch.name, name)) return mkAction(branch.code, codata, args);
     }
     panic("applyDestructor: no matching destructor");
 }
 
-pub fn projectField(record: Value, name: []const u8, k: Value) Value {
+pub fn projectField(record: Value, name: []const u8, k: Value) Action {
     if (record.kind != .record) panic("projectField: value is not a record");
     for (record.payload.record.fields) |field| {
-        if (stringEq(field.name, name)) return field.code(record, &[_]Value{k});
+        if (stringEq(field.name, name)) return mkAction(field.code, record, &[_]Value{k});
     }
     panic("projectField: no such field");
 }
 
-fn identityCode(self: Value, args: []const Value) Value {
+fn identityCode(self: Value, args: []const Value) Action {
     // The uniform closure protocol is "dup used captures, then drop self";
     // with no captures and an immortal self this is a no-op, kept for
     // uniformity with generated closure bodies.
     drop(self);
-    return args[0];
+    return done(args[0]);
 }
 
 var IDENTITY_KONT_OBJ: Object = .{
@@ -561,13 +661,13 @@ var IDENTITY_KONT_OBJ: Object = .{
     .payload = .{ .closure = .{ .code = &identityCode, .captures = &[_]Value{} } },
 };
 
-/// A covalue that, once invoked, returns its argument unchanged. Since every
-/// generated function tail-returns whatever the covalue it invokes returns,
-/// calling a record field's code with this as its continuation makes the
+/// A covalue that, once invoked, finishes with its argument unchanged.
+/// Running a record field's code with this as its continuation makes the
 /// field's (call-by-name) computation synchronous from the caller's point of
-/// view -- used by `Expand` pattern matching to force a field into a plain
-/// value it can immediately test and bind against. Immortal: forcing a
-/// field allocates nothing and creates no RC obligation.
+/// view -- the nested `run` in `forceField` dispatches until this kont turns
+/// the value into a `done` Action. Used by `Expand` pattern matching to force
+/// a field into a plain value it can immediately test and bind against.
+/// Immortal: forcing a field allocates nothing and creates no RC obligation.
 pub fn identityKont() Value {
     return &IDENTITY_KONT_OBJ;
 }
@@ -575,10 +675,22 @@ pub fn identityKont() Value {
 /// Force a record field by name without checking `record`'s kind first
 /// (callers that already know it is a record, e.g. `Expand` pattern
 /// matching after its own `.kind == .record` guard, can skip that check).
+///
+/// `Ir.Force` is an expression in the middle of a block, so this has to hand
+/// back a plain `?Value` -- it runs a *nested* trampoline to completion
+/// rather than returning an Action. That is the one place native stack
+/// still grows: depth is bounded by the maximum dynamic nesting of `Force`
+/// (three frames per level), not by the total number of reduction steps.
+/// `g_force_depth_max` reports the high-water mark under MALGO_RC_STATS.
 pub fn forceField(record: Value, name: []const u8) ?Value {
     if (record.kind != .record) return null;
     for (record.payload.record.fields) |field| {
-        if (stringEq(field.name, name)) return field.code(record, &[_]Value{identityKont()});
+        if (stringEq(field.name, name)) {
+            g_force_depth += 1;
+            if (g_force_depth > g_force_depth_max) g_force_depth_max = g_force_depth;
+            defer g_force_depth -= 1;
+            return run(field.code, record, &[_]Value{identityKont()});
+        }
     }
     return null;
 }
@@ -656,8 +768,12 @@ pub fn exitWithLeakCheck() void {
     // std.c.getenv, not std.posix (removed in Zig 0.16); libc is always
     // linked (see Toolchain.hs's -lc).
     if (std.c.getenv("MALGO_RC_STATS") != null) {
-        var buf: [96]u8 = undefined;
-        const line = std.fmt.bufPrint(&buf, "MALGO-STATS: total_allocs={d} reuse_hits={d}\n", .{ g_total_allocs, g_reuse_hits }) catch "MALGO-STATS: ?\n";
+        var buf: [160]u8 = undefined;
+        const line = std.fmt.bufPrint(
+            &buf,
+            "MALGO-STATS: total_allocs={d} reuse_hits={d} dispatches={d} force_depth_max={d}\n",
+            .{ g_total_allocs, g_reuse_hits, g_dispatches, g_force_depth_max },
+        ) catch "MALGO-STATS: ?\n";
         writeStderr(line);
     }
     var leaked = g_live_objects != 0;
@@ -1455,6 +1571,112 @@ test "mkStructReuse allocates fresh on a null token" {
     const built = mkStructReuse(null, .{ .tuple = {} }, &[_]Value{a});
     try std.testing.expectEqual(Kind.strukt, built.kind);
     drop(built);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+// --- Trampoline dispatch (see `CodeFn`/`run`) ---
+
+var t_remaining: usize = 0;
+var t_first_frame: usize = 0;
+var t_last_frame: usize = 0;
+
+/// Passes its `self` and argument straight through for `t_remaining`
+/// dispatches, then finishes -- the minimal shape of a generated function
+/// under the Action protocol, and a probe of the frame address `run`
+/// dispatches from.
+fn chainCode(self: Value, args: []const Value) Action {
+    var probe: u8 = 0;
+    std.mem.doNotOptimizeAway(&probe);
+    const addr = @intFromPtr(&probe);
+    if (t_first_frame == 0) t_first_frame = addr;
+    t_last_frame = addr;
+    if (t_remaining == 0) {
+        drop(self);
+        return done(args[0]);
+    }
+    t_remaining -= 1;
+    return mkAction(&chainCode, self, args);
+}
+
+test "run dispatches in constant native stack and is RC-neutral" {
+    initHeap();
+    const before = g_live_objects;
+    t_remaining = 100_000;
+    t_first_frame = 0;
+    t_last_frame = 0;
+
+    const callee = mkClosure(&chainCode, &[_]Value{});
+    const result = run(&chainCode, callee, &[_]Value{mkInt32(7)});
+
+    // The property issue #360 is about: 100k dispatches, one frame. Before
+    // the trampoline this chain cost ~98.6 bytes of never-popped stack each.
+    try std.testing.expect(t_first_frame != 0);
+    try std.testing.expectEqual(t_first_frame, t_last_frame);
+
+    try std.testing.expectEqual(@as(i32, 7), result.payload.int32);
+    drop(result);
+    // `run` neither dups nor drops: the one reference of `callee` and the one
+    // of the argument that went in are the ones that came back out.
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+fn forcedFieldCode(self: Value, args: []const Value) Action {
+    drop(self);
+    return applyCovalue(args[0], mkInt32(99));
+}
+
+test "forceField runs a nested trampoline down to a plain value" {
+    initHeap();
+    const before = g_live_objects;
+    const rec = mkRecord(&[_]NamedField{.{ .name = "f", .code = &forcedFieldCode }}, &[_]Value{});
+
+    const forced = forceField(rec, "f") orelse return error.TestUnexpectedResult;
+
+    try std.testing.expectEqual(@as(i32, 99), forced.payload.int32);
+    try std.testing.expectEqual(@as(usize, 0), g_force_depth);
+    try std.testing.expect(g_force_depth_max >= 1);
+    drop(forced);
+    // forceField consumed the record's reference as the field code's `self`.
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+fn dropRestCode(self: Value, args: []const Value) Action {
+    drop(self);
+    for (args[1..]) |a| drop(a);
+    return done(args[0]);
+}
+
+test "an action carrying exactly MAX_ARGS arguments round-trips" {
+    initHeap();
+    const before = g_live_objects;
+    var argv: [MAX_ARGS]Value = undefined;
+    for (&argv, 0..) |*slot, i| slot.* = mkInt32(@intCast(i));
+
+    const callee = mkClosure(&dropRestCode, &[_]Value{});
+    const result = run(&dropRestCode, callee, argv[0..MAX_ARGS]);
+
+    try std.testing.expectEqual(@as(i32, 0), result.payload.int32);
+    drop(result);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
+test "applyDestructor dispatches to the matching branch" {
+    initHeap();
+    const before = g_live_objects;
+    // Nothing in the compiler constructs codata yet (Cocase lowers to a
+    // panic stub), so this path has no corpus coverage at all -- build one
+    // by hand rather than leave the branch untested.
+    const cd = mkCodata(&[_]NamedBranch{
+        .{ .name = "other", .code = &forcedFieldCode },
+        .{ .name = "wanted", .code = &forcedFieldCode },
+    }, &[_]Value{});
+
+    const action = applyDestructor(cd, "wanted", &[_]Value{identityKont()});
+    try std.testing.expectEqual(cd, action.self);
+    const result = run(action.code.?, action.self, action.argv[0..action.argc]);
+
+    try std.testing.expectEqual(@as(i32, 99), result.payload.int32);
+    drop(result);
     try std.testing.expectEqual(before, g_live_objects);
 }
 

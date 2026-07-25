@@ -124,19 +124,25 @@ inductive Stmt where
 mutual
 
 /-- Every terminator except `if`/`panic` consumes one reference of each of
-its operands (the call moves them into the callee). -/
+its operands (the call moves them into the callee).
+
+The call terminators do not emit a native Zig call: each returns an `rt.Action`
+that the runtime's `rt.run` trampoline dispatches (see `Emit`). The RC contract
+above is unaffected — an Action carries exactly the references a direct call
+would have moved. -/
 inductive Terminator where
   /-- `return rt.applyCovalue(k, v)` -/
   | applyCo (k v : Name)
   /-- `return rt.callClosure(f, &.{args})` -/
   | callClosure (f : Name) (args : List Name)
-  /-- `return <fn>(rt.no_self, &.{args})` (Join IR's `Invoke`) -/
+  /-- `return rt.staticCall(&<fn>, &.{args})` (Join IR's `Invoke`) -/
   | staticCall (fn : Name) (args : List Name)
   /-- `return rt.projectField(v, field, k)` -/
   | project (v : Name) (field : String) (k : Name)
   /-- `return rt.applyDestructor(v, name, &.{args})` -/
   | destruct (v : Name) (name : String) (args : List Name)
-  /-- `return v` (Join IR's `Finish`; the generated `main` owns the result) -/
+  /-- `return rt.done(v)` (Join IR's `Finish`; the generated `main` owns the
+  result, which comes back out of the trampoline) -/
   | «return» (v : Name)
   /-- `Ifz` and every lowered `Select` arm. The guard only borrows. -/
   | «if» (guard : Guard) (thenB elseB : Block)

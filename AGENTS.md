@@ -79,10 +79,23 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
   `rt.mkStructReuse`) recycle a uniquely-referenced Object in place (Koka-style
   FBIP, generalized to any same-arity payload, not just literal cell reuse).
   Set `MALGO_RC_STATS=1` when running a compiled binary to print
-  `MALGO-STATS: total_allocs=<N> reuse_hits=<N>` to stderr.
+  `MALGO-STATS: total_allocs=<N> reuse_hits=<N> dispatches=<N> force_depth_max=<N>`
+  to stderr.
+- Calling convention is a trampoline: a generated function returns an
+  `rt.Action` (the next call, or `done(v)`) and `rt.run` dispatches in a loop.
+  Zig does not guarantee tail calls, so emitting this CPS IR's tail calls as
+  native `return f(..)` grew the stack by one frame per reduction step and
+  SIGSEGV'd past ~150k steps (#360). The IR and the RC passes are unaffected —
+  an Action carries exactly the references a direct call moved.
 - Golden parity harness: `bash scripts/zig-golden.sh` (CI job `zig-golden`)
   compiles every golden testcase and diffs stdout byte-for-byte against the
   interpreter's goldens, failing on any leak.
+- Deep-recursion gate: `bash scripts/zig-deep-recursion.sh` (same CI jobs)
+  compiles `bench/fixtures/BenchFibDeep.mlg` release-fast and runs it — 18.8M
+  dispatches, which pre-#360 would have needed ~1.85 GB of native stack. Every
+  golden-sweep case is shallow, so this is the only thing that catches a
+  trampoline regression. Kept out of the sweep because its cases run
+  `--opt debug`, where DebugAllocator makes a case this long ~13s.
 - Runtime unit tests: `zig test -lc runtime/zig/runtime.zig` (`-lc` is required on
   Linux since the runtime calls `std.c.write`/`std.c.getenv` directly; macOS
   masks this because it always links libc via libSystem).

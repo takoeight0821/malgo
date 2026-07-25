@@ -7,10 +7,16 @@ import Malgo.Backend.Zig.Runtime
 (produced by `ClosureConv.convertProgram`) as Zig source text.
 
 Every `Func` becomes a Zig function with the uniform self-passing signature
-`fn (self: rt.Value, args: []const rt.Value) rt.Value`: a closure/record field
+`fn (self: rt.Value, args: []const rt.Value) rt.Action`: a closure/record field
 receives the closure object itself as `self` and reads its captures out of it
 (`ReadCapture` → `rt.capturesOf(self)`), while a top-level definition is called
 directly with the `rt.no_self` sentinel and ignores it.
+
+A generated function never performs a call: it returns an `rt.Action` naming the
+call it wants, and the runtime's `rt.run` trampoline dispatches in a loop. Zig
+does not guarantee tail-call optimization, so emitting these tail calls natively
+grew the stack by one frame per reduction step (issue #360). The RC discipline is
+unchanged — an Action carries exactly the references a direct call moved.
 
 Zig errors on both an unused local `const` and a pointless `_ = x;` discard of a
 used one, so the printer discards exactly the bindings (and `self`/`args`) that
@@ -97,6 +103,21 @@ def emitGuard (pv : Name → String) : Guard → String
 def valueSlice (pv : Name → String) (vs : List Name) : String :=
   "&[_]rt.Value{" ++ ", ".intercalate (vs.map pv) ++ "}"
 
+/-- Mirrors `MAX_ARGS` in `runtime/zig/runtime.zig`, the fixed argument capacity
+of an `rt.Action`. The runtime's own `rcInvariant` in `mkAction` is the
+authoritative backstop if the two ever drift. -/
+def maxCallArgs : Nat := 4
+
+/-- `valueSlice` for a call site, rejecting an arity the runtime's Action cannot
+carry. The front end tops out at 2 (`callClosure f [arg, kont]`), so exceeding
+this is a compiler bug rather than a user error. -/
+def callArgs (pv : Name → String) (what : String) (vs : List Name) : String :=
+  if vs.length > maxCallArgs then
+    panic! s!"Malgo.Backend.Zig.Emit: {what} call site has {vs.length} arguments, \
+             exceeding MAX_ARGS ({maxCallArgs}) in runtime/zig/runtime.zig"
+  else
+    valueSlice pv vs
+
 /-- A Zig string-literal slice of `vs`'s symbolic (compile-time) names, in the
 same order as the matching `valueSlice` — passed alongside it to an `rt.*Named`
 RC-tracing wrapper so a construction event's slots can be attributed back to
@@ -173,11 +194,18 @@ partial def emitStmts (pv : Name → String) (funcName : String)
 
 partial def emitTerminator (pv : Name → String) (funcName : String) : Terminator → String
   | .applyCo k v => "return rt.applyCovalue(" ++ pv k ++ ", " ++ pv v ++ ");\n"
-  | .callClosure f args => "return rt.callClosure(" ++ pv f ++ ", " ++ valueSlice pv args ++ ");\n"
-  | .staticCall fn args => "return " ++ mangleId fn ++ "(rt.no_self, " ++ valueSlice pv args ++ ");\n"
+  | .callClosure f args => "return rt.callClosure(" ++ pv f ++ ", " ++ callArgs pv "closure" args ++ ");\n"
+  | .staticCall fn args => "return rt.staticCall(&" ++ mangleId fn ++ ", " ++ callArgs pv "static" args ++ ");\n"
   | .project v field k => "return rt.projectField(" ++ pv v ++ ", " ++ zigStringLit field ++ ", " ++ pv k ++ ");\n"
-  | .destruct v name args => "return rt.applyDestructor(" ++ pv v ++ ", " ++ zigStringLit name ++ ", " ++ valueSlice pv args ++ ");\n"
-  | .«return» v => "return " ++ pv v ++ ";\n"
+  -- An over-arity destructor degrades to the panic `Cocase` already lowers to
+  -- rather than failing the build: nothing constructs codata yet, so every
+  -- `.destruct` that executes panics anyway.
+  | .destruct v name args =>
+    if args.length > maxCallArgs then
+      "rt.panicUnimplemented(\"Cocase destructor arity > MAX_ARGS\");\n"
+    else
+      "return rt.applyDestructor(" ++ pv v ++ ", " ++ zigStringLit name ++ ", " ++ valueSlice pv args ++ ");\n"
+  | .«return» v => "return rt.done(" ++ pv v ++ ");\n"
   | .«if» guard t e =>
     "if (" ++ emitGuard pv guard ++ ") {\n"
       ++ emitBlock pv funcName t
@@ -196,7 +224,7 @@ def emitFunc (fn : Func) : String :=
   let discardArgs := if fn.params.isEmpty then "_ = args;\n" else ""
   let paramBinds := String.join (fn.params.zipIdx.map (fun (p, i) =>
     declareConst (pv p) ("args[" ++ toString i ++ "]") (bodyFree.contains p)))
-  "fn " ++ mangleId fn.name ++ "(self: rt.Value, args: []const rt.Value) rt.Value {\n"
+  "fn " ++ mangleId fn.name ++ "(self: rt.Value, args: []const rt.Value) rt.Action {\n"
     ++ discardSelf ++ discardArgs ++ paramBinds
     ++ emitBlock pv funcNameLit fn.body ++ "}"
 
@@ -210,9 +238,9 @@ the `ModuleName` directly and is otherwise pure. -/
 def emitProgram (modName : ModuleName) (program : Program) : String :=
   let entryCall := match program.entry with
     | none => ""
-    -- The Finish value propagates up the tail-call chain to here; dropping it
-    -- is the last consumption the leak check relies on.
-    | some name => "    rt.drop(" ++ mangleId name ++ "(rt.no_self, &[_]rt.Value{}));"
+    -- The Finish value comes back out of the trampoline here; dropping it is
+    -- the last consumption the leak check relies on.
+    | some name => "    rt.drop(rt.run(&" ++ mangleId name ++ ", rt.no_self, &[_]rt.Value{}));"
   unlines
     [ "// Generated by the Malgo Zig backend from module " ++ modName.toStr ++ ".",
       "// Memory: Perceus reference counting (dup/drop inserted by the compiler);",

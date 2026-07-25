@@ -142,18 +142,24 @@ pathRoot (PField p _) = pathRoot p
 
 -- | Every terminator except 'TIf'\/'TPanic' consumes one reference of each
 -- of its operands (the call moves them into the callee).
+--
+-- The call terminators do not emit a native Zig call: each returns an
+-- @rt.Action@ that the runtime's @rt.run@ trampoline dispatches (see
+-- 'Malgo.Backend.Zig.Emit'). The RC contract above is unaffected — an
+-- Action carries exactly the references a direct call would have moved.
 data Terminator
   = -- | @return rt.applyCovalue(k, v)@
     TApplyCo Name Name
   | -- | @return rt.callClosure(f, &.{args})@
     TCallClosure Name [Name]
-  | -- | @return \<fn\>(rt.no_self, &.{args})@ (Join IR's @Invoke@)
+  | -- | @return rt.staticCall(&\<fn\>, &.{args})@ (Join IR's @Invoke@)
     TStaticCall Name [Name]
   | -- | @return rt.projectField(v, field, k)@
     TProject Name Text Name
   | -- | @return rt.applyDestructor(v, name, &.{args})@
     TDestruct Name Text [Name]
-  | -- | @return v@ (Join IR's @Finish@; the generated @main@ owns the result)
+  | -- | @return rt.done(v)@ (Join IR's @Finish@; the generated @main@ owns
+    -- the result, which comes back out of the trampoline)
     TReturn Name
   | -- | @Ifz@ and every lowered @Select@ arm. The guard only borrows.
     TIf Guard Block Block

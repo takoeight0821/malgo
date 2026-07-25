@@ -199,9 +199,6 @@ def renderFullProd : Full.Producer → Doc
       fromString krs.1 ++ renderArgs [renderName krs.2.1] <+> atom "=" <+> block (renderFullStmt krs.2.2))
   | .«do» _ name stmt => atom "do" <+> renderName name <+> atom "." <+> block (renderFullStmt stmt)
   | .mu _ name stmt => atom "mu" <+> renderName name <+> atom "." <+> block (renderFullStmt stmt)
-  | .cocase _ branches =>
-    atom "cocase" <+> blockLines (branches.attach.map fun ⟨dvs, hdvs⟩ =>
-      group (atom "." ++ fromString dvs.1 ++ renderArgs (dvs.2.1.map renderName) <+> atom "->" ++ nest 2 (line ++ renderFullStmt dvs.2.2)))
 termination_by p => sizeOf p
 decreasing_by
   all_goals simp_wf
@@ -219,8 +216,6 @@ def renderFullCons : Full.Consumer → Doc
   | .«then» _ name stmt => group (atom "then" <+> renderName name <+> atom "->" <+> block (renderFullStmt stmt))
   | .finish _ => atom "finish"
   | .select _ branches => atom "select" <+> blockLines (branches.map renderFullBranch)
-  | .destructor _ name ps c =>
-    atom "." ++ fromString name ++ renderArgs (ps.map renderFullProd) <+> atom "->" <+> renderFullCons c
 termination_by c => sizeOf c
 decreasing_by
   all_goals simp_wf
@@ -274,9 +269,6 @@ def renderFlatProd : Flat.Producer → Doc
     braceList ((sortAssocAscending fields).attach.map fun ⟨krs, hkrs⟩ =>
       fromString krs.1 ++ renderArgs [renderName krs.2.1] <+> atom "=" <+> block (renderFlatStmt krs.2.2))
   | .mu _ name stmt => atom "mu" <+> renderName name <+> atom "." <+> block (renderFlatStmt stmt)
-  | .cocase _ branches =>
-    atom "cocase" <+> blockLines (branches.attach.map fun ⟨dvs, hdvs⟩ =>
-      group (atom "." ++ fromString dvs.1 ++ renderArgs (dvs.2.1.map renderName) <+> atom "->" ++ nest 2 (line ++ renderFlatStmt dvs.2.2)))
 termination_by p => sizeOf p
 decreasing_by
   all_goals simp_wf
@@ -294,8 +286,6 @@ def renderFlatCons : Flat.Consumer → Doc
   | .«then» _ name stmt => group (atom "then" <+> renderName name <+> atom "->" <+> block (renderFlatStmt stmt))
   | .finish _ => atom "finish"
   | .select _ branches => atom "select" <+> blockLines (branches.map renderFlatBranch)
-  | .destructor _ name ps c =>
-    atom "." ++ fromString name ++ renderArgs (ps.map renderFlatProd) <+> atom "->" <+> renderFlatCons c
 termination_by c => sizeOf c
 decreasing_by
   all_goals simp_wf
@@ -349,9 +339,6 @@ def renderJoinProd : Join.Producer → Doc
     braceList ((sortAssocAscending fields).attach.map fun ⟨krs, hkrs⟩ =>
       fromString krs.1 ++ renderArgs [renderName krs.2.1] <+> atom "=" <+> block (renderJoinStmt krs.2.2))
   | .mu _ name stmt => atom "mu" <+> renderName name <+> atom "." <+> block (renderJoinStmt stmt)
-  | .cocase _ branches =>
-    atom "cocase" <+> blockLines (branches.attach.map fun ⟨dvs, hdvs⟩ =>
-      group (atom "." ++ fromString dvs.1 ++ renderArgs (dvs.2.1.map renderName) <+> atom "->" ++ nest 2 (line ++ renderJoinStmt dvs.2.2)))
 termination_by p => sizeOf p
 decreasing_by
   all_goals simp_wf
@@ -369,8 +356,6 @@ def renderJoinCons : Join.Consumer → Doc
   | .«then» _ name stmt => group (atom "then" <+> renderName name <+> atom "->" <+> block (renderJoinStmt stmt))
   | .finish _ => atom "finish"
   | .select _ branches => atom "select" <+> blockLines (branches.map renderJoinBranch)
-  | .destructor _ name ps ret =>
-    atom "." ++ fromString name ++ renderArgs (ps.map renderJoinProd) <+> atom "->" <+> renderName ret
 termination_by c => sizeOf c
 decreasing_by
   all_goals simp_wf
@@ -435,7 +420,6 @@ def renderTerm : Ir.Terminator → Doc
   | .callClosure f args => atom "return" <+> renderName f ++ renderArgs (args.map renderName)
   | .staticCall fn args => atom "return" <+> renderName fn ++ renderArgs (args.map renderName)
   | .project v field k => atom "return" <+> renderName v ++ atom "." ++ fromString field ++ renderArgs [renderName k]
-  | .destruct v name args => atom "return" <+> renderName v ++ atom "." ++ fromString name ++ renderArgs (args.map renderName)
   | .«return» v => atom "return" <+> renderName v
   | .«if» guard t e =>
     group (atom "if" <+> renderGuard guard <+> atom "then" <+> block (renderBlock t) <+> atom "else" <+> block (renderBlock e))

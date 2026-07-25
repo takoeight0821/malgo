@@ -53,7 +53,6 @@ inductive Value where
   | struct (tag : Tag) (values : List Value)
   | function (env : Env) (params : List Name) (statement : JStatement)
   | record (env : Env) (fields : List (String × Name × JStatement))
-  | codata (env : Env) (branches : List (String × List Name × JStatement))
   | consumer (k : ConsumerK)
 
 /-- Defunctionalized consumer closure. `run` is `fromConsumer env k`;
@@ -123,7 +122,6 @@ partial def valueToText : Value → String
   | .struct (.tag name) values => name ++ "(" ++ String.intercalate ", " (values.map valueToText) ++ ")"
   | .function .. => "<function>"
   | .record .. => "<record>"
-  | .codata .. => "<codata>"
   | .consumer .. => "<consumer>"
 
 /-! ## Errors -/
@@ -753,7 +751,6 @@ partial def evalProducer (env : Env) : JProducer → EvalM Value
     storeSet slot (.struct .tuple [])
     evalStatement (extendEnv name (.consumer (.writeSlot slot)) env) stmt
     return (← storeGet? slot).getD (.struct .tuple [])
-  | .cocase _ branches => pure (.codata env branches)
 
 partial def evalConsumer (env : Env) : JConsumer → Value → EvalM Unit
   | .label range label, given => do
@@ -778,16 +775,6 @@ partial def evalConsumer (env : Env) : JConsumer → Value → EvalM Unit
   | .«then» _ name statement, given =>
     evalStatement (extendEnv name given env) statement
   | .finish _, _ => pure ()
-  | .destructor range dName producers returnName, given => do
-    match given with
-    | .codata cenv branches =>
-      match branches.find? (fun (n, _, _) => n == dName) with
-      | some (_, vars, body) => do
-        let prodValues ← producers.mapM (evalProducer env)
-        let retConsumer ← lookupEnv env range returnName
-        evalStatement (extendEnv' (vars.zip (prodValues ++ [retConsumer])) cenv) body
-      | none => throw (.noSuchField range dName given)
-    | _ => throw (.noMatch range given)
   | .select range branches, given => selectGo env range given branches
 
 partial def selectGo (env : Env) (range : Range) (given : Value) : List JBranch → EvalM Unit

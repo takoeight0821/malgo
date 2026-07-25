@@ -165,11 +165,6 @@ flatProducer (Full.Do range name statement) = do
 flatProducer (Full.Mu range name statement) = do
   statement' <- flatStatement statement
   pure $ Zero (Mu range name statement')
-flatProducer (Full.Cocase range branches) = do
-  branches' <- for branches \(d, vars, s) -> do
-    s' <- flatStatement s
-    pure (d, vars, s')
-  pure $ Zero (Cocase range branches')
 
 flatConsumer :: (State Uniq :> es, Reader ModuleName :> es) => Full.Consumer -> Eff es Consumer
 flatConsumer (Full.Label range name) = pure $ Label range name
@@ -204,27 +199,6 @@ flatConsumer (Full.Finish range) = pure $ Finish range
 flatConsumer (Full.Select range branches) = do
   branches <- traverse flatBranch branches
   pure $ Select range branches
-flatConsumer (Full.Destructor range name producers consumer) = do
-  (zeros, mproducer, rest) <- split producers
-  case mproducer of
-    Just producer -> do
-      outer <- newTemporalId "outer"
-      inner <- newTemporalId "inner"
-      destr <- flatConsumer (Full.Destructor range name (zeros <> [Full.Var range inner] <> rest) consumer)
-      producer' <- flatProducer producer
-      pure
-        $ Then range outer
-        $ cut producer'
-        $ Then range inner
-        $ cut (Zero (Var range outer)) destr
-    Nothing -> do
-      producers' <- for zeros \zero -> do
-        zero' <- flatProducer zero
-        case zero' of
-          Zero producer' -> pure producer'
-          Do' {} -> error "impossible"
-      consumer' <- flatConsumer consumer
-      pure $ Destructor range name producers' consumer'
 
 flatBranch :: (State Uniq :> es, Reader ModuleName :> es) => Full.Branch -> Eff es Branch
 flatBranch (Full.Branch range pattern statement) = do
@@ -249,7 +223,6 @@ isValue Full.Lambda {} = True
 isValue Full.Object {} = True
 isValue Full.Do {} = False
 isValue Full.Mu {} = False
-isValue Full.Cocase {} = True
 
 data Program = Program
   { definitions :: [(Range, Name, Name, Statement)],
@@ -269,7 +242,6 @@ data Producer where
   Lambda :: Range -> [Name] -> Statement -> Producer
   Object :: Range -> Map Text (Name, Statement) -> Producer
   Mu :: Range -> Name -> Statement -> Producer
-  Cocase :: Range -> [(Text, [Name], Statement)] -> Producer
 
 deriving stock instance Show Producer
 
@@ -286,7 +258,6 @@ instance HasRange Producer where
   range (Lambda range _ _) = range
   range (Object range _) = range
   range (Mu range _ _) = range
-  range (Cocase range _) = range
 
 instance ToSExpr Producer where
   toSExpr (Var _ name) = toSExpr name
@@ -296,8 +267,6 @@ instance ToSExpr Producer where
   toSExpr (Lambda _ names statement) = S.L [S.A "lambda", S.L $ map toSExpr names, toSExpr statement]
   toSExpr (Object _ kvs) = S.L $ map (\(k, v) -> S.L [toSExpr k, toSExpr v]) $ Map.toList kvs
   toSExpr (Mu _ name statement) = S.L [S.A "mu", toSExpr name, toSExpr statement]
-  toSExpr (Cocase _ branches) =
-    S.L $ S.A "cocase" : map (\(d, vars, s) -> S.L [toSExpr d, S.L $ map toSExpr vars, toSExpr s]) branches
 
 data Consumer where
   Label :: Range -> Name -> Consumer
@@ -306,7 +275,6 @@ data Consumer where
   Then :: Range -> Name -> Statement -> Consumer
   Finish :: Range -> Consumer
   Select :: Range -> [Branch] -> Consumer
-  Destructor :: Range -> Text -> [Producer] -> Consumer -> Consumer
 
 deriving stock instance Show Consumer
 
@@ -323,8 +291,6 @@ instance ToSExpr Consumer where
   toSExpr (Then _ name statement) = S.L [S.A "then", toSExpr name, toSExpr statement]
   toSExpr (Finish _) = S.A "finish"
   toSExpr (Select _ branches) = S.L $ S.A "select" : map toSExpr branches
-  toSExpr (Destructor _ name producers consumer) =
-    S.L [S.A "destructor", toSExpr name, S.L $ map toSExpr producers, toSExpr consumer]
 
 data Statement where
   Cut :: Producer -> Consumer -> Statement

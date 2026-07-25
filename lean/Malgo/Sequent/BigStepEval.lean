@@ -99,7 +99,6 @@ partial def evalProducer (env : Env) : JProducer → EvalM Value
     let slot ← freshSlot
     storeSet slot (.struct .tuple [])
     evalStatement slot (extendEnv name (.consumer (.writeSlot slot)) env) stmt
-  | .cocase _ branches => pure (.codata env branches)
 
 /-- Apply a named consumer to a value: invoke its closure (which writes to
 its own captured slot), then read the current slot back. -/
@@ -148,16 +147,6 @@ partial def applyConsumerDirect (slot : Nat) (env : Env) : JConsumer → Value �
   | .«then» _ name statement, given =>
     evalStatement slot (extendEnv name given env) statement
   | .finish _, given => pure given
-  | .destructor range dName producers returnName, given => do
-    match given with
-    | .codata cenv branches =>
-      match branches.find? (fun (n, _, _) => n == dName) with
-      | some (_, vars, body) => do
-        let prodValues ← producers.mapM (evalProducer env)
-        let retConsumer ← lookupEnv env range returnName
-        evalStatement slot (extendEnv' (vars.zip (prodValues ++ [retConsumer])) cenv) body
-      | none => throw (.noSuchField range dName given)
-    | _ => throw (.noMatch range given)
   | .select range branches, given => selectGo slot env range given branches
 
 partial def selectGo (slot : Nat) (env : Env) (range : Range) (given : Value) :

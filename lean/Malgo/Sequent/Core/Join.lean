@@ -42,7 +42,6 @@ inductive Producer where
   | lambda (range : Range) (names : List Name) (statement : Statement)
   | object (range : Range) (fields : List (String × Name × Statement))
   | mu (range : Range) (name : Name) (statement : Statement)
-  | cocase (range : Range) (branches : List (String × List Name × Statement))
 
 inductive Consumer where
   | label (range : Range) (name : Name)
@@ -51,7 +50,6 @@ inductive Consumer where
   | «then» (range : Range) (name : Name) (statement : Statement)
   | finish (range : Range)
   | select (range : Range) (branches : List Branch)
-  | destructor (range : Range) (name : String) (producers : List Producer) (consumer : Name)
 
 inductive Statement where
   | cut (producer : Producer) (consumer : Name)
@@ -74,7 +72,6 @@ def Producer.range : Producer → Range
   | .lambda r _ _ => r
   | .object r _ => r
   | .mu r _ _ => r
-  | .cocase r _ => r
 
 instance : HasRange Producer := ⟨Producer.range⟩
 
@@ -105,16 +102,12 @@ def Producer.toSExpr : Producer → SExpr
     .list ((sortAssocAscending kvs).attach.map fun ⟨kns, hkns⟩ =>
       .list [sym kns.1, .list [Malgo.toSExpr kns.2.1, kns.2.2.toSExpr]])
   | .mu _ name statement => .list [sym "mu", Malgo.toSExpr name, statement.toSExpr]
-  | .cocase _ branches =>
-    .list (sym "cocase" :: branches.attach.map fun ⟨dvs, hdvs⟩ =>
-      .list [Malgo.toSExpr dvs.1, .list (dvs.2.1.map Malgo.toSExpr), dvs.2.2.toSExpr])
 termination_by p => sizeOf p
 decreasing_by
   all_goals simp_wf
   all_goals first
     | omega
     | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem (mem_sortAssocAscending hkns)) (by omega)
-    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
     | (rename_i h
        exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
@@ -126,8 +119,6 @@ def Consumer.toSExpr : Consumer → SExpr
   | .«then» _ name statement => .list [sym "then", Malgo.toSExpr name, statement.toSExpr]
   | .finish _ => sym "finish"
   | .select _ branches => .list (sym "select" :: branches.map Branch.toSExpr)
-  | .destructor _ name producers consumer =>
-    .list [sym "destructor", Malgo.toSExpr name, .list (producers.map Producer.toSExpr), Malgo.toSExpr consumer]
 termination_by c => sizeOf c
 decreasing_by
   all_goals simp_wf
@@ -249,10 +240,6 @@ partial def joinProducer (moduleName : ModuleName) : Flat.Producer → JoinM Pro
   | .mu range name statement => do
     let statement ← runJoin (joinStatement moduleName statement)
     pure <| .mu range name statement
-  | .cocase range branches => do
-    let branches ← branches.mapM fun (d, vars, s) => do
-      pure (d, vars, ← runJoin (joinStatement moduleName s))
-    pure <| .cocase range branches
 
 /-- Consumers other than a bare `Label` are hoisted: they emit a `Join`
 frame via `tellJoin` and reduce to the fresh name that binds it. -/
@@ -272,10 +259,6 @@ partial def joinConsumer (moduleName : ModuleName) : Flat.Consumer → JoinM Nam
   | .select range branches => do
     let branches ← branches.mapM fun b => do pure (← joinBranch moduleName b)
     tellJoin moduleName range "select" (.select range branches)
-  | .destructor range name producers ret => do
-    let producers ← producers.mapM (joinProducer moduleName)
-    let ret ← joinConsumer moduleName ret
-    tellJoin moduleName range "destructor" (.destructor range name producers ret)
 
 /-- The `Join`-binding position keeps a full `Consumer` rather than
 hoisting it to a name (port of `joinConsumer'`). -/
@@ -295,10 +278,6 @@ partial def joinConsumer' (moduleName : ModuleName) : Flat.Consumer → JoinM Co
   | .select range branches => do
     let branches ← branches.mapM fun b => do pure (← joinBranch moduleName b)
     pure <| .select range branches
-  | .destructor range name producers ret => do
-    let producers ← producers.mapM (joinProducer moduleName)
-    let ret ← joinConsumer moduleName ret
-    pure <| .destructor range name producers ret
 
 partial def joinBranch (moduleName : ModuleName) : Flat.Branch → MalgoM Branch
   | .branch range pattern statement => do

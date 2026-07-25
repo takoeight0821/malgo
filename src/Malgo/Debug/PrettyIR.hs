@@ -206,10 +206,6 @@ renderFullProd = \case
     braceList [pretty k <> renderArgs [renderName ret] <+> "=" <+> block (renderFullStmt stmt) | (k, (ret, stmt)) <- Map.toList fields]
   Full.Do _ name stmt -> "do" <+> renderName name <+> "." <+> block (renderFullStmt stmt)
   Full.Mu _ name stmt -> "mu" <+> renderName name <+> "." <+> block (renderFullStmt stmt)
-  Full.Cocase _ branches ->
-    "cocase"
-      <+> blockLines
-        [group ("." <> pretty d <> renderArgs (map renderName vs) <+> "->" <> nest 2 (line <> renderFullStmt s)) | (d, vs, s) <- branches]
 
 renderFullCons :: Full.Consumer -> Doc ann
 renderFullCons = \case
@@ -219,7 +215,6 @@ renderFullCons = \case
   Full.Then _ name stmt -> group ("then" <+> renderName name <+> "->" <+> block (renderFullStmt stmt))
   Full.Finish _ -> "finish"
   Full.Select _ branches -> "select" <+> blockLines (map renderFullBranch branches)
-  Full.Destructor _ name ps c -> "." <> pretty name <> renderArgs (map renderFullProd ps) <+> "->" <+> renderFullCons c
 
 renderFullBranch :: Full.Branch -> Doc ann
 renderFullBranch (Full.Branch _ pat stmt) = group (renderPattern pat <+> "->" <> nest 2 (line <> renderFullStmt stmt))
@@ -249,10 +244,6 @@ renderFlatProd = \case
   Flat.Object _ fields ->
     braceList [pretty k <> renderArgs [renderName ret] <+> "=" <+> block (renderFlatStmt stmt) | (k, (ret, stmt)) <- Map.toList fields]
   Flat.Mu _ name stmt -> "mu" <+> renderName name <+> "." <+> block (renderFlatStmt stmt)
-  Flat.Cocase _ branches ->
-    "cocase"
-      <+> blockLines
-        [group ("." <> pretty d <> renderArgs (map renderName vs) <+> "->" <> nest 2 (line <> renderFlatStmt s)) | (d, vs, s) <- branches]
 
 renderFlatCons :: Flat.Consumer -> Doc ann
 renderFlatCons = \case
@@ -262,7 +253,6 @@ renderFlatCons = \case
   Flat.Then _ name stmt -> group ("then" <+> renderName name <+> "->" <+> block (renderFlatStmt stmt))
   Flat.Finish _ -> "finish"
   Flat.Select _ branches -> "select" <+> blockLines (map renderFlatBranch branches)
-  Flat.Destructor _ name ps c -> "." <> pretty name <> renderArgs (map renderFlatProd ps) <+> "->" <+> renderFlatCons c
 
 renderFlatBranch :: Flat.Branch -> Doc ann
 renderFlatBranch (Flat.Branch _ pat stmt) = group (renderPattern pat <+> "->" <> nest 2 (line <> renderFlatStmt stmt))
@@ -292,10 +282,6 @@ renderJoinProd = \case
   Join.Object _ fields ->
     braceList [pretty k <> renderArgs [renderName ret] <+> "=" <+> block (renderJoinStmt stmt) | (k, (ret, stmt)) <- Map.toList fields]
   Join.Mu _ name stmt -> "mu" <+> renderName name <+> "." <+> block (renderJoinStmt stmt)
-  Join.Cocase _ branches ->
-    "cocase"
-      <+> blockLines
-        [group ("." <> pretty d <> renderArgs (map renderName vs) <+> "->" <> nest 2 (line <> renderJoinStmt s)) | (d, vs, s) <- branches]
 
 renderJoinCons :: Join.Consumer -> Doc ann
 renderJoinCons = \case
@@ -305,7 +291,6 @@ renderJoinCons = \case
   Join.Then _ name stmt -> group ("then" <+> renderName name <+> "->" <+> block (renderJoinStmt stmt))
   Join.Finish _ -> "finish"
   Join.Select _ branches -> "select" <+> blockLines (map renderJoinBranch branches)
-  Join.Destructor _ name ps ret -> "." <> pretty name <> renderArgs (map renderJoinProd ps) <+> "->" <+> renderName ret
 
 renderJoinBranch :: Join.Branch -> Doc ann
 renderJoinBranch (Join.Branch _ pat stmt) = group (renderPattern pat <+> "->" <> nest 2 (line <> renderJoinStmt stmt))
@@ -365,7 +350,6 @@ renderTerm = \case
   Ir.TCallClosure f args -> "return" <+> renderName f <> renderArgs (map renderName args)
   Ir.TStaticCall fn args -> "return" <+> renderName fn <> renderArgs (map renderName args)
   Ir.TProject v field k -> "return" <+> renderName v <> "." <> pretty field <> renderArgs [renderName k]
-  Ir.TDestruct v name args -> "return" <+> renderName v <> "." <> pretty name <> renderArgs (map renderName args)
   Ir.TReturn v -> "return" <+> renderName v
   Ir.TIf guard t e -> group ("if" <+> renderGuard guard <+> "then" <+> block (renderBlock t) <+> "else" <+> block (renderBlock e))
   Ir.TPanic msg -> "panic" <+> dquotes (pretty msg)

@@ -170,17 +170,12 @@ def producerToJson : Producer → Json
       Json.arr (fields.attach.map fun ⟨kns, hkns⟩ =>
         Json.arr #[Json.str kns.1, toJson kns.2.1, statementToJson kns.2.2]).toArray]
   | .mu r name s => Json.arr #[Json.str "mu", toJson r, toJson name, statementToJson s]
-  | .cocase r branches =>
-    Json.arr #[Json.str "cocase", toJson r,
-      Json.arr (branches.attach.map fun ⟨dvs, hdvs⟩ =>
-        Json.arr #[Json.str dvs.1, jList toJson dvs.2.1, statementToJson dvs.2.2]).toArray]
 termination_by p => sizeOf p
 decreasing_by
   all_goals simp_wf
   all_goals first
     | omega
     | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hkns) (by omega)
-    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
     | exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem hp) (by omega)
 
 def consumerToJson : Consumer → Json
@@ -194,9 +189,6 @@ def consumerToJson : Consumer → Json
   | .select r branches =>
     Json.arr #[Json.str "select", toJson r,
       Json.arr (branches.attach.map fun ⟨b, hb⟩ => branchToJson b).toArray]
-  | .destructor r name ps c =>
-    Json.arr #[Json.str "destr", toJson r, Json.str name,
-      Json.arr (ps.attach.map fun ⟨p, hp⟩ => producerToJson p).toArray, toJson c]
 termination_by c => sizeOf c
 decreasing_by
   all_goals simp_wf
@@ -241,10 +233,6 @@ partial def producerFromJson (j : Json) : Except String Producer := do
         match (← e.getArr?).toList with
         | [k, name, s] => return (← k.getStr?, ← fromJson? name, ← statementFromJson s)
         | _ => .error "Producer.object: bad field") a)
-    | "cocase" => return .cocase (← fromJson? r) (← jParseList (fun e => do
-        match (← e.getArr?).toList with
-        | [d, vars, s] => return (← d.getStr?, ← jParseList fromJson? vars, ← statementFromJson s)
-        | _ => .error "Producer.cocase: bad branch") a)
     | other => .error s!"Producer: unknown 3-element tag {other}"
   | [tag, r, a, b] => match ← tag.getStr? with
     | "mu" => return .mu (← fromJson? r) (← fromJson? a) (← statementFromJson b)
@@ -270,7 +258,6 @@ partial def consumerFromJson (j : Json) : Except String Consumer := do
     | "then" => return .«then» (← fromJson? r) (← fromJson? a) (← statementFromJson b)
     | other => .error s!"Consumer: unknown 4-element tag {other}"
   | [tag, r, a, b, c] => match ← tag.getStr? with
-    | "destr" => return .destructor (← fromJson? r) (← a.getStr?) (← jParseList producerFromJson b) (← fromJson? c)
     | other => .error s!"Consumer: unknown 5-element tag {other}"
   | _ => .error "Consumer: unexpected shape"
 

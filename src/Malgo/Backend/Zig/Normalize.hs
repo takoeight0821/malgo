@@ -39,7 +39,6 @@ substStatement from to = goS
     goP (Lambda range names stmt) = Lambda range names (goS stmt)
     goP (Object range fields) = Object range (fmap (\(k, s) -> (k, goS s)) fields)
     goP (Mu range name stmt) = Mu range name (goS stmt)
-    goP (Cocase range branches) = Cocase range (map (\(d, vs, s) -> (d, vs, goS s)) branches)
 
     goC (Label range n) = Label range (r n)
     goC (Apply range ps ks) = Apply range (map goP ps) (map r ks)
@@ -47,7 +46,6 @@ substStatement from to = goS
     goC (Then range name stmt) = Then range name (goS stmt)
     goC f@(Finish _) = f
     goC (Select range branches) = Select range (map goB branches)
-    goC (Destructor range name ps k) = Destructor range name (map goP ps) (r k)
 
     goB (Branch range pat stmt) = Branch range pat (goS stmt)
 
@@ -74,7 +72,6 @@ normalizeStatement = goS
     goP (Lambda range names stmt) = Lambda range names (goS stmt)
     goP (Object range fields) = Object range (fmap (\(k, s) -> (k, goS s)) fields)
     goP (Mu range name stmt) = Mu range name (goS stmt)
-    goP (Cocase range branches) = Cocase range (map (\(d, vs, s) -> (d, vs, goS s)) branches)
 
     goC (Label range n) = Label range n
     goC (Apply range ps ks) = Apply range (map goP ps) ks
@@ -82,6 +79,5 @@ normalizeStatement = goS
     goC (Then range name stmt) = Then range name (goS stmt)
     goC f@(Finish _) = f
     goC (Select range branches) = Select range (map goB branches)
-    goC (Destructor range name ps k) = Destructor range name (map goP ps) k
 
     goB (Branch range pat stmt) = Branch range pat (goS stmt)

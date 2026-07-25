@@ -40,7 +40,6 @@ partial def flatProdStats : Flat.Producer → List String
   | .lambda _ _ s => "lambdas" :: flatStmtStats s
   | .object _ fs => "objects" :: fs.flatMap (fun (_, _, s) => flatStmtStats s)
   | .mu _ _ s => "mus" :: flatStmtStats s
-  | .cocase _ bs => "cocases" :: bs.flatMap (fun (_, _, s) => flatStmtStats s)
 
 partial def flatConsStats : Flat.Consumer → List String
   | .label _ _ => ["labels"]
@@ -49,7 +48,6 @@ partial def flatConsStats : Flat.Consumer → List String
   | .«then» _ _ s => "thens" :: flatStmtStats s
   | .finish _ => ["finishes"]
   | .select _ bs => "selects" :: bs.flatMap flatBranchStats
-  | .destructor _ _ ps c => "destructors" :: (ps.flatMap flatProdStats ++ flatConsStats c)
 
 partial def flatBranchStats : Flat.Branch → List String
   | .branch _ _ s => flatStmtStats s
@@ -80,7 +78,6 @@ partial def joinProdStats : Join.Producer → List String
   | .lambda _ _ s => "lambdas" :: joinStmtStats s
   | .object _ fs => "objects" :: fs.flatMap (fun (_, _, s) => joinStmtStats s)
   | .mu _ _ s => "mus" :: joinStmtStats s
-  | .cocase _ bs => "cocases" :: bs.flatMap (fun (_, _, s) => joinStmtStats s)
 
 partial def joinConsStats : Join.Consumer → List String
   | .label _ _ => ["labels"]
@@ -89,7 +86,6 @@ partial def joinConsStats : Join.Consumer → List String
   | .«then» _ _ s => "thens" :: joinStmtStats s
   | .finish _ => ["finishes"]
   | .select _ bs => "selects" :: bs.flatMap joinBranchStats
-  | .destructor _ _ ps _ => "destructors" :: ps.flatMap joinProdStats
 
 partial def joinBranchStats : Join.Branch → List String
   | .branch _ _ s => joinStmtStats s
@@ -102,8 +98,8 @@ end
 (the literal list is already alphabetically sorted, and `Data.List.sort`
 keeps it so). -/
 def statKeys : List String :=
-  ["applies", "binOps", "cocases", "constructs", "cuts", "definitions",
-   "destructors", "externalCalls", "finishes", "ifzs", "invokes", "joins",
+  ["applies", "binOps", "constructs", "cuts", "definitions",
+   "externalCalls", "finishes", "ifzs", "invokes", "joins",
    "labels", "lambdas", "literals", "mus", "objects", "primitives",
    "projects", "selects", "thens", "vars"]
 

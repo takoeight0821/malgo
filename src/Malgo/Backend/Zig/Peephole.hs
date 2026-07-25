@@ -160,7 +160,6 @@ substNameBlock from to = goBlock
       TCallClosure f args -> TCallClosure (rn f) (map rn args)
       TStaticCall fn args -> TStaticCall fn (map rn args)
       TProject v field k -> TProject (rn v) field (rn k)
-      TDestruct v name args -> TDestruct (rn v) name (map rn args)
       TReturn v -> TReturn (rn v)
       TIf guard t e -> TIf (goGuard guard) (goBlock t) (goBlock e)
       TPanic msg -> TPanic msg

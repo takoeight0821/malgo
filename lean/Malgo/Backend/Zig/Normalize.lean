@@ -60,16 +60,12 @@ def substProducer (src tgt : Name) : Producer → Producer
     .object range (fields.attach.map fun ⟨krs, hkrs⟩ =>
       (krs.1, krs.2.1, substStatement src tgt krs.2.2))
   | .mu range name stmt => .mu range name (substStatement src tgt stmt)
-  | .cocase range branches =>
-    .cocase range (branches.attach.map fun ⟨dvs, hdvs⟩ =>
-      (dvs.1, dvs.2.1, substStatement src tgt dvs.2.2))
 termination_by p => sizeOf p
 decreasing_by
   all_goals simp_wf
   all_goals first
     | omega
     | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hkrs) (by omega)
-    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
     | (rename_i h
        exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
@@ -81,8 +77,6 @@ def substConsumer (src tgt : Name) : Consumer → Consumer
   | .«then» range name stmt => .«then» range name (substStatement src tgt stmt)
   | .finish range => .finish range
   | .select range branches => .select range (branches.map (substBranch src tgt))
-  | .destructor range name ps k =>
-    .destructor range name (ps.map (substProducer src tgt)) (substName src tgt k)
 termination_by c => sizeOf c
 
 def substBranch (src tgt : Name) : Branch → Branch
@@ -118,8 +112,6 @@ partial def normalizeProducer : Producer → Producer
   | .object range fields =>
     .object range (fields.map (fun (k, ret, s) => (k, ret, normalizeStatement s)))
   | .mu range name stmt => .mu range name (normalizeStatement stmt)
-  | .cocase range branches =>
-    .cocase range (branches.map (fun (d, vs, s) => (d, vs, normalizeStatement s)))
 
 partial def normalizeConsumer : Consumer → Consumer
   | .label range n => .label range n
@@ -128,7 +120,6 @@ partial def normalizeConsumer : Consumer → Consumer
   | .«then» range name stmt => .«then» range name (normalizeStatement stmt)
   | .finish range => .finish range
   | .select range branches => .select range (branches.map normalizeBranch)
-  | .destructor range name ps k => .destructor range name (ps.map normalizeProducer) k
 
 partial def normalizeBranch : Branch → Branch
   | .branch range pat stmt => .branch range pat (normalizeStatement stmt)

@@ -147,9 +147,6 @@ evalProducer (Mu _ name stmt) = do
   ref <- newIORef (Struct Tuple [])
   local (extendEnv name (Consumer $ \v -> writeIORef ref v))
     $ evalStatement ref stmt
-evalProducer (Cocase _ branches) = do
-  env <- ask @Env
-  pure $ Codata env branches
 
 -- | Create a Consumer value that writes its result to the shared ResultRef.
 mkConsumerValue ::
@@ -225,18 +222,6 @@ applyConsumerDirect ref (Then _ name statement) given = do
   local (extendEnv name given) do
     evalStatement ref statement
 applyConsumerDirect _ (Finish _) given = pure given
-applyConsumerDirect ref (Destructor range dName producers returnName) given = do
-  case given of
-    Codata env branches -> do
-      case find (\(n, _, _) -> n == dName) branches of
-        Just (_, vars, body) -> do
-          prodValues <- traverse evalProducer producers
-          retConsumer <- lookupEnv range returnName
-          let allValues = prodValues <> [retConsumer]
-          local (const $ extendEnv' (zip vars allValues) env)
-            $ evalStatement ref body
-        Nothing -> throwError $ NoSuchField range dName given
-    _ -> throwError $ NoMatch range given
 applyConsumerDirect ref (Select r branches) given = go branches
   where
     go [] = throwError $ NoMatch r given

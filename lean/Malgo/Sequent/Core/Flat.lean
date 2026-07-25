@@ -41,7 +41,6 @@ inductive Producer where
   | lambda (range : Range) (names : List Name) (statement : Statement)
   | object (range : Range) (fields : List (String × Name × Statement))
   | mu (range : Range) (name : Name) (statement : Statement)
-  | cocase (range : Range) (branches : List (String × List Name × Statement))
 
 inductive Consumer where
   | label (range : Range) (name : Name)
@@ -50,7 +49,6 @@ inductive Consumer where
   | «then» (range : Range) (name : Name) (statement : Statement)
   | finish (range : Range)
   | select (range : Range) (branches : List Branch)
-  | destructor (range : Range) (name : String) (producers : List Producer) (consumer : Consumer)
 
 inductive Statement where
   | cut (producer : Producer) (consumer : Consumer)
@@ -73,7 +71,6 @@ def Producer.range : Producer → Range
   | .lambda r _ _ => r
   | .object r _ => r
   | .mu r _ _ => r
-  | .cocase r _ => r
 
 instance : HasRange Producer := ⟨Producer.range⟩
 
@@ -104,16 +101,12 @@ def Producer.toSExpr : Producer → SExpr
     .list ((sortAssocAscending kvs).attach.map fun ⟨kns, hkns⟩ =>
       .list [sym kns.1, .list [Malgo.toSExpr kns.2.1, kns.2.2.toSExpr]])
   | .mu _ name statement => .list [sym "mu", Malgo.toSExpr name, statement.toSExpr]
-  | .cocase _ branches =>
-    .list (sym "cocase" :: branches.attach.map fun ⟨dvs, hdvs⟩ =>
-      .list [Malgo.toSExpr dvs.1, .list (dvs.2.1.map Malgo.toSExpr), dvs.2.2.toSExpr])
 termination_by p => sizeOf p
 decreasing_by
   all_goals simp_wf
   all_goals first
     | omega
     | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem (mem_sortAssocAscending hkns)) (by omega)
-    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
     | (rename_i h
        exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
@@ -125,8 +118,6 @@ def Consumer.toSExpr : Consumer → SExpr
   | .«then» _ name statement => .list [sym "then", Malgo.toSExpr name, statement.toSExpr]
   | .finish _ => sym "finish"
   | .select _ branches => .list (sym "select" :: branches.map Branch.toSExpr)
-  | .destructor _ name producers consumer =>
-    .list [sym "destructor", Malgo.toSExpr name, .list (producers.map Producer.toSExpr), consumer.toSExpr]
 termination_by c => sizeOf c
 decreasing_by
   all_goals simp_wf
@@ -198,7 +189,6 @@ partial def isValue : Full.Producer → Bool
   | .object .. => true
   | .«do» .. => false
   | .mu .. => false
-  | .cocase .. => true
 
 /-- Split at the first non-value producer: `(valuePrefix, firstNonValue?,
 rest)`. Pure — it consumes no fresh names. -/
@@ -308,10 +298,6 @@ partial def flatProducer (moduleName : ModuleName) : Full.Producer → MalgoM Wi
   | .mu range name statement => do
     let statement' ← flatStatement moduleName statement
     pure <| .zero (.mu range name statement')
-  | .cocase range branches => do
-    let branches' ← branches.mapM fun (d, vars, s) => do
-      pure (d, vars, ← flatStatement moduleName s)
-    pure <| .zero (.cocase range branches')
 
 partial def flatConsumer (moduleName : ModuleName) : Full.Consumer → MalgoM Consumer
   | .label range name => pure <| .label range name
@@ -340,21 +326,6 @@ partial def flatConsumer (moduleName : ModuleName) : Full.Consumer → MalgoM Co
   | .select range branches => do
     let branches ← branches.mapM (flatBranch moduleName)
     pure <| .select range branches
-  | .destructor range name producers consumer => do
-    let (zeros, mproducer, rest) := split producers
-    match mproducer with
-    | some producer =>
-      let outer ← newTemporalId moduleName "outer"
-      let inner ← newTemporalId moduleName "inner"
-      let destr ← flatConsumer moduleName
-        (.destructor range name (zeros ++ [.var range inner] ++ rest) consumer)
-      let producer' ← flatProducer moduleName producer
-      pure <| .«then» range outer <| producer'.cut <| .«then» range inner
-        <| (Wip.zero (.var range outer)).cut destr
-    | none =>
-      let producers' ← flatZeros moduleName zeros
-      let consumer' ← flatConsumer moduleName consumer
-      pure <| .destructor range name producers' consumer'
 
 partial def flatBranch (moduleName : ModuleName) : Full.Branch → MalgoM Branch
   | .branch range pattern statement => do

@@ -8,11 +8,13 @@ Haskell uses Template Haskell's `embedStringFile`; Lean uses the builtin
 (`lean/Malgo/Backend/Zig/`), four levels up to the repo root, then into
 `runtime/zig/runtime.zig`.
 
-**Lake does not track `include_str` as a build dependency** (verified: editing
-`runtime.zig` and rebuilding leaves this module's `.olean` untouched, so the
-compiler keeps emitting the *previous* runtime text). Haskell has no such
-problem — `embedStringFile` calls `addDependentFile`. After changing
-`runtime.zig`, force this module to rebuild:
+**Lake's tracking of `include_str` is not reliable.** Measured on the same
+edit, twice: changing `runtime.zig` rebuilt this module, but *reverting* that
+change did not — `lake build` reported success while the produced binary went
+on embedding the previous runtime text. Haskell has no such problem;
+`embedStringFile` calls `addDependentFile`, and the same revert rebuilt and
+cleared correctly there. After changing `runtime.zig`, force this module to
+rebuild rather than trusting the build to notice:
 
 ```
 rm -f lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.olean \
@@ -22,7 +24,9 @@ rm -f lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.olean \
 
 `touch`ing this file is *not* enough. A change that touches `runtime.zig` and
 nothing else is the dangerous case: a stale build produces a green
-`lean-zig-golden` run that tested the old runtime. -/
+`lean-zig-golden` run that tested the old runtime. CI does the removal
+unconditionally before its sweep (see `.github/workflows/lean.yml`), and
+`mise run lean-bust-runtime` does the same locally. -/
 
 namespace Malgo.Backend.Zig
 

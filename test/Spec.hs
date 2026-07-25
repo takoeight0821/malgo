@@ -1,6 +1,5 @@
 module Main (main) where
 
-import Malgo.Backend.SchemeSpec qualified as SchemeSpec
 import Malgo.Backend.Zig.PeepholeSpec qualified as PeepholeSpec
 import Malgo.Backend.Zig.PerceusSpec qualified as PerceusSpec
 import Malgo.Backend.Zig.ReuseSpec qualified as ReuseSpec
@@ -35,7 +34,6 @@ main = do
     describe "Malgo.Elaborate" ElaborateSpec.spec
     describe "Malgo.Features" FeaturesSpec.spec
     describe "Malgo.Query.Engine" QueryEngineSpec.spec
-    describe "Malgo.Backend.Scheme" SchemeSpec.spec
     describe "Malgo.Backend.Zig" ZigSpec.spec
     describe "Malgo.Backend.Zig.Perceus" (PerceusSpec.specWith builtin prelude)
     describe "Malgo.Backend.Zig.Peephole" PeepholeSpec.spec

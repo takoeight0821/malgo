@@ -240,7 +240,7 @@ writeIORef :: (MonadIO m) => IORef a -> a -> m ()
 writeIORef ref a = liftIO $ IORef.writeIORef ref a
 
 -- | Compilation target backend.
-data Target = TargetEval | TargetScheme | TargetZig
+data Target = TargetEval | TargetZig
   deriving stock (Eq, Show)
 
 -- | Evaluation mode (small-step CPS or big-step).

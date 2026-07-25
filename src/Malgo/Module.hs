@@ -43,10 +43,10 @@ import Malgo.Prelude
 import Malgo.SExpr (ToSExpr (..))
 import Malgo.SExpr qualified as S
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findFile, getCurrentDirectory, listDirectory, makeAbsolute, removeFile, renameFile)
+import System.Environment (lookupEnv)
 import System.FilePath (makeRelative, takeDirectory, takeFileName)
 import System.FilePath qualified as F
 import System.FilePath qualified as FP
-import System.Environment (lookupEnv)
 import System.IO (hClose, openBinaryTempFile)
 import Text.Megaparsec.Pos (initialPos)
 

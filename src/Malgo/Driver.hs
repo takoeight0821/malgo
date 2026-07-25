@@ -8,7 +8,6 @@ import Effectful
 import Effectful.Error.Static (Error)
 import Effectful.Reader.Static
 import Effectful.State.Static.Local (State)
-import Malgo.Backend.Scheme (SchemePass (..))
 import Malgo.Backend.Zig (ZigPass (..))
 import Malgo.Backend.Zig.Toolchain qualified as Zig
 import Malgo.Features
@@ -24,13 +23,13 @@ import Malgo.Rename (RenamePass (..), genBuiltinRnEnv)
 import Malgo.Sequent.BigStepEval (BigStepEvalPass (..))
 import Malgo.Sequent.Core.Fingerprint (fingerprintFlat, fingerprintJoin)
 import Malgo.Sequent.Core.Flat (flatProgram)
-import Malgo.Sequent.Core.Join qualified as Join
 import Malgo.Sequent.Core.Join (joinProgram)
+import Malgo.Sequent.Core.Join qualified as Join
 import Malgo.Sequent.Eval (EvalPass (..), Handlers (..))
 import Malgo.Sequent.ToCore (toCore)
 import Malgo.Sequent.ToFun (ToFunPass (..))
-import Malgo.Syntax qualified as Syntax
 import Malgo.Syntax (Module (..))
+import Malgo.Syntax qualified as Syntax
 import Malgo.Syntax.Extension
 import System.IO (hPutChar)
 import System.IO qualified as IO
@@ -69,9 +68,6 @@ compileFromAST srcPath parsedAst = do
   let modName = parsedAst.moduleName
   core <- fetchLinkedCore srcPath parsedAst
   case flags.target of
-    TargetScheme -> do
-      schemeCode <- runReader modName $ runPass SchemePass core
-      liftIO $ putStr $ convertString schemeCode
     TargetZig -> do
       zigCode <- runReader modName $ runPass ZigPass core
       liftIO $ putStr $ convertString zigCode

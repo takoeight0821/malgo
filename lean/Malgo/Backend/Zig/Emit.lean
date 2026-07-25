@@ -197,14 +197,6 @@ partial def emitTerminator (pv : Name → String) (funcName : String) : Terminat
   | .callClosure f args => "return rt.callClosure(" ++ pv f ++ ", " ++ callArgs pv "closure" args ++ ");\n"
   | .staticCall fn args => "return rt.staticCall(&" ++ mangleId fn ++ ", " ++ callArgs pv "static" args ++ ");\n"
   | .project v field k => "return rt.projectField(" ++ pv v ++ ", " ++ zigStringLit field ++ ", " ++ pv k ++ ");\n"
-  -- An over-arity destructor degrades to the panic `Cocase` already lowers to
-  -- rather than failing the build: nothing constructs codata yet, so every
-  -- `.destruct` that executes panics anyway.
-  | .destruct v name args =>
-    if args.length > maxCallArgs then
-      "rt.panicUnimplemented(\"Cocase destructor arity > MAX_ARGS\");\n"
-    else
-      "return rt.applyDestructor(" ++ pv v ++ ", " ++ zigStringLit name ++ ", " ++ valueSlice pv args ++ ");\n"
   | .«return» v => "return rt.done(" ++ pv v ++ ");\n"
   | .«if» guard t e =>
     "if (" ++ emitGuard pv guard ++ ") {\n"

@@ -10,7 +10,7 @@ The IR is first-order and in ANF: every value is produced by a named `Let`
 and every operand position is a variable. Closure conversion has already
 happened — captures are explicit index reads (`ReadCapture`) against the
 function's own closure object (the `self` parameter of the self-passing
-calling convention `fn (self, args) rt.Value`), and every nested Lambda /
+calling convention `fn (self, args) rt.Action`), and every nested Lambda /
 escaping join / Object field has been lifted into its own `Func`. This is
 exactly the shape the Perceus pass needs: reference counting reduces to
 counting variable occurrences.
@@ -95,7 +95,7 @@ inductive Expr where
   (`Eval` re-runs the field statement per force), so forcing twice
   legitimately consumes two references. -/
   | force (v : Name) (field : String)
-  /-- `rt.panicUnimplemented(..)` (the `Cocase` stub). `noreturn`: the
+  /-- `rt.panicUnimplemented(..)`. `noreturn`: the
   printer truncates the rest of the block after it, and RcCheck treats it
   as terminating the path. -/
   | panicExpr (msg : String)
@@ -139,8 +139,6 @@ inductive Terminator where
   | staticCall (fn : Name) (args : List Name)
   /-- `return rt.projectField(v, field, k)` -/
   | project (v : Name) (field : String) (k : Name)
-  /-- `return rt.applyDestructor(v, name, &.{args})` -/
-  | destruct (v : Name) (name : String) (args : List Name)
   /-- `return rt.done(v)` (Join IR's `Finish`; the generated `main` owns the
   result, which comes back out of the trampoline) -/
   | «return» (v : Name)
@@ -222,7 +220,6 @@ partial def freeVarsTerminator : Terminator → Std.TreeSet Name
   | .callClosure f args => Std.TreeSet.ofList (f :: args)
   | .staticCall _ args => Std.TreeSet.ofList args
   | .project v _ k => Std.TreeSet.ofList [v, k]
-  | .destruct v _ args => Std.TreeSet.ofList (v :: args)
   | .«return» v => Std.TreeSet.ofList [v]
   | .«if» guard t e => ((freeVarsGuard guard).union (freeVarsBlock t)).union (freeVarsBlock e)
   | .panic _ => {}
@@ -271,7 +268,6 @@ def termOperands : Terminator → List Name
   | .callClosure f args => f :: args
   | .staticCall _ args => args
   | .project v _ k => [v, k]
-  | .destruct v _ args => v :: args
   | .«return» v => [v]
   | .«if» .. => []
   | .panic _ => []

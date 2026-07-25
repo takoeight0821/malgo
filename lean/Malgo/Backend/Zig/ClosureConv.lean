@@ -89,9 +89,6 @@ partial def freeVarsProducer : Producer → Std.TreeSet Name
   | .object _ fields =>
     nameSetUnions (fields.map (fun (_, ret, stmt) => (freeVarsStatement stmt).erase ret))
   | .mu _ name stmt => (freeVarsStatement stmt).erase name
-  | .cocase _ branches =>
-    nameSetUnions (branches.map (fun (_, vars, stmt) =>
-      (freeVarsStatement stmt).diff (Std.TreeSet.ofList vars)))
 
 partial def freeVarsConsumer : Consumer → Std.TreeSet Name
   | .label _ name => sing name
@@ -101,7 +98,6 @@ partial def freeVarsConsumer : Consumer → Std.TreeSet Name
   | .«then» _ name stmt => (freeVarsStatement stmt).erase name
   | .finish _ => emptySet
   | .select _ branches => nameSetUnions (branches.map freeVarsBranch)
-  | .destructor _ _ ps k => (nameSetUnions (ps.map freeVarsProducer)).union (sing k)
 
 partial def freeVarsBranch : Branch → Std.TreeSet Name
   | .branch _ pat stmt => (freeVarsStatement stmt).diff (patternVars pat)
@@ -124,7 +120,7 @@ partial def escapingNamesStatement : Statement → Std.TreeSet Name
     (escapingNamesProducer cond).union
       ((escapingNamesStatement t).union (escapingNamesStatement e))
 
--- `Lambda`/`Object`/`Mu`/`Cocase` are nested-closure-body producers: an
+-- `Lambda`/`Object`/`Mu` are nested-closure-body producers: an
 -- escaping name of the enclosing statement is exactly a free variable of
 -- theirs, so those cases delegate to `freeVarsProducer`.
 partial def escapingNamesProducer : Producer → Std.TreeSet Name
@@ -135,7 +131,6 @@ partial def escapingNamesProducer : Producer → Std.TreeSet Name
   | .lambda r names stmt => freeVarsProducer (.lambda r names stmt)
   | .object r fields => freeVarsProducer (.object r fields)
   | .mu r name stmt => freeVarsProducer (.mu r name stmt)
-  | .cocase r branches => freeVarsProducer (.cocase r branches)
 
 partial def escapingNamesConsumer : Consumer → Std.TreeSet Name
   | .label _ _ => emptySet
@@ -145,7 +140,6 @@ partial def escapingNamesConsumer : Consumer → Std.TreeSet Name
   | .«then» _ _ stmt => escapingNamesStatement stmt
   | .finish _ => emptySet
   | .select _ branches => nameSetUnions (branches.map escapingNamesBranch)
-  | .destructor _ _ ps k => (nameSetUnions (ps.map escapingNamesProducer)).union (sing k)
 
 partial def escapingNamesBranch : Branch → Std.TreeSet Name
   | .branch _ _ stmt => escapingNamesStatement stmt
@@ -173,7 +167,6 @@ partial def collectJoinsProducer : Producer → List (Name × Consumer)
   | .lambda _ _ _ => []
   | .object _ _ => []
   | .mu _ _ _ => []
-  | .cocase _ _ => []
 
 partial def collectJoinsConsumer : Consumer → List (Name × Consumer)
   | .label _ _ => []
@@ -182,7 +175,6 @@ partial def collectJoinsConsumer : Consumer → List (Name × Consumer)
   | .«then» _ _ stmt => collectJoins stmt
   | .finish _ => []
   | .select _ branches => branches.flatMap (fun | .branch _ _ stmt => collectJoins stmt)
-  | .destructor _ _ ps _ => ps.flatMap collectJoinsProducer
 
 end
 
@@ -218,7 +210,6 @@ partial def initialClassifyJoinsProducer : Producer → OwnershipMap
   | .lambda _ _ _ => {}
   | .object _ _ => {}
   | .mu _ _ _ => {}
-  | .cocase _ _ => {}
 
 partial def initialClassifyJoinsConsumerWithEscaping : Consumer → OwnershipMap × Std.TreeSet Name
   | .label _ _ => ({}, {})
@@ -231,9 +222,6 @@ partial def initialClassifyJoinsConsumerWithEscaping : Consumer → OwnershipMap
   | .select _ branches =>
     let results := branches.map (fun | .branch _ _ stmt => initialClassifyJoinsWithEscaping stmt)
     (mapUnions (results.map Prod.fst), nameSetUnions (results.map Prod.snd))
-  | .destructor _ _ ps k =>
-    (mapUnions (ps.map initialClassifyJoinsProducer),
-      (nameSetUnions (ps.map escapingNamesProducer)).union (sing k))
 
 end
 
@@ -393,9 +381,6 @@ partial def convertApply (moduleName : ModuleName) (env : LocalEnv) (ownership :
   | .«then» _ name stmt => convertStatement moduleName env ownership (substStatement name v stmt)
   | .finish _ => pure (Ir.Block.mk [] (.«return» v), [])
   | .select _ branches => convertSelect moduleName env ownership v branches
-  | .destructor _ name producers k => do
-    let (stmts, vs, fns) ← convertProducers moduleName env ownership producers
-    pure (Ir.Block.mk stmts (.destruct v name (vs ++ [k])), fns)
 
 partial def convertProducers (moduleName : ModuleName) (env : LocalEnv) (ownership : OwnershipMap) :
     List Producer → MalgoM (List Ir.Stmt × List Name × List Ir.Func)
@@ -454,11 +439,6 @@ partial def convertProducer (moduleName : ModuleName) (env : LocalEnv) (ownershi
   | .mu _ _ _ =>
     throw { passName := "ClosureConv",
             message := "Mu in producer position should have been eliminated by Normalize" }
-  | .cocase _ _ => do
-    -- Not yet implemented: compiles to a runtime panic. `PanicExpr` is
-    -- `noreturn`, so anything after it in the block is never printed.
-    let t ← Malgo.newTemporalId moduleName "cocase"
-    pure ([Ir.Stmt.«let» t (Ir.Expr.panicExpr "Cocase")], t, [])
 
 /-- Lift an `Escaping` join's consumer into its own `Ir.Func`, returning the
 allocation statement that binds the join's name to the closure. -/

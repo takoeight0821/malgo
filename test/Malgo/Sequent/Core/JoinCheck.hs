@@ -54,8 +54,6 @@ checkProducer (Lambda _ _ stmt) = checkStatement stmt
 checkProducer (Object _ fields) =
   mapM_ (\(_, stmt) -> checkStatement stmt) fields
 checkProducer (Mu _ _ stmt) = checkStatement stmt
-checkProducer (Cocase _ branches) =
-  mapM_ (\(_, _, s) -> checkStatement s) branches
 
 checkConsumer :: Consumer -> IO ()
 checkConsumer (Label _ name) = evaluate name >> pure ()
@@ -69,6 +67,3 @@ checkConsumer (Then _ name stmt) = do
 checkConsumer (Finish _) = pure ()
 checkConsumer (Select _ branches) =
   mapM_ (\(Branch _ _ s) -> checkStatement s) branches
-checkConsumer (Destructor _ _ producers name) = do
-  mapM_ checkProducer producers
-  evaluate name >> pure ()

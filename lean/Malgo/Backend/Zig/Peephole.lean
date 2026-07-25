@@ -172,7 +172,6 @@ partial def snTerm (frm to : Name) : Terminator → Terminator
       | .callClosure f args => .callClosure (rn f) (args.map rn)
       | .staticCall fn args => .staticCall fn (args.map rn)
       | .project v field k => .project (rn v) field (rn k)
-      | .destruct v name args => .destruct (rn v) name (args.map rn)
       | .«return» v => .«return» (rn v)
       | .«if» .. => term  -- unreachable (handled above)
       | .panic msg => .panic msg

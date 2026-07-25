@@ -32,7 +32,6 @@ inductive Producer where
   | object (range : Range) (fields : List (String × Name × Statement))
   | «do» (range : Range) (name : Name) (statement : Statement)
   | mu (range : Range) (name : Name) (statement : Statement)
-  | cocase (range : Range) (branches : List (String × List Name × Statement))
 
 inductive Consumer where
   | label (range : Range) (name : Name)
@@ -41,7 +40,6 @@ inductive Consumer where
   | «then» (range : Range) (name : Name) (statement : Statement)
   | finish (range : Range)
   | select (range : Range) (branches : List Branch)
-  | destructor (range : Range) (name : String) (producers : List Producer) (consumer : Consumer)
 
 inductive Statement where
   | cut (producer : Producer) (consumer : Consumer)
@@ -64,7 +62,6 @@ def Producer.range : Producer → Range
   | .object r _ => r
   | .«do» r _ _ => r
   | .mu r _ _ => r
-  | .cocase r _ => r
 
 instance : HasRange Producer := ⟨Producer.range⟩
 
@@ -95,16 +92,12 @@ def Producer.toSExpr : Producer → SExpr
       .list [sym kns.1, .list [Malgo.toSExpr kns.2.1, kns.2.2.toSExpr]])
   | .«do» _ name statement => .list [sym "do", Malgo.toSExpr name, statement.toSExpr]
   | .mu _ name statement => .list [sym "mu", Malgo.toSExpr name, statement.toSExpr]
-  | .cocase _ branches =>
-    .list (sym "cocase" :: branches.attach.map fun ⟨dvs, hdvs⟩ =>
-      .list [Malgo.toSExpr dvs.1, .list (dvs.2.1.map Malgo.toSExpr), dvs.2.2.toSExpr])
 termination_by p => sizeOf p
 decreasing_by
   all_goals simp_wf
   all_goals first
     | omega
     | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem (mem_sortAssocAscending hkns)) (by omega)
-    | exact Nat.lt_of_lt_of_le (sizeOf_snd_snd_lt_of_mem hdvs) (by omega)
     | (rename_i h
        exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
@@ -116,8 +109,6 @@ def Consumer.toSExpr : Consumer → SExpr
   | .«then» _ name statement => .list [sym "then", Malgo.toSExpr name, statement.toSExpr]
   | .finish _ => sym "finish"
   | .select _ branches => .list (sym "select" :: branches.map Branch.toSExpr)
-  | .destructor _ name producers consumer =>
-    .list [sym "destructor", Malgo.toSExpr name, .list (producers.map Producer.toSExpr), consumer.toSExpr]
 termination_by c => sizeOf c
 decreasing_by
   all_goals simp_wf

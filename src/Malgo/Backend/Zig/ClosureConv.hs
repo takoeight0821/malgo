@@ -3,7 +3,7 @@
 -- future Perceus pass for ownership tracking.
 --
 -- Two questions this module answers about a function body (a 'Statement'
--- that does not itself descend into nested 'Lambda'\/'Object'\/'Cocase'\/'Mu'
+-- that does not itself descend into nested 'Lambda'\/'Object'\/'Mu'
 -- bodies for the purpose of these particular computations):
 --
 --   1. 'freeVarsStatement' etc. — which names does a term reference that it
@@ -15,7 +15,7 @@
 --
 -- Escaping analysis, in detail: after normalization, every remaining
 -- consumer bound by @Join name consumer stmt@ is one of @Apply@, @Project@,
--- @Then@, @Finish@, @Select@, @Destructor@ (never a bare @Label@, since that
+-- @Then@, @Finish@, @Select@ (never a bare @Label@, since that
 -- case was eliminated by substitution). A name bound this way can be
 -- compiled as a same-function inline substitution (no allocation at all)
 -- as long as every use of it stays within the current function: as the
@@ -25,12 +25,11 @@
 --
 --   * passed as the continuation argument to 'Invoke' (calls a top-level def)
 --   * passed as an element of 'Apply'\'s @returns@ (calls a closure)
---   * passed as the continuation argument to 'Destructor' (calls a codata branch)
 --   * passed as the continuation argument to 'Project' (calls a record field)
 --   * passed as an element of 'Construct'\'s @returns@ (stored into data;
 --     always empty in practice, per 'Malgo.Sequent.ToCore', but handled
 --     defensively)
---   * free in the body of a nested 'Lambda'\/'Object' field\/'Cocase' branch\/'Mu'
+--   * free in the body of a nested 'Lambda'\/'Object' field\/'Mu'
 --     (those bodies are lifted into their own function, so any name they
 --     reference from an enclosing scope must be a real captured value)
 module Malgo.Backend.Zig.ClosureConv
@@ -74,8 +73,6 @@ freeVarsProducer (Lambda _ names stmt) = freeVarsStatement stmt Set.\\ Set.fromL
 freeVarsProducer (Object _ fields) =
   Set.unions [freeVarsStatement stmt Set.\\ Set.singleton ret | (ret, stmt) <- Map.elems fields]
 freeVarsProducer (Mu _ name stmt) = Set.delete name (freeVarsStatement stmt)
-freeVarsProducer (Cocase _ branches) =
-  Set.unions [freeVarsStatement stmt Set.\\ Set.fromList vars | (_, vars, stmt) <- branches]
 
 freeVarsConsumer :: Consumer -> Set Name
 freeVarsConsumer (Label _ name) = Set.singleton name
@@ -84,7 +81,6 @@ freeVarsConsumer (Project _ _ k) = Set.singleton k
 freeVarsConsumer (Then _ name stmt) = Set.delete name (freeVarsStatement stmt)
 freeVarsConsumer (Finish _) = Set.empty
 freeVarsConsumer (Select _ branches) = Set.unions (map freeVarsBranch branches)
-freeVarsConsumer (Destructor _ _ ps k) = Set.unions (map freeVarsProducer ps) <> Set.singleton k
 
 freeVarsBranch :: Branch -> Set Name
 freeVarsBranch (Branch _ pat stmt) = freeVarsStatement stmt Set.\\ patternVars pat
@@ -122,7 +118,7 @@ escapingNamesStatement (BinOp _ _ lhs rhs _k) = escapingNamesProducer lhs <> esc
 escapingNamesStatement (Ifz _ cond t e) =
   escapingNamesProducer cond <> escapingNamesStatement t <> escapingNamesStatement e
 
--- | 'Lambda'\/'Object'\/'Mu'\/'Cocase' are all nested-closure-body
+-- | 'Lambda'\/'Object'\/'Mu' are all nested-closure-body
 -- producers: an escaping name of the *enclosing* statement is exactly a
 -- free variable of theirs (their own join structure is a separate,
 -- independently-analyzed scope — see the haddock above), so those cases
@@ -134,7 +130,6 @@ escapingNamesProducer (Construct _ _ ps ks) = Set.unions (map escapingNamesProdu
 escapingNamesProducer p@(Lambda {}) = freeVarsProducer p
 escapingNamesProducer p@(Object {}) = freeVarsProducer p
 escapingNamesProducer p@(Mu {}) = freeVarsProducer p
-escapingNamesProducer p@(Cocase {}) = freeVarsProducer p
 
 escapingNamesConsumer :: Consumer -> Set Name
 escapingNamesConsumer (Label _ _) = Set.empty -- eliminated by Normalize; kept total defensively.
@@ -143,7 +138,6 @@ escapingNamesConsumer (Project _ _ k) = Set.singleton k
 escapingNamesConsumer (Then _ _name stmt) = escapingNamesStatement stmt
 escapingNamesConsumer (Finish _) = Set.empty
 escapingNamesConsumer (Select _ branches) = Set.unions (map escapingNamesBranch branches)
-escapingNamesConsumer (Destructor _ _ ps k) = Set.unions (map escapingNamesProducer ps) <> Set.singleton k
 
 escapingNamesBranch :: Branch -> Set Name
 escapingNamesBranch (Branch _ _ stmt) = escapingNamesStatement stmt
@@ -204,7 +198,6 @@ collectJoinsProducer (Construct _ _ ps _) = concatMap collectJoinsProducer ps
 collectJoinsProducer (Lambda _ _ _) = []
 collectJoinsProducer (Object _ _) = []
 collectJoinsProducer (Mu _ _ _) = []
-collectJoinsProducer (Cocase _ _) = []
 
 collectJoinsConsumer :: Consumer -> [(Name, Consumer)]
 collectJoinsConsumer (Label _ _) = []
@@ -213,7 +206,6 @@ collectJoinsConsumer (Project _ _ _) = []
 collectJoinsConsumer (Then _ _ stmt) = collectJoins stmt
 collectJoinsConsumer (Finish _) = []
 collectJoinsConsumer (Select _ branches) = concatMap (\(Branch _ _ stmt) -> collectJoins stmt) branches
-collectJoinsConsumer (Destructor _ _ ps _) = concatMap collectJoinsProducer ps
 
 -- | The direct-escaping rule alone (see 'classifyJoins' for why this is not
 -- the whole story).
@@ -257,7 +249,7 @@ initialClassifyJoinsWithEscaping (Ifz _ cond t e) =
 -- analysis, but its *own* join structure still needs classifying once it is
 -- lifted — which happens via a fresh top-level call to 'classifyJoins' on
 -- its body, done by the emitter. This function does not recurse into
--- 'Lambda'\/'Object'\/'Cocase'\/'Mu' bodies for that reason.
+-- 'Lambda'\/'Object'\/'Mu' bodies for that reason.
 initialClassifyJoinsProducer :: Producer -> Map Name Ownership
 initialClassifyJoinsProducer (Var _ _) = Map.empty
 initialClassifyJoinsProducer (Literal _ _) = Map.empty
@@ -265,7 +257,6 @@ initialClassifyJoinsProducer (Construct _ _ ps _) = Map.unions (map initialClass
 initialClassifyJoinsProducer (Lambda _ _ _) = Map.empty
 initialClassifyJoinsProducer (Object _ _) = Map.empty
 initialClassifyJoinsProducer (Mu _ _ _) = Map.empty
-initialClassifyJoinsProducer (Cocase _ _) = Map.empty
 
 initialClassifyJoinsConsumer :: Consumer -> Map Name Ownership
 initialClassifyJoinsConsumer = fst . initialClassifyJoinsConsumerWithEscaping
@@ -285,8 +276,6 @@ initialClassifyJoinsConsumerWithEscaping (Finish _) = (Map.empty, Set.empty)
 initialClassifyJoinsConsumerWithEscaping (Select _ branches) =
   let results = [initialClassifyJoinsWithEscaping stmt | Branch _ _ stmt <- branches]
    in (Map.unions (map fst results), Set.unions (map snd results))
-initialClassifyJoinsConsumerWithEscaping (Destructor _ _ ps k) =
-  (Map.unions (map initialClassifyJoinsProducer ps), Set.unions (map escapingNamesProducer ps) <> Set.singleton k)
 
 -- | Local (same-function) substitution environment: a join name classified
 -- 'Local' maps to the 'Consumer' it was bound to, to be inlined at use.
@@ -326,7 +315,7 @@ convertProgram program = do
 convertDefinition :: (State Uniq :> es, Reader ModuleName :> es) => (Range, Name, Name, Statement) -> Eff es [Ir.Func]
 convertDefinition (defRange, name, retName, rawStmt) = do
   -- Normalize once per top-level definition: 'normalizeStatement' recurses
-  -- into every nested Lambda/Object field/Cocase branch body, so this
+  -- into every nested Lambda/Object field body, so this
   -- single call covers the whole tree reachable from here.
   let stmt = normalizeStatement rawStmt
   selfVar <- newTemporalId "self"
@@ -410,9 +399,6 @@ convertApply env ownership consumer v = case consumer of
   Then _ name stmt -> convertStatement env ownership (substStatement name v stmt)
   Finish _ -> pure (Ir.Block [] (Ir.TReturn v), [])
   Select _ branches -> convertSelect env ownership v branches
-  Destructor _ name producers k -> do
-    (stmts, vs, fns) <- convertProducers env ownership producers
-    pure (Ir.Block stmts (Ir.TDestruct v name (vs <> [k])), fns)
 
 convertProducers :: (State Uniq :> es, Reader ModuleName :> es) => LocalEnv -> Map Name Ownership -> [Producer] -> Eff es ([Ir.Stmt], [Name], [Ir.Func])
 convertProducers _ _ [] = pure ([], [], [])
@@ -475,12 +461,6 @@ convertProducer env ownership = \case
     t <- newTemporalId "record"
     pure ([Ir.Let t (Ir.MkRecord (map fst fieldFns) sharedCaptures)], t, concatMap snd fieldFns)
   Mu {} -> error "Malgo.Backend.Zig.ClosureConv: Mu in producer position should have been eliminated by Normalize"
-  Cocase {} -> do
-    -- Not yet implemented: compiles to a runtime panic. 'Ir.PanicExpr' is
-    -- @noreturn@, so anything after it in the block is never printed;
-    -- variables referenced only by the Cocase become dead bindings.
-    t <- newTemporalId "cocase"
-    pure ([Ir.Let t (Ir.PanicExpr "Cocase")], t, [])
 
 -- | The renamer can assign the same wildcard 'Malgo.Id.Id' to more than one
 -- surface parameter (e.g. two @_@s); Ir binders must be unique per path, so

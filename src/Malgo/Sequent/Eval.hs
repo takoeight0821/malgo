@@ -59,7 +59,6 @@ data Value where
   Struct :: Tag -> [Value] -> Value
   Function :: Env -> [Name] -> Statement -> Value
   Record :: Env -> Map Text (Name, Statement) -> Value
-  Codata :: Env -> [(Text, [Name], Statement)] -> Value
   Consumer ::
     ( forall es.
       ( Error EvalError :> es,
@@ -81,8 +80,6 @@ instance Show Value where
   showsPrec d (Record _env fields) =
     let fields' = fmap (\(name, statement) -> (name, sShow @_ @String statement)) fields
      in showParen (d > 10) $ showString "Record <env> " . showsPrec 11 fields'
-  showsPrec d (Codata _env branches) =
-    showParen (d > 10) $ showString "Codata <env> " . showsPrec 11 (map (\(n, vs, _) -> (n, vs)) branches)
   showsPrec d (Consumer _) = showParen (d > 10) $ showString "Consumer <consumer>"
 
 instance Eq Value where
@@ -262,9 +259,6 @@ evalProducer (Mu _ name stmt) = do
   local (extendEnv name (Consumer $ \v -> writeIORef ref v))
     $ evalStatement stmt
   readIORef ref
-evalProducer (Cocase _ branches) = do
-  env <- ask @Env
-  pure $ Codata env branches
 {-# INLINE evalProducer #-}
 
 evalConsumer :: (Error EvalError :> es, Reader Env :> es, Reader Toplevels :> es, Reader Handlers :> es, IOE :> es) => Consumer -> Value -> Eff es ()
@@ -295,18 +289,6 @@ evalConsumer (Then _ name statement) given = do
   local (extendEnv name given) do
     evalStatement statement
 evalConsumer (Finish _) _ = pure ()
-evalConsumer (Destructor range dName producers returnName) given = do
-  case given of
-    Codata env branches -> do
-      case find (\(n, _, _) -> n == dName) branches of
-        Just (_, vars, body) -> do
-          prodValues <- traverse evalProducer producers
-          retConsumer <- lookupEnv range returnName
-          let allValues = prodValues <> [retConsumer]
-          local (const $ extendEnv' (zip vars allValues) env)
-            $ evalStatement body
-        Nothing -> throwError $ NoSuchField range dName given
-    _ -> throwError $ NoMatch range given
 evalConsumer (Select range branches) given = go branches
   where
     go [] = throwError $ NoMatch range given
@@ -402,7 +384,6 @@ valueToText (Struct (Tag name) []) = name
 valueToText (Struct (Tag name) values) = name <> "(" <> T.intercalate ", " (map valueToText values) <> ")"
 valueToText (Function {}) = "<function>"
 valueToText (Record {}) = "<record>"
-valueToText (Codata {}) = "<codata>"
 valueToText (Consumer _) = "<consumer>"
 
 isZeroValue :: Value -> Bool

@@ -138,14 +138,6 @@ emitTerminator pv funcName = \case
   Ir.TCallClosure f args -> "return rt.callClosure(" <> pv f <> ", " <> callArgs pv "closure" args <> ");\n"
   Ir.TStaticCall fn args -> "return rt.staticCall(&" <> mangleId fn <> ", " <> callArgs pv "static" args <> ");\n"
   Ir.TProject v field k -> "return rt.projectField(" <> pv v <> ", " <> zigStringLit field <> ", " <> pv k <> ");\n"
-  -- Unlike the other call terminators, an over-arity destructor degrades to
-  -- the same runtime panic 'Cocase' already lowers to rather than failing
-  -- the build: nothing constructs codata yet, so every 'Ir.TDestruct' that
-  -- executes panics anyway, and a hard error here would refuse to compile a
-  -- program that today compiles and runs (as long as it never destructs).
-  Ir.TDestruct v name args
-    | length args > maxCallArgs -> "rt.panicUnimplemented(\"Cocase destructor arity > MAX_ARGS\");\n"
-    | otherwise -> "return rt.applyDestructor(" <> pv v <> ", " <> zigStringLit name <> ", " <> valueSlice pv args <> ");\n"
   Ir.TReturn v -> "return rt.done(" <> pv v <> ");\n"
   Ir.TIf guard t e ->
     "if ("

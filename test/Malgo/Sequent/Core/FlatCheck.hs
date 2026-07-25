@@ -49,7 +49,6 @@ checkProducer (Construct _ _ producers consumers) = do
 checkProducer (Lambda _ _ stmt) = checkStatement stmt
 checkProducer (Object _ fields) = mapM_ (checkStatement . snd) fields
 checkProducer (Mu _ _ stmt) = checkStatement stmt
-checkProducer (Cocase _ branches) = mapM_ (\(_, _, s) -> checkStatement s) branches
 
 checkConsumer :: Consumer -> IO ()
 checkConsumer (Label _ _) = pure ()
@@ -60,9 +59,6 @@ checkConsumer (Project _ _ consumer) = checkConsumer consumer
 checkConsumer (Then _ _ stmt) = checkStatement stmt
 checkConsumer (Finish _) = pure ()
 checkConsumer (Select _ branches) = mapM_ (\(Branch _ _ s) -> checkStatement s) branches
-checkConsumer (Destructor _ _ producers consumer) = do
-  mapM_ checkProducer producers
-  checkConsumer consumer
 
 assertValue :: Producer -> IO ()
 assertValue p
@@ -76,4 +72,3 @@ isValueProducer (Construct _ _ ps _) = all isValueProducer ps
 isValueProducer (Lambda _ _ _) = True
 isValueProducer (Object _ _) = True
 isValueProducer (Mu _ _ _) = False
-isValueProducer (Cocase _ _) = True

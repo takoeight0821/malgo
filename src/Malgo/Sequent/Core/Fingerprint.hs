@@ -34,14 +34,12 @@ data Stats = Stats
     lambdas :: !Int,
     objects :: !Int,
     mus :: !Int,
-    cocases :: !Int,
     labels :: !Int,
     applies :: !Int,
     projects :: !Int,
     thens :: !Int,
     finishes :: !Int,
     selects :: !Int,
-    destructors :: !Int,
     definitions :: !Int
   }
 
@@ -61,14 +59,12 @@ instance Semigroup Stats where
         lambdas = a.lambdas + b.lambdas,
         objects = a.objects + b.objects,
         mus = a.mus + b.mus,
-        cocases = a.cocases + b.cocases,
         labels = a.labels + b.labels,
         applies = a.applies + b.applies,
         projects = a.projects + b.projects,
         thens = a.thens + b.thens,
         finishes = a.finishes + b.finishes,
         selects = a.selects + b.selects,
-        destructors = a.destructors + b.destructors,
         definitions = a.definitions + b.definitions
       }
 
@@ -88,14 +84,12 @@ instance Monoid Stats where
         lambdas = 0,
         objects = 0,
         mus = 0,
-        cocases = 0,
         labels = 0,
         applies = 0,
         projects = 0,
         thens = 0,
         finishes = 0,
         selects = 0,
-        destructors = 0,
         definitions = 0
       }
 
@@ -106,11 +100,9 @@ renderStats s =
           sort
             [ ("applies", s.applies),
               ("binOps", s.binOps),
-              ("cocases", s.cocases),
               ("constructs", s.constructs),
               ("cuts", s.cuts),
               ("definitions", s.definitions),
-              ("destructors", s.destructors),
               ("externalCalls", s.externalCalls),
               ("finishes", s.finishes),
               ("ifzs", s.ifzs),
@@ -150,7 +142,6 @@ flatProdStats (Flat.Construct _ _ ps cs) = mempty {constructs = 1} <> foldMap fl
 flatProdStats (Flat.Lambda _ _ s) = mempty {lambdas = 1} <> flatStmtStats s
 flatProdStats (Flat.Object _ fs) = mempty {objects = 1} <> foldMap (flatStmtStats . snd) (Map.elems fs)
 flatProdStats (Flat.Mu _ _ s) = mempty {mus = 1} <> flatStmtStats s
-flatProdStats (Flat.Cocase _ bs) = mempty {cocases = 1} <> foldMap (\(_, _, s) -> flatStmtStats s) bs
 
 flatConsStats :: Flat.Consumer -> Stats
 flatConsStats (Flat.Label _ _) = mempty {labels = 1}
@@ -159,7 +150,6 @@ flatConsStats (Flat.Project _ _ c) = mempty {projects = 1} <> flatConsStats c
 flatConsStats (Flat.Then _ _ s) = mempty {thens = 1} <> flatStmtStats s
 flatConsStats (Flat.Finish _) = mempty {finishes = 1}
 flatConsStats (Flat.Select _ bs) = mempty {selects = 1} <> foldMap (\(Flat.Branch _ _ s) -> flatStmtStats s) bs
-flatConsStats (Flat.Destructor _ _ ps c) = mempty {destructors = 1} <> foldMap flatProdStats ps <> flatConsStats c
 
 -- Join IR statistics
 
@@ -182,7 +172,6 @@ joinProdStats (Join.Construct _ _ ps _) = mempty {constructs = 1} <> foldMap joi
 joinProdStats (Join.Lambda _ _ s) = mempty {lambdas = 1} <> joinStmtStats s
 joinProdStats (Join.Object _ fs) = mempty {objects = 1} <> foldMap (joinStmtStats . snd) (Map.elems fs)
 joinProdStats (Join.Mu _ _ s) = mempty {mus = 1} <> joinStmtStats s
-joinProdStats (Join.Cocase _ bs) = mempty {cocases = 1} <> foldMap (\(_, _, s) -> joinStmtStats s) bs
 
 joinConsStats :: Join.Consumer -> Stats
 joinConsStats (Join.Label _ _) = mempty {labels = 1}
@@ -191,4 +180,3 @@ joinConsStats (Join.Project _ _ _) = mempty {projects = 1}
 joinConsStats (Join.Then _ _ s) = mempty {thens = 1} <> joinStmtStats s
 joinConsStats (Join.Finish _) = mempty {finishes = 1}
 joinConsStats (Join.Select _ bs) = mempty {selects = 1} <> foldMap (\(Join.Branch _ _ s) -> joinStmtStats s) bs
-joinConsStats (Join.Destructor _ _ ps _) = mempty {destructors = 1} <> foldMap joinProdStats ps

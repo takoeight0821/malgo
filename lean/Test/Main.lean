@@ -15,17 +15,16 @@ open Malgo
 /-- Parse `test/testcases/malgo/<name>.mlg` and dump it. The workspace is
 rooted at the repository root (`main` chdirs there), so artifact relPaths
 match the Haskell goldens. -/
-private def parseGolden (name : String) : IO String := do
+private def parseGoldenAt (path : System.FilePath) : IO String := do
   let ws ← Workspace.setup
-  let path := System.FilePath.mk s!"test/testcases/malgo/{name}.mlg"
   let text ← IO.FS.readFile path
   let (result, _flags) ← Malgo.Parser.pass ws path text
   match result with
   | .error e => return s!"PARSE ERROR: {e.render}"
   | .ok m => return sShow m
 
-private def parserCase (name : String) : GoldenCase :=
-  { group := "Malgo.Parser", name, run := parseGolden name }
+private def parserCaseAt (name : String) (path : System.FilePath) : GoldenCase :=
+  { group := "Malgo.Parser", name, run := parseGoldenAt path }
 
 /-! ## Rename golden cases (the first real uniq-order-parity gate)
 
@@ -266,8 +265,22 @@ def enumerateTestcases : IO (List String) := do
     if e.fileName.endsWith ".mlg" then (System.FilePath.mk e.fileName).fileStem else none
   return (names.toArray.qsort (· < ·)).toList
 
+/-- The 18 non-error Parser goldens, mirroring `renameCases`: Builtin/Prelude
+from `runtime/malgo/` plus the 16 representative testcases. Previously only
+three were registered, leaving 15 of the committed `.golden/Malgo.Parser`
+files ungated on the Lean side.
+
+The five `.golden/Malgo.Parser/error/*` cases are deliberately still absent:
+parser *error text* legitimately differs between the implementations (see
+this file's header), so they need Lean-owned goldens rather than the shared
+Haskell-generated ones. -/
+def parserCases : List GoldenCase :=
+  [ parserCaseAt "Builtin" "runtime/malgo/Builtin.mlg",
+    parserCaseAt "Prelude" "runtime/malgo/Prelude.mlg" ] ++
+  representatives.map (fun n => parserCaseAt n (testcasePath n))
+
 def cases : List GoldenCase :=
-  [parserCase "Primitive", parserCase "HelloImport", parserCase "Eventually"]
+  parserCases
     ++ renameCases ++ elaborateCases ++ toFunCases
 
 /-! ## Lint gate (per `Malgo.LintSpec`)

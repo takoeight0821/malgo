@@ -106,8 +106,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-selfhost-${{ hashFiles('cabal.project.freeze') }}-
 
-      - name: Install Chez Scheme
-        run: sudo apt-get install -y chezscheme
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: '0.16.0'
 
       - name: Run self-hosted eval goldens
         env:
@@ -120,7 +121,10 @@ jobs:
   selfhost-level2:
     name: self-hosted level 2 metacircular (GHC ${{ matrix.ghc-version }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # L2 through the Zig backend is ~7.5x slower per case than the Chez Scheme
+    # path it replaced (measured locally: 220s vs 29s on Fib), so the old
+    # 60-minute budget no longer has margin on a CI runner.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -162,13 +166,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ghc-${{ matrix.ghc-version }}-dist-level2-${{ hashFiles('cabal.project.freeze') }}-
 
-      - name: Install Chez Scheme
-        run: sudo apt-get install -y chezscheme
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: '0.16.0'
 
       - name: Run Level 2 metacircular checks
         env:
           PRECOMPILE_TIMEOUT: 300
-          CASE_TIMEOUT: 600
+          CASE_TIMEOUT: 1200
         run: scripts/selfhost-level2.sh
 
   zig-golden:

@@ -134,7 +134,14 @@ Malgo has two self-hosting levels, each tested by a CI job:
 | Level | Description | Script | CI job |
 |-------|-------------|--------|--------|
 | Level 1 | The Malgo evaluator written in Malgo (`runtime/malgo/compiler/`) evaluates arbitrary Malgo programs | `scripts/selfhost-golden.sh` | `self-hosted golden` |
-| Level 2 | Level 1 evaluator evaluates `Main.mlg` which evaluates a Malgo program (metacircular interpreter) | `scripts/selfhost-level2.sh` | `self-hosted level 2 metacircular` |
+| Level 2 | Level 1 evaluator evaluates `Main.mlg` which evaluates a Malgo program (metacircular interpreter) | `scripts/selfhost-level2.sh` | **currently disabled in CI** |
+
+**Level 2 is off in CI** (`LEAN_SELFHOST_L2=0` in `lean/ci-gates.env`, and
+`if: false` on `build.yml`'s job). It takes ~16 minutes on its own against a
+target of keeping CI under 10, because the Zig backend is ~7.5x slower per
+case than the Chez Scheme path self-hosting used to run on (#385). Level 1
+still runs on every PR over all 73 testcases. Run L2 locally before touching
+`runtime/malgo/compiler/`, and re-enable the flag when #385 lands.
 
 Both levels run through the **Zig backend**: `Main.mlg` is compiled to a native
 binary with `malgo compile --opt release-fast` and that binary is the evaluator.

@@ -72,7 +72,12 @@ if ! "$MALGO" compile runtime/malgo/compiler/Main.mlg -o "$NATIVE_MAIN" --opt re
 fi
 log "native compilation done"
 
-mapfile -t cases < <(find .golden/Malgo.Sequent.Eval -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+# Not `mapfile`: it is a bash 4 builtin, and macOS still ships bash 3.2, so
+# this gate could not run at all on a Mac.
+cases=()
+while IFS= read -r case_name; do
+  cases+=("$case_name")
+done < <(find .golden/Malgo.Sequent.Eval -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
 total_cases=${#cases[@]}
 log "starting golden checks: ${total_cases} cases (parallelism: ${PARALLEL_JOBS})"
 

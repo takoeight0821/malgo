@@ -441,4 +441,44 @@ private def closureList (xs : List (ModuleName × List ModuleName)) (target : Mo
 #guard closureList [(a, [b]), (b, [a])] a == [b]
 end Guards
 
+namespace RdepGuards
+
+/-! Port of `test/Malgo/Query/EngineSpec.hs`. `reverseDepClosure` decides
+what the LSP invalidates when a file changes; getting it wrong means either
+stale results or invalidating the world. The cyclic case is the one this
+port already proved terminates (see `reverseDepClosureGo`'s
+`termination_by`) -- these pin that it also returns the right answer. -/
+
+private def mn (s : String) : ModuleName := .moduleName s
+private def a := mn "A"
+private def b := mn "B"
+private def c := mn "C"
+private def d := mn "D"
+private def e := mn "E"
+
+private def deps (xs : List (ModuleName × List ModuleName)) :
+    Std.TreeMap ModuleName (Std.TreeSet ModuleName) :=
+  xs.foldl (init := {}) (fun m (k, vs) => m.insert k (Std.TreeSet.ofList vs))
+
+-- Nothing imports A.
+#guard reverseDepClosure (deps [(a, []), (b, [])]) a == ({} : Std.TreeSet ModuleName)
+
+-- B imports A, so invalidating A must reach B.
+#guard reverseDepClosure (deps [(a, []), (b, [a])]) a == Std.TreeSet.ofList [b]
+
+-- C -> B -> A: C must be reached even though it never names A.
+#guard reverseDepClosure (deps [(a, []), (b, [a]), (c, [b])]) a == Std.TreeSet.ofList [b, c]
+
+-- The target itself is excluded; `invalidateWithRdeps` adds it separately.
+#guard reverseDepClosure (deps [(a, [b]), (b, [])]) b == Std.TreeSet.ofList [a]
+
+-- A sibling subtree (E -> D) must not be dragged in.
+#guard reverseDepClosure (deps [(a, []), (b, [a]), (d, []), (e, [d])]) a
+  == Std.TreeSet.ofList [b]
+
+-- Defensive: a cycle must neither loop nor over-report.
+#guard reverseDepClosure (deps [(a, [b]), (b, [a])]) a == Std.TreeSet.ofList [b]
+
+end RdepGuards
+
 end Malgo.Query.Engine

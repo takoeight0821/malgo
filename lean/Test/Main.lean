@@ -376,6 +376,215 @@ Plus the guard against vacuity: a pairing pass that silently matched nothing
 corpus-wide would satisfy every linearity check above, so at least one
 `dropReuse` must fire somewhere. -/
 
+/-! ## Flat/Join structural invariants (port of `FlatCheck.hs`/`JoinCheck.hs`)
+
+`ToCoreSpec` drives these over every testcase alongside its goldens. The
+goldens pin *what* the IR looks like; these pin a property that must hold
+whatever it looks like.
+
+**Flat**: every producer in an argument position (`primitive`,
+`externalCall`, `binOp`, `construct`) must be a *value* -- a var, a literal,
+or a recursively-value construct. That is the entire point of the Flat pass;
+a nested computation surviving there would be a miscompile that the goldens
+would happily record.
+
+**Join**: the Haskell checker walks the tree calling `evaluate` to force
+bottoms out of a lazily-built structure. That has no meaning in Lean, where
+the program is already a total value by the time we hold it -- porting the
+traversal would assert nothing. What does carry over is the non-vacuity
+check: a Join program with no definitions means the pipeline dropped
+everything on the floor. -/
+
+/-! ## ReuseSpecialize (port of `test/Malgo/Sequent/ReuseSpecializeSpec.hs`)
+
+`specializeProgram` inserts the `reuseHint` primitive that lets the Zig
+backend recycle a matched cell in place. It runs in `MalgoM` (it mints
+`reuseArg`/`reuseHint` names), so this is a gate rather than a `#guard`.
+
+Five of the six cases assert the pass leaves a definition **alone**. That is
+the important direction: #354 records two attempts at more aggressive
+hint placement that both crashed the runtime's `rc == 1` assertion, so a pass
+that fires where it should not is a live failure mode, not a hypothetical
+one. Compared via `sShow`, exactly as the Haskell spec does. -/
+
+namespace ReuseSpec
+
+open Malgo.Sequent.Fun
+
+private def rr : Range := ⟨SourcePos.initial "", SourcePos.initial ""⟩
+private def sn (s : String) : Name := { name := s, moduleName := .moduleName "t", sort := .external }
+private def vr (s : String) : Expr := .var rr (sn s)
+
+/-- `sShow` of the named definition after specialization. -/
+private def specialized (defs : List (Range × Name × Expr)) (target : String) : IO String := do
+  let prog : Program := { definitions := defs, dependencies := [] }
+  let out ← MalgoM.run Malgo.Test.flag {}
+    (Malgo.Sequent.ReuseSpecialize.specializeProgram (.moduleName "t") prog)
+  match out.definitions.find? (fun d => d.2.1 == sn target) with
+  | some (_, _, b) => return Malgo.sShow b
+  | none => return "<not found>"
+
+private structure Case where
+  name : String
+  defs : List (Range × Name × Expr)
+  target : String
+  /-- `none` means "must come back unchanged". -/
+  expected : Option Expr
+
+-- mapList: `Cons (f x) (mapList f xs)` in the recursive arm.
+private def mapListBody : Expr :=
+  .lambda rr [sn "f"] (.lambda rr [sn "xs"]
+    (.select rr (.construct rr .tuple [vr "f", vr "xs"])
+      [ .branch rr (.destruct rr .tuple [.pvar rr (sn "_"),
+          .destruct rr (.tag "Nil") []]) (.construct rr (.tag "Nil") []),
+        .branch rr (.destruct rr .tuple [.pvar rr (sn "f2"),
+          .destruct rr (.tag "Cons") [.pvar rr (sn "x2"), .pvar rr (sn "xs2")]])
+          (.construct rr (.tag "Cons")
+            [ .apply rr (vr "f2") [vr "x2"],
+              .apply rr (.apply rr (.invoke rr (sn "mapList")) [vr "f2"]) [vr "xs2"] ]) ]))
+
+-- Two recursive calls into one Construct: which cell would be reused?
+private def mirrorBody : Expr :=
+  .lambda rr [sn "tree"] (.select rr (vr "tree")
+    [ .branch rr (.destruct rr (.tag "Node")
+        [.pvar rr (sn "val"), .pvar rr (sn "left"), .pvar rr (sn "right")])
+        (.construct rr (.tag "Node")
+          [ vr "val",
+            .apply rr (.invoke rr (sn "mirror")) [vr "right"],
+            .apply rr (.invoke rr (sn "mirror")) [vr "left"] ]) ])
+
+-- Rebuilt through a different tag than the one matched.
+private def snocBody : Expr :=
+  .lambda rr [sn "xs"] (.select rr (vr "xs")
+    [ .branch rr (.destruct rr (.tag "Cons") [.pvar rr (sn "x2"), .pvar rr (sn "xs2")])
+        (.construct rr (.tag "Snoc")
+          [vr "x2", .apply rr (.invoke rr (sn "f")) [vr "xs2"]]) ])
+
+-- Models Map.mlg's AVL insert: rebuilt via a rebalancing helper, not a
+-- direct Construct, so there is no cell to recycle in place.
+private def smartCtorBody : Expr :=
+  .lambda rr [sn "x"] (.lambda rr [sn "tree"] (.select rr (vr "tree")
+    [ .branch rr (.destruct rr (.tag "Node")
+        [.pvar rr (sn "val"), .pvar rr (sn "left"), .pvar rr (sn "right")])
+        (.apply rr (.apply rr (.apply rr (.invoke rr (sn "mkNode"))
+          [.apply rr (.apply rr (.invoke rr (sn "insert")) [vr "x"]) [vr "left"]])
+          [vr "val"]) [vr "right"]) ]))
+
+private def baseCaseBody : Expr :=
+  .lambda rr [sn "xs"] (.select rr (vr "xs")
+    [ .branch rr (.destruct rr (.tag "Nil") []) (.construct rr (.tag "Nil") []) ])
+
+private def notLambdaSelectBody : Expr := .construct rr (.tag "Unit") []
+
+private def cases : List Case :=
+  [ { name := "instruments a mapList-shaped self-recursive rebuild"
+    , defs := [(rr, sn "mapList", mapListBody)], target := "mapList", expected := none }
+  , { name := "leaves two recursive calls into one Construct untouched (ambiguous)"
+    , defs := [(rr, sn "mirror", mirrorBody)], target := "mirror", expected := some mirrorBody }
+  , { name := "leaves a rebuild through a different tag untouched"
+    , defs := [(rr, sn "f", snocBody)], target := "f", expected := some snocBody }
+  , { name := "leaves a smart-constructor rebuild untouched"
+    , defs := [(rr, sn "insert", smartCtorBody)], target := "insert", expected := some smartCtorBody }
+  , { name := "leaves a non-recursive base case untouched"
+    , defs := [(rr, sn "f", baseCaseBody)], target := "f", expected := some baseCaseBody }
+  , { name := "leaves a definition that isn't Lambda+Select shaped untouched"
+    , defs := [(rr, sn "f", notLambdaSelectBody)], target := "f", expected := some notLambdaSelectBody } ]
+
+def run : IO Nat := do
+  let mut failed := 0
+  for c in cases do
+    let actual ← specialized c.defs c.target
+    match c.expected with
+    | some e =>
+      if actual == Malgo.sShow e then
+        IO.println s!"ok Malgo.Sequent.ReuseSpecialize/{c.name}"
+      else
+        IO.println s!"FAIL Malgo.Sequent.ReuseSpecialize/{c.name}: changed when it should not have"
+        failed := failed + 1
+    | none =>
+      -- The positive case: assert the hint was actually inserted rather
+      -- than pinning the exact fresh-name numbering.
+      if (actual.splitOn "reuseHint").length > 1 then
+        IO.println s!"ok Malgo.Sequent.ReuseSpecialize/{c.name}"
+      else
+        IO.println s!"FAIL Malgo.Sequent.ReuseSpecialize/{c.name}: no reuseHint inserted"
+        failed := failed + 1
+  IO.println s!"=== reuse-specialize {cases.length - failed}/{cases.length} passed ==="
+  return failed
+
+end ReuseSpec
+
+namespace IrInvariants
+
+open Malgo.Sequent.Core
+
+private partial def isValueProducer : Flat.Producer → Bool
+  | .var _ _ => true
+  | .literal _ _ => true
+  | .construct _ _ ps _ => ps.all isValueProducer
+  | .lambda .. => true
+  | .object .. => true
+  | .mu .. => false
+
+mutual
+
+/-- Collects a description of each argument position holding a non-value. -/
+private partial def badFlatStmt : Flat.Statement → List String
+  | .cut p c => badFlatProd p ++ badFlatCons c
+  | .join _ _ c s => badFlatCons c ++ badFlatStmt s
+  | .primitive _ nm ps c =>
+    (ps.filter (fun p => !isValueProducer p) |>.map (fun _ => s!"primitive {nm}")) ++ badFlatCons c
+  | .invoke _ _ c => badFlatCons c
+  | .externalCall _ nm ps c =>
+    (ps.filter (fun p => !isValueProducer p) |>.map (fun _ => s!"externalCall {nm}")) ++ badFlatCons c
+  | .binOp _ op l r c =>
+    (if isValueProducer l then [] else [s!"binOp {op} lhs"]) ++
+    (if isValueProducer r then [] else [s!"binOp {op} rhs"]) ++ badFlatCons c
+  | .ifz _ cond t e => badFlatProd cond ++ badFlatStmt t ++ badFlatStmt e
+
+private partial def badFlatProd : Flat.Producer → List String
+  | .var .. => []
+  | .literal .. => []
+  | .construct _ _ ps cs =>
+    (ps.filter (fun p => !isValueProducer p) |>.map (fun _ => "construct arg")) ++
+      cs.flatMap badFlatCons
+  | .lambda _ _ s => badFlatStmt s
+  | .object _ fields => fields.flatMap (fun f => badFlatStmt f.2.2)
+  | .mu _ _ s => badFlatStmt s
+
+private partial def badFlatCons : Flat.Consumer → List String
+  | .label .. => []
+  | .apply _ ps cs => ps.flatMap badFlatProd ++ cs.flatMap badFlatCons
+  | .project _ _ c => badFlatCons c
+  | .«then» _ _ s => badFlatStmt s
+  | .finish _ => []
+  | .select _ branches => branches.flatMap (fun b => match b with | .branch _ _ s => badFlatStmt s)
+
+end
+
+def run (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR)) (names : List String) :
+    IO Nat := do
+  let mut failed := 0
+  for name in names do
+    try
+      let ir ← Malgo.Test.getAllIR memo (Malgo.Test.testcasePath name)
+      let bad := ir.flat.definitions.flatMap (fun d => badFlatStmt d.2.2.2)
+      if !bad.isEmpty then
+        IO.println s!"FAIL Malgo.Sequent.Core.Flat/{name}: non-value in {bad.length} argument position(s): {bad.take 3}"
+        failed := failed + 1
+      else if ir.join.definitions.isEmpty then
+        IO.println s!"FAIL Malgo.Sequent.Core.Join/{name}: no definitions"
+        failed := failed + 1
+      else
+        IO.println s!"ok Malgo.Sequent.Core.FlatJoin/{name}"
+    catch e =>
+      IO.println s!"FAIL Malgo.Sequent.Core.FlatJoin/{name}: {toString e}"
+      failed := failed + 1
+  IO.println s!"=== ir-invariants {names.length - failed}/{names.length} passed ==="
+  return failed
+
+end IrInvariants
+
 namespace ZigCorpus
 
 open Malgo.Backend.Zig.Ir
@@ -769,6 +978,9 @@ def main (args : List String) : IO UInt32 := do
     let metPageFailures ← Malgo.Test.runMetPageGate
     let reuseFailures ← Malgo.Test.ZigReuse.run
     let corpusFailures ← Malgo.Test.ZigCorpus.run memo names
+    let irFailures ← Malgo.Test.IrInvariants.run memo names
+    let specFailures ← Malgo.Test.ReuseSpec.run
     return (if goldenCode == 0 && inferCode == 0 && metPageFailures == 0
-        && reuseFailures == 0 && corpusFailures == 0
+        && reuseFailures == 0 && corpusFailures == 0 && irFailures == 0
+        && specFailures == 0
       then 0 else 1)

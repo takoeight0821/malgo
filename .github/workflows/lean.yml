@@ -90,6 +90,13 @@ jobs:
       - name: Cross-implementation parity (error mode)
         run: bash scripts/lean-parity.sh --mode error
 
+      # The only thing that drives the actual CLI binary across the corpus:
+      # lake test calls library functions in process. Also carries the error
+      # -fixture contract, which nothing else asserts once lean-parity.sh
+      # goes away with the Haskell implementation.
+      - name: CLI gate (eval / bigstep / error, Lean binary)
+        run: bash scripts/cli-gate.sh
+
   lean-selfhost:
     needs: gates
     if: needs.gates.outputs.selfhost == '1'

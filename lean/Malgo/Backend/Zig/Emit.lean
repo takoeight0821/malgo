@@ -251,4 +251,29 @@ def emitProgram (modName : ModuleName) (program : Program) : String :=
       "    rt.exitWithLeakCheck();",
       "}" ]
 
+/-! ## `mangleId` (port of Haskell `test/Malgo/Backend/ZigSpec.hs`)
+
+Zig's raw-identifier syntax `@"..."` accepts almost any string, which is what
+lets a Malgo `Id` become a Zig identifier without a keyword-substitution
+table. These pin the three properties the Haskell spec pins. `Id.toText`
+renders the same three sorts identically on both sides, so the expected
+strings are the Haskell ones verbatim. -/
+
+private def ext (s : String) : Name :=
+  { name := s, moduleName := .moduleName "Test", sort := .external }
+
+private def intern (s : String) (uniq : Nat) : Name :=
+  { name := s, moduleName := .moduleName "Test", sort := .internal uniq }
+
+-- Zig keywords survive the wrapping unscathed.
+#guard mangleId (ext "error") == "@\"Test.error\""
+#guard mangleId (ext "fn") == "@\"Test.fn\""
+#guard mangleId (ext "test") == "@\"Test.test\""
+
+-- Same surface name, different uniq: must not collide.
+#guard mangleId (intern "x" 1) != mangleId (intern "x" 2)
+
+-- Quotes and backslashes would otherwise close or escape the raw identifier.
+#guard mangleId (ext "a\"b\\c") == "@\"Test.a\\\"b\\\\c\""
+
 end Malgo.Backend.Zig.Emit

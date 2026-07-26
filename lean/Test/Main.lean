@@ -347,6 +347,175 @@ def prettyIRCases (testcaseNames exampleNames : List String) : List GoldenCase :
 /-! ## MET page gate (M8, authored fresh — no Haskell reference test
 exists; see `Test/MetPage.lean`'s module doc). -/
 
+/-! ## Zig Reuse placement gate (port of `ReuseSpec.hs`'s `placementSpec`)
+
+`reuseFunc` mints fresh token names, so it lives in `MalgoM` and cannot be a
+`#guard` the way the pass's pure siblings (`Peephole`, `RcCheck`) are. Same
+determinism the Haskell spec relies on: `MalgoM.run` starts `Uniq` at 0, so
+within one call the tokens are `reuse_0`, `reuse_1`, ... in pairing order.
+
+The four negative cases matter most -- an unpaired drop that got swallowed
+instead of flushed back out would leak, and the golden sweep would not
+notice. -/
+
+/-! ## Zig corpus linearity oracle (port of `PerceusSpec.hs`'s `corpusSpec`)
+
+Every golden testcase is lowered through the real backend pipeline
+(ClosureConv → Peephole → Perceus → Reuse) and handed to the `RcCheck`
+linearity checker. That covers **every control-flow path** of the whole
+corpus, including paths no golden input actually executes, with no Zig
+toolchain in the loop -- which is exactly what `zig-golden.sh` cannot do,
+since it only observes the stdout of the paths a run happens to take.
+
+Two properties, both from the Haskell spec:
+
+  * ClosureConv alone must not insert any RC op (they are Perceus's job);
+  * the full pipeline must stay linear, reuse-token obligations included.
+
+Plus the guard against vacuity: a pairing pass that silently matched nothing
+corpus-wide would satisfy every linearity check above, so at least one
+`dropReuse` must fire somewhere. -/
+
+namespace ZigCorpus
+
+open Malgo.Backend.Zig.Ir
+
+private def hasRcOps : Block → Bool
+  | .mk stmts term =>
+    stmts.any (fun st => match st with
+      | .dup _ => true | .drop _ => true | _ => false)
+    || (match term with
+        | .«if» _ t e => hasRcOps t || hasRcOps e
+        | _ => false)
+
+private def hasReuseOp : Block → Bool
+  | .mk stmts term =>
+    stmts.any (fun st => match st with | .dropReuse .. => true | _ => false)
+    || (match term with
+        | .«if» _ t e => hasReuseOp t || hasReuseOp e
+        | _ => false)
+
+def run (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR)) (names : List String) :
+    IO Nat := do
+  let mut failed := 0
+  let mut reuseFired := false
+  for name in names do
+    let path := Malgo.Test.testcasePath name
+    try
+      let ir ← Malgo.Test.getAllIR memo path
+      let stages ← MalgoM.run Malgo.Test.flag {}
+        (Malgo.Backend.Zig.runZigStages ir.moduleName ir.join)
+      if stages.closureConv.funcs.any (fun fn => hasRcOps fn.body) then
+        IO.println s!"FAIL Malgo.Backend.Zig.corpus/{name}: ClosureConv inserted an RC op"
+        failed := failed + 1
+      else match Malgo.Backend.Zig.RcCheck.checkProgram stages.reuse with
+        | .ok () =>
+          if stages.reuse.funcs.any (fun fn => hasReuseOp fn.body) then
+            reuseFired := true
+          IO.println s!"ok Malgo.Backend.Zig.corpus/{name}"
+        | .error vs =>
+          IO.println s!"FAIL Malgo.Backend.Zig.corpus/{name}: {vs.length} linearity violation(s)"
+          failed := failed + 1
+    catch e =>
+      IO.println s!"FAIL Malgo.Backend.Zig.corpus/{name}: {toString e}"
+      failed := failed + 1
+  if reuseFired then
+    IO.println "ok Malgo.Backend.Zig.corpus/reuse fired at least once"
+  else
+    IO.println "FAIL Malgo.Backend.Zig.corpus: no Drop/MkStruct pairing anywhere in the corpus"
+    failed := failed + 1
+  IO.println s!"=== zig-corpus {names.length + 1 - failed}/{names.length + 1} passed ==="
+  return failed
+
+end ZigCorpus
+
+namespace ZigReuse
+
+open Malgo.Backend.Zig.Ir
+open Malgo.Sequent.Fun (Name Tag)
+
+private def rr : Range := ⟨SourcePos.initial "", SourcePos.initial ""⟩
+
+private def rn (s : String) (uniq : Nat) : Name :=
+  { name := s, moduleName := .moduleName "ReuseTest", sort := .temporal uniq }
+
+private def vA : Name := rn "a" 10
+private def vB : Name := rn "b" 11
+private def vK : Name := rn "k" 12
+private def vS1 : Name := rn "s1" 13
+private def vS2 : Name := rn "s2" 14
+
+/-- The Nth fresh token `reuseFunc` mints, 0-indexed. -/
+private def tok (i : Nat) : Name := rn "reuse" i
+
+private def runReuse (params : List Name) (body : Block) : IO Block := do
+  let fn : Func := { range := rr, name := rn "fn" 0, kind := .topLevelFn,
+                     selfVar := rn "self" 1, params, body }
+  let fn' ← MalgoM.run Malgo.Test.flag {} (Malgo.Backend.Zig.Reuse.reuseFunc (.moduleName "ReuseTest") fn)
+  return fn'.body
+
+private structure Case where
+  name : String
+  params : List Name
+  input : Block
+  expected : Block
+
+private def cases : List Case :=
+  [ { name := "pairs a Drop with a later same-shape MkStruct"
+    , params := [vA, vB, vK]
+    , input := .mk [.drop vA, .let vS1 (.mkStruct .tuple [vB])] (.applyCo vK vS1)
+    , expected := .mk [.dropReuse (tok 0) vA 1,
+                       .let vS1 (.mkStructReuse (tok 0) .tuple [vB])] (.applyCo vK vS1) }
+    -- vB was dropped last, so it pairs with the nearest MkStruct.
+  , { name := "pairs LIFO: the most recently dropped wins the nearest MkStruct"
+    , params := [vA, vB, vK]
+    , input := .mk [.drop vA, .drop vB, .let vS1 (.mkStruct .tuple [vK]),
+                    .let vS2 (.mkStruct .tuple [vK])] (.callClosure vK [vS1, vS2])
+    , expected := .mk [.dropReuse (tok 0) vB 1, .let vS1 (.mkStructReuse (tok 0) .tuple [vK]),
+                       .dropReuse (tok 1) vA 1, .let vS2 (.mkStructReuse (tok 1) .tuple [vK])]
+                    (.callClosure vK [vS1, vS2]) }
+  , { name := "flushes an unpaired Drop (no later MkStruct) unchanged"
+    , params := [vA, vK]
+    , input := .mk [.drop vA] (.applyCo vK vA)
+    , expected := .mk [.drop vA] (.applyCo vK vA) }
+    -- Losing the leftover pending drop here would leak.
+  , { name := "flushes the extra pending drop when drops outnumber MkStructs"
+    , params := [vA, vB, vK]
+    , input := .mk [.drop vA, .drop vB, .let vS1 (.mkStruct .tuple [vK])] (.callClosure vK [vS1])
+    , expected := .mk [.dropReuse (tok 0) vB 1, .let vS1 (.mkStructReuse (tok 0) .tuple [vK]),
+                       .drop vA] (.callClosure vK [vS1]) }
+  , { name := "does not pair a Drop that comes after the MkStruct"
+    , params := [vA, vB, vK]
+    , input := .mk [.let vS1 (.mkStruct .tuple [vB]), .drop vA] (.callClosure vK [vS1])
+    , expected := .mk [.let vS1 (.mkStruct .tuple [vB]), .drop vA] (.callClosure vK [vS1]) }
+  , { name := "treats a bare PanicExpr as a barrier"
+    , params := [vA, vK]
+    , input := .mk [.drop vA, .let vB (.panicExpr "no match")] (.applyCo vK vB)
+    , expected := .mk [.drop vA, .let vB (.panicExpr "no match")] (.applyCo vK vB) }
+  , { name := "pairs within each TIf branch independently"
+    , params := [vA, vB, vK]
+    , input := .mk [] (.«if» (.isZero vA)
+        (.mk [.drop vA, .let vS1 (.mkStruct .tuple [vB])] (.applyCo vK vS1))
+        (.mk [.drop vB] (.applyCo vK vA)))
+    , expected := .mk [] (.«if» (.isZero vA)
+        (.mk [.dropReuse (tok 0) vA 1, .let vS1 (.mkStructReuse (tok 0) .tuple [vB])]
+          (.applyCo vK vS1))
+        (.mk [.drop vB] (.applyCo vK vA))) } ]
+
+def run : IO Nat := do
+  let mut failed := 0
+  for c in cases do
+    let actual ← runReuse c.params c.input
+    if actual == c.expected then
+      IO.println s!"ok Malgo.Backend.Zig.Reuse/{c.name}"
+    else
+      IO.println s!"FAIL Malgo.Backend.Zig.Reuse/{c.name}"
+      failed := failed + 1
+  IO.println s!"=== zig-reuse {cases.length - failed}/{cases.length} passed ==="
+  return failed
+
+end ZigReuse
+
 def runMetPageGate : IO Nat := do
   match ← Malgo.Test.MetPage.run with
   | .ok () => IO.println "ok Malgo.Debug.MetPage/index"; return 0
@@ -598,5 +767,8 @@ def main (args : List String) : IO UInt32 := do
     let goldenCode ← Malgo.Test.runSuite cfg allCases
     let inferCode ← Malgo.Test.runInferGate cfg names
     let metPageFailures ← Malgo.Test.runMetPageGate
+    let reuseFailures ← Malgo.Test.ZigReuse.run
+    let corpusFailures ← Malgo.Test.ZigCorpus.run memo names
     return (if goldenCode == 0 && inferCode == 0 && metPageFailures == 0
+        && reuseFailures == 0 && corpusFailures == 0
       then 0 else 1)

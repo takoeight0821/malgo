@@ -224,4 +224,81 @@ private def peepFn : Func :=
 
 #guard (peepholeFunc peepFn).body == Block.mk [] (.«return» (nm "a"))
 
+/-! ## Exact-shape unit checks (port of `test/Malgo/Backend/Zig/PeepholeSpec.hs`)
+
+Corpus-wide safety is covered by the zig-golden parity harness; these pin the
+exact rewrite, including the four cases where the pass must *not* fire.
+`#guard` rather than golden cases: they are pure structural equalities, so
+`lake build` is the right place to catch a regression. -/
+
+private def tnm (s : String) (uniq : Nat) : Name :=
+  { name := s, moduleName := .moduleName "PeepholeTest", sort := .temporal uniq }
+
+private def vA : Name := tnm "a" 10
+private def vB : Name := tnm "b" 11
+private def vK : Name := tnm "k" 12
+private def vH : Name := tnm "h" 13
+private def vT : Name := tnm "t" 14
+private def vU : Name := tnm "u" 15
+
+private def peepBody (params : List Name) (body : Block) : Block :=
+  (peepholeFunc { range := r0, name := tnm "fn" 0, kind := .topLevelFn,
+                  selfVar := tnm "self" 1, params, body }).body
+
+-- The shape `fromClauses` produces: a fresh tuple of the parameters, with a
+-- guarded Select arm reading fields back out of it. Reads are re-rooted, the
+-- now-trivially-true root test is dropped, and the alias is substituted.
+#guard peepBody [vA, vK]
+    (.mk [.let vT (.mkStruct .tuple [vA, vK]), .let vH (.readPath (.field (.root vT) 0))]
+      (.«if» (.and [.tagEq (.root vT) .tuple, .tagEq (.field (.root vT) 0) (.tag "Cons")])
+        (.mk [] (.applyCo vK vH)) (.mk [] (.panic "no match"))))
+  == .mk [] (.«if» (.and [.tagEq (.root vA) (.tag "Cons")])
+      (.mk [] (.applyCo vK vA)) (.mk [] (.panic "no match")))
+
+-- Re-rooting is not limited to one field deep.
+#guard peepBody [vA, vK]
+    (.mk [.let vT (.mkStruct .tuple [vA, vK]),
+          .let vH (.readPath (.field (.field (.root vT) 0) 1))]
+      (.applyCo vK vH))
+  == .mk [.let vH (.readPath (.field (.root vA) 1))] (.applyCo vK vH)
+
+-- Must NOT fire: the tuple escapes into a call, so it has to be built.
+#guard peepBody [vA, vK] (.mk [.let vT (.mkStruct .tuple [vA])] (.applyCo vK vT))
+  == .mk [.let vT (.mkStruct .tuple [vA])] (.applyCo vK vT)
+
+-- Must NOT fire: a primitive observes the tuple as a value.
+#guard peepBody [vA, vK]
+    (.mk [.let vT (.mkStruct .tuple [vA]), .let vH (.prim "malgo_print" [vT])] (.applyCo vK vH))
+  == .mk [.let vT (.mkStruct .tuple [vA]), .let vH (.prim "malgo_print" [vT])] (.applyCo vK vH)
+
+-- Must NOT fire: the root test asks for a tag the construction does not have,
+-- so it is not trivially true and the tuple is genuinely inspected.
+#guard peepBody [vA, vK]
+    (.mk [.let vT (.mkStruct .tuple [vA])]
+      (.«if» (.and [.tagEq (.root vT) (.tag "Cons")])
+        (.mk [] (.applyCo vK vT)) (.mk [] (.panic "no match"))))
+  == .mk [.let vT (.mkStruct .tuple [vA])]
+      (.«if» (.and [.tagEq (.root vT) (.tag "Cons")])
+        (.mk [] (.applyCo vK vT)) (.mk [] (.panic "no match")))
+
+-- Both arms of a TIf read from the same tuple.
+#guard peepBody [vA, vB, vK]
+    (.mk [.let vT (.mkStruct .tuple [vA, vB])]
+      (.«if» (.isZero vA)
+        (.mk [.let vH (.readPath (.field (.root vT) 0))] (.applyCo vK vH))
+        (.mk [.let vU (.readPath (.field (.root vT) 1))] (.applyCo vK vU))))
+  == .mk [] (.«if» (.isZero vA) (.mk [] (.applyCo vK vA)) (.mk [] (.applyCo vK vB)))
+
+-- Nested tuples collapse via the fixpoint, not just one layer.
+#guard peepBody [vA, vB, vK]
+    (.mk [.let (tnm "inner" 20) (.mkStruct .tuple [vA, vB]),
+          .let vT (.mkStruct .tuple [tnm "inner" 20]),
+          .let vH (.readPath (.field (.field (.root vT) 0) 1))]
+      (.applyCo vK vH))
+  == .mk [] (.applyCo vK vB)
+
+-- A pure alias is substituted even with no tuple in sight.
+#guard peepBody [vA, vK] (.mk [.let vH (.readPath (.root vA))] (.applyCo vK vH))
+  == .mk [] (.applyCo vK vA)
+
 end Malgo.Backend.Zig.Peephole

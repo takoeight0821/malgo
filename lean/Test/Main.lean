@@ -585,6 +585,76 @@ def run (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR)) (names : List St
 
 end IrInvariants
 
+/-! ## Parser surface behaviour (selected from `test/Malgo/ParserSpec.hs`)
+
+That spec has 19 unit cases; most are "this string parses" smoke checks for
+syntax the golden corpus already exercises end to end -- C-style calls
+(`CStyleApply`), tuples and clauses, data/type defs (`CStyleDataDef`,
+`CStyleTypeSynonym`), the Malgo 2025 bundle (`BottomTilde`, `RowPoly`,
+`LabelGoto`), and pragmas (8 corpus files open with `#c-style-apply` or
+`#malgo-2025`). Re-asserting those here would add coverage of nothing.
+
+Four carry weight and are ported:
+
+  * The three `#345` field-access precedence cases. `.field` binds to the
+    adjacent atom only when no whitespace precedes the dot. The corpus has
+    the no-space form (`xs.tail.tail` in CodataE2E) but **not one instance
+    of the spaced form**, so half the rule is currently unpinned -- and the
+    two halves produce different trees, not a parse error, which is the kind
+    of difference a golden over a whole file will not localise.
+  * Unknown pragmas must be ignored rather than rejected. Every pragma in
+    the corpus is one of the two known ones, so nothing else covers the
+    fallthrough. -/
+
+namespace ParserSurface
+
+private def parses (src : String) : IO (Except String String) := do
+  let ws ← Workspace.setup
+  let (res, _) ← Malgo.Parser.pass ws "<test>" src
+  match res with
+  | .error e => return .error e.render
+  | .ok m => return .ok (Malgo.sShow m)
+
+private structure Case where
+  name : String
+  src : String
+  /-- Substring the rendered parse tree must contain. -/
+  expect : Option String := none
+
+private def cases : List Case :=
+  [ { name := "binds .field to the adjacent atom when no space precedes the dot"
+    , src := "def main = f a state.dict"
+    , expect := some "(apply (apply f a) (project state \"dict\"))" }
+  , { name := "treats .field as a postfix on the whole application when a space precedes it"
+    , src := "def main = f a state .dict"
+    , expect := some "(project (apply (apply f a) state) \"dict\")" }
+  , { name := "chains adjacent .field projections tightly"
+    , src := "def main = f state.dict.head"
+    , expect := some "(apply f (project (project state \"dict\") \"head\"))" }
+  , { name := "ignores unknown pragmas alongside known ones"
+    , src := "#experimental-feature\n#c-style-apply\ndef main = f(x, y)" } ]
+
+def run : IO Nat := do
+  let mut failed := 0
+  for c in cases do
+    match ← parses c.src with
+    | .error e =>
+      IO.println s!"FAIL Malgo.Parser.surface/{c.name}: parse error: {e}"
+      failed := failed + 1
+    | .ok rendered =>
+      match c.expect with
+      | none => IO.println s!"ok Malgo.Parser.surface/{c.name}"
+      | some needle =>
+        if (rendered.splitOn needle).length > 1 then
+          IO.println s!"ok Malgo.Parser.surface/{c.name}"
+        else
+          IO.println s!"FAIL Malgo.Parser.surface/{c.name}: missing {needle}"
+          failed := failed + 1
+  IO.println s!"=== parser-surface {cases.length - failed}/{cases.length} passed ==="
+  return failed
+
+end ParserSurface
+
 namespace ZigCorpus
 
 open Malgo.Backend.Zig.Ir
@@ -980,7 +1050,8 @@ def main (args : List String) : IO UInt32 := do
     let corpusFailures ← Malgo.Test.ZigCorpus.run memo names
     let irFailures ← Malgo.Test.IrInvariants.run memo names
     let specFailures ← Malgo.Test.ReuseSpec.run
+    let parserFailures ← Malgo.Test.ParserSurface.run
     return (if goldenCode == 0 && inferCode == 0 && metPageFailures == 0
         && reuseFailures == 0 && corpusFailures == 0 && irFailures == 0
-        && specFailures == 0
+        && specFailures == 0 && parserFailures == 0
       then 0 else 1)

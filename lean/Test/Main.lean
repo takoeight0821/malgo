@@ -26,6 +26,29 @@ private def parseGoldenAt (path : System.FilePath) : IO String := do
 private def parserCaseAt (name : String) (path : System.FilePath) : GoldenCase :=
   { group := "Malgo.Parser", name, run := parseGoldenAt path }
 
+/-! ### Parser error cases (`test/Malgo/ParserSpec/errors/*.mlg`)
+
+Haskell's `driveErrorParse` dumps megaparsec's `errorBundlePretty`, which
+prints the offending source line and a caret under the column. The Lean
+parser's `PError.render` is a single line. Both are legitimate renderings of
+the same failure, so these cases carry Lean-owned goldens under
+`.golden-lean/` rather than sharing the Haskell tree. -/
+
+private def parserErrorCaseDir : System.FilePath :=
+  System.FilePath.mk "test/Malgo/ParserSpec/errors"
+
+private def parseErrorGolden (path : System.FilePath) : IO String := do
+  let ws ← Workspace.setup
+  let text ← IO.FS.readFile path
+  let (result, _flags) ← Malgo.Parser.pass ws path text
+  match result with
+  | .error e => return e.render
+  | .ok m => return s!"PARSED WITHOUT ERROR: {sShow m}"
+
+private def parserErrorCase (name : String) : GoldenCase :=
+  { group := "Malgo.Parser", name := s!"error/{name}",
+    run := parseErrorGolden (parserErrorCaseDir / s!"{name}.mlg") }
+
 /-! ## Rename golden cases (the first real uniq-order-parity gate)
 
 Each case runs the M1 mini-driver (`Malgo.Driver.compileToRenamed`) and
@@ -66,6 +89,41 @@ private def renameGolden (path : System.FilePath) : IO String := do
 
 private def renameCase (name : String) (path : System.FilePath) : GoldenCase :=
   { group := "Malgo.Rename", name, run := renameGolden path }
+
+/-! ### Rename error cases (`test/Malgo/RenameSpec/errors/*.mlg`)
+
+Haskell's `driveErrorRename` `show`s the `CompileError` it caught; Lean's
+`CompileError.render` names the pass in the text and formats the range
+differently. Lean-owned goldens, same as the parser errors above. -/
+
+private def renameErrorCaseDir : System.FilePath :=
+  System.FilePath.mk "test/Malgo/RenameSpec/errors"
+
+private def renameErrorGolden (path : System.FilePath) : IO String := do
+  try
+    let ws ← Workspace.setup
+    let cache ← IO.mkRef (← getPrebuilt)
+    let (renamed, _) ← MalgoM.run flag {} (Malgo.Driver.compileToRenamed ws cache path)
+    return s!"RENAMED WITHOUT ERROR: {sShow renamed}"
+  catch e => return toString e
+
+private def renameErrorCase (name : String) : GoldenCase :=
+  { group := "Malgo.Rename", name := s!"error/{name}",
+    run := renameErrorGolden (renameErrorCaseDir / s!"{name}.mlg") }
+
+/-- Base names of an error-fixture directory, sorted (Haskell
+`listDirectory errorcaseDir`). -/
+def enumerateErrorCases (dir : System.FilePath) : IO (List String) := do
+  let entries ← dir.readDir
+  let names := entries.toList.filterMap fun e =>
+    if e.fileName.endsWith ".mlg" then (System.FilePath.mk e.fileName).fileStem else none
+  return (names.toArray.qsort (· < ·)).toList
+
+def enumerateParserErrorCases : IO (List String) := enumerateErrorCases parserErrorCaseDir
+def enumerateRenameErrorCases : IO (List String) := enumerateErrorCases renameErrorCaseDir
+
+def parserErrorCases (names : List String) : List GoldenCase := names.map parserErrorCase
+def renameErrorCases (names : List String) : List GoldenCase := names.map renameErrorCase
 
 private def testcasePath (name : String) : System.FilePath :=
   System.FilePath.mk s!"test/testcases/malgo/{name}.mlg"
@@ -268,12 +326,8 @@ def enumerateTestcases : IO (List String) := do
 /-- The 18 non-error Parser goldens, mirroring `renameCases`: Builtin/Prelude
 from `runtime/malgo/` plus the 16 representative testcases. Previously only
 three were registered, leaving 15 of the committed `.golden/Malgo.Parser`
-files ungated on the Lean side.
-
-The five `.golden/Malgo.Parser/error/*` cases are deliberately still absent:
-parser *error text* legitimately differs between the implementations (see
-this file's header), so they need Lean-owned goldens rather than the shared
-Haskell-generated ones. -/
+files ungated on the Lean side. The `error/*` cases are registered
+separately (`parserErrorCases`) because their goldens are Lean-owned. -/
 def parserCases : List GoldenCase :=
   [ parserCaseAt "Builtin" "runtime/malgo/Builtin.mlg",
     parserCaseAt "Prelude" "runtime/malgo/Prelude.mlg" ] ++
@@ -1050,7 +1104,12 @@ def main (args : List String) : IO UInt32 := do
     let forthNames ← Malgo.Test.enumerateForthTestcases
     let lintNames ← Malgo.Test.enumerateLintCases
     let exampleNames ← Malgo.Test.enumerateExamples
-    let allCases := Malgo.Test.cases ++ Malgo.Test.toCoreCases memo names
+    let parserErrorNames ← Malgo.Test.enumerateParserErrorCases
+    let renameErrorNames ← Malgo.Test.enumerateRenameErrorCases
+    let allCases := Malgo.Test.cases
+      ++ Malgo.Test.parserErrorCases parserErrorNames
+      ++ Malgo.Test.renameErrorCases renameErrorNames
+      ++ Malgo.Test.toCoreCases memo names
       ++ Malgo.Test.evalCases memo names
       ++ Malgo.Test.bigStepEvalCases memo names
       ++ Malgo.Test.forthCases memo forthNames

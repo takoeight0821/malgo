@@ -4,7 +4,12 @@ written next to it on mismatch. Cases whose Lean output legitimately
 diverges from Haskell get an override in `.golden-lean/` with the same
 layout: the runner checks `.golden-lean/` first (an explicit override
 wins), then the shared `.golden/`. `--update` only ever writes to
-`.golden-lean/` — the shared tree stays Haskell-owned. -/
+`.golden-lean/` — the shared tree stays Haskell-owned.
+
+The overrides are the 11 parser/rename *error* cases, whose message text
+each implementation renders in its own format. The split exists only while
+both implementations do: once Haskell retires, these become the only
+goldens and fold back into `.golden/`. -/
 
 namespace Malgo.Test
 

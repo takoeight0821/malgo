@@ -136,9 +136,16 @@ def lookAhead (p : P α) : P α := fun s =>
   | .ok a _ _ => .ok a s false
   | .err e _ => .err e false
 
+/-- Megaparsec reports the token that *was* there, not a generic label:
+`notFollowedBy` failing at `def let` says `unexpected 'l'`. Rendering a
+`.label` here instead produced "unexpected unexpected input". -/
 def notFollowedBy (p : P α) : P Unit := fun s =>
   match p s with
-  | .ok _ _ _ => .err (s.errorAt (some (.label "unexpected input")) []) false
+  | .ok _ _ _ =>
+    let found := match s.rest with
+      | [] => ErrorItem.endOfInput
+      | c :: _ => ErrorItem.tokens (toString c)
+    .err (s.errorAt (some found) []) false
   | .err _ _ => .ok () s false
 
 def getSourcePos : P SourcePos := fun s => .ok s.sourcePos s false

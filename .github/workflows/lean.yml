@@ -27,6 +27,7 @@ jobs:
     outputs:
       parity: ${{ steps.g.outputs.LEAN_PARITY }}
       selfhost: ${{ steps.g.outputs.LEAN_SELFHOST }}
+      selfhostL2: ${{ steps.g.outputs.LEAN_SELFHOST_L2 }}
       zig: ${{ steps.g.outputs.LEAN_ZIG }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -125,7 +126,10 @@ jobs:
       - name: Self-hosted golden (Level 1 — Malgo-in-Malgo compiler, Zig backend)
         run: MALGO=lean/.lake/build/bin/malgo MALGO_WORK_DIR=.malgo-work-lean bash scripts/selfhost-golden.sh
 
+      # Disabled via lean/ci-gates.env until #385 makes L2 affordable: it is
+      # ~16 minutes on its own, against a target of keeping CI under 10.
       - name: Self-hosted metacircular (Level 2)
+        if: needs.gates.outputs.selfhostL2 == '1'
         run: |
           MALGO=lean/.lake/build/bin/malgo MALGO_WORK_DIR=.malgo-work-lean \
           CASE_TIMEOUT=1200 PRECOMPILE_TIMEOUT=300 bash scripts/selfhost-level2.sh

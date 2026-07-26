@@ -30,6 +30,17 @@ log() {
   printf '[%s] %s\n' "$(timestamp)" "$*"
 }
 
+# Each case's own log is collected only after `wait`, so that the final
+# output stays in case order despite running in parallel. That leaves the
+# terminal silent for the whole sweep -- ~16 minutes on CI, in which a hang,
+# a timeout and a slow-but-healthy case look identical. fd 3 keeps a handle
+# on the real stdout so a case can report starting and finishing while the
+# rest are still running.
+exec 3>&1
+progress() {
+  printf '[%s] %s\n' "$(timestamp)" "$*" >&3
+}
+
 if [[ "$KEEP_WORK" != "1" ]]; then
   log "cleaning work directory: $MALGO_WORK_DIR"
   rm -rf "$MALGO_WORK_DIR"
@@ -167,9 +178,17 @@ run_case() {
   rm -f "$out" "$err"
 }
 
+run_case_watched() {
+  local dir="$1"
+  local start=$SECONDS
+  progress "start: $dir"
+  run_case "$dir" >"$results_dir/$dir.log" 2>&1
+  progress "$(cat "$results_dir/$dir.status" 2>/dev/null || echo fail): $dir ($((SECONDS - start))s)"
+}
+
 pids=()
 for dir in "${level2_cases[@]}"; do
-  run_case "$dir" >"$results_dir/$dir.log" 2>&1 &
+  run_case_watched "$dir" &
   pids+=("$!")
 done
 

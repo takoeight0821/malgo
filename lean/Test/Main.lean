@@ -28,11 +28,10 @@ private def parserCaseAt (name : String) (path : System.FilePath) : GoldenCase :
 
 /-! ### Parser error cases (`test/Malgo/ParserSpec/errors/*.mlg`)
 
-Haskell's `driveErrorParse` dumps megaparsec's `errorBundlePretty`, which
-prints the offending source line and a caret under the column. The Lean
-parser's `PError.render` is a single line. Both are legitimate renderings of
-the same failure, so these cases carry Lean-owned goldens under
-`.golden-lean/` rather than sharing the Haskell tree. -/
+The goldens here are `PError.render`'s single line. Haskell's
+`driveErrorParse` dumped megaparsec's `errorBundlePretty` — the offending
+source line with a caret under the column — so these were the last cases to
+transfer when that implementation retired. -/
 
 private def parserErrorCaseDir : System.FilePath :=
   System.FilePath.mk "test/Malgo/ParserSpec/errors"
@@ -94,7 +93,7 @@ private def renameCase (name : String) (path : System.FilePath) : GoldenCase :=
 
 Haskell's `driveErrorRename` `show`s the `CompileError` it caught; Lean's
 `CompileError.render` names the pass in the text and formats the range
-differently. Lean-owned goldens, same as the parser errors above. -/
+differently, so these transferred alongside the parser errors above. -/
 
 private def renameErrorCaseDir : System.FilePath :=
   System.FilePath.mk "test/Malgo/RenameSpec/errors"
@@ -914,12 +913,13 @@ contains Builtin's names. `Map.<>`'s left-bias silently prefers the
 earlier-listed dependency's copy, which is fine since re-exported names are
 identical regardless of which dependency contributed them.
 
-The engine's `buildDepsEnv` stays genuinely strict (matching Haskell's
-`Query/Engine.hs` literally) because it is exercised at CLI-parity level by
-`scripts/lean-parity.sh --mode error`: `malgo eval --infer` on a real
-testcase (e.g. `Undefined.mlg`, which has this exact Prelude+Builtin
-diamond) crashes on Haskell's actual binary too — confirmed empirically —
-so the Lean CLI must crash identically, not silently succeed. -/
+The engine's `buildDepsEnv` stays genuinely strict, matching what the
+Haskell `Query/Engine.hs` did, and `scripts/cli-gate.sh`'s error mode
+asserts that: `malgo eval --infer` on a real testcase (e.g. `Undefined.mlg`,
+which has this exact Prelude+Builtin diamond) is expected to fail. The
+Haskell binary failed on it identically — confirmed empirically before that
+implementation was retired — so this is a shared latent defect being pinned
+down, not a Lean-side regression. -/
 private def buildDepsEnvLenient (ws : Workspace) (db : Malgo.Query.QueryDB)
     (deps : Std.TreeSet ModuleName) : MalgoM Malgo.Infer.TyEnv :=
   deps.toList.foldlM (init := ({} : Malgo.Infer.TyEnv)) fun acc dep => do

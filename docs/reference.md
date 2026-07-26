@@ -2,7 +2,7 @@
 
 **Version:** June 2025
 
-This document describes the syntax and semantics of the Malgo programming language as currently implemented. It is based on the parser (`src/Malgo/Parser.hs`) and the test suite (`test/testcases/malgo/`). For further details, consult the parser source and test cases directly.
+This document describes the syntax and semantics of the Malgo programming language as currently implemented. It is based on the parser (`lean/Malgo/Parser.lean`) and the test suite (`test/testcases/malgo/`). For further details, consult the parser source and test cases directly.
 
 ---
 
@@ -244,7 +244,7 @@ def hello = ("hello", "world")
 
 ---
 
-For the most up-to-date syntax and semantics, refer to `src/Malgo/Parser.hs` and the test cases in `test/testcases/malgo/`.
+For the most up-to-date syntax and semantics, refer to `lean/Malgo/Parser.lean` and the test cases in `test/testcases/malgo/`.
 
 <!--
 Prompt:
@@ -255,7 +255,7 @@ You are tasked with generating a comprehensive reference document (`reference.md
 - **Do not include any planned or speculative syntax features** from `todo.md` or other design proposals.
 - Base your descriptions **solely on the current implementation** and the test cases.
 - Refer to supporting documentation in the `docs/` directory (e.g., `docs/syntax.md`) for additional details.
-- For the most up-to-date syntax, consult `src/Malgo/Parser.hs` and the test cases in `test/testcases/malgo/`.
+- For the most up-to-date syntax, consult `lean/Malgo/Parser.lean` and the test cases in `test/testcases/malgo/`.
 
 ---
 
@@ -309,7 +309,7 @@ Your generated `reference.md` should be structured in Markdown and include the f
 ### Additional Output Requirements
 - Use clear, concise technical language in Markdown.
 - Ensure all syntax examples precisely reflect the **current implementation**.
-- Direct readers to the actual parser source (`src/Malgo/Parser.hs`) and testcases (`test/testcases/malgo/`) for verification and further details.
+- Direct readers to the actual parser source (`lean/Malgo/Parser.lean`) and testcases (`test/testcases/malgo/`) for verification and further details.
 - Target the document at readers with a background in functional programming and interest in Malgo’s concrete implementation details.
 
 ✅ Your goal is to produce a clear and authoritative language reference that fully documents the **current**, implemented syntax and semantics of Malgo.

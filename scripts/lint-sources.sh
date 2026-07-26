@@ -5,13 +5,13 @@
 # Usage: scripts/lint-sources.sh [DIR ...]
 #   DIR ...  Directories to scan recursively for *.mlg (default: examples/malgo
 #            and test/testcases).
-#   MALGO    Optional path to the malgo executable; otherwise resolved via
-#            `cabal list-bin exe:malgo`.
+#   MALGO    Optional path to the malgo executable (default: the Lean build).
 set -uo pipefail
 
-malgo="${MALGO:-}"
-if [ -z "$malgo" ]; then
-  malgo="$(cabal list-bin exe:malgo)"
+malgo="${MALGO:-lean/.lake/build/bin/malgo}"
+if [ ! -x "$malgo" ]; then
+  echo "malgo executable not found at '$malgo' (set MALGO, or run 'lake build' in lean/)." >&2
+  exit 1
 fi
 
 dirs=("$@")

@@ -1,48 +1,47 @@
 # MET — M-exp-Tracer
 
-MET is a browser-based tool (`app/met`) that runs a `.mlg` file through the full
-compilation pipeline — Parse through the Zig backend's `Reuse` pass — and renders
-every stage's intermediate representation in a Malgo-ish ASCII notation, for
-side-by-side or unified-diff comparison between adjacent stages. It exists to make
-the effect of a specific pass on a specific program visible without instrumenting
-the compiler or reading raw IR dumps by hand.
+MET runs a `.mlg` file through the full compilation pipeline — Parse through the
+Zig backend's `Reuse` pass — and renders every stage's intermediate representation
+in a Malgo-ish ASCII notation, for side-by-side or unified-diff comparison between
+adjacent stages. It exists to make the effect of a specific pass on a specific
+program visible without instrumenting the compiler or reading raw IR dumps by hand.
 
 ## Running it
 
 ```
-mise run met --option source="path/to/file.mlg"
-mise run met --option source="path/to/file.mlg" --option port=9090
-mise run met --option source="path/to/file.mlg" --option flags="--infer --malgo2025"
+malgo debug-trace path/to/file.mlg
+malgo debug-trace path/to/file.mlg -o /tmp/trace.html
+malgo debug-trace path/to/file.mlg --infer --malgo2025
 ```
 
-`mise run met` depends on `mise run build` and then runs
-`cabal exec met -- SOURCE --port PORT [flags]`. The two flags MET's own CLI accepts:
+It writes one self-contained HTML file (default `trace.html`) and exits. The two
+flags:
 
 - `--infer`: also run `InferPass` (mirrors `malgo eval --infer`), adding an
   `Elaborate` stage's input to type-checking.
 - `--malgo2025`: also run `ElaboratePass` (mirrors the `malgo2025` feature flag),
   inserting an `Elaborate` stage between `Rename` and `ToFun`.
 
-The server prints `MET: traced <path> (<N> stages). Listening on
-http://localhost:<port>` and stays up until killed; every compiler effect needed to
-produce the trace runs exactly once, before the HTTP server starts — page handlers
-are pure functions over the resulting `[Stage]` list.
+MET used to be a live `servant`/`warp` server (`app/met`, `mise run met`) serving a
+route per transition. It is a static page now because Lean's networking is still
+under `Std.Internal`, and because a file is easier to keep, attach to an issue, or
+diff against a later run than a process that has to stay up.
 
 ## What it shows
 
-The home page (`/`) lists every adjacent stage transition as a link. Each stage
-transition page (`/stage/<i>`) offers two views of the same pair of stages:
+The page lists every adjacent stage transition, each with both views of the same
+pair of stages and a button to toggle between them (a few lines of inline JS,
+in place of the server's `?view=diff` query parameter):
 
 - **Side-by-side** (default): a two-column table, line-aligned, with word-level
   highlighting on lines that changed.
-- **Diff patch** (`?view=diff`): a unified-diff-style rendering, added/removed lines
-  highlighted, again with word-level sub-highlighting within a paired
-  removed/added line.
+- **Diff patch**: a unified-diff-style rendering, added/removed lines highlighted,
+  again with word-level sub-highlighting within a paired removed/added line.
 
 The word-level highlighting matters more than it might sound: a single renamed
 identifier or a single inserted `dup` no longer paints its whole line red/green —
 only the token that actually changed does. This is implemented as a two-pass diff
-(`Malgo.Debug.DiffView`, via the `Diff` library): first line-by-line, then, for a
+(`Malgo.Debug.DiffView`, a Myers diff): first line-by-line, then, for a
 same-position "replace" (a run of removed lines immediately followed by a run of
 added lines — the shape every changed statement takes in this renderer), word-by-word
 within each paired line.
@@ -85,20 +84,20 @@ does, and [`perceus-gc.md`](perceus-gc.md) for `Perceus`/`Reuse`/`RcCheck` in de
 
 ## Architecture
 
-- **`Malgo.Debug.Pipeline`** (`src/Malgo/Debug/Pipeline.hs`) drives a single module
+- **`Malgo.Debug.Pipeline`** (`lean/Malgo/Debug/Pipeline.lean`) drives a single module
   through every pass above, capturing each stage's rendered text into a `Stage {name,
-  rendered}` list. This is also used directly by MET's own golden tests
-  (`Malgo.Debug.PrettyIRSpec`), independent of the web server.
-- **`Malgo.Debug.PrettyIR`** (`src/Malgo/Debug/PrettyIR.hs`) is a best-effort,
+  rendered}` list. This is also what MET's own golden tests use, independent of any
+  page rendering.
+- **`Malgo.Debug.PrettyIR`** (`lean/Malgo/Debug/PrettyIR.lean`) is a best-effort,
   non-round-trippable renderer for every IR from surface syntax through
   `Core.Full`/`Flat`/`Join` to the Zig backend's own IR — the source of the ASCII
   notation the sidebar legend explains.
-- **`Malgo.Debug.DiffView`** (`src/Malgo/Debug/DiffView.hs`) implements the
+- **`Malgo.Debug.DiffView`** (`lean/Malgo/Debug/DiffView.lean`) implements the
   line-then-word diffing described above, independent of HTML rendering.
-- **`app/met`** (`Main.hs` + `Server.hs`) is the CLI entry point (`optparse-applicative`)
-  and the `servant` + `warp` + `lucid` HTTP server. `Server.app` takes the
-  precomputed `[Stage]` and serves two routes: `/` (the stage list) and
-  `/stage/:index` (a transition view, with an optional `?view=diff` query param).
+- **`Malgo.Debug.MetPage`** (`lean/Malgo/Debug/MetPage.lean`) renders the precomputed
+  `[Stage]` into the single HTML document, inlining its own CSS and the view-toggle
+  script. `lean/Test/MetPage.lean` gates that the generated page lists every stage
+  transition.
 
 ## Known limitations
 

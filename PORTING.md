@@ -6,21 +6,18 @@ Full-port tracking for the Lean 4 rewrite under `lean/` (plan:
 file is the per-module completeness ledger `lean/README.md`'s own
 milestone table doesn't spell out file-by-file).
 
-**Status: M0–M9 complete.** Haskell (`src/`, `malgo-lsp/`, `app/met/`)
-remains the semantic oracle throughout; every Lean module below is verified
-against it (goldens, `scripts/lean-parity.sh`, the self-hosted compiler
-stress test, or a fresh test where no Haskell equivalent exists to
-byte-diff against — noted per row).
+**Status: complete, and the Haskell implementation has been removed**
+(2026-07-26). While the port was under way Haskell (`src/`, `malgo-lsp/`,
+`app/met/`) was the semantic oracle, and every Lean module below was
+verified against it: goldens, `scripts/lean-parity.sh`, the self-hosted
+compiler stress test, or a fresh test where no Haskell equivalent existed
+to byte-diff against (noted per row).
 
-## Dual-implementation policy
-
-Semantic changes to an already-ported subsystem land in **both**
-implementations in the same PR. A golden file changes only when both
-implementations agree on the new output, or the PR explicitly marks that
-area as not-yet-ported. Never hand-edit `.golden/` to accommodate the Lean
-side only — implementation-specific divergence (float formatting, parser
-error text, `PrettyIR` layout differences) goes in the parallel
-`.golden-lean/` override tree instead (see `lean/README.md`'s intro).
+This file is now a historical ledger of what was ported from where. The
+day-to-day status doc is `lean/README.md`; module paths in the left-hand
+columns below refer to files that no longer exist and are kept so a
+question of the form "where did X go?" still has an answer, in this
+repository's history if not its working tree.
 
 ## Core compiler (`src/Malgo/*.hs` ↔ `lean/Malgo/*.lean`)
 
@@ -88,45 +85,51 @@ are both present, toggled by inline JS instead of Haskell's server-side
 
 | Gate | Command | Status |
 |---|---|---|
-| Golden tests + infer + MetPage | `cd lean && lake test` | 532/532 + 94/94 + 1/1 |
-| Cross-implementation parity | `bash scripts/lean-parity.sh [--mode error]` | 292/292 + 8/8 |
-| Self-hosted compiler (L1) | `MALGO=lean/.lake/build/bin/malgo scripts/selfhost-golden.sh` | 73/73 |
-| Self-hosted metacircular (L2) | `MALGO=lean/.lake/build/bin/malgo scripts/selfhost-level2.sh` | 5/5 |
-| Zig backend golden parity | `MALGO=lean/.lake/build/bin/malgo scripts/zig-golden.sh` | 73/73, zero leaks |
-| Runtime benchmark (Lean vs Haskell) | `bash bench/lean-vs-haskell.sh` | see `bench/lean-vs-haskell.md` |
+| Golden tests + the non-golden gates | `mise run test` | 558 + 94 + 7 + 74 + 73 + 6 + 4 |
+| CLI over the corpus | `bash scripts/cli-gate.sh` | 73 + 73 + 8 |
+| Self-hosted compiler (L1) | `bash scripts/selfhost-golden.sh` | 73/73 |
+| Self-hosted metacircular (L2) | `bash scripts/selfhost-level2.sh` | 5/5, disabled in CI (#385) |
+| Zig backend golden parity | `bash scripts/zig-golden.sh` | 73/73, zero leaks |
+| Zig deep recursion | `bash scripts/zig-deep-recursion.sh` | 18.8M dispatches, no leak |
+| Malgo source lint | `bash scripts/lint-sources.sh examples/malgo test/testcases runtime/malgo` | 0 findings |
 
-All of the above run in CI (`.github/workflows/lean.yml`); `lean-parity`
-additionally runs on a nightly schedule (independent of push/PR activity)
-so a silent divergence is caught within a day even without a code change
-triggering it.
+All of the above except L2 run in CI (`.github/workflows/lean.yml`), on
+every PR and again on a nightly schedule, so a gate nobody's changes
+happen to touch still reports within a day.
 
-## Haskell retirement criteria
+## Haskell retirement: what the criteria were, and how the decision was made
 
-Per the original plan's M9 entry — **not yet met, no target date**. Do not
-delete or stop maintaining any Haskell code without all of the following
-being independently true:
+This section used to set four conditions that all had to hold before any
+Haskell code could be deleted, and stated that even meeting all four would
+not authorize deletion — that would be "a separate, later decision". The
+maintainer took that decision on 2026-07-25, adopting the Lean
+implementation and the Zig backend as the project's only ones, and it
+overrides what this section required. Recording the gap honestly:
 
-1. Every gate in the table above green on `master` for **1 consecutive
-   week**, including the self-hosted metacircular (L2) and the Zig
-   backend's leak gate (`MALGO-LEAK`/exit 83) — both are the deepest,
-   most end-to-end stress tests available and the ones most likely to
-   surface a subtle divergence under real load.
-2. All `scripts/lean-parity.sh` modes (`eval`, `bigstep`, `fingerprint`,
-   `error`) green **twice consecutively** on independent CI runs (guards
-   against a flaky pass being mistaken for a real one).
-3. `bench/lean-vs-haskell.sh` shows the Lean binary within a documented,
-   explicitly-agreed performance budget of the Haskell one (not
-   necessarily equal — just close enough that retiring Haskell isn't a
-   regression for real users). No specific number is fixed here yet;
-   set one before acting on this criterion.
-4. A human maintainer has actually used the Lean `malgo` binary for real
-   work (editing/compiling real `.mlg` programs, not just running the test
-   suite) and hit no surprises.
+1. **Every gate green on `master` for one consecutive week, including
+   L2 and the leak gate.** Partly met. Every gate was green, and the leak
+   gate runs on all 73 cases in the Zig sweep. But L2 was *disabled* in
+   CI a day earlier (#385: through the Zig backend it costs ~16 minutes
+   against a sub-10-minute CI target), so the deepest end-to-end stress
+   test was not among the passing gates at the time of the decision. It
+   still runs locally, and #385 tracks bringing it back.
+2. **All `scripts/lean-parity.sh` modes green twice consecutively.** Met
+   while both implementations existed. The script is gone with the second
+   implementation; `scripts/cli-gate.sh` inherits the coverage that was
+   not about comparing the two.
+3. **Lean within an agreed performance budget of Haskell.** Not met, and
+   now unmeasurable — the criterion never fixed a number, and there is no
+   longer a second implementation to measure against. `bench/lean-vs-haskell.md`
+   holds the last comparison, taken before the trampoline (#360) changed
+   the Zig backend's calling convention, so it does not describe today's
+   binary either. Treat criterion 3 as lapsed rather than satisfied.
+4. **A maintainer used the Lean binary for real work.** Met: the Lean
+   binary has been the one driving self-hosting and the Zig sweeps since
+   #384.
 
-When (and only when) all four hold: flip `lean/ci-gates.env` /
-`.github/workflows/lean.yml` so the Lean build becomes the default CI
-target Haskell's own workflows are compared against (rather than the
-reverse, as today), demote Haskell's own CI to a weekly parity check
-against Lean, and treat outright deletion of `src/`, `app/`, `malgo-lsp/`,
-etc. as a **separate, later decision** — not implied by meeting criteria
-1–4 above.
+What actually justified acting despite 1 and 3: the Lean implementation is
+gated on the same corpus the Haskell one was (547 goldens, the 73-case Zig
+byte-parity sweep with its leak gate, Level 1 self-hosting over all 73
+cases), and the maintenance cost of keeping two implementations in step
+was the thing being paid for a comparison that had stopped finding
+divergences.

@@ -122,7 +122,7 @@ Each copattern clause defines how the object responds to a specific observation,
 
 ## AST for Copatterns (`CoPat`)
 
-The core of the design is a recursive `CoPat` data type that mirrors the structure of expressions. It is defined in `src/Malgo/Syntax.hs` as follows:
+The core of the design is a recursive `CoPat` data type that mirrors the structure of expressions. It is defined in `lean/Malgo/Syntax.lean` as follows:
 
 ```haskell
 data CoPat x
@@ -152,7 +152,7 @@ data Expr x
 
 ### Parsing Strategy
 
-The parser in `src/Malgo/Parser/Regular.hs` is updated to build this AST:
+The parser in `lean/Malgo/Parser/Regular.lean` is updated to build this AST:
 
 1.  A `pCoPat` parser handles the left-hand side of a clause. It starts by parsing the `#` hole and then iteratively applies suffixes for projections (`.field`) and applications (`(pattern)`).
 2.  A `pBlock` parser, responsible for `{...}` blocks, is modified to first `try` parsing the content as a `Codata` expression. If it fails (i.e., no `#` is found), it falls back to parsing it as a regular function or record.

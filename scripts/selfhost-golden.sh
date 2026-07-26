@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-MALGO=${MALGO:-cabal exec malgo --}
+MALGO=${MALGO:-lean/.lake/build/bin/malgo}
 CASE_TIMEOUT=${CASE_TIMEOUT:-20}
 PRECOMPILE_TIMEOUT=${PRECOMPILE_TIMEOUT:-180}
 KEEP_WORK=${KEEP_WORK:-0}
@@ -24,10 +24,9 @@ if [[ "$KEEP_WORK" != "1" ]]; then
   rm -rf "$MALGO_WORK_DIR"
 fi
 
-if [[ "$MALGO" == *cabal* ]]; then
-  log "building malgo executable"
-  cabal build exe:malgo >/dev/null
-  log "build complete"
+if [[ ! -x "$MALGO" ]]; then
+  echo "malgo executable not found at '$MALGO' (set MALGO, or run 'lake build' in lean/)." >&2
+  exit 1
 fi
 
 precompile=(
@@ -50,7 +49,7 @@ precompile=(
 for file in "${precompile[@]}"; do
   start=$SECONDS
   log "precompile start: $file"
-  if ! timeout "$PRECOMPILE_TIMEOUT" $MALGO eval "$file" </dev/null >/dev/null; then
+  if ! timeout "$PRECOMPILE_TIMEOUT" "$MALGO" eval "$file" </dev/null >/dev/null; then
     log "precompile failed: $file"
     exit 1
   fi
@@ -67,13 +66,18 @@ if ! command -v zig >/dev/null 2>&1; then
   exit 1
 fi
 log "compiling Main.mlg to a native binary via the Zig backend"
-if ! $MALGO compile runtime/malgo/compiler/Main.mlg -o "$NATIVE_MAIN" --opt release-fast; then
+if ! "$MALGO" compile runtime/malgo/compiler/Main.mlg -o "$NATIVE_MAIN" --opt release-fast; then
   log "native compilation failed"
   exit 1
 fi
 log "native compilation done"
 
-mapfile -t cases < <(find .golden/Malgo.Sequent.Eval -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+# Not `mapfile`: it is a bash 4 builtin, and macOS still ships bash 3.2, so
+# this gate could not run at all on a Mac.
+cases=()
+while IFS= read -r case_name; do
+  cases+=("$case_name")
+done < <(find .golden/Malgo.Sequent.Eval -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
 total_cases=${#cases[@]}
 log "starting golden checks: ${total_cases} cases (parallelism: ${PARALLEL_JOBS})"
 

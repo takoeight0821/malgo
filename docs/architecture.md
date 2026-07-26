@@ -27,7 +27,7 @@ Malgo’s source tree is organized by compiler phases and core abstractions:
 
 **Pipeline Orchestration**:
 
-`src/Malgo/Driver.hs` is the main entry point. It coordinates the pipeline as follows:
+`lean/Malgo/Driver.lean` is the main entry point. It coordinates the pipeline as follows:
 
 ```
 source file
@@ -112,10 +112,10 @@ Parse → Rename → ToFun → ToCore → Flat → Join → Eval
 
 | IR Stage       | Defined In             | Purpose / Abstraction                | Structure-Preserving? | Phase Role            |
 | -------------- | ---------------------- | ------------------------------------ | --------------------- | --------------------- |
-| Fun IR         | `Sequent/Fun.hs`       | Functional, simple, close to AST     | Mostly                | Initial lowering      |
-| Core IR (Full) | `Sequent/Core/Full.hs` | Sequent calculus, explicit control   | Partially             | Pre-optimization      |
-| Flat IR        | `Sequent/Core/Flat.hs` | No nested computations, flat control | Lossy (flattens)      | Simplifies codegen    |
-| Join IR        | `Sequent/Core/Join.hs` | Normalized, explicit join points     | Lossy                 | Final, for evaluation |
+| Fun IR         | `Sequent/Fun.lean`       | Functional, simple, close to AST     | Mostly                | Initial lowering      |
+| Core IR (Full) | `Sequent/Core/Full.lean` | Sequent calculus, explicit control   | Partially             | Pre-optimization      |
+| Flat IR        | `Sequent/Core/Flat.lean` | No nested computations, flat control | Lossy (flattens)      | Simplifies codegen    |
+| Join IR        | `Sequent/Core/Join.lean` | Normalized, explicit join points     | Lossy                 | Final, for evaluation |
 
 - **Transformations** are mostly structure-preserving until flattening and joinification, which introduce explicit control flow and may lose some high-level structure.
 - Each IR is tied to a phase: optimization, analysis, or interpretation.
@@ -182,30 +182,29 @@ data Statement where
 
 ## 🔗 Composition and Effects
 
-- **Monad Stack**:
-  - Uses `Effectful` for effect management:
-    - `ReaderT` for configuration and environments
-    - `StateT` for unique supply, type environments, etc.
-    - `ExceptT` for error handling
-    - `IOE` for IO boundaries
-- **Custom Monads**:
-  - Each pass can specify its own effect constraints.
+- **Monad**:
+  - `MalgoM = ReaderT Ctx (EIO CompileError)` (`lean/Malgo/Monad.lean`). `Ctx`
+    carries the flags, the workspace, and `IO.Ref`s for the unique supply,
+    feature flags, and pragmas.
+  - A pass that throws its own error type is wrapped into the uniform
+    `CompileError` by `Malgo.Pass.wrapError`.
 - **Testability**:
-  - Property-based and golden tests for each phase and IR transformation.
-  - Staged testing: e.g., `test/Malgo/Sequent/ToCoreSpec.hs`, `EvalSpec.hs`.
+  - Golden tests for each phase and IR transformation, plus non-golden gates
+    (inference, IR invariants, Zig-backend linearity) in `lean/Test/Main.lean`.
+  - `#guard` for build-time assertions on pure functions.
 
 ---
 
 ## 💡 Advanced Topics
 
-- **Template Haskell**:
-  - Used for deriving instances and boilerplate (e.g., in `Syntax`).
 - **Type-Level Programming**:
-  - Type families and DataKinds for phase-indexing and IR invariants.
+  - Phase-indexed `Syntax` — the AST is parameterized by compilation phase, so
+    a field only present after renaming cannot be read before it.
 - **Debugging & Visualization**:
-  - Pretty-printing via `Prettyprinter`, S-expression output via `ToSExpr`.
-  - Dumps at each phase (see `withDump` in `Driver.hs`).
-  - DOT graph output possible for IR visualization.
+  - Pretty-printing via `Malgo.Doc` (a port of `prettyprinter`'s `layoutSmart`),
+    S-expression output via `sShow`.
+  - `malgo debug-trace` renders every stage of the pipeline — see
+    [`met-tool.md`](met-tool.md).
 
 ---
 
@@ -254,7 +253,7 @@ You are analyzing a Haskell codebase that implements a programming language inte
 
 Your goal is to write a detailed and technically accurate `architecture.md` document. This document should give a high-level architectural overview while also highlighting how Intermediate Representations (IRs) are defined and used throughout the interpreter pipeline.
 
-> 🧭 Begin by exploring `src/Malgo/Driver.hs`, which acts as the central coordination point. It provides an entry point for understanding the overall evaluation flow and module interactions.
+> 🧭 Begin by exploring `lean/Malgo/Driver.lean`, which acts as the central coordination point. It provides an entry point for understanding the overall evaluation flow and module interactions.
 
 Please structure your documentation with the following sections:
 
@@ -264,7 +263,7 @@ Please structure your documentation with the following sections:
 
 - Summarize the layout of the Haskell source tree.
 - Identify the roles of key modules (e.g., Lexer, Parser, AST, TypeChecker, IR-related modules, Evaluator).
-- Explain how `src/Malgo/Driver.hs` orchestrates the pipeline across these modules.
+- Explain how `lean/Malgo/Driver.lean` orchestrates the pipeline across these modules.
 
 ---
 

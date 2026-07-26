@@ -9,7 +9,7 @@ debugging it. For the reference-counting memory model specifically, see
 
 ## Where it sits in the compiler
 
-Every backend (interpreter, Scheme, Zig) shares the same front end and the same Join
+Both backends (interpreter, Zig) share the same front end and the same Join
 IR. `Malgo.Driver.compileFromAST`'s `TargetZig` branch, and `compileToExecutable`
 (used by `malgo compile`), both run:
 
@@ -33,7 +33,7 @@ on Fun IR and are shared by every backend, not Zig-specific:
   the hint marks the scrutinee's last use for the Zig backend's `Reuse` pass (below)
   to recognize, without affecting any other backend's semantics.
 
-`ZigPass` (`Malgo.Backend.Zig`, `src/Malgo/Backend/Zig/`) then takes Join IR and
+`ZigPass` (`Malgo.Backend.Zig`, `lean/Malgo/Backend/Zig/`) then takes Join IR and
 produces Zig source text:
 
 ```
@@ -44,10 +44,10 @@ Join IR
   -> Perceus (dup/drop insertion)
   -> Reuse (Drop/MkStruct -> reuse-token pairing)
   -> RcCheck (linearity + reuse-token static verification)
-  -> Emit (Zig text; runtime embedded via file-embed from runtime/zig/runtime.zig)
+  -> Emit (Zig text; runtime embedded via include_str from runtime/zig/runtime.zig)
 ```
 
-Each stage is a pure `Ir.Program -> Ir.Program` (or `-> Text`) function; `Malgo.Backend.Zig`'s
+Each stage is a pure `Ir.Program -> Ir.Program` (or `-> String`) function; `Malgo.Backend.Zig`'s
 `runPassImpl` just threads the program through them in order, wrapping any
 `RcCheck` violation as a compile error rather than emitting broken code.
 
@@ -139,7 +139,7 @@ constructor name never needs a heap allocation of its own).
 
 ## Building and testing
 
-- `mise run build` runs `hpack && cabal build`, covering the compiler itself.
+- `mise run build` runs `lake build`, covering the compiler itself.
 - `zig test -lc runtime/zig/runtime.zig` runs the runtime's own unit tests
   (`-lc` links libc explicitly; required on Linux since the runtime calls
   `std.c.write`/`std.c.getenv` directly — masked on macOS, where libc is always
@@ -151,16 +151,17 @@ constructor name never needs a heap allocation of its own).
   oracle for the compiler as a whole: any observable divergence between it and the
   Zig backend is a Zig-backend bug, not a spec ambiguity to resolve in the backend's
   favor.
-- Hspec unit tests for the individual passes live under
-  `test/Malgo/Backend/Zig/*Spec.hs` (`Malgo.Backend.Zig.PeepholeSpec`,
-  `PerceusSpec`, `ReuseSpec`) plus `Malgo.Backend.ZigSpec` for the pass composition
-  end-to-end and `Malgo.Debug.PrettyIRSpec` for the renderer used by MET (below).
+- Unit gates for the individual passes live in `lean/Test/Main.lean`:
+  `ZigReuse` (the `Reuse` pass on hand-built IR), `ZigCorpus` (every testcase's
+  emitted Zig checked for linearity), `IrInvariants`, and `ReuseSpec`
+  (`ReuseSpecialize`'s hint insertion). MET's renderer is gated by its own
+  golden cases in the same file.
 
 ## Debugging tools
 
-- **MET** (`app/met`, `mise run met --option source=path/to/file.mlg`): a browser UI
-  that traces a `.mlg` file through every stage above (and the front-end stages
-  before it) and renders each one for side-by-side or unified diffing. See
+- **MET** (`malgo debug-trace path/to/file.mlg`): renders a `.mlg` file's trip
+  through every stage above (and the front-end stages before it) into one
+  self-contained HTML page, for side-by-side or unified diffing. See
   [`met-tool.md`](met-tool.md).
 - **`scripts/rctrace.py`**: correlates a `MALGO_RC_TRACE=1` run's JSON-lines trace
   log with the compile-time symbolic names the trace carries, to answer "who still

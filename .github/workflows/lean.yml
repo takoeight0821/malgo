@@ -1,13 +1,14 @@
 name: lean
 
-# CI for the Lean 4 port under lean/. Milestone-gated jobs (parity,
-# zig-golden, selfhost) activate via lean/ci-gates.env as the port
-# progresses; lean-build (build + golden tests) is always on. M9
-# (consolidation): the whole workflow (every gated job, same as any push)
-# also runs on a nightly schedule, independent of push/PR activity, so a
-# silent divergence (e.g. a Haskell-side change that doesn't touch
-# anything the Lean side would rebuild against) is caught within a day
-# rather than waiting for the next code change to either implementation.
+# CI for the Malgo compiler, written in Lean 4 under lean/. This is the
+# whole of CI: the Haskell implementation it was ported from is gone, and
+# build.yml with it.
+#
+# Jobs beyond lean-build are gated by lean/ci-gates.env, from when they
+# tracked the port's milestones; the flags now serve as a kill switch for a
+# gate that has become too slow to run per-PR (LEAN_SELFHOST_L2, see #385).
+# The whole workflow also runs nightly so a gate nobody's changes happen to
+# touch still reports within a day.
 
 on:
   push:
@@ -25,7 +26,6 @@ jobs:
   gates:
     runs-on: ubuntu-latest
     outputs:
-      parity: ${{ steps.g.outputs.LEAN_PARITY }}
       selfhost: ${{ steps.g.outputs.LEAN_SELFHOST }}
       selfhostL2: ${{ steps.g.outputs.LEAN_SELFHOST_L2 }}
       zig: ${{ steps.g.outputs.LEAN_ZIG }}
@@ -44,39 +44,16 @@ jobs:
           lake-package-directory: lean
           test: true
 
-  lean-parity:
-    needs: gates
-    if: needs.gates.outputs.parity == '1'
+  # What lean-parity used to be: it diffed the two implementations' output
+  # over the corpus, which needs two implementations. `cli-gate.sh` keeps the
+  # half that was never about parity -- driving the actual CLI binary, which
+  # `lake test` does not (it calls library functions in process) -- plus the
+  # error-fixture contract, which nothing else asserts.
+  cli-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 2
-
-      - uses: ./.github/actions/setup-haskell-cached
-        id: setup
-        with:
-          ghc-version: '9.12.4'
-
-      - name: Cache cabal store
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ runner.os }}-ghc-9.12.4-store-${{ hashFiles('cabal.project.freeze') }}
-          restore-keys: |
-            ${{ runner.os }}-ghc-9.12.4-store-
-
-      - name: Cache dist-newstyle
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: dist-newstyle
-          key: ${{ runner.os }}-ghc-9.12.4-dist-malgo-${{ hashFiles('cabal.project.freeze') }}-${{ hashFiles('src/**/*.hs', '*.cabal', 'package.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-ghc-9.12.4-dist-malgo-${{ hashFiles('cabal.project.freeze') }}-
-
-      - name: Build the Haskell malgo executable
-        run: cabal build exe:malgo
 
       - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
         with:
@@ -84,18 +61,12 @@ jobs:
           build: true
           test: false
 
-      - name: Cross-implementation parity (eval, bigstep, fingerprint)
-        run: bash scripts/lean-parity.sh
-
-      - name: Cross-implementation parity (error mode)
-        run: bash scripts/lean-parity.sh --mode error
-
-      # The only thing that drives the actual CLI binary across the corpus:
-      # lake test calls library functions in process. Also carries the error
-      # -fixture contract, which nothing else asserts once lean-parity.sh
-      # goes away with the Haskell implementation.
-      - name: CLI gate (eval / bigstep / error, Lean binary)
+      - name: CLI gate (eval / bigstep / error)
         run: bash scripts/cli-gate.sh
+
+      # Moved here from build.yml, which was this gate's only caller.
+      - name: Lint examples, testcases, and runtime
+        run: scripts/lint-sources.sh examples/malgo test/testcases runtime/malgo
 
   lean-selfhost:
     needs: gates
@@ -131,15 +102,16 @@ jobs:
           version: '0.16.0'
 
       - name: Self-hosted golden (Level 1 — Malgo-in-Malgo compiler, Zig backend)
-        run: MALGO=lean/.lake/build/bin/malgo MALGO_WORK_DIR=.malgo-work-lean bash scripts/selfhost-golden.sh
+        run: bash scripts/selfhost-golden.sh
 
       # Disabled via lean/ci-gates.env until #385 makes L2 affordable: it is
       # ~16 minutes on its own, against a target of keeping CI under 10.
       - name: Self-hosted metacircular (Level 2)
         if: needs.gates.outputs.selfhostL2 == '1'
-        run: |
-          MALGO=lean/.lake/build/bin/malgo MALGO_WORK_DIR=.malgo-work-lean \
-          CASE_TIMEOUT=1200 PRECOMPILE_TIMEOUT=300 bash scripts/selfhost-level2.sh
+        env:
+          CASE_TIMEOUT: 1200
+          PRECOMPILE_TIMEOUT: 300
+        run: bash scripts/selfhost-level2.sh
 
   lean-zig-golden:
     needs: gates
@@ -177,29 +149,24 @@ jobs:
         with:
           version: '0.16.0'
 
-      # runtime.zig is shared by both implementations but its unit tests only
-      # ran in build.yml, which will not survive the Haskell retirement.
+      # These used to run in build.yml, which the Haskell retirement removed.
       - name: Run Zig runtime unit tests
         run: zig test -lc runtime/zig/runtime.zig
 
-      - name: Zig backend golden parity sweep (Lean malgo compile)
+      - name: Zig backend golden parity sweep
         env:
           MAX_FAILURES: 40
           COMPILE_TIMEOUT: 120
           CASE_TIMEOUT: 30
-        run: |
-          MALGO=lean/.lake/build/bin/malgo MALGO_WORK_DIR=.malgo-work-lean \
-          bash scripts/zig-golden.sh
+        run: bash scripts/zig-golden.sh
 
       # The sweep's cases are all shallow; this is the one that would have
       # SIGSEGV'd before the trampoline (issue #360).
-      - name: Zig backend deep-recursion gate (Lean malgo compile)
-        run: |
-          MALGO=lean/.lake/build/bin/malgo MALGO_WORK_DIR=.malgo-work-lean \
-          bash scripts/zig-deep-recursion.sh
+      - name: Zig backend deep-recursion gate
+        run: bash scripts/zig-deep-recursion.sh
 
   actions-timeline:
-    needs: [gates, lean-build, lean-parity, lean-selfhost, lean-zig-golden]
+    needs: [gates, lean-build, cli-gate, lean-selfhost, lean-zig-golden]
     if: always()
     runs-on: ubuntu-latest
     permissions:

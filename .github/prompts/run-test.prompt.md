@@ -3,13 +3,13 @@ mode: "agent"
 tools: ["codebase"]
 ---
 
-# Test-run & error-analysis assistant for our Haskell language-processor project
+# Test-run & error-analysis assistant for our Lean 4 language-processor project
 
 #codebase
 
 1. **Setup**
 
-   - Change directory to the project root that contains the Haskell sources.
+   - Change directory to the project root (the compiler lives under `lean/`).
    - Ensure the correct tool versions are loaded via `mise` (`mise use` if needed).
 
 2. **Execute tests**
@@ -24,12 +24,12 @@ tools: ["codebase"]
 
 4. **Map to source**
 
-   - Using **only** `.hs` files from #codebase, locate the exact lines referenced in the errors.
+   - Using **only** `.lean` files from #codebase, locate the exact lines referenced in the errors.
    - For each location, quote the relevant snippet (±5 lines of context).
 
 5. **Root-cause analysis**
 
-   - Explain _why_ the failure occurs, referencing Haskell language rules, library behavior, or build setup as appropriate.
+   - Explain _why_ the failure occurs, referencing Lean language rules, library behavior, or build setup as appropriate.
    - If multiple errors share a common cause, identify that pattern once.
 
 6. **Proposed solutions**
@@ -72,8 +72,8 @@ tools: ["codebase"]
 
 9. **Constraints**
 
-- Do **not** modify non-Haskell files.
-- Assume GHC 9.12 and Cabal; note if the fix depends on other versions.
+- Do **not** modify non-Lean files.
+- Assume the toolchain pinned by `lean/lean-toolchain`; note if the fix depends on another version.
 - Keep the report under 500 lines; link to full log if larger.
 
 10. **Finish**

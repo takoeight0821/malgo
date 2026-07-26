@@ -1,38 +1,37 @@
 # malgo
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/malgo-lang/malgo)
-[![CI](https://github.com/malgo-lang/malgo/actions/workflows/build.yml/badge.svg)](https://github.com/malgo-lang/malgo/actions/workflows/build.yml)
+[![CI](https://github.com/malgo-lang/malgo/actions/workflows/lean.yml/badge.svg)](https://github.com/malgo-lang/malgo/actions/workflows/lean.yml)
 
 A statically typed functional programming language.
 
 ## Requirement
 
-* [cabal-install](https://www.haskell.org/cabal/)
+* [elan](https://github.com/leanprover/elan) (the Lean 4 toolchain manager; the toolchain version itself is pinned by `lean/lean-toolchain`)
+* [Zig](https://ziglang.org/) 0.16, to compile Malgo programs to native executables
 
 ## Installation
-
-### Installing Malgo
 
 ```sh
 git clone https://github.com/malgo-lang/malgo
 cd malgo
-cabal install
+cd lean && lake build
 ```
+
+The compiler lands at `lean/.lake/build/bin/malgo`.
 
 ## Directory Structure
 
 A brief overview of the main directories and files:
 
 ```
-app/           # CLI entry point (Main.hs)
+lean/          # The compiler, written in Lean 4 (CLI entry point, all passes)
 docs/          # Documentation and references
 examples/      # Example Malgo source files
-nix/           # Nix-related files
-runtime/       # Malgo runtime and standard library
-src/           # Main source code (Haskell)
-test/          # Test suites and testcases
-README.md      # This file
-malgo.cabal    # Cabal project file
+runtime/malgo/ # Malgo runtime and standard library, and the self-hosted compiler
+runtime/zig/   # The Zig backend's runtime (reference counting, primitives)
+scripts/       # CI gates (golden parity, self-hosting, lint)
+test/          # Testcases and golden fixtures
 ```
 
 ## Usage
@@ -155,22 +154,22 @@ https://github.com/malgo-lang/minilisp
 This project uses [mise](https://github.com/jdx/mise) for managing development tools and tasks. The `mise.toml` file defines tool versions and common development workflows.
 
 ### Toolchain
-- **GHC** (via ghcup)
-- **cabal-install**
-- **hpack**
-- **Haskell Language Server (HLS)**
-- **go** (for changelog generation)
+- **Lean 4** (via elan; version pinned by `lean/lean-toolchain`)
+- **Zig** 0.16 (pinned in `mise.toml`; the native backend's toolchain)
 - **watchexec** (for file watching)
 - **git-chglog** (for changelog generation)
 
 ### Common Tasks
 Run these with `mise run <task>`:
 
-- `setup` — Install and set up all required tools and dependencies.
-- `setup-hls` — Build and set up Haskell Language Server for the project.
-- `build` — Build the project (`hpack && cabal build`).
-- `test` — Run the test suite. Optionally filter tests with `--option match=<pattern>`.
-- `exec` — Run the project executable (`cabal exec malgo-exe`).
+- `setup` — Install elan.
+- `build` — Build the compiler (`lake build`).
+- `test` — Run the test suite. Filter with `-- --match <pattern>`.
+- `exec` — Run the compiler (`-- eval examples/malgo/Hello.mlg`).
+- `cli-gate` — Drive the CLI over the whole corpus.
+- `zig-golden` — Byte-parity sweep of the Zig backend against the interpreter.
+- `selfhost-golden` — Level 1 self-hosting (the Malgo evaluator written in Malgo).
+- `lint-sources` — Lint every `.mlg` under `examples/`, `test/testcases/` and `runtime/`.
 - `changelog` — Generate the changelog using `git-chglog`.
 
 See `mise.toml` for more details and customization.

@@ -160,4 +160,77 @@ private def mkFn (params : List Name) (body : Block) : Func :=
 #guard (perceusFunc (mkFn [nm "a"] (.mk [] (.«return» (nm "a"))))).body ==
   Block.mk [] (.«return» (nm "a"))
 
+/-! ## Exact-placement checks (port of `PerceusSpec.hs`'s `placementSpec`)
+
+The pass is pure, so these are `#guard`s. Corpus-wide linearity is covered by
+the oracle in `lean/Test/Main.lean` (`ZigCorpus`), which runs the whole
+pipeline over every testcase and hands the result to `RcCheck`; these pin the
+individual insertion *rules* the oracle can only observe in aggregate. -/
+
+private def pnm (s : String) (uniq : Nat) : Name :=
+  { name := s, moduleName := .moduleName "PerceusTest", sort := .temporal uniq }
+
+private def pA : Name := pnm "a" 10
+private def pB : Name := pnm "b" 11
+private def pK : Name := pnm "k" 12
+private def pS : Name := pnm "s" 13
+private def pH : Name := pnm "h" 14
+private def pL : Name := pnm "l" 15
+private def pF1 : Name := pnm "f1" 16
+private def pF2 : Name := pnm "f2" 17
+private def pC : Name := pnm "c" 18
+private def pSelf : Name := pnm "self" 1
+
+private def pFn (kind : FuncKind) (params : List Name) (body : Block) : Func :=
+  { range := r0, name := pnm "fn" 0, kind, selfVar := pSelf, params, body }
+
+private def pBody (kind : FuncKind) (params : List Name) (body : Block) : Block :=
+  (perceusFunc (pFn kind params body)).body
+
+-- An unused parameter is dropped at entry rather than leaked.
+#guard pBody .topLevelFn [pA, pK] (.mk [.let pL (.lit (.int32 1))] (.applyCo pK pL))
+  == .mk [.drop pA, .let pL (.lit (.int32 1))] (.applyCo pK pL)
+
+-- Two occurrences in one construction: the variable's own reference moves
+-- into the last, so exactly one dup covers the extra.
+#guard pBody .topLevelFn [pA, pK] (.mk [.let pS (.mkStruct .tuple [pA, pA])] (.applyCo pK pS))
+  == .mk [.dup pA, .let pS (.mkStruct .tuple [pA, pA])] (.applyCo pK pS)
+
+-- Consumed by the struct AND still live at the terminator: one dup.
+#guard pBody .topLevelFn [pA, pK] (.mk [.let pS (.mkStruct .tuple [pA])] (.callClosure pK [pA, pS]))
+  == .mk [.dup pA, .let pS (.mkStruct .tuple [pA])] (.callClosure pK [pA, pS])
+
+-- Each branch drops what only the other branch consumes.
+#guard pBody .topLevelFn [pA, pB, pK]
+    (.mk [] (.«if» (.isZero pA) (.mk [] (.applyCo pK pA)) (.mk [] (.applyCo pK pB))))
+  == .mk [] (.«if» (.isZero pA)
+      (.mk [.drop pB] (.applyCo pK pA)) (.mk [.drop pA] (.applyCo pK pB)))
+
+-- A borrowed read that stays live is promoted to owned with a dup, and the
+-- now-dead root is dropped.
+#guard pBody .topLevelFn [pS, pK] (.mk [.let pH (.readPath (.field (.root pS) 0))] (.applyCo pK pH))
+  == .mk [.let pH (.readPath (.field (.root pS) 0)), .dup pH, .drop pS] (.applyCo pK pH)
+
+-- A borrowed read nobody uses is elided outright.
+#guard pBody .topLevelFn [pS, pK] (.mk [.let pH (.readPath (.field (.root pS) 0))] (.applyCo pK pS))
+  == .mk [] (.applyCo pK pS)
+
+-- The closure protocol: dup the captures still needed, then drop self.
+#guard pBody .closureFn [pK] (.mk [.let pC (.readCapture pSelf 0)] (.applyCo pK pC))
+  == .mk [.let pC (.readCapture pSelf 0), .dup pC, .drop pSelf] (.applyCo pK pC)
+
+-- Record fields are call-by-name, so forcing twice consumes two references.
+#guard pBody .topLevelFn [pS, pK]
+    (.mk [.let pF1 (.force pS "a"), .let pF2 (.force pS "b")] (.callClosure pK [pF1, pF2]))
+  == .mk [.dup pS, .let pF1 (.force pS "a"), .let pF2 (.force pS "b")]
+      (.callClosure pK [pF1, pF2])
+
+-- Finish returns one value; everything else must be released first.
+#guard pBody .topLevelFn [pA, pB] (.mk [] (.«return» pB)) == .mk [.drop pA] (.«return» pB)
+
+-- A bare panic arm is RC-exempt, so nothing is inserted anywhere.
+#guard pBody .topLevelFn [pA, pK]
+    (.mk [] (.«if» (.isZero pA) (.mk [] (.applyCo pK pA)) (.mk [] (.panic "no matching branch"))))
+  == .mk [] (.«if» (.isZero pA) (.mk [] (.applyCo pK pA)) (.mk [] (.panic "no matching branch")))
+
 end Malgo.Backend.Zig.Perceus

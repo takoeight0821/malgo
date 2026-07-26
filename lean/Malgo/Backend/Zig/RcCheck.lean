@@ -165,4 +165,60 @@ private def doubleConsume : Func :=
 #guard (match checkProgram { funcs := [wellFormed], entry := none } with | .ok () => true | _ => false)
 #guard checkFunc doubleConsume == [.useAfterConsume (n "g") (n "x")]
 
+/-! ## Reuse-token linearity (port of `ReuseSpec.hs`'s `rcCheckSpec`)
+
+A reuse token must be produced by a `dropReuse` and consumed by exactly one
+`mkStructReuse` before the block's terminator. Both failure directions are
+pinned, since a checker that accepts everything would pass the positive case
+alone. -/
+
+private def rtok : Name := n "reuse_0"
+
+private def reuseFn (body : Block) : Func :=
+  { range := ⟨SourcePos.initial "", SourcePos.initial ""⟩
+    name := n "r", kind := .topLevelFn, selfVar := n "self"
+    params := [n "a", n "b", n "k"], body }
+
+-- Well-formed: token produced, then consumed by a same-arity rebuild.
+#guard (match checkProgram { funcs := [reuseFn
+    (.mk [.dropReuse rtok (n "a") 1, .let (n "s") (.mkStructReuse rtok .tuple [n "b"])]
+      (.applyCo (n "k") (n "s")))], entry := none } with | .ok () => true | _ => false)
+
+-- Consuming a token that was never produced.
+#guard (checkFunc (reuseFn
+    (.mk [.let (n "s") (.mkStructReuse rtok .tuple [n "a"])] (.applyCo (n "k") (n "s"))))
+  |>.any (fun v => match v with | .tokenUnavailable _ t => t == rtok | _ => false))
+
+-- Producing a token and reaching the terminator without consuming it.
+#guard (checkFunc (reuseFn (.mk [.dropReuse rtok (n "a") 1] (.applyCo (n "k") (n "k"))))
+  |>.any (fun v => match v with | .tokenUnconsumed _ ts => ts.contains rtok | _ => false))
+
+/-! ## Linearity violations (port of `PerceusSpec.hs`'s `rcCheckSpec`)
+
+A checker that accepts everything would satisfy the positive cases and the
+corpus oracle alike, so each violation kind gets a fixture that must trip it. -/
+
+private def cnm (s : String) : Name :=
+  { name := s, moduleName := .moduleName "RcTest", sort := .external }
+
+private def cFn (kind : FuncKind) (params : List Name) (body : Block) : Func :=
+  { range := ⟨SourcePos.initial "", SourcePos.initial ""⟩
+    name := cnm "c", kind, selfVar := cnm "self", params, body }
+
+-- Consuming the same reference twice in one call.
+#guard (checkFunc (cFn .topLevelFn [cnm "a", cnm "k"]
+    (.mk [] (.callClosure (cnm "k") [cnm "a", cnm "a"])))
+  |>.any (fun v => match v with | .useAfterConsume _ x => x == cnm "a" | _ => false))
+
+-- An owned parameter that reaches the terminator unconsumed (a leak).
+#guard (checkFunc (cFn .topLevelFn [cnm "a", cnm "k"]
+    (.mk [.let (cnm "l") (.lit (.int32 1))] (.applyCo (cnm "k") (cnm "l"))))
+  |>.any (fun v => match v with | .unconsumedAtExit _ xs => xs.contains (cnm "a") | _ => false))
+
+-- Touching a borrowed alias after its root's reference was moved away.
+#guard (checkFunc (cFn .topLevelFn [cnm "s", cnm "k"]
+    (.mk [.let (cnm "h") (.readPath (.root (cnm "s"))), .drop (cnm "s"), .dup (cnm "h")]
+      (.applyCo (cnm "k") (cnm "h"))))
+  |>.any (fun v => match v with | .dupOfDead _ x => x == cnm "h" | _ => false))
+
 end Malgo.Backend.Zig.RcCheck

@@ -104,11 +104,11 @@ Level 1/2 はどちらも Zig バックエンド経由で走る。`Main.mlg` を
 for f in runtime/malgo/Builtin.mlg runtime/malgo/Prelude.mlg \
           runtime/malgo/Either.mlg \
           runtime/malgo/compiler/{AST,Token,Diagnostic,Lexer,Parser,Value,Eval,FunIR,Rename,ToFun,Main}.mlg; do
-  cabal exec malgo -- eval "$f" </dev/null >/dev/null
+  lean/.lake/build/bin/malgo eval "$f" </dev/null >/dev/null
 done
 
 # 2. Level 1 評価器をネイティブバイナリにコンパイル
-cabal exec malgo -- compile runtime/malgo/compiler/Main.mlg -o /tmp/malgoc --opt release-fast
+lean/.lake/build/bin/malgo compile runtime/malgo/compiler/Main.mlg -o /tmp/malgoc --opt release-fast
 
 # 3. Level 2 テスト（例: Echo）
 printf 'Hello\n' | /tmp/malgoc \

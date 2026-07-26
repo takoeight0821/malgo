@@ -7,9 +7,12 @@ import Malgo.SExpr
 the `Resource` artifact-serialization class.
 
 Differences from Haskell (both per plan):
-- the workspace directory honors `MALGO_WORK_DIR` and defaults to
-  `.malgo-work-lean`, so both toolchains can share one checkout;
-- `Resource` artifacts are not wire-compatible with Haskell's `binary`.
+- the workspace directory honors `MALGO_WORK_DIR`;
+- `Resource` artifacts are not wire-compatible with Haskell's `binary`,
+  which is why the default used to be `.malgo-work-lean` — a separate mirror
+  so the two implementations could share one checkout without corrupting
+  each other's artifacts. With one implementation left it is `.malgo-work`
+  again.
 -/
 
 namespace Malgo
@@ -123,7 +126,7 @@ structure Workspace where
 namespace Workspace
 
 def workDirName : IO String := do
-  return (← IO.getEnv "MALGO_WORK_DIR").getD ".malgo-work-lean"
+  return (← IO.getEnv "MALGO_WORK_DIR").getD ".malgo-work"
 
 /-- Port of `runWorkspaceOnPwd`: create the work dir under the current
 directory and set up an empty module map. -/

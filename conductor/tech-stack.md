@@ -1,18 +1,26 @@
 # Technology Stack - Malgo
 
 ## Core Language & Runtime
-- **Haskell (GHC 9.12.4):** The primary language used for the compiler, interpreter, and tooling.
-- **Effectful:** Used as the primary effect system for managing side effects in a structured and type-safe manner.
+- **Lean 4:** The language the compiler, interpreter, and tooling are written in.
+  The toolchain version is pinned by `lean/lean-toolchain`.
+- **Zig 0.16:** The native backend's toolchain, and the language
+  `runtime/zig/runtime.zig` (reference counting, primitives) is written in.
+  Pinned in `mise.toml`.
 
 ## Compiler & Tooling
-- **Megaparsec:** The library used for parsing Malgo source files and intermediate representations.
-- **Hpack & Cabal:** Used for package management and building the project.
+- **A hand-written parser combinator library** (`lean/Malgo/Parser/Prim.lean`),
+  modelled on megaparsec down to its error reporting.
+- **Lake:** Build system and package manager.
 - **Mise:** Orchestrates development tasks (setup, build, test, etc.).
-- **Ormolu:** The code formatter used to maintain a consistent Haskell style.
 
 ## Testing & Quality Assurance
-- **Hspec:** The primary testing framework.
-- **Hspec-golden:** Used for golden testing of compiler outputs and interpreter results.
+- **`lean/Test/Main.lean`:** One executable holding the whole suite — a
+  hand-rolled golden runner plus the non-golden gates.
+- **`.golden/`:** Golden outputs, in hspec-golden's directory layout
+  (`<Group>/<Case>/golden`), inherited from the Haskell implementation.
+- **`scripts/`:** The CI gates that need a built binary — Zig byte-parity,
+  deep recursion, self-hosting, CLI, lint.
 
-## LSP Support
-- **malgo-lsp:** An internal package providing Language Server Protocol support for the Malgo language.
+## History
+The compiler was written in Haskell (GHC 9.12.4, Effectful, megaparsec, hspec)
+until 2026-07. See `PORTING.md`.

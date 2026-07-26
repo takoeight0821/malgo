@@ -1,6 +1,5 @@
 [tools]
 watchexec = "latest"
-ghcup = "latest"
 gh = "latest"
 claude = { version = "latest", bin = "claude", platforms = """
 [linux-arm64]
@@ -23,85 +22,36 @@ hyperfine = "latest"
 zig = "0.16.0"
 
 [env]
-_.path = ["~/.ghcup/bin", "~/.local/bin", "~/.cabal/bin", "~/.elan/bin"]
+_.path = ["~/.local/bin", "~/.elan/bin"]
 
 [tasks.setup]
-description = "Setup tools"
-run = [
-    "ghcup install ghc 9.12.4",
-    "ghcup set ghc 9.12.4",
-    "ghcup install cabal latest",
-    "ghcup set cabal latest",
-    "cabal update",
-    "cabal install hpack --overwrite-policy=always --ignore-project",
-    "cabal install ormolu --overwrite-policy=always --ignore-project",
-]
-
-[tasks.lean-setup]
 description = "Install elan (Lean toolchain manager); the toolchain itself is pinned by lean/lean-toolchain"
 run = "command -v elan >/dev/null 2>&1 || curl -sSf https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none"
 
-[tasks.lean-bust-runtime]
-description = "Force the Lean port to re-embed runtime/zig/runtime.zig (Lake does not reliably track include_str)"
+[tasks.bust-runtime]
+description = "Force a re-embed of runtime/zig/runtime.zig (Lake does not reliably track include_str)"
 run = """
 rm -f lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.olean \
       lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.trace \
       lean/.lake/build/ir/Malgo/Backend/Zig/Runtime.c
 """
 
-[tasks.lean-build]
-description = "Build the Lean 4 port (lean/)"
+[tasks.build]
+description = "Build the compiler"
 dir = "lean"
 run = "lake build"
 
-[tasks.lean-test]
-description = "Run the Lean 4 port's test suite (extra args after --, e.g. mise run lean-test -- --match PAT)"
-depends = ["lean-build"]
+[tasks.test]
+description = "Run the test suite (extra args after --, e.g. mise run test -- --match PAT)"
+depends = ["build"]
 dir = "lean"
 run = "lake test --"
-
-[tasks.setup-hls]
-description = "Setup HLS (requires HLS support for the project's GHC version)"
-# No HLS binary distribution for GHC 9.12.4 yet (see haskell/haskell-language-server#4890).
-# Compiles HLS 2.13.0.0 from source. This takes a long time (~30-60 min).
-# Once HLS 2.14.0.0 ships with bindists, replace with:
-#   "ghcup install hls latest"
-#   "ghcup set hls latest"
-run = [
-    "ghcup compile hls -v 2.13.0.0 --ghc 9.12.4",
-    "ghcup set hls 2.13.0.0",
-]
-
-[tasks.format]
-description = "Format the code"
-run = "ormolu --mode inplace $(find src app test Setup.hs -name '*.hs' 2>/dev/null)"
-
-[tasks.build]
-description = "Build the project"
-depends = ["format"]
-run = "hpack && cabal build"
-
-[tasks.test]
-description = "Run the tests"
-depends = ["build"]
-run = """
-    if [ -z '{{option(name=\"match\")}}' ]; then
-        cabal test --test-show-details=direct --test-option=--jobs=4 --test-option=--fail-fast
-    else
-        cabal test --test-show-details=direct --test-options=--match --test-options={{option(name=\"match\")}}
-    fi
-"""
-
-[tasks.reset]
-description = "Reset golden test files"
-run = "trash .golden"
 
 [tasks.golden-update]
 description = "Regenerate and commit golden test files"
 depends = ["build"]
 run = """
-trash .golden
-cabal test --test-show-details=direct --test-option=--jobs=4
+(cd lean && lake test -- --update)
 git add .golden/
 git commit -m 'chore: regenerate golden files'
 """
@@ -118,8 +68,13 @@ run = "bash scripts/selfhost-level2.sh"
 
 [tasks.cli-gate]
 description = "Drive the malgo CLI over the corpus (eval / bigstep / error fixtures)"
-depends = ["lean-build"]
+depends = ["build"]
 run = "bash scripts/cli-gate.sh"
+
+[tasks.lint-sources]
+description = "Lint every .mlg under examples/, test/testcases/ and runtime/"
+depends = ["build"]
+run = "bash scripts/lint-sources.sh examples/malgo test/testcases runtime/malgo"
 
 [tasks.zig-golden]
 description = "Run Zig backend golden parity sweep (byte parity + leak gate)"
@@ -132,36 +87,13 @@ depends = ["build"]
 run = "bash scripts/zig-deep-recursion.sh"
 
 [tasks.exec]
-description = "Run the project"
+description = "Run the compiler (extra args after --, e.g. mise run exec -- eval examples/malgo/Hello.mlg)"
 depends = ["build"]
-run = "cabal exec malgo-exe"
-
-[tasks.met]
-description = "Launch MET (M-exp-Tracer): browse a .mlg file's compilation pipeline in the browser"
-depends = ["build"]
-run = """
-    SOURCE='{{option(name="source")}}'
-    if [ -z "$SOURCE" ]; then
-        echo 'Error: Please provide a source file with --option source="path/to/file.mlg"'
-        exit 1
-    fi
-    PORT='{{option(name="port")}}'
-    if [ -z "$PORT" ]; then
-        PORT=8080
-    fi
-    cabal exec met -- "$SOURCE" --port "$PORT" {{option(name="flags")}}
-"""
+run = "lean/.lake/build/bin/malgo"
 
 [tasks.changelog]
 description = "Generate changelog"
 run = "git-chglog -o CHANGELOG.md"
-
-[tasks.graph]
-description = "Generate dependency graph"
-run = [
-    "zsh -c 'grep '^import' src/Malgo/**/*.hs | grep -v Malgo.Prelude | grep -v Malgo.Id | grep -v Malgo.SExpr | sort | uniq | python graph.py > dependencies.dot'",
-    "dot -Tsvg dependencies.dot -o dependencies.svg",
-]
 
 [tasks.wiki]
 description = "Create a new wiki file with date prefix"

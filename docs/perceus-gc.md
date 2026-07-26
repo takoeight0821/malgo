@@ -106,11 +106,11 @@ every control-flow path, and reports any path where a reference is:
   `DropReuse`, or was already consumed (`TokenUnavailable`/`TokenUnconsumed`).
 
 `Malgo.Backend.Zig`'s `runPassImpl` runs this check unconditionally — on every
-compile, not just in an hspec suite or behind a debug flag — turning any
+compile, not just in the test suite or behind a debug flag — turning any
 Perceus/Reuse bug into a *compile-time* error (`ZigError`) rather than a
 use-after-free or a leak in the produced binary. The golden-test corpus also runs it
-directly on every testcase with no Zig toolchain needed at all, since it's pure
-Haskell over the IR.
+directly on every testcase with no Zig toolchain needed at all, since it is a
+pure function over the IR.
 
 `RcCheck`'s model is deliberately stricter than heap reachability: a borrowed alias
 (a `ReadPath`/`ReadCapture` result) is only accessible while its root still holds a

@@ -913,12 +913,13 @@ contains Builtin's names. `Map.<>`'s left-bias silently prefers the
 earlier-listed dependency's copy, which is fine since re-exported names are
 identical regardless of which dependency contributed them.
 
-The engine's `buildDepsEnv` stays genuinely strict (matching Haskell's
-`Query/Engine.hs` literally) because it is exercised at CLI-parity level by
-`scripts/lean-parity.sh --mode error`: `malgo eval --infer` on a real
-testcase (e.g. `Undefined.mlg`, which has this exact Prelude+Builtin
-diamond) crashes on Haskell's actual binary too — confirmed empirically —
-so the Lean CLI must crash identically, not silently succeed. -/
+The engine's `buildDepsEnv` stays genuinely strict, matching what the
+Haskell `Query/Engine.hs` did, and `scripts/cli-gate.sh`'s error mode
+asserts that: `malgo eval --infer` on a real testcase (e.g. `Undefined.mlg`,
+which has this exact Prelude+Builtin diamond) is expected to fail. The
+Haskell binary failed on it identically — confirmed empirically before that
+implementation was retired — so this is a shared latent defect being pinned
+down, not a Lean-side regression. -/
 private def buildDepsEnvLenient (ws : Workspace) (db : Malgo.Query.QueryDB)
     (deps : Std.TreeSet ModuleName) : MalgoM Malgo.Infer.TyEnv :=
   deps.toList.foldlM (init := ({} : Malgo.Infer.TyEnv)) fun acc dep => do

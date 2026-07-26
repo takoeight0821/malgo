@@ -52,7 +52,7 @@ Malgo features a Hindley-Milner-style type system with type inference, type anno
   def add = { x y -> x + y }
   ```
 - **Type inference:** Most types can be omitted; the compiler infers them.
-- **Implementation:** See `src/Malgo/Syntax.hs` (Type, Expr), `src/Malgo/Infer.hs`.
+- **Implementation:** See `lean/Malgo/Syntax.lean` (Type, Expr), `lean/Malgo/Infer.lean`.
 
 ## 4. Pattern Matching and Data Types
 
@@ -70,7 +70,7 @@ def fromMaybe = { default m ->
 ```
 
 - **Pattern syntax:** Supports variables, constructors, tuples, records, lists, and literals.
-- **See also:** `src/Malgo/Syntax.hs` (Pat, Clause)
+- **See also:** `lean/Malgo/Syntax.lean` (Pat, Clause)
 
 ## 5. Records, Tuples, and Lists
 
@@ -104,7 +104,7 @@ module {foo, bar} = import SomeModule
 
 - **Import all:** `module {..} = import Builtin`
 - **Selective import:** `module {foo, bar} = import SomeModule`
-- **Implementation:** See `src/Malgo/Syntax.hs` (Module, Import)
+- **Implementation:** See `lean/Malgo/Syntax.lean` (Module, Import)
 
 ## 7. Operator Definitions and Infix Notation
 
@@ -163,12 +163,12 @@ def main = {
 
 Malgo's compiler is modular, with distinct passes:
 
-- **Parsing:** `src/Malgo/Parser.hs` (produces AST)
-- **Renaming:** `src/Malgo/Rename.hs` (resolves names)
-- **Type Inference:** `src/Malgo/Infer.hs` (infers types)
-- **Refinement:** `src/Malgo/Refine.hs` (elaborates types)
+- **Parsing:** `lean/Malgo/Parser.lean` (produces AST)
+- **Renaming:** `lean/Malgo/Rename.lean` (resolves names)
+- **Type Inference:** `lean/Malgo/Infer.lean` (infers types)
+- **Refinement:** `lean/Malgo/Refine.lean` (elaborates types)
 - **Code Generation:** `src/Malgo/Sequent/`
-- **Pass Management:** `src/Malgo/Pass.hs`
+- **Pass Management:** `lean/Malgo/Pass.lean`
 
 Each pass is composable and testable in isolation.
 
@@ -210,7 +210,7 @@ def example = {
   mise run test
   ```
 - **Explore examples:** See `examples/malgo/`
-- **Read the code:** Start with `src/Malgo/Syntax.hs` and `src/Malgo/Pass.hs`
+- **Read the code:** Start with `lean/Malgo/Syntax.lean` and `lean/Malgo/Pass.lean`
 - **Contribute:** See [CONTRIBUTING.md] if available, or open issues/PRs.
 
 ---

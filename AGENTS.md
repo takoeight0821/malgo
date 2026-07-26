@@ -4,35 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Malgo?
 
-Malgo is a statically typed functional programming language with an interpreter written in Haskell. Source files use the `.mlg` extension.
+Malgo is a statically typed functional programming language with an interpreter and a native (Zig) backend, written in Lean 4. Source files use the `.mlg` extension.
 
 ## Build, Test, and Development Commands
 
 ```bash
-mise run setup       # Install toolchain (GHC 9.12.4, cabal, hpack, ormolu)
-mise run build       # Format + build (hpack && cabal build)
-mise run test        # Run test suite
-mise run test -- --match=Parser  # Run tests matching "Parser"
-mise run format      # Format with Ormolu
-mise run exec        # Run executable (cabal exec malgo-exe)
-mise run setup-hls   # Setup HLS for editor integration
-mise run reset       # Reset golden test outputs
+mise run setup            # Install elan (toolchain pinned by lean/lean-toolchain)
+mise run build            # lake build
+mise run test             # Run the test suite
+mise run test -- --match Parser   # Run cases matching "Parser"
+mise run test -- --update # Regenerate golden outputs in place
+mise run exec -- eval examples/malgo/Hello.mlg
 ```
 
-After `cabal install`, use: `malgo eval examples/malgo/Hello.mlg`
+The compiler lands at `lean/.lake/build/bin/malgo`.
 
 ## Project Structure
 
-- `src/Malgo/` - Haskell source (modules `Malgo.*`)
-- `app/malgo/Main.hs` - CLI entry point (`malgo eval ...`)
+- `lean/Malgo/` - the compiler (modules `Malgo.*`)
+- `lean/Main.lean` - CLI entry point (`malgo eval ...`)
+- `lean/Test/Main.lean` - the whole test suite: golden cases plus the
+  non-golden gates (infer, zig-reuse, zig-corpus, ir-invariants,
+  reuse-specialize, parser-surface)
 - `runtime/malgo/` - Malgo runtime/stdlib (`Builtin.mlg`, `Prelude.mlg`)
+- `runtime/zig/runtime.zig` - the Zig backend's runtime
 - `examples/malgo/` - Sample `.mlg` programs
-- `test/Malgo/` - Hspec tests mirroring source structure (`*Spec.hs`)
 - `test/testcases/` - Test input files; `.golden/` - golden test outputs
 
 ## Compilation Pipeline Architecture
 
-The pipeline is orchestrated in `src/Malgo/Driver.hs`:
+The pipeline is orchestrated in `lean/Malgo/Driver.lean`:
 
 ```
 Source (.mlg)
@@ -57,7 +58,7 @@ constructor's own curried closure. This is shared by both backends
 
 `malgo compile SOURCE [-o OUT] [--opt debug|release-safe|release-fast]` compiles
 via Zig to a native executable (Zig 0.16 pinned in `mise.toml`). Pipeline inside
-`ZigPass` (`src/Malgo/Backend/Zig/`):
+`ZigPass` (`lean/Malgo/Backend/Zig/`):
 
 ```
 Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label elimination)
@@ -65,7 +66,7 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
         → Peephole (scrutinee-tuple elimination)
         → Perceus (dup/drop insertion) → Reuse (Drop/MkStruct → reuse-token pairing)
         → RcCheck (linearity + reuse-token assert)
-        → Emit (Zig text, runtime embedded via file-embed from runtime/zig/runtime.zig)
+        → Emit (Zig text, runtime embedded via include_str from runtime/zig/runtime.zig)
 ```
 
 - Memory: Perceus reference counting. Every produced binary leak-checks itself
@@ -99,32 +100,34 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
 - Runtime unit tests: `zig test -lc runtime/zig/runtime.zig` (`-lc` is required on
   Linux since the runtime calls `std.c.write`/`std.c.getenv` directly; macOS
   masks this because it always links libc via libSystem).
-- **After editing `runtime/zig/runtime.zig`, run `mise run lean-bust-runtime`
-  before rebuilding the Lean port.** Lake does not reliably track the
-  `include_str` that embeds it, so `lake build` can report success while the
-  binary keeps emitting the previous runtime text. Haskell's `embedStringFile`
-  has no such problem. CI does this unconditionally in `lean-zig-golden`.
+- **After editing `runtime/zig/runtime.zig`, run `mise run bust-runtime`
+  before rebuilding.** Lake does not reliably track the `include_str` that
+  embeds it, so `lake build` can report success while the binary keeps
+  emitting the previous runtime text. CI does this unconditionally in
+  `lean-zig-golden` and `lean-selfhost`.
 - The interpreter (`Malgo.Sequent.Eval`) is the semantic oracle: any observable
-  divergence in the Zig backend is a bug, matched against Eval.hs.
+  divergence in the Zig backend is a bug, matched against `Eval.lean`.
 
 ### Intermediate Representations
 
+All under `lean/Malgo/`.
+
 | IR | Module | Purpose |
 |----|--------|---------|
-| Fun IR | `Sequent/Fun.hs` | Functional, close to AST |
-| Core IR | `Sequent/Core/Full.hs` | Sequent calculus, explicit control |
-| Flat IR | `Sequent/Core/Flat.hs` | No nested computations |
-| Join IR | `Sequent/Core/Join.hs` | Normalized, explicit join points (final) |
+| Fun IR | `Sequent/Fun.lean` | Functional, close to AST |
+| Core IR | `Sequent/Core/Full.lean` | Sequent calculus, explicit control |
+| Flat IR | `Sequent/Core/Flat.lean` | No nested computations |
+| Join IR | `Sequent/Core/Join.lean` | Normalized, explicit join points (final) |
 
 ### Key Modules
 
 - `Malgo.Driver` - Pipeline orchestration
-- `Malgo.Syntax` - Phase-indexed AST with type families for extensibility
+- `Malgo.Syntax` - Phase-indexed AST
 - `Malgo.Pass` - Compiler pass abstraction
 - `Malgo.Parser.*` - Parsing (Regular and CStyle variants)
 - `Malgo.Rename.*` - Name resolution and desugaring
 - `Malgo.Sequent.Eval` - Interpreter for Join IR
-- `Malgo.Monad` - Effectful monad stack runner
+- `Malgo.Monad` - `MalgoM`, the compiler's monad (`ReaderT Ctx (EIO CompileError)`)
 - `Malgo.Features` - Feature flag system
 
 ## Self-Hosting Levels
@@ -133,11 +136,11 @@ Malgo has two self-hosting levels, each tested by a CI job:
 
 | Level | Description | Script | CI job |
 |-------|-------------|--------|--------|
-| Level 1 | The Malgo evaluator written in Malgo (`runtime/malgo/compiler/`) evaluates arbitrary Malgo programs | `scripts/selfhost-golden.sh` | `self-hosted golden` |
+| Level 1 | The Malgo evaluator written in Malgo (`runtime/malgo/compiler/`) evaluates arbitrary Malgo programs | `scripts/selfhost-golden.sh` | `lean-selfhost` |
 | Level 2 | Level 1 evaluator evaluates `Main.mlg` which evaluates a Malgo program (metacircular interpreter) | `scripts/selfhost-level2.sh` | **currently disabled in CI** |
 
-**Level 2 is off in CI** (`LEAN_SELFHOST_L2=0` in `lean/ci-gates.env`, and
-`if: false` on `build.yml`'s job). It takes ~16 minutes on its own against a
+**Level 2 is off in CI** (`LEAN_SELFHOST_L2=0` in `lean/ci-gates.env`).
+It takes ~16 minutes on its own against a
 target of keeping CI under 10, because the Zig backend is ~7.5x slower per
 case than the Chez Scheme path self-hosting used to run on (#385). Level 1
 still runs on every PR over all 73 testcases. Run L2 locally before touching
@@ -164,43 +167,32 @@ bash scripts/selfhost-level2.sh
 
 ## Coding Style
 
-- **Formatter**: Ormolu - run `mise run format` before commits
-- **Linting**: HLint rules in `.hlint.yaml`
-  - Alias `Data.Text` as `T`, `Data.ByteString` as `BS`, lazy variants `TL`/`BL`
-  - Avoid `Debug.Trace`
-- **Module naming**: `Malgo.Foo.Bar` → `src/Malgo/Foo/Bar.hs`
-- Prefer explicit imports
-- Package metadata from `package.yaml` (hpack) - don't edit `.cabal` directly
+- **Module naming**: `Malgo.Foo.Bar` → `lean/Malgo/Foo/Bar.lean`
+- Prefer `def`/`abbrev` over `partial def`; a `partial def` is a place a
+  termination argument was skipped, and #379 tracks the ones that block
+  proofs.
+- `#guard` for build-time assertions is the house style for pure functions;
+  a gate in `lean/Test/Main.lean` for anything needing `IO`/`MalgoM`.
 
 ## Testing
 
-- Framework: Hspec with discovery (`test/Spec.hs`)
-- Each spec exposes `spec :: Spec` and ends with `*Spec.hs`
-- Golden tests under `.golden/` - reset with `mise run reset`
-- Run with details: `cabal test --test-show-details=direct`
+- One executable: `lean/Test/Main.lean`, run by `mise run test`.
+- Golden tests under `.golden/`, in hspec-golden's directory layout
+  (`<Group>/<Case>/golden`). `mise run test -- --update` rewrites them;
+  a mismatch also drops an `actual` next to the `golden`.
+- Filter with `-- --match PATTERN` (matches `Group/Case`).
 
 ## Commits & PRs
 
 - Conventional Commits format (see `.gitmessage`)
 - Example: `feat(parser): support C-style apply`
-- Quality gate: `mise run format && mise run test`
+- Quality gate: `mise run test`
 
-## Lean 4 port (`lean/`)
+## History
 
-A full second implementation of Malgo — parser through every backend
-(Eval/Zig), the query-based compilation engine, the linter, and
-the MET debug tracer (`malgo debug-trace`) — exists in Lean 4 under
-`lean/`, at parity with this Haskell implementation (which
-remains the semantic oracle: the committed `.golden/` tree, the
-self-hosted-compiler stress test, and `scripts/zig-golden.sh` gate both
-implementations, not just this one). See `lean/README.md` for build
-commands and milestone-by-milestone status, and `PORTING.md` at the repo
-root for the file-by-file module mapping and the Haskell-retirement
-criteria (not yet met — do not treat this port as a reason to stop
-maintaining the Haskell code).
-
-If you change semantics anywhere under `src/Malgo/` (not just fixing a
-typo or adding a comment), the same change almost certainly needs to land
-in `lean/Malgo/` in the same PR — check `PORTING.md`'s module table for
-the corresponding Lean file, and re-run `bash scripts/lean-parity.sh`
-before considering the change complete.
+Malgo was written in Haskell until 2026-07, and that implementation was the
+semantic oracle while the Lean 4 port was built against it. It has been
+removed; `PORTING.md` records the module-by-module mapping and why the
+retirement criteria were overridden. Documents under `docs/plans/`,
+`docs/reports/`, `bench/` and `wiki/` describe that period and are left as
+written — do not "correct" them to the current layout.

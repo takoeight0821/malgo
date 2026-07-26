@@ -304,11 +304,12 @@ def runDebugTrace (source outPath : System.FilePath) (useInfer malgo2025 : Bool)
     IO.eprintln (toString e)
     return 1
 
-/-- Hidden developer subcommand mirroring Haskell `dumpFingerprint`: lower a
-single module (unlinked) through Parse → Rename → ToFun → ToCore → Flat →
-Join and print its canonical, format-immune IR fingerprint — used by
-`scripts/lean-parity.sh` to diff the two implementations' lowering without
-depending on uniq-numbering/formatting parity. -/
+/-- Hidden developer subcommand: lower a single module (unlinked) through
+Parse → Rename → ToFun → ToCore → Flat → Join and print its canonical,
+format-immune IR fingerprint. It exists because `scripts/lean-parity.sh`
+diffed this against the Haskell implementation's own `dumpFingerprint`,
+without depending on uniq-numbering or formatting parity; with that
+implementation retired it survives as a debugging aid. -/
 def runDump (source : System.FilePath) (stage : DumpStage) : IO UInt32 := do
   try
     let ws ← Malgo.Workspace.setup

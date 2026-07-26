@@ -213,6 +213,68 @@ private def testProg : Program :=
   match (saturateProgram testProg).definitions with
   | [_, (_, _, body)] => Malgo.sShow body == "(Cons (a b))"
   | _ => false
+
+/-! ## Port of `test/Malgo/Sequent/SaturateCtorSpec.hs`
+
+Compared via `sShow`, exactly as the Haskell spec does. The three
+"leaves ... untouched" cases matter as much as the rewrites: over-eager
+inlining of a partial application would change the program's meaning, not
+just its shape. -/
+
+private def consDef : Range × Name × Expr :=
+  (r0, extId "Cons",
+    .lambda r0 [extId "p1"] (.lambda r0 [extId "p2"]
+      (.construct r0 (.tag "Cons") [.var r0 (extId "p1"), .var r0 (extId "p2")])))
+
+private def nilDef : Range × Name × Expr :=
+  (r0, extId "Nil", .construct r0 (.tag "Nil") [])
+
+private def vx : Expr := .var r0 (extId "x")
+private def vxs : Expr := .var r0 (extId "xs")
+
+/-- `sShow` of `caller`'s body after saturation, given the defs to run over. -/
+private def caller (defs : List (Range × Name × Expr)) (body : Expr) : String :=
+  match ((saturateProgram { definitions := defs ++ [(r0, extId "caller", body)],
+                            dependencies := [] }).definitions.reverse) with
+  | (_, _, b) :: _ => Malgo.sShow b
+  | [] => "<none>"
+
+-- Immediate arguments.
+#guard caller [consDef] (.apply r0 (.apply r0 (.invoke r0 (extId "Cons")) [vx]) [vxs])
+  == "(Cons (x xs))"
+
+-- Non-immediate arguments: `mapList` is not a constructor, so its own call
+-- survives untouched inside the rewritten Cons spine.
+#guard caller [consDef]
+    (.apply r0 (.apply r0 (.invoke r0 (extId "Cons"))
+      [.apply r0 (.var r0 (extId "f")) [vx]])
+      [.apply r0 (.apply r0 (.invoke r0 (extId "mapList")) [.var r0 (extId "f")]) [vxs]])
+  == Malgo.sShow (Expr.construct r0 (.tag "Cons")
+      [ .apply r0 (.var r0 (extId "f")) [vx],
+        .apply r0 (.apply r0 (.invoke r0 (extId "mapList")) [.var r0 (extId "f")]) [vxs] ])
+
+-- Must NOT fire: a partial application is a closure, not a value.
+#guard caller [consDef] (.apply r0 (.invoke r0 (extId "Cons")) [vx])
+  == Malgo.sShow (Expr.apply r0 (.invoke r0 (extId "Cons")) [vx])
+
+-- Arity-0 constructors are saturated by a bare reference.
+#guard caller [nilDef] (.invoke r0 (extId "Nil")) == Malgo.sShow (Expr.construct r0 (.tag "Nil") [])
+
+-- Over-application: build the value, then apply the extras to it.
+#guard caller [consDef]
+    (.apply r0 (.apply r0 (.apply r0 (.invoke r0 (extId "Cons")) [vx]) [vxs])
+      [.var r0 (extId "extra")])
+  == Malgo.sShow (Expr.apply r0
+      (.construct r0 (.tag "Cons") [vx, vxs]) [.var r0 (extId "extra")])
+
+-- Rewrites reach inside a Let without disturbing what surrounds them.
+#guard caller [consDef]
+    (.«let» r0 (extId "v")
+      (.apply r0 (.apply r0 (.invoke r0 (extId "Cons")) [vx]) [vxs])
+      (.var r0 (extId "v")))
+  == Malgo.sShow (Expr.«let» r0 (extId "v")
+      (.construct r0 (.tag "Cons") [vx, vxs]) (.var r0 (extId "v")))
+
 end Test
 
 end Malgo.Sequent.SaturateCtor

@@ -1,15 +1,10 @@
 /-! Hand-rolled golden runner, layout-compatible with hspec-golden:
 `.golden/<Group>/<Case>/golden` holds the expected bytes, `actual` is
-written next to it on mismatch. Cases whose Lean output legitimately
-diverges from Haskell get an override in `.golden-lean/` with the same
-layout: the runner checks `.golden-lean/` first (an explicit override
-wins), then the shared `.golden/`. `--update` only ever writes to
-`.golden-lean/` — the shared tree stays Haskell-owned.
+written next to it on mismatch, and `--update` (re)writes `golden`.
 
-The overrides are the 11 parser/rename *error* cases, whose message text
-each implementation renders in its own format. The split exists only while
-both implementations do: once Haskell retires, these become the only
-goldens and fold back into `.golden/`. -/
+The tree used to be read-only here, with Lean-owned overrides in a parallel
+`.golden-lean/`, because the Haskell implementation generated `.golden/` and
+was the semantic oracle. It is now the only implementation's own tree. -/
 
 namespace Malgo.Test
 
@@ -24,16 +19,8 @@ root). Golden paths are therefore relative to ".". -/
 def repoRoot : IO System.FilePath := do
   return System.FilePath.mk "."
 
-/-- Override directory (`.golden-lean/`) first, shared `.golden/` second. -/
-private def goldenDirs (c : GoldenCase) : IO (Array System.FilePath) := do
-  let root ← repoRoot
-  return #[root / ".golden-lean" / c.group / c.name, root / ".golden" / c.group / c.name]
-
-private def resolveGoldenDir (c : GoldenCase) : IO (Option System.FilePath) := do
-  for dir in (← goldenDirs c) do
-    if (← (dir / "golden").pathExists) then
-      return some dir
-  return none
+private def goldenDir (c : GoldenCase) : IO System.FilePath := do
+  return (← repoRoot) / ".golden" / c.group / c.name
 
 structure Outcome where
   passed : Bool
@@ -41,29 +28,23 @@ structure Outcome where
 
 def checkGolden (update : Bool) (c : GoldenCase) : IO Outcome := do
   let label := s!"{c.group}/{c.name}"
-  let overrideDir := (← goldenDirs c)[0]!
-  match ← resolveGoldenDir c with
-  | none =>
+  let dir ← goldenDir c
+  let goldenPath := dir / "golden"
+  unless ← goldenPath.pathExists do
     if update then
-      IO.FS.createDirAll overrideDir
-      IO.FS.writeFile (overrideDir / "golden") (← c.run)
-      return ⟨true, s!"CREATED {label} (in .golden-lean)"⟩
-    return ⟨false, s!"MISSING {label}: no golden file (run with --update to create)"⟩
-  | some dir =>
-    let goldenPath := dir / "golden"
-    let actual ← c.run
-    if (← IO.FS.readFile goldenPath) == actual then
-      return ⟨true, s!"ok {label}"⟩
-    else if update then
-      -- Never clobber the shared, Haskell-owned .golden/ tree: a
-      -- divergent case gets (or refreshes) a .golden-lean override.
-      IO.FS.createDirAll overrideDir
-      IO.FS.writeFile (overrideDir / "golden") actual
-      return ⟨true, s!"UPDATED {label} (override in .golden-lean)"⟩
-    else
       IO.FS.createDirAll dir
-      IO.FS.writeFile (dir / "actual") actual
-      return ⟨false, s!"FAIL {label}: output differs from {goldenPath} (actual written alongside)"⟩
+      IO.FS.writeFile goldenPath (← c.run)
+      return ⟨true, s!"CREATED {label}"⟩
+    return ⟨false, s!"MISSING {label}: no golden file (run with --update to create)"⟩
+  let actual ← c.run
+  if (← IO.FS.readFile goldenPath) == actual then
+    return ⟨true, s!"ok {label}"⟩
+  else if update then
+    IO.FS.writeFile goldenPath actual
+    return ⟨true, s!"UPDATED {label}"⟩
+  else
+    IO.FS.writeFile (dir / "actual") actual
+    return ⟨false, s!"FAIL {label}: output differs from {goldenPath} (actual written alongside)"⟩
 
 structure Config where
   match? : Option String := none

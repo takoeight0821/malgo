@@ -28,11 +28,10 @@ private def parserCaseAt (name : String) (path : System.FilePath) : GoldenCase :
 
 /-! ### Parser error cases (`test/Malgo/ParserSpec/errors/*.mlg`)
 
-Haskell's `driveErrorParse` dumps megaparsec's `errorBundlePretty`, which
-prints the offending source line and a caret under the column. The Lean
-parser's `PError.render` is a single line. Both are legitimate renderings of
-the same failure, so these cases carry Lean-owned goldens under
-`.golden-lean/` rather than sharing the Haskell tree. -/
+The goldens here are `PError.render`'s single line. Haskell's
+`driveErrorParse` dumped megaparsec's `errorBundlePretty` — the offending
+source line with a caret under the column — so these were the last cases to
+transfer when that implementation retired. -/
 
 private def parserErrorCaseDir : System.FilePath :=
   System.FilePath.mk "test/Malgo/ParserSpec/errors"
@@ -94,7 +93,7 @@ private def renameCase (name : String) (path : System.FilePath) : GoldenCase :=
 
 Haskell's `driveErrorRename` `show`s the `CompileError` it caught; Lean's
 `CompileError.render` names the pass in the text and formats the range
-differently. Lean-owned goldens, same as the parser errors above. -/
+differently, so these transferred alongside the parser errors above. -/
 
 private def renameErrorCaseDir : System.FilePath :=
   System.FilePath.mk "test/Malgo/RenameSpec/errors"

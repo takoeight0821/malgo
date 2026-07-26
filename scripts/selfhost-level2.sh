@@ -13,7 +13,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-MALGO=${MALGO:-cabal exec malgo --}
+MALGO=${MALGO:-lean/.lake/build/bin/malgo}
 # Level 2 is ~50-200x slower than Level 1, and the Zig backend is a further
 # ~7.5x slower per case than the Chez Scheme path it replaced (measured:
 # 220s vs 29s on Fib, on an M-series Mac). Budget accordingly.
@@ -46,10 +46,9 @@ if [[ "$KEEP_WORK" != "1" ]]; then
   rm -rf "$MALGO_WORK_DIR"
 fi
 
-if [[ "$MALGO" == *cabal* ]]; then
-  log "building malgo executable"
-  cabal build exe:malgo >/dev/null
-  log "build complete"
+if [[ ! -x "$MALGO" ]]; then
+  echo "malgo executable not found at '$MALGO' (set MALGO, or run 'lake build' in lean/)." >&2
+  exit 1
 fi
 
 precompile=(
@@ -72,7 +71,7 @@ precompile=(
 for file in "${precompile[@]}"; do
   start=$SECONDS
   log "precompile start: $file"
-  if ! timeout "$PRECOMPILE_TIMEOUT" $MALGO eval "$file" </dev/null >/dev/null; then
+  if ! timeout "$PRECOMPILE_TIMEOUT" "$MALGO" eval "$file" </dev/null >/dev/null; then
     log "precompile failed: $file"
     exit 1
   fi
@@ -89,7 +88,7 @@ if ! command -v zig >/dev/null 2>&1; then
   exit 1
 fi
 log "compiling Main.mlg to a native binary (Level 1 evaluator) via the Zig backend"
-if ! $MALGO compile runtime/malgo/compiler/Main.mlg -o "$NATIVE_MAIN" --opt release-fast; then
+if ! "$MALGO" compile runtime/malgo/compiler/Main.mlg -o "$NATIVE_MAIN" --opt release-fast; then
   log "native compilation failed"
   exit 1
 fi

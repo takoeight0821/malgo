@@ -5,7 +5,7 @@
 # its stdout against the interpreter's golden output byte-for-byte.
 #
 # Env knobs (all optional):
-#   MALGO             path to the malgo executable (default: cabal-built one)
+#   MALGO             path to the malgo executable (default: the Lean build)
 #   ZIG_BIN_DIR       directory containing the zig binary, prepended to PATH
 #   COMPILE_TIMEOUT   seconds allowed for `malgo compile` (default: 60)
 #   CASE_TIMEOUT      seconds allowed for running the compiled binary (default: 10)
@@ -16,12 +16,7 @@ set -u
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 
-if [ -z "${MALGO:-}" ]; then
-  # `cabal list-bin` resolves the exact path regardless of platform triple
-  # (aarch64-osx, x86_64-linux, ...) or GHC/package version, unlike a
-  # hardcoded dist-newstyle path.
-  MALGO="$(cabal list-bin exe:malgo 2>/dev/null || true)"
-fi
+MALGO="${MALGO:-lean/.lake/build/bin/malgo}"
 COMPILE_TIMEOUT="${COMPILE_TIMEOUT:-60}"
 CASE_TIMEOUT="${CASE_TIMEOUT:-10}"
 MAX_FAILURES="${MAX_FAILURES:-999999}"
@@ -35,8 +30,8 @@ if ! command -v zig >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ -z "$MALGO" ] || [ ! -x "$MALGO" ]; then
-  echo "malgo executable not found (set MALGO explicitly or run 'cabal build exe:malgo')." >&2
+if [ ! -x "$MALGO" ]; then
+  echo "malgo executable not found at '$MALGO' (set MALGO, or run 'lake build' in lean/)." >&2
   exit 1
 fi
 

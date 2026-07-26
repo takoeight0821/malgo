@@ -17,7 +17,7 @@
 #
 # Env knobs (all optional):
 #   MALGO             path to the malgo executable (default: the Lean build)
-#   MALGO_WORK_DIR    workspace mirror (default: .malgo-work-lean)
+#   MALGO_WORK_DIR    workspace mirror (default: .malgo-work)
 #   CASE_TIMEOUT      seconds per case (default: 60)
 #   MODES             space-separated subset of "eval bigstep error"
 set -u
@@ -26,7 +26,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 
 MALGO="${MALGO:-lean/.lake/build/bin/malgo}"
-export MALGO_WORK_DIR="${MALGO_WORK_DIR:-.malgo-work-lean}"
+export MALGO_WORK_DIR="${MALGO_WORK_DIR:-.malgo-work}"
 CASE_TIMEOUT="${CASE_TIMEOUT:-60}"
 MODES="${MODES:-eval bigstep error}"
 

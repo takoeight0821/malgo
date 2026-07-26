@@ -113,6 +113,18 @@ jobs:
           build: true
           test: false
 
+      # Same include_str staleness as lean-zig-golden: without this the job
+      # compiles Main.mlg against a cached, stale embedded runtime. That is
+      # not hypothetical -- it is how this step first failed, with every one
+      # of the 73 cases dying on `malgo_read_file` after that primitive had
+      # already been implemented. See lean/Malgo/Backend/Zig/Runtime.lean.
+      - name: Rebuild the embedded Zig runtime
+        run: |
+          rm -f lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.olean \
+                lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.trace \
+                lean/.lake/build/ir/Malgo/Backend/Zig/Runtime.c
+          cd lean && lake build malgo
+
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: '0.16.0'

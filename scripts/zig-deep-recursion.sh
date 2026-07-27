@@ -87,4 +87,48 @@ if [ "$actual" != "$EXPECTED" ]; then
 fi
 
 cat "$WORK/stats"
+
+# This run already produced the fib-deep counters, so gating them here costs no
+# extra compile and no extra execution -- the numbers were previously printed and
+# thrown away (#399). Only total_allocs / dispatches / force_depth_max are gated;
+# see scripts/perf-baseline.sh for why reuse_hits is reported rather than gated.
+BASELINE="${BASELINE:-bench/perf-baseline.json}"
+if [ ! -f "$BASELINE" ] || ! command -v jq >/dev/null 2>&1; then
+  echo "NOTICE: no $BASELINE (or no jq) -- skipping the perf gate."
+else
+  stats_line="$(grep '^MALGO-STATS:' "$WORK/stats" | tail -n 1)"
+  case "$stats_line" in
+    ''|*'?'*)
+      echo "FAIL: unusable MALGO-STATS line ('$stats_line')" >&2
+      exit 1
+      ;;
+  esac
+  perf_fail=0
+  for field in total_allocs dispatches force_depth_max; do
+    actual_v="$(printf '%s\n' "$stats_line" | sed -n "s/.*$field=\([0-9]*\).*/\1/p")"
+    base_v="$(jq -r --arg f "$field" '.tiers["fib-deep"].counters[$f] // empty' "$BASELINE")"
+    if [ -z "$actual_v" ]; then
+      echo "FAIL: could not parse $field from '$stats_line'" >&2
+      exit 1
+    fi
+    if [ -z "$base_v" ]; then
+      echo "NOTICE: no fib-deep baseline for $field -- skipping"
+      continue
+    fi
+    if [ "$field" = "force_depth_max" ]; then
+      if [ "$actual_v" -ne "$base_v" ]; then
+        echo "FAIL: force_depth_max changed ($base_v -> $actual_v); see #382" >&2
+        perf_fail=1
+      fi
+    elif [ "$actual_v" -gt "$base_v" ]; then
+      echo "FAIL: $field rose ($base_v -> $actual_v, +$((actual_v - base_v)))" >&2
+      perf_fail=1
+    elif [ "$actual_v" -lt "$base_v" ]; then
+      echo "  $field improved ($base_v -> $actual_v); record it with 'mise run perf-baseline -- --tier=fib-deep --update'"
+    fi
+  done
+  [ "$perf_fail" -eq 0 ] || exit 1
+  echo "=== perf counters within baseline ==="
+fi
+
 echo "=== deep recursion OK: $actual, no leak ==="

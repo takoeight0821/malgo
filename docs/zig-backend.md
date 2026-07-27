@@ -168,8 +168,21 @@ constructor name never needs a heap allocation of its own).
   holds a reference to this object right now" without manually grepping raw
   pointer addresses. See the "Debugging" section of [`perceus-gc.md`](perceus-gc.md).
 - **`MALGO_RC_STATS=1`** on a compiled binary prints
-  `MALGO-STATS: total_allocs=<N> reuse_hits=<N>` to stderr at exit — a quick way to
-  measure the `Reuse` pass's effect on allocation count without full tracing.
+  `MALGO-STATS: total_allocs=<N> reuse_hits=<N> dispatches=<N> force_depth_max=<N>`
+  to stderr at exit — a quick way to measure the `Reuse` pass's effect on allocation
+  count without full tracing. The counters themselves are always on (only the
+  reporting is env-gated), so an instrumented run and a timed run measure the same
+  binary. They are deterministic and machine-independent, which is why #385 requires
+  them in any before/after claim and treats wall clock as insufficient.
+- **`mise run perf-baseline`** (`scripts/perf-baseline.sh`) records and compares those
+  counters against `bench/perf-baseline.json` across four tiers — `fib-shallow`,
+  `fib-deep`, `selfhost-l1`, `selfhost-l2`. Gates are directional and only
+  `total_allocs`, `dispatches` and `force_depth_max` are enforced; `reuse_hits` is
+  reported, because it is a ratio whose denominator moves whenever an optimization
+  removes allocations. `--update` rewrites the baseline, and that diff is the
+  before/after claim. `fib-deep` is gated for free inside
+  `scripts/zig-deep-recursion.sh`, which already ran the instrumented binary and
+  previously discarded the numbers.
 - **`RcCheck`** runs unconditionally on every compile (see
   [`perceus-gc.md`](perceus-gc.md)) — no flag is needed to catch a Perceus/Reuse bug
   as a compile error rather than a runtime use-after-free.

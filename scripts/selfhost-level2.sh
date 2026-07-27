@@ -25,16 +25,22 @@ MALGO=${MALGO:-lean/.lake/build/bin/malgo}
 TARGET=${TARGET:-zig}
 SCHEME=${SCHEME:-scheme}
 # Level 2 is ~50-200x slower than Level 1, and the Zig backend is a further
-# ~7.5x slower per case than the Chez Scheme path it replaced (measured:
-# 220s vs 29s on Fib, on an M-series Mac; #385). Hence the per-target default:
-# 300 is the value the Chez path shipped with before #384, and still 10x the
-# 29s observation.
+# ~5x slower per case than the Chez Scheme path it replaced (measured serially
+# on an M-series Mac: 154s vs 31s on Fib; was ~7.5x before #403/#405 -- see
+# `mise run perf-baseline -- --tier=l2-ratio`). Hence the per-target default:
+# 300 is the value the Chez path shipped with before #384, and 600 gives the Zig
+# path ~3.4x headroom over the slowest case measured (177s).
 case "$TARGET" in
-  zig)    CASE_TIMEOUT=${CASE_TIMEOUT:-1200} ;;
+  zig)    CASE_TIMEOUT=${CASE_TIMEOUT:-600} ;;
   scheme) CASE_TIMEOUT=${CASE_TIMEOUT:-300} ;;
   *) echo "unknown TARGET '$TARGET' (expected zig|scheme)" >&2; exit 1 ;;
 esac
 PRECOMPILE_TIMEOUT=${PRECOMPILE_TIMEOUT:-180}
+# Concurrent cases. Deliberately 2 rather than selfhost-golden.sh's `nproc`: a
+# Level 2 case runs for minutes and allocates billions of times, so
+# oversubscribing inflates every case's wall clock far more than the overlap
+# saves. CI sets this explicitly; see the pool near the bottom of this file.
+PARALLEL_JOBS=${PARALLEL_JOBS:-2}
 KEEP_WORK=${KEEP_WORK:-0}
 MALGO_WORK_DIR=${MALGO_WORK_DIR:-.malgo-work}
 
@@ -144,7 +150,7 @@ level2_cases=(
 )
 
 total_cases=${#level2_cases[@]}
-log "starting Level 2 metacircular checks: ${total_cases} cases (parallel, TARGET=$TARGET)"
+log "starting Level 2 metacircular checks: ${total_cases} cases (TARGET=$TARGET, parallelism: ${PARALLEL_JOBS}, CASE_TIMEOUT: ${CASE_TIMEOUT}s)"
 log "command: ${RUNNER[*]} runtime/malgo/compiler/Main.mlg <case.mlg>"
 
 results_dir="$MALGO_WORK_DIR/level2-results"
@@ -224,15 +230,30 @@ run_case_watched() {
   progress "$(cat "$results_dir/$dir.status" 2>/dev/null || echo fail): $dir ($((SECONDS - start))s)"
 }
 
-pids=()
+# Throttled to PARALLEL_JOBS concurrent workers, mirroring
+# scripts/selfhost-golden.sh's pool. Launching all five at once is fine on a
+# workstation with cores to spare, and pathological on a CI runner: five
+# minutes-long, allocation-heavy processes contend, and each one's *wall clock*
+# inflates even though its compute has not changed. That is what put every case
+# over the 600s CASE_TIMEOUT on CI while the same sweep took 154-177s per case
+# locally.
+#
+# Per-case status is read from the .status files either way, so nothing needs the
+# pid array this replaces.
+#
+# `wait -n` is bash 4.3+; on macOS's bash 3.2 the fallback waits for every
+# running job instead, which leaves `active_jobs` over-counted and effectively
+# serialises the rest of the sweep. That is the safe direction to be wrong in.
+active_jobs=0
 for dir in "${level2_cases[@]}"; do
   run_case_watched "$dir" &
-  pids+=("$!")
+  active_jobs=$((active_jobs + 1))
+  if [[ $active_jobs -ge $PARALLEL_JOBS ]]; then
+    wait -n 2>/dev/null || wait
+    active_jobs=$((active_jobs - 1))
+  fi
 done
-
-for pid in "${pids[@]}"; do
-  wait "$pid" || true
-done
+wait
 
 pass=0
 fail=0

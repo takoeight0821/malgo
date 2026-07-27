@@ -138,12 +138,30 @@ pub var g_dispatches: usize = 0;
 pub var g_force_depth: usize = 0;
 pub var g_force_depth_max: usize = 0;
 
+/// Whether RC tracing is compiled in at all. ReleaseFast excludes it, which is
+/// what makes it free rather than nearly-free (#385).
+///
+/// The `*Named` wrappers are the only RC entry points generated code calls, and
+/// every allocation site passes them a stack-materialized
+/// `&[_][]const u8{"x","y"}` array of per-slot symbolic names plus a `func`
+/// string literal -- two words per slot, on every single allocation. A runtime
+/// `if (!g_trace_enabled) return` cannot remove that: `g_trace_enabled` is a
+/// mutable global, so the branch is not foldable and the arguments must still be
+/// materialized before the call. Making the trace bodies *comptime*-dead makes
+/// the wrappers empty, which lets LLVM inline them away and only then does the
+/// names array become genuinely dead code.
+///
+/// Debug and ReleaseSafe keep tracing, which is where RC is actually debugged --
+/// `rcInvariant` fires there, and #354's reuse-token investigations run there.
+/// Flip this to `true` if a release-only RC bug ever needs `scripts/rctrace.py`.
+pub const rc_trace_supported = builtin.mode != .ReleaseFast;
+
 /// Set from the MALGO_RC_TRACE environment variable at startup. When true,
 /// every `*Named` wrapper below (see "Named RC tracing" further down) emits
 /// one JSON-lines record per RC event to stderr, for offline correlation by
 /// `scripts/rctrace.py`. The plain (untraced) dup/drop/mkStruct/... below
 /// are never touched by this -- tracing is purely additive and cannot
-/// change any RC decision.
+/// change any RC decision. Has no effect unless `rc_trace_supported`.
 pub var g_trace_enabled: bool = false;
 
 /// Called first thing in the generated `main` (and in `zig test` blocks).
@@ -159,7 +177,7 @@ pub fn initHeap() void {
     g_free_worklist = .empty;
     // std.c.getenv, not std.posix (removed in Zig 0.16); libc is always
     // linked (see Toolchain.hs's -lc).
-    g_trace_enabled = std.c.getenv("MALGO_RC_TRACE") != null;
+    g_trace_enabled = rc_trace_supported and std.c.getenv("MALGO_RC_TRACE") != null;
 }
 
 /// Transient non-Value bytes: print formatting, encode/parse buffers, the
@@ -350,7 +368,57 @@ fn decChildren(container: Value, children: []const Value) void {
     }
 }
 
+// ===== Interned small integers (#385) =====
+//
+// Every scalar is otherwise a separate heap Object: `mkInt32` allocates, and so
+// every arithmetic primitive allocates one Object per intermediate result (see
+// `malgo_add_int32_t`). On the self-hosting workload that dominates the profile
+// -- 4.57M allocations to compute `fib 5` through an interpreter written in
+// Malgo -- and #385 names unboxed small scalars as its single biggest lever.
+//
+// Full unboxing (tagged pointers / NaN boxing) would change `Value = *Object`
+// everywhere, in the compiler as well as here. Interning is the part of that win
+// available without touching the representation: values in this range become
+// statically allocated Objects, so they cost no allocation and no RC traffic.
+//
+// Correctness rests on `IMMORTAL`, which already existed for `NO_SELF_OBJ` and
+// `IDENTITY_KONT_OBJ`:
+//   * `dup` (:222) and `drop` (:226) both short-circuit on it, so an interned
+//     int is never freed and never counted by the leak gate;
+//   * `dropReuse` (:299) returns null on it, so an interned int can never be
+//     handed to `mkStructReuse` as a recycling token. Payloads are otherwise
+//     never mutated in place, so sharing one Object per value is sound.
+//
+// The range is deliberately modest. It covers loop counters, small list indices,
+// character codes and the 0/1 that dominate `fib`-shaped recursion, at a fixed
+// cost of (INT32_INTERN_MAX - INT32_INTERN_MIN + 1) Objects in .data.
+const INT32_INTERN_MIN: i32 = -128;
+const INT32_INTERN_MAX: i32 = 1024;
+
+const int32_intern_table = blk: {
+    const n = INT32_INTERN_MAX - INT32_INTERN_MIN + 1;
+    // One backwards branch per entry, against a default quota of 1000.
+    @setEvalBranchQuota(4 * n);
+    var table: [n]Object = undefined;
+    for (&table, 0..) |*slot, i| {
+        slot.* = .{
+            .rc = IMMORTAL,
+            .kind = .int32,
+            .payload = .{ .int32 = INT32_INTERN_MIN + @as(i32, @intCast(i)) },
+        };
+    }
+    break :blk table;
+};
+
+/// Mutable so the interned Objects live in `.data` and yield a stable `Value`
+/// (`*Object`) per entry. Never written after initialization -- `IMMORTAL`
+/// keeps every RC path off them.
+var int32_interned: [int32_intern_table.len]Object = int32_intern_table;
+
 pub fn mkInt32(n: i32) Value {
+    if (n >= INT32_INTERN_MIN and n <= INT32_INTERN_MAX) {
+        return &int32_interned[@intCast(n - INT32_INTERN_MIN)];
+    }
     return alloc(.int32, .{ .int32 = n });
 }
 pub fn mkInt64(n: i64) Value {
@@ -435,6 +503,7 @@ fn emitTraced(result: std.fmt.BufPrintError![]const u8) void {
 }
 
 fn traceLine(event: []const u8, v: Value, name: []const u8, func: []const u8) void {
+    if (!rc_trace_supported) return;
     if (!g_trace_enabled) return;
     const rc: i64 = if (v.rc == IMMORTAL) -1 else @intCast(v.rc);
     var buf: [512]u8 = undefined;
@@ -449,6 +518,7 @@ fn traceLine(event: []const u8, v: Value, name: []const u8, func: []const u8) vo
 /// earlier instead of dereferencing `v` -- for events reported after a call
 /// (like 'dropReuseNamed') that may already have freed the object.
 fn traceAddr(event: []const u8, addr: usize, name: []const u8, func: []const u8) void {
+    if (!rc_trace_supported) return;
     if (!g_trace_enabled) return;
     var buf: [512]u8 = undefined;
     emitTraced(std.fmt.bufPrint(
@@ -464,6 +534,7 @@ fn traceAddr(event: []const u8, addr: usize, name: []const u8, func: []const u8)
 /// and child address that went into it -- so a later 'traceDecChild' event
 /// against the same (container, slot) pair can be resolved back to a name.
 fn traceSlots(event: []const u8, v: Value, fields: []const Value, names: []const []const u8, func: []const u8) void {
+    if (!rc_trace_supported) return;
     if (!g_trace_enabled) return;
     var head: [512]u8 = undefined;
     const headLine = std.fmt.bufPrint(
@@ -496,6 +567,7 @@ fn traceSlots(event: []const u8, v: Value, fields: []const Value, names: []const
 /// field/capture) is about to have its reference decremented. `rc_before`
 /// is `child`'s refcount at this moment.
 fn traceDecChild(container: Value, slot: usize, child: Value) void {
+    if (!rc_trace_supported) return;
     if (!g_trace_enabled) return;
     const rc: i64 = if (child.rc == IMMORTAL) -1 else @intCast(child.rc);
     var buf: [160]u8 = undefined;
@@ -1438,10 +1510,58 @@ fn valueToText(v: Value) []const u8 {
 // The Haskell test suite never runs these; CI's zig-golden job and local
 // development do.
 
+/// An `int32` Object that is genuinely heap-allocated, for the RC and
+/// allocation-accounting tests below. `mkInt32` interns
+/// `INT32_INTERN_MIN..INT32_INTERN_MAX` into immortal statics (#385), which are
+/// deliberately invisible to `g_live_objects`/`g_total_allocs` and inert under
+/// dup/drop -- so a test that means to exercise refcounting has to ask for a
+/// value outside that range. `nth` just keeps distinct payloads distinct.
+fn mkHeapInt(nth: i32) Value {
+    return mkInt32(INT32_INTERN_MAX + 1 + nth);
+}
+
+test "small ints are interned: no allocation, no RC traffic, still correct" {
+    initHeap();
+    const before = g_live_objects;
+    const beforeAllocs = g_total_allocs;
+
+    const a = mkInt32(7);
+    const b = mkInt32(7);
+    // Same value means the very same Object, and no allocation happened.
+    try std.testing.expectEqual(a, b);
+    try std.testing.expectEqual(beforeAllocs, g_total_allocs);
+    try std.testing.expectEqual(before, g_live_objects);
+    try std.testing.expectEqual(@as(i32, 7), asI32(a));
+
+    // Immortal, so dup/drop cannot free it and the leak gate ignores it.
+    try std.testing.expectEqual(IMMORTAL, a.rc);
+    dup(a);
+    drop(a);
+    drop(a);
+    try std.testing.expectEqual(IMMORTAL, a.rc);
+    try std.testing.expectEqual(before, g_live_objects);
+
+    // An interned int can never be offered as a reuse token.
+    try std.testing.expectEqual(@as(?Value, null), dropReuse(a, 2));
+
+    // Both ends of the range are interned; just past either end is not.
+    try std.testing.expectEqual(IMMORTAL, mkInt32(INT32_INTERN_MIN).rc);
+    try std.testing.expectEqual(IMMORTAL, mkInt32(INT32_INTERN_MAX).rc);
+    const lo = mkInt32(INT32_INTERN_MIN - 1);
+    const hi = mkInt32(INT32_INTERN_MAX + 1);
+    try std.testing.expectEqual(@as(u32, 1), lo.rc);
+    try std.testing.expectEqual(@as(u32, 1), hi.rc);
+    try std.testing.expectEqual(INT32_INTERN_MIN - 1, asI32(lo));
+    try std.testing.expectEqual(INT32_INTERN_MAX + 1, asI32(hi));
+    drop(lo);
+    drop(hi);
+    try std.testing.expectEqual(before, g_live_objects);
+}
+
 test "dup/drop: an extra reference delays the free by exactly one drop" {
     initHeap();
     const before = g_live_objects;
-    const v = mkInt32(42);
+    const v = mkHeapInt(0);
     try std.testing.expectEqual(before + 1, g_live_objects);
     dup(v);
     drop(v);
@@ -1453,7 +1573,7 @@ test "dup/drop: an extra reference delays the free by exactly one drop" {
 test "g_total_allocs counts every Object ever allocated, freed or not" {
     initHeap();
     const before = g_total_allocs;
-    const a = mkInt32(1);
+    const a = mkHeapInt(0);
     const pair = mkStruct(.{ .tuple = {} }, &[_]Value{a});
     try std.testing.expectEqual(before + 2, g_total_allocs);
     drop(pair);
@@ -1463,8 +1583,8 @@ test "g_total_allocs counts every Object ever allocated, freed or not" {
 test "drop releases a struct's children transitively" {
     initHeap();
     const before = g_live_objects;
-    const a = mkInt32(1);
-    const b = mkInt32(2);
+    const a = mkHeapInt(0);
+    const b = mkHeapInt(1);
     const pair = mkStruct(.{ .tuple = {} }, &[_]Value{ a, b });
     try std.testing.expectEqual(before + 3, g_live_objects);
     drop(pair);
@@ -1523,7 +1643,7 @@ test "string payloads are owned and freed with the object" {
 test "unsafe_cast returns an owned reference" {
     initHeap();
     const before = g_live_objects;
-    const v = mkInt32(1);
+    const v = mkHeapInt(0);
     const w = malgo_unsafe_cast(&[_]Value{v});
     drop(w);
     try std.testing.expectEqual(before + 1, g_live_objects);
@@ -1536,8 +1656,8 @@ test "dropReuse recycles a uniquely-referenced same-arity struct in place" {
     const before = g_live_objects;
     const beforeAllocs = g_total_allocs;
     const beforeHits = g_reuse_hits;
-    const a = mkInt32(1);
-    const b = mkInt32(2);
+    const a = mkHeapInt(0);
+    const b = mkHeapInt(1);
     const pair = mkStruct(.{ .tuple = {} }, &[_]Value{ a, b });
     const tok = dropReuse(pair, 2);
     try std.testing.expect(tok != null);
@@ -1545,8 +1665,8 @@ test "dropReuse recycles a uniquely-referenced same-arity struct in place" {
     try std.testing.expectEqual(beforeHits + 1, g_reuse_hits);
     // a/b were released transitively, just as an ordinary drop would.
     try std.testing.expectEqual(before + 1, g_live_objects);
-    const c = mkInt32(3);
-    const d = mkInt32(4);
+    const c = mkHeapInt(2);
+    const d = mkHeapInt(3);
     const rebuilt = mkStructReuse(tok, .{ .named = "Cons" }, &[_]Value{ c, d });
     try std.testing.expectEqual(pair, rebuilt);
     // 5 Objects allocated total (a, b, pair, c, d); the recycled pair

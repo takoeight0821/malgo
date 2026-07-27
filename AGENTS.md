@@ -82,6 +82,20 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
   Set `MALGO_RC_STATS=1` when running a compiled binary to print
   `MALGO-STATS: total_allocs=<N> reuse_hits=<N> dispatches=<N> force_depth_max=<N>`
   to stderr.
+- Perf baseline (#399): `mise run perf-baseline` compares those counters against
+  `bench/perf-baseline.json` over four tiers (`fib-shallow`, `fib-deep`,
+  `selfhost-l1`, `selfhost-l2`); `-- --tier=all --update` reseeds it, and that diff
+  is the before/after claim #385 requires. The counters are deterministic and
+  machine-independent; wall clock is recorded only via `--timing` and never gated.
+  Gates are a **ratchet**: `total_allocs` and `dispatches` may not rise,
+  `force_depth_max` may not change at all (#382 rests on it being 1), and
+  `reuse_hits` is reported rather than gated — it falls whenever an optimization
+  removes allocations, so it is not a standalone signal. `fib-deep` and
+  `selfhost-l1` are gated inside `zig-deep-recursion.sh` and `selfhost-golden.sh`,
+  which already run those binaries, so CI pays ~1s rather than a new job.
+- Small `int32`s (`-128..1024`) are interned as `IMMORTAL` statics by `rt.mkInt32`,
+  so they cost no allocation and no RC traffic; and RC tracing is compiled out of
+  `release-fast` entirely. Both are #385 work — see `docs/perceus-gc.md`.
 - Calling convention is a trampoline: a generated function returns an
   `rt.Action` (the next call, or `done(v)`) and `rt.run` dispatches in a loop.
   Zig does not guarantee tail calls, so emitting this CPS IR's tail calls as

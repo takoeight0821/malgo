@@ -7,8 +7,8 @@ Haskell uses optparse-applicative; this is a hand-rolled argv parser (no
 combinator library) with the same three subcommands, flags, and defaults.
 Byte-parity with optparse's generated `--help` is explicitly not a goal.
 
-Dispatch is stubbed for M1: the pipeline (`Malgo.Driver`) and the Scheme/Zig
-backends and the linter are not ported yet, so each `run*` arm prints a
+Dispatch is stubbed for M1: the pipeline (`Malgo.Driver`) and the Zig
+backend and the linter are not ported yet, so each `run*` arm prints a
 clear message and exits 1. `runEval` for `--target eval` carries the single
 integration seam (see the `TODO(M1 integration)` below). -/
 
@@ -31,7 +31,6 @@ def OptMode.toString : OptMode → String
 
 def parseTargetArg : String → Except String Target
   | "eval" => .ok .eval
-  | "scheme" => .ok .scheme
   | "zig" => .ok .zig
   | t => .error s!"Unknown target: {t}"
 
@@ -51,7 +50,7 @@ def usage : String :=
   "Usage: malgo COMMAND\n\n" ++
   "Commands:\n" ++
   "  eval SOURCE [--no-opt] [--lambdalift] [--debug-mode]\n" ++
-  "              [--target eval|scheme|zig] [--eval-mode smallstep|bigstep]\n" ++
+  "              [--target eval|zig] [--eval-mode smallstep|bigstep]\n" ++
   "              [--infer] [ARG...]\n" ++
   "  compile SOURCE [-o|--output OUT] [--opt debug|release-safe|release-fast]\n" ++
   "  lint SOURCE [--deny-warnings]\n" ++
@@ -233,12 +232,6 @@ def runEval (flag : Flag) (source : System.FilePath) : IO UInt32 := do
   | .eval =>
     try
       Malgo.Driver.compileAndEval flag source
-    catch e =>
-      IO.eprintln (toString e)
-      return 1
-  | .scheme =>
-    try
-      Malgo.Driver.compileScheme flag source
     catch e =>
       IO.eprintln (toString e)
       return 1

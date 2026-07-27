@@ -318,7 +318,6 @@ instance : Pretty Range where
 /-- Compilation target backend. -/
 inductive Target where
   | eval
-  | scheme
   | zig
   deriving BEq, Repr
 

@@ -40,10 +40,7 @@
 #   scripts/perf-baseline.sh [--tier=LIST] [--update] [--timing]
 #
 #   --tier=LIST   comma-separated: fib-shallow,fib-deep,selfhost-l1,selfhost-l2,
-#                 l2-ratio, or `all`. Default: fib-shallow,fib-deep (the cheap
-#                 tiers). `l2-ratio` is the Zig-vs-Chez wall-clock ratio on Level
-#                 2 -- #385's actual success metric -- and needs the Scheme
-#                 backend, so it only works before #400 lands. Local only.
+#                 or `all`. Default: fib-shallow,fib-deep (the cheap tiers).
 #   --update      rewrite the baseline JSON from this run instead of comparing.
 #   --timing      also measure wall clock with hyperfine (local only; never CI).
 #
@@ -62,7 +59,6 @@ MALGO="${MALGO:-lean/.lake/build/bin/malgo}"
 BASELINE="${BASELINE:-bench/perf-baseline.json}"
 COMPILE_TIMEOUT="${COMPILE_TIMEOUT:-600}"
 CASE_TIMEOUT="${CASE_TIMEOUT:-900}"
-SCHEME="${SCHEME:-scheme}"
 
 TIERS="fib-shallow,fib-deep"
 UPDATE=0
@@ -79,7 +75,7 @@ for arg in "$@"; do
 done
 
 if [ "$TIERS" = "all" ]; then
-  TIERS="fib-shallow,fib-deep,selfhost-l1,selfhost-l2,l2-ratio"
+  TIERS="fib-shallow,fib-deep,selfhost-l1,selfhost-l2"
 fi
 
 if [ -n "${ZIG_BIN_DIR:-}" ]; then
@@ -194,69 +190,6 @@ ensure_selfhost_evaluator() {
   compile_fixture selfhost runtime/malgo/compiler/Main.mlg "$WORK/malgoc"
 }
 
-# The same Level 1 evaluator through the Scheme backend, for the ratio tier.
-# Shares the precompile above, so only the emit is extra.
-ensure_selfhost_scheme() {
-  [ -s "$WORK/main.scm" ] && return 0
-  ensure_selfhost_evaluator || return 1
-  if ! command -v "$SCHEME" >/dev/null 2>&1; then
-    echo "FAIL: '$SCHEME' not on PATH (run 'mise install' for chezscheme, or set SCHEME)." >&2
-    return 1
-  fi
-  echo "  emitting Main.mlg through the Scheme backend" >&2
-  if ! timeout "$COMPILE_TIMEOUT" "$MALGO" eval --target scheme \
-        runtime/malgo/compiler/Main.mlg >"$WORK/main.scm"; then
-    echo "FAIL: 'malgo eval --target scheme' failed (needs the Scheme backend; see #400)." >&2
-    return 1
-  fi
-}
-
-# Wall-clock seconds for one serial Level 2 case. Echoes an integer.
-time_l2_case() {
-  local label="$1"; shift
-  local start=$SECONDS out
-  out="$(printf 'Hello\n' | timeout "$CASE_TIMEOUT" "$@" \
-        runtime/malgo/compiler/Main.mlg test/testcases/malgo/Fib.mlg 2>/dev/null)"
-  local status=$? elapsed=$((SECONDS - start))
-  if [ "$status" -ne 0 ]; then
-    echo "FAIL($label): exited $status after ${elapsed}s" >&2
-    return 1
-  fi
-  if [ "$out" != "8" ]; then
-    echo "FAIL($label): expected '8', got '$out'" >&2
-    return 1
-  fi
-  echo "  $label: ${elapsed}s" >&2
-  printf '%s\n' "$elapsed"
-}
-
-# Echoes "<chez_s> <zig_s> <ratio>".
-#
-# This is the quantity #385 is actually about, and the only one that survives
-# moving between machines: absolute wall clock does not compare across hardware
-# or CI runner generations, but Chez and Zig measured back-to-back in one run on
-# one machine do. That is what the retained Scheme backend is for -- it is the
-# control, not nostalgia (see #400).
-#
-# Serial and single-case on purpose. selfhost-level2.sh runs five cases as
-# unbounded parallel jobs, so its per-case seconds are contended and cannot be
-# compared against a serial figure -- which is exactly the trap that made the
-# original 220s-vs-29s pairing non-comparable.
-run_ratio_tier() {
-  echo "=== l2-ratio ===" >&2
-  ensure_selfhost_scheme || return 1
-  local zig_s chez_s
-  zig_s="$(time_l2_case zig "$WORK/malgoc")" || return 1
-  chez_s="$(time_l2_case chez "$SCHEME" --script "$WORK/main.scm")" || return 1
-  if [ "$chez_s" -le 0 ]; then
-    echo "FAIL(l2-ratio): chez run measured ${chez_s}s -- too fast to form a ratio" >&2
-    return 1
-  fi
-  # Two decimal places without bc: integer arithmetic on hundredths.
-  local hundredths=$(( zig_s * 100 / chez_s ))
-  printf '%s %s %s.%02d\n' "$chez_s" "$zig_s" "$((hundredths / 100))" "$((hundredths % 100))"
-}
-
 # Echoes "<tier> <total_allocs> <reuse_hits> <dispatches> <force_depth_max>".
 run_tier() {
   local tier="$1" counters
@@ -282,7 +215,7 @@ run_tier() {
       counters="$(measure_binary "$tier" 8 "$WORK/malgoc" runtime/malgo/compiler/Main.mlg test/testcases/malgo/Fib.mlg)" || return 1
       ;;
     *)
-      echo "unknown tier '$tier' (fib-shallow|fib-deep|selfhost-l1|selfhost-l2|l2-ratio|all)" >&2
+      echo "unknown tier '$tier' (fib-shallow|fib-deep|selfhost-l1|selfhost-l2|all)" >&2
       return 1
       ;;
   esac
@@ -297,20 +230,9 @@ RESULTS="$WORK/results"
 : >"$RESULTS"
 failed=0
 
-RATIO="$WORK/ratio"
-: >"$RATIO"
-
 old_ifs="$IFS"; IFS=','
 for tier in $TIERS; do
   IFS="$old_ifs"
-  if [ "$tier" = "l2-ratio" ]; then
-    if ! run_ratio_tier >>"$RATIO"; then
-      failed=1
-      [ "$UPDATE" -eq 1 ] && { echo "refusing to --update from a failed run" >&2; exit 1; }
-    fi
-    IFS=','
-    continue
-  fi
   if ! run_tier "$tier" >>"$RESULTS"; then
     failed=1
     [ "$UPDATE" -eq 1 ] && { echo "refusing to --update from a failed run" >&2; exit 1; }
@@ -322,23 +244,6 @@ IFS="$old_ifs"
 # ---------------------------------------------------------------------------
 # Compare or update
 # ---------------------------------------------------------------------------
-
-# Stores the ratio tier under its own top-level key: it is wall clock plus a
-# derived ratio, not counters, and it carries the machine it was taken on --
-# absolute seconds mean nothing without that.
-record_ratio() {
-  [ -s "$RATIO" ] || return 0
-  read -r chez_s zig_s ratio <"$RATIO"
-  jq --argjson chez "$chez_s" --argjson zig "$zig_s" --argjson ratio "$ratio" \
-     --arg machine "$(uname -s) $(uname -m)" \
-     --arg commit "$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" '
-     .l2_ratio = {
-       "$comment": "#385'"'"'s success metric: Level 2 wall clock through Zig over Chez, one serial case each, back-to-back on one machine. Absolute seconds are not comparable across machines; the ratio is. Needs the Scheme backend as the control (#400). Local only -- never gated in CI, since running L2 there is the 16 minutes #385 exists to remove.",
-       chez_s: $chez, zig_s: $zig, ratio: $ratio,
-       machine: $machine, commit: $commit
-     }' "$BASELINE" >"$WORK/ratio.json" || return 1
-  mv "$WORK/ratio.json" "$BASELINE"
-}
 
 results_to_json() {
   jq -n --rawfile raw "$RESULTS" --arg commit "$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" \
@@ -374,10 +279,8 @@ if [ "$UPDATE" -eq 1 ]; then
     results_to_json >"$WORK/new.json" || exit 1
     jq -s '.[0] * .[1]' "$BASELINE" "$WORK/new.json" >"$WORK/merged.json" || exit 1
     mv "$WORK/merged.json" "$BASELINE"
-    record_ratio || exit 1
   else
     results_to_json >"$BASELINE" || exit 1
-    record_ratio || exit 1
   fi
   echo "updated $BASELINE:"
   jq . "$BASELINE"
@@ -428,35 +331,6 @@ while read -r tier ta rh di fd; do
     echo "  IMPROVED -- re-run with --update to record it"
   fi
 done <"$RESULTS"
-
-# The ratio gate. Wall clock is noisy even on one quiet machine, so this allows a
-# 15% band rather than pretending to more precision than it has -- it is here to
-# catch "the gap got materially worse", not to score single-digit percentages.
-# That is also why it is never run in CI: hosted runners vary far more than 15%.
-if [ -s "$RATIO" ] && [ -f "$BASELINE" ]; then
-  read -r chez_s zig_s ratio <"$RATIO"
-  base_ratio="$(jq -r '.l2_ratio.ratio // empty' "$BASELINE")"
-  base_machine="$(jq -r '.l2_ratio.machine // empty' "$BASELINE")"
-  this_machine="$(uname -s) $(uname -m)"
-  echo "--- l2-ratio ---"
-  printf '  chez %ss  zig %ss  ratio %sx  (baseline %sx)\n' \
-    "$chez_s" "$zig_s" "$ratio" "${base_ratio:-none}"
-  if [ -z "$base_ratio" ]; then
-    echo "  NOTICE: no baseline ratio -- record it with --tier=l2-ratio --update"
-  elif [ -n "$base_machine" ] && [ "$base_machine" != "$this_machine" ]; then
-    echo "  NOTICE: baseline was taken on '$base_machine', this is '$this_machine' -- not comparing"
-  else
-    # Integer hundredths again, to stay free of bc.
-    now_h=$(printf '%s' "$ratio" | awk -F. '{printf "%d", $1*100 + ($2 == "" ? 0 : substr($2 "00",1,2))}')
-    base_h=$(printf '%s' "$base_ratio" | awk -F. '{printf "%d", $1*100 + ($2 == "" ? 0 : substr($2 "00",1,2))}')
-    if [ "$now_h" -gt $(( base_h * 115 / 100 )) ]; then
-      echo "  REGRESSION: the Zig/Chez gap widened by more than 15%"
-      regressions=1
-    elif [ "$now_h" -lt "$base_h" ]; then
-      echo "  IMPROVED: gap narrowed -- re-run with --update to record it"
-    fi
-  fi
-fi
 
 # ---------------------------------------------------------------------------
 # Wall clock (informational, local only)

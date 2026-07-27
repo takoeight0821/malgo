@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
 # selfhost-level2.sh — Level 2 metacircular interpreter test
 #
-# Level 1: the Malgo evaluator (Main.mlg), built into a runnable artifact,
-#          evaluates a .mlg program directly
+# Level 1: the Malgo evaluator (Main.mlg), built into a runnable artifact via
+#          the Zig backend, evaluates a .mlg program directly
 # Level 2: that artifact evaluates Main.mlg, which evaluates a .mlg program
-#
-# TARGET selects how Main.mlg becomes runnable:
-#   TARGET=zig    (default) `malgo compile --opt release-fast` -> native binary
-#   TARGET=scheme           `malgo eval --target scheme` -> main.scm, run under Chez
-#
-# The Scheme path is retained as the cross-implementation performance reference
-# for #385: it is the only baseline the Zig backend's numbers can be read
-# against. Do not delete it until #385 closes -- see #400.
 #
 # Building the evaluator and running the cases can be separated, which is how CI
 # keeps any one job under 10 minutes:
@@ -37,19 +29,10 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
 MALGO=${MALGO:-lean/.lake/build/bin/malgo}
-TARGET=${TARGET:-zig}
-SCHEME=${SCHEME:-scheme}
-# Level 2 is ~50-200x slower than Level 1, and the Zig backend is a further
-# ~5x slower per case than the Chez Scheme path it replaced (measured serially
-# on an M-series Mac: 154s vs 31s on Fib; was ~7.5x before #403/#405 -- see
-# `mise run perf-baseline -- --tier=l2-ratio`). Hence the per-target default:
-# 300 is the value the Chez path shipped with before #384, and 600 gives the Zig
-# path ~3.4x headroom over the slowest case measured (177s).
-case "$TARGET" in
-  zig)    CASE_TIMEOUT=${CASE_TIMEOUT:-600} ;;
-  scheme) CASE_TIMEOUT=${CASE_TIMEOUT:-300} ;;
-  *) echo "unknown TARGET '$TARGET' (expected zig|scheme)" >&2; exit 1 ;;
-esac
+# Level 2 is ~50-200x slower than Level 1. 600 gives ~3-4x headroom over the
+# slowest case measured running alone on a CI runner (~460s; see #385 and
+# `mise run perf-baseline`).
+CASE_TIMEOUT=${CASE_TIMEOUT:-600}
 PRECOMPILE_TIMEOUT=${PRECOMPILE_TIMEOUT:-180}
 # Concurrent cases. Deliberately 2 rather than selfhost-golden.sh's `nproc`: a
 # Level 2 case runs for minutes and allocates billions of times, so
@@ -74,13 +57,6 @@ if [[ -z "${L2_CASES// /}" ]]; then
 fi
 
 if [[ -n "$EVAL_BIN" ]]; then
-  # The Scheme path's evaluator is a .scm run through `scheme --script`, not a
-  # binary, and the ratio measurement it exists for wants both halves built the
-  # same way in one place. Rather than guess which, refuse the combination.
-  if [[ "$TARGET" != "zig" ]]; then
-    echo "EVAL_BIN is TARGET=zig only (got TARGET=$TARGET)" >&2
-    exit 1
-  fi
   if [[ "$BUILD_ONLY" == "1" ]]; then
     echo "BUILD_ONLY and EVAL_BIN are mutually exclusive: one builds, the other skips building" >&2
     exit 1
@@ -162,39 +138,18 @@ else
 
   mkdir -p "$MALGO_WORK_DIR"
 
-  # Every arm must set RUNNER: under `set -u`, bash 3.2 errors on "${RUNNER[@]}"
-  # for an unset/empty array. The `*)` arm above already exited, so RUNNER is
-  # always populated by the time run_case uses it.
-  case "$TARGET" in
-    zig)
-      EVAL_MAIN="$MALGO_WORK_DIR/malgoc"
-      RUNNER=("$EVAL_MAIN")
-      if ! command -v zig >/dev/null 2>&1; then
-        echo "zig not found on PATH (set ZIG_BIN_DIR or run 'mise install' / activate mise)." >&2
-        exit 1
-      fi
-      log "compiling Main.mlg to a native binary (Level 1 evaluator) via the Zig backend"
-      if ! "$MALGO" compile runtime/malgo/compiler/Main.mlg -o "$EVAL_MAIN" --opt release-fast; then
-        log "native compilation failed"
-        exit 1
-      fi
-      log "native compilation done: $EVAL_MAIN"
-      ;;
-    scheme)
-      EVAL_MAIN="$MALGO_WORK_DIR/main.scm"
-      RUNNER=("$SCHEME" --script "$EVAL_MAIN")
-      if ! command -v "$SCHEME" >/dev/null 2>&1; then
-        echo "'$SCHEME' not found on PATH (run 'mise install' to get chezscheme, or set SCHEME)." >&2
-        exit 1
-      fi
-      log "compiling Main.mlg to Scheme (Level 1 evaluator)"
-      if ! "$MALGO" eval --target scheme runtime/malgo/compiler/Main.mlg > "$EVAL_MAIN"; then
-        log "Scheme compilation failed"
-        exit 1
-      fi
-      log "Scheme compilation done: $EVAL_MAIN"
-      ;;
-  esac
+  EVAL_MAIN="$MALGO_WORK_DIR/malgoc"
+  RUNNER=("$EVAL_MAIN")
+  if ! command -v zig >/dev/null 2>&1; then
+    echo "zig not found on PATH (set ZIG_BIN_DIR or run 'mise install' / activate mise)." >&2
+    exit 1
+  fi
+  log "compiling Main.mlg to a native binary (Level 1 evaluator) via the Zig backend"
+  if ! "$MALGO" compile runtime/malgo/compiler/Main.mlg -o "$EVAL_MAIN" --opt release-fast; then
+    log "native compilation failed"
+    exit 1
+  fi
+  log "native compilation done: $EVAL_MAIN"
 
   if [[ "$BUILD_ONLY" == "1" ]]; then
     log "BUILD_ONLY: evaluator built, stopping before the case sweep"
@@ -211,7 +166,7 @@ fi
 level2_cases=($L2_CASES)
 
 total_cases=${#level2_cases[@]}
-log "starting Level 2 metacircular checks: ${total_cases} cases (TARGET=$TARGET, parallelism: ${PARALLEL_JOBS}, CASE_TIMEOUT: ${CASE_TIMEOUT}s)"
+log "starting Level 2 metacircular checks: ${total_cases} cases (parallelism: ${PARALLEL_JOBS}, CASE_TIMEOUT: ${CASE_TIMEOUT}s)"
 log "command: ${RUNNER[*]} runtime/malgo/compiler/Main.mlg <case.mlg>"
 
 results_dir="$MALGO_WORK_DIR/level2-results"

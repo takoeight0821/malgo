@@ -13,6 +13,21 @@
 # for #385: it is the only baseline the Zig backend's numbers can be read
 # against. Do not delete it until #385 closes -- see #400.
 #
+# Building the evaluator and running the cases can be separated, which is how CI
+# keeps any one job under 10 minutes:
+#   BUILD_ONLY=1   build the evaluator and stop
+#   EVAL_BIN=PATH  use an already-built evaluator; skip the precompile and the
+#                  `malgo compile` entirely
+#   L2_CASES="A B" run only these cases (default: all five)
+#
+# Splitting matters because the fixed cost dwarfs everything else: on CI the
+# 14-module precompile is ~12s but `malgo compile Main.mlg` is ~105s, and a job
+# that runs one case would otherwise spend more time building than testing. The
+# built evaluator needs nothing from `.malgo-work` -- it reads `Main.mlg` and its
+# imports as source at run time, and `.malgo-work` is the Lean compiler's own
+# workspace (lean/Malgo/Module.lean) -- so the binary alone is enough to hand to
+# another machine.
+#
 # This script verifies the metacircular property: the Malgo evaluator
 # written in Malgo can evaluate itself while correctly running programs.
 
@@ -43,6 +58,38 @@ PRECOMPILE_TIMEOUT=${PRECOMPILE_TIMEOUT:-180}
 PARALLEL_JOBS=${PARALLEL_JOBS:-2}
 KEEP_WORK=${KEEP_WORK:-0}
 MALGO_WORK_DIR=${MALGO_WORK_DIR:-.malgo-work}
+BUILD_ONLY=${BUILD_ONLY:-0}
+EVAL_BIN=${EVAL_BIN:-}
+# Space-separated. Kept as a string rather than an array so the CI matrix can
+# pass a single name through `env:`.
+L2_CASES=${L2_CASES:-"Echo Factorial Fib StringOps Bool"}
+
+# Validate arguments before anything expensive or destructive happens -- the
+# build phase wipes MALGO_WORK_DIR, so a bad argument must not get that far.
+# (L2_CASES unset falls back to all five, as every other knob here does; this
+# catches an explicitly whitespace-only value, which is a mistake, not a default.)
+if [[ -z "${L2_CASES// /}" ]]; then
+  echo "L2_CASES is empty -- nothing to run" >&2
+  exit 1
+fi
+
+if [[ -n "$EVAL_BIN" ]]; then
+  # The Scheme path's evaluator is a .scm run through `scheme --script`, not a
+  # binary, and the ratio measurement it exists for wants both halves built the
+  # same way in one place. Rather than guess which, refuse the combination.
+  if [[ "$TARGET" != "zig" ]]; then
+    echo "EVAL_BIN is TARGET=zig only (got TARGET=$TARGET)" >&2
+    exit 1
+  fi
+  if [[ "$BUILD_ONLY" == "1" ]]; then
+    echo "BUILD_ONLY and EVAL_BIN are mutually exclusive: one builds, the other skips building" >&2
+    exit 1
+  fi
+  if [[ ! -x "$EVAL_BIN" ]]; then
+    echo "EVAL_BIN '$EVAL_BIN' is not an executable file" >&2
+    exit 1
+  fi
+fi
 
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
@@ -63,91 +110,105 @@ progress() {
   printf '[%s] %s\n' "$(timestamp)" "$*" >&3
 }
 
-if [[ "$KEEP_WORK" != "1" ]]; then
-  log "cleaning work directory: $MALGO_WORK_DIR"
-  rm -rf "$MALGO_WORK_DIR"
-fi
+# With EVAL_BIN there is nothing to build, so there is nothing to clean and no
+# Lean-side compiler needed -- the whole point is that a case can run on a
+# machine that has neither a toolchain nor a workspace.
+if [[ -z "$EVAL_BIN" ]]; then
+  if [[ "$KEEP_WORK" != "1" ]]; then
+    log "cleaning work directory: $MALGO_WORK_DIR"
+    rm -rf "$MALGO_WORK_DIR"
+  fi
 
-if [[ ! -x "$MALGO" ]]; then
-  echo "malgo executable not found at '$MALGO' (set MALGO, or run 'lake build' in lean/)." >&2
-  exit 1
-fi
-
-precompile=(
-  runtime/malgo/Builtin.mlg
-  runtime/malgo/Prelude.mlg
-  runtime/malgo/Either.mlg
-  runtime/malgo/compiler/AST.mlg
-  runtime/malgo/compiler/Token.mlg
-  runtime/malgo/compiler/Diagnostic.mlg
-  runtime/malgo/compiler/Lexer.mlg
-  runtime/malgo/compiler/Parser.mlg
-  runtime/malgo/compiler/Value.mlg
-  runtime/malgo/compiler/Eval.mlg
-  runtime/malgo/compiler/FunIR.mlg
-  runtime/malgo/compiler/Rename.mlg
-  runtime/malgo/compiler/ToFun.mlg
-  runtime/malgo/compiler/Main.mlg
-)
-
-for file in "${precompile[@]}"; do
-  start=$SECONDS
-  log "precompile start: $file"
-  if ! timeout "$PRECOMPILE_TIMEOUT" "$MALGO" eval "$file" </dev/null >/dev/null; then
-    log "precompile failed: $file"
+  if [[ ! -x "$MALGO" ]]; then
+    echo "malgo executable not found at '$MALGO' (set MALGO, or run 'lake build' in lean/)." >&2
     exit 1
   fi
-  elapsed=$((SECONDS - start))
-  log "precompile done: $file (${elapsed}s)"
-done
+fi
 
-log "precompile phase complete (${#precompile[@]} files)"
+if [[ -n "$EVAL_BIN" ]]; then
+  EVAL_MAIN="$EVAL_BIN"
+  RUNNER=("$EVAL_BIN")
+  log "using prebuilt Level 1 evaluator: $EVAL_MAIN (skipping precompile and compile)"
+else
+  precompile=(
+    runtime/malgo/Builtin.mlg
+    runtime/malgo/Prelude.mlg
+    runtime/malgo/Either.mlg
+    runtime/malgo/compiler/AST.mlg
+    runtime/malgo/compiler/Token.mlg
+    runtime/malgo/compiler/Diagnostic.mlg
+    runtime/malgo/compiler/Lexer.mlg
+    runtime/malgo/compiler/Parser.mlg
+    runtime/malgo/compiler/Value.mlg
+    runtime/malgo/compiler/Eval.mlg
+    runtime/malgo/compiler/FunIR.mlg
+    runtime/malgo/compiler/Rename.mlg
+    runtime/malgo/compiler/ToFun.mlg
+    runtime/malgo/compiler/Main.mlg
+  )
 
-mkdir -p "$MALGO_WORK_DIR"
+  for file in "${precompile[@]}"; do
+    start=$SECONDS
+    log "precompile start: $file"
+    if ! timeout "$PRECOMPILE_TIMEOUT" "$MALGO" eval "$file" </dev/null >/dev/null; then
+      log "precompile failed: $file"
+      exit 1
+    fi
+    elapsed=$((SECONDS - start))
+    log "precompile done: $file (${elapsed}s)"
+  done
 
-# Every arm must set RUNNER: under `set -u`, bash 3.2 errors on "${RUNNER[@]}"
-# for an unset/empty array. The `*)` arm above already exited, so RUNNER is
-# always populated by the time run_case uses it.
-case "$TARGET" in
-  zig)
-    EVAL_MAIN="$MALGO_WORK_DIR/malgoc"
-    RUNNER=("$EVAL_MAIN")
-    if ! command -v zig >/dev/null 2>&1; then
-      echo "zig not found on PATH (set ZIG_BIN_DIR or run 'mise install' / activate mise)." >&2
-      exit 1
-    fi
-    log "compiling Main.mlg to a native binary (Level 1 evaluator) via the Zig backend"
-    if ! "$MALGO" compile runtime/malgo/compiler/Main.mlg -o "$EVAL_MAIN" --opt release-fast; then
-      log "native compilation failed"
-      exit 1
-    fi
-    log "native compilation done: $EVAL_MAIN"
-    ;;
-  scheme)
-    EVAL_MAIN="$MALGO_WORK_DIR/main.scm"
-    RUNNER=("$SCHEME" --script "$EVAL_MAIN")
-    if ! command -v "$SCHEME" >/dev/null 2>&1; then
-      echo "'$SCHEME' not found on PATH (run 'mise install' to get chezscheme, or set SCHEME)." >&2
-      exit 1
-    fi
-    log "compiling Main.mlg to Scheme (Level 1 evaluator)"
-    if ! "$MALGO" eval --target scheme runtime/malgo/compiler/Main.mlg > "$EVAL_MAIN"; then
-      log "Scheme compilation failed"
-      exit 1
-    fi
-    log "Scheme compilation done: $EVAL_MAIN"
-    ;;
-esac
+  log "precompile phase complete (${#precompile[@]} files)"
+
+  mkdir -p "$MALGO_WORK_DIR"
+
+  # Every arm must set RUNNER: under `set -u`, bash 3.2 errors on "${RUNNER[@]}"
+  # for an unset/empty array. The `*)` arm above already exited, so RUNNER is
+  # always populated by the time run_case uses it.
+  case "$TARGET" in
+    zig)
+      EVAL_MAIN="$MALGO_WORK_DIR/malgoc"
+      RUNNER=("$EVAL_MAIN")
+      if ! command -v zig >/dev/null 2>&1; then
+        echo "zig not found on PATH (set ZIG_BIN_DIR or run 'mise install' / activate mise)." >&2
+        exit 1
+      fi
+      log "compiling Main.mlg to a native binary (Level 1 evaluator) via the Zig backend"
+      if ! "$MALGO" compile runtime/malgo/compiler/Main.mlg -o "$EVAL_MAIN" --opt release-fast; then
+        log "native compilation failed"
+        exit 1
+      fi
+      log "native compilation done: $EVAL_MAIN"
+      ;;
+    scheme)
+      EVAL_MAIN="$MALGO_WORK_DIR/main.scm"
+      RUNNER=("$SCHEME" --script "$EVAL_MAIN")
+      if ! command -v "$SCHEME" >/dev/null 2>&1; then
+        echo "'$SCHEME' not found on PATH (run 'mise install' to get chezscheme, or set SCHEME)." >&2
+        exit 1
+      fi
+      log "compiling Main.mlg to Scheme (Level 1 evaluator)"
+      if ! "$MALGO" eval --target scheme runtime/malgo/compiler/Main.mlg > "$EVAL_MAIN"; then
+        log "Scheme compilation failed"
+        exit 1
+      fi
+      log "Scheme compilation done: $EVAL_MAIN"
+      ;;
+  esac
+
+  if [[ "$BUILD_ONLY" == "1" ]]; then
+    log "BUILD_ONLY: evaluator built, stopping before the case sweep"
+    exit 0
+  fi
+fi
 
 # Level 2 test cases: a small subset of simple programs that complete quickly
 # even when interpreted by an interpreter.
-level2_cases=(
-  Echo
-  Factorial
-  Fib
-  StringOps
-  Bool
-)
+# Word-split L2_CASES deliberately -- it is a space-separated list, and this
+# keeps the script bash 3.2 clean (no mapfile). Validated near the top, before
+# anything expensive runs.
+# shellcheck disable=SC2206
+level2_cases=($L2_CASES)
 
 total_cases=${#level2_cases[@]}
 log "starting Level 2 metacircular checks: ${total_cases} cases (TARGET=$TARGET, parallelism: ${PARALLEL_JOBS}, CASE_TIMEOUT: ${CASE_TIMEOUT}s)"

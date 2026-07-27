@@ -8,7 +8,7 @@ combinator library) with the same three subcommands, flags, and defaults.
 Byte-parity with optparse's generated `--help` is explicitly not a goal.
 
 Dispatch is stubbed for M1: the pipeline (`Malgo.Driver`) and the Zig
-backends and the linter are not ported yet, so each `run*` arm prints a
+backend and the linter are not ported yet, so each `run*` arm prints a
 clear message and exits 1. `runEval` for `--target eval` carries the single
 integration seam (see the `TODO(M1 integration)` below). -/
 

@@ -94,8 +94,11 @@ Level 1 では通る変更が、Level 2（Malgo → Malgo → Malgo）では失�
 
 Level 1/2 はどちらも Zig バックエンド経由で走る。`Main.mlg` を
 `malgo compile` でネイティブバイナリにし、そのバイナリが評価器になる。
-以前は Scheme バックエンド経由だったが、`malgo_read_file` の実装により
-移行した（Scheme バックエンドは削除済み）。
+
+Chez Scheme 経由の評価器は #385（Zig バックエンドと Chez の性能比較）の
+測定用に一時的に存在していたが、#385 が閉じたことで役目を終え #400 で
+削除された。過去の 7.5 倍という数字の再測定が必要になったら、#404 以前の
+コミットを参照すること。
 
 ### 手順
 
@@ -115,9 +118,11 @@ printf 'Hello\n' | /tmp/malgoc \
   runtime/malgo/compiler/Main.mlg test/testcases/malgo/Echo.mlg
 
 # 4. フルスクリプト
-PRECOMPILE_TIMEOUT=300 CASE_TIMEOUT=1200 bash scripts/selfhost-level2.sh
+PRECOMPILE_TIMEOUT=300 bash scripts/selfhost-level2.sh
 ```
 
-Level 2 は Level 1 より 50〜200 倍遅く、さらに Zig バックエンドは同じ
-ケースで Chez Scheme の約7.5倍遅い（実測: Fib で 220秒 対 29秒）。
-タイムアウトは余裕を持たせること。改善は #385 で追跡している。
+Level 2 は Level 1 より 50〜200 倍遅い。CI では `l2-build`（評価器を1回だけ
+ビルドして artifact 化）+ `l2-case`（1 ジョブ 1 ケース、matrix）に分割して
+いるので、ローカルで手動確認する際も `BUILD_ONLY=1` / `EVAL_BIN=PATH` /
+`L2_CASES="A B"` が使える（詳細は `scripts/selfhost-level2.sh` 冒頭のコメント）。
+タイムアウトは余裕を持たせること。

@@ -51,7 +51,7 @@ EvalPass (Interpreter) | ZigPass (--target zig / malgo compile)
 conversion: it inlines a fully(-or-over-)saturated call of a data constructor
 (`Cons x xs`, or `Cons (f x) (mapList f xs)` — arguments need not be
 immediate) directly into `Fun.Construct`, instead of invoking the
-constructor's own curried closure. This is shared by both backends
+constructor's own curried closure. This is shared by every backend
 (Eval/Zig) and every direct caller of `toCore`, not Zig-specific.
 
 ### Zig Backend (native executables)
@@ -146,25 +146,28 @@ All under `lean/Malgo/`.
 
 ## Self-Hosting Levels
 
-Malgo has two self-hosting levels, each tested by a CI job:
+Malgo has two self-hosting levels:
 
-| Level | Description | Script | CI job |
+| Level | Description | Script | CI job(s) |
 |-------|-------------|--------|--------|
 | Level 1 | The Malgo evaluator written in Malgo (`runtime/malgo/compiler/`) evaluates arbitrary Malgo programs | `scripts/selfhost-golden.sh` | `lean-selfhost` |
-| Level 2 | Level 1 evaluator evaluates `Main.mlg` which evaluates a Malgo program (metacircular interpreter) | `scripts/selfhost-level2.sh` | **currently disabled in CI** |
+| Level 2 | Level 1 evaluator evaluates `Main.mlg` which evaluates a Malgo program (metacircular interpreter) | `scripts/selfhost-level2.sh` | `l2-build` + `l2-case` (matrix) |
 
-**Level 2 is off in CI** (`LEAN_SELFHOST_L2=0` in `lean/ci-gates.env`).
-It takes ~16 minutes on its own against a
-target of keeping CI under 10, because the Zig backend is ~7.5x slower per
-case than the Chez Scheme path self-hosting used to run on (#385). Level 1
-still runs on every PR over all 73 testcases. Run L2 locally before touching
-`runtime/malgo/compiler/`, and re-enable the flag when #385 lands.
+**Level 2 is on in CI, but only for master pushes and the nightly cron — not pull requests**
+(`LEAN_SELFHOST_L2=1` in `lean/ci-gates.env`, gated further by
+`github.event_name != 'pull_request'` in `lean.yml`). It was off for a while (#385)
+because a single job running all five cases took ~16-27 minutes against a target of
+keeping any one CI job under 10. #385 closed by splitting it: `l2-build` compiles the
+evaluator once (~3 min) and uploads it as an artifact; `l2-case` runs one case per job
+from that artifact (~6-8 min each, no contention between cases since each gets its own
+runner). A regression still surfaces within a day even though it never runs on a PR.
 
-Both levels run through the **Zig backend**: `Main.mlg` is compiled to a native
-binary with `malgo compile --opt release-fast` and that binary is the evaluator.
-They used to go through the Scheme backend; the switch became possible once
-`malgo_read_file` was implemented in `runtime/zig/runtime.zig`, which was the
-only runtime primitive the self-hosted compiler still lacked.
+Both levels run on the **Zig backend**: `Main.mlg` is compiled to a native binary with
+`malgo compile --opt release-fast` and that binary is the evaluator. A Scheme backend
+existed briefly as a Chez-based cross-implementation performance reference for #385
+(so the "how much faster is Zig" claim had a control to measure against) and was
+removed again once #385 closed (#400) — see the git history around #385/#400/#404
+if that measurement ever needs to be redone from scratch.
 
 ```bash
 # Level 1: ./malgoc <testcase.mlg>
@@ -177,6 +180,12 @@ bash scripts/selfhost-golden.sh
 # so that the inner Lexer can tokenize integer literals when evaluating
 # nested Malgo sources.
 bash scripts/selfhost-level2.sh
+
+# Building the evaluator and running cases can be split, which is how CI keeps
+# any one job under 10 minutes -- see the header of selfhost-level2.sh for
+# BUILD_ONLY / EVAL_BIN / L2_CASES.
+BUILD_ONLY=1 bash scripts/selfhost-level2.sh
+EVAL_BIN=.malgo-work/malgoc L2_CASES=Fib bash scripts/selfhost-level2.sh
 ```
 
 ## Coding Style

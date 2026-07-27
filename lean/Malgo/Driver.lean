@@ -205,8 +205,8 @@ already-parsed module seeded into the engine's `cacheParsedModule` under its
 own resolved name, so `fetchLinkedProgram` starts from a cache hit instead
 of re-deriving the module's identity.
 
-`compileAndEval`/`compileZig`/`compileToNativeExecutable`
-(all four CLI entries below) share this exact parse+link+seed sequence —
+`compileAndEval`/`compileZig`/`compileToNativeExecutable` (all three CLI
+entries below) share this exact parse+link+seed sequence —
 `linkForCli` is the one place it lives, so a future fix only has one call
 site to update. -/
 private def linkForCli (ws : Workspace) (path : System.FilePath) :
@@ -238,8 +238,8 @@ def compileAndEval (flag : Flag) (path : System.FilePath) : IO UInt32 := do
     | .bigStep => Malgo.Sequent.BigStepEval.bigStepEvalProgram moduleName handlers linked
   return 0
 
-/-- CLI entry for `malgo eval --target zig`: link exactly as
-`compileAndEval` but, instead of interpreting, run the Zig lowering pipeline (`Malgo.Backend.Zig.compileToZigText`, which
+/-- CLI entry for `malgo eval --target zig`: link exactly as `compileAndEval`,
+then run the Zig lowering pipeline (`Malgo.Backend.Zig.compileToZigText`, which
 runs ClosureConv → Peephole → Perceus → Reuse, the linearity check, and Emit)
 and print the generated Zig source. Mirrors Haskell `Driver.compileFromAST`'s
 `TargetZig` branch. -/

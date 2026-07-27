@@ -39,7 +39,7 @@
 # Usage:
 #   scripts/perf-baseline.sh [--tier=LIST] [--update] [--timing]
 #
-#   --tier=LIST   comma-separated: fib-shallow,fib-deep,selfhost-l1,selfhost-l2
+#   --tier=LIST   comma-separated: fib-shallow,fib-deep,selfhost-l1,selfhost-l2,
 #                 or `all`. Default: fib-shallow,fib-deep (the cheap tiers).
 #   --update      rewrite the baseline JSON from this run instead of comparing.
 #   --timing      also measure wall clock with hyperfine (local only; never CI).

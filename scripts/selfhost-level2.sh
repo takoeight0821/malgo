@@ -25,12 +25,13 @@ MALGO=${MALGO:-lean/.lake/build/bin/malgo}
 TARGET=${TARGET:-zig}
 SCHEME=${SCHEME:-scheme}
 # Level 2 is ~50-200x slower than Level 1, and the Zig backend is a further
-# ~7.5x slower per case than the Chez Scheme path it replaced (measured:
-# 220s vs 29s on Fib, on an M-series Mac; #385). Hence the per-target default:
-# 300 is the value the Chez path shipped with before #384, and still 10x the
-# 29s observation.
+# ~5x slower per case than the Chez Scheme path it replaced (measured serially
+# on an M-series Mac: 154s vs 31s on Fib; was ~7.5x before #403/#405 -- see
+# `mise run perf-baseline -- --tier=l2-ratio`). Hence the per-target default:
+# 300 is the value the Chez path shipped with before #384, and 600 gives the Zig
+# path ~3.4x headroom over the slowest case measured (177s).
 case "$TARGET" in
-  zig)    CASE_TIMEOUT=${CASE_TIMEOUT:-1200} ;;
+  zig)    CASE_TIMEOUT=${CASE_TIMEOUT:-600} ;;
   scheme) CASE_TIMEOUT=${CASE_TIMEOUT:-300} ;;
   *) echo "unknown TARGET '$TARGET' (expected zig|scheme)" >&2; exit 1 ;;
 esac

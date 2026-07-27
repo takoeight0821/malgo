@@ -72,10 +72,11 @@ jobs:
     needs: gates
     if: needs.gates.outputs.selfhost == '1'
     runs-on: ubuntu-latest
-    # This one job runs both levels, and L2 through the Zig backend is ~7.5x
-    # slower per case than the Chez Scheme path it replaced (measured locally:
-    # 220s vs 29s on Fib).
-    timeout-minutes: 90
+    # This one job runs both levels. L2 through the Zig backend is ~5x slower per
+    # case than the Chez Scheme path it replaced (measured locally and serially:
+    # 154s vs 31s on Fib; it was ~7.5x before #403/#405). Re-measure with
+    # `mise run perf-baseline -- --tier=l2-ratio`.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -109,7 +110,7 @@ jobs:
       - name: Self-hosted metacircular (Level 2)
         if: needs.gates.outputs.selfhostL2 == '1'
         env:
-          CASE_TIMEOUT: 1200
+          CASE_TIMEOUT: 600
           PRECOMPILE_TIMEOUT: 300
         run: bash scripts/selfhost-level2.sh
 

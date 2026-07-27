@@ -72,11 +72,9 @@ jobs:
     needs: gates
     if: needs.gates.outputs.selfhost == '1'
     runs-on: ubuntu-latest
-    # This one job runs both levels. L2 through the Zig backend is ~5x slower per
-    # case than the Chez Scheme path it replaced (measured locally and serially:
-    # 154s vs 31s on Fib; it was ~7.5x before #403/#405). Re-measure with
-    # `mise run perf-baseline -- --tier=l2-ratio`.
-    timeout-minutes: 60
+    # Level 1 only. Level 2 lives in l2-build + l2-case below, because a single
+    # job running all five L2 cases took 26.7 minutes.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -105,24 +103,101 @@ jobs:
       - name: Self-hosted golden (Level 1 — Malgo-in-Malgo compiler, Zig backend)
         run: bash scripts/selfhost-golden.sh
 
-      # Not run on pull requests: L2 is minutes per case, so it would set the
-      # whole run's wall clock (the jobs here are concurrent) and push PR
-      # feedback from ~3 minutes to well over the 10 we want. On master pushes
-      # and the nightly cron it still catches a regression within a day, which
-      # is the coverage that mattered -- since #395 it has been running nowhere.
-      #
-      # PARALLEL_JOBS is the reason this can use a 600s CASE_TIMEOUT at all.
-      # Unthrottled, five concurrent cases contend on a runner with far fewer
-      # cores than a workstation and every case blew past 600s, while the same
-      # sweep is 154-177s per case locally. Lower this further before ever
-      # raising CASE_TIMEOUT again (#385).
-      - name: Self-hosted metacircular (Level 2)
-        if: needs.gates.outputs.selfhostL2 == '1' && github.event_name != 'pull_request'
+  # ===== Level 2, split so no single job runs long =====
+  #
+  # Not run on pull requests at all: a case is minutes, and the jobs here are
+  # concurrent, so L2 would set the whole run's wall clock and push PR feedback
+  # from ~3 minutes to well past it. Master pushes and the nightly cron still
+  # catch a regression within a day, which is the coverage that mattered --
+  # since #395 L2 had been running nowhere.
+  #
+  # Why two jobs. Measured on run 30239212721, one job running all five cases
+  # took 26.7 minutes, and the fixed cost was almost entirely `malgo compile
+  # Main.mlg` (~105s; the 14-module precompile is only ~12s). Splitting per case
+  # without splitting the build would make each job ~11 min -- still over
+  # budget -- so the evaluator is built once and handed to the case jobs.
+  #
+  # This also buys headroom on CASE_TIMEOUT. Five concurrent cases contend on a
+  # runner with far fewer cores than a workstation: unthrottled they all blew
+  # past 600s, at PARALLEL_JOBS=2 they were 435-492s. One case alone on a runner
+  # has no contention at all. If a case ever times out again, take the time out
+  # of the case (#407) -- do not raise CASE_TIMEOUT, which is what buried #385.
+  l2-build:
+    needs: gates
+    if: needs.gates.outputs.selfhostL2 == '1' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
+        with:
+          lake-package-directory: lean
+          build: true
+          test: false
+
+      # Not optional, for the same reason lean-selfhost and lean-zig-golden do
+      # it: Lake does not reliably track the include_str that embeds
+      # runtime.zig, so without this the evaluator can be built against a stale
+      # cached runtime. See lean/Malgo/Backend/Zig/Runtime.lean.
+      - name: Rebuild the embedded Zig runtime
+        run: |
+          rm -f lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.olean \
+                lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.trace \
+                lean/.lake/build/ir/Malgo/Backend/Zig/Runtime.c
+          cd lean && lake build malgo
+
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: '0.16.0'
+
+      - name: Build the Level 1 evaluator
         env:
-          CASE_TIMEOUT: 600
+          BUILD_ONLY: 1
           PRECOMPILE_TIMEOUT: 300
-          PARALLEL_JOBS: 2
         run: bash scripts/selfhost-level2.sh
+
+      # 5.6 MB. The binary is the whole dependency: it reads Main.mlg and its
+      # imports as source at run time, and .malgo-work is the Lean compiler's
+      # workspace, not the evaluator's -- verified by running a case with an
+      # empty workspace and no Lean toolchain present.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: l2-evaluator
+          path: .malgo-work/malgoc
+          retention-days: 1
+          if-no-files-found: error
+
+  l2-case:
+    needs: [gates, l2-build]
+    if: needs.gates.outputs.selfhostL2 == '1' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # One case, no contention, plus ~10s of setup. The 600s CASE_TIMEOUT is the
+    # real gate; this is only a backstop against a hang.
+    timeout-minutes: 15
+    strategy:
+      # Each case is an independent claim about the evaluator. Cancelling the
+      # others on the first failure would throw away exactly the information
+      # needed to tell "one case regressed" from "the evaluator is broken".
+      fail-fast: false
+      matrix:
+        case: [Echo, Factorial, Fib, StringOps, Bool]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: l2-evaluator
+
+      - name: Level 2 — ${{ matrix.case }}
+        env:
+          EVAL_BIN: ./malgoc
+          L2_CASES: ${{ matrix.case }}
+          PARALLEL_JOBS: 1
+          CASE_TIMEOUT: 600
+        run: |
+          chmod +x ./malgoc
+          bash scripts/selfhost-level2.sh
 
   lean-zig-golden:
     needs: gates
@@ -177,7 +252,7 @@ jobs:
         run: bash scripts/zig-deep-recursion.sh
 
   actions-timeline:
-    needs: [gates, lean-build, cli-gate, lean-selfhost, lean-zig-golden]
+    needs: [gates, lean-build, cli-gate, lean-selfhost, lean-zig-golden, l2-build, l2-case]
     if: always()
     runs-on: ubuntu-latest
     permissions:

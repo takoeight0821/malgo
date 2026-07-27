@@ -180,4 +180,50 @@ for i in "${!cases[@]}"; do
 done
 
 printf 'PASS: %s\nFAIL: %s\nTIMEOUT: %s\n' "$pass" "$fail" "$timeout_count"
-[[ $fail -eq 0 ]]
+
+# One extra serial run of the evaluator already built above, instrumented, to gate
+# the selfhost-l1 counters (#399). Costs ~1s: this is the tier #385's own baseline
+# reading came from, and the sweep above is parallel so its wall clock is
+# meaningless while counters from a single serial run are not. Only total_allocs /
+# dispatches / force_depth_max are gated -- see scripts/perf-baseline.sh for why
+# reuse_hits is reported instead.
+BASELINE="${BASELINE:-bench/perf-baseline.json}"
+perf_fail=0
+if [[ $fail -eq 0 ]] && [[ -f "$BASELINE" ]] && command -v jq >/dev/null 2>&1; then
+  log "measuring selfhost-l1 counters"
+  stats_file=$(mktemp)
+  if MALGO_RC_STATS=1 timeout "$CASE_TIMEOUT" "$NATIVE_MAIN" \
+       test/testcases/malgo/Fib.mlg >/dev/null 2>"$stats_file"; then
+    stats_line=$(grep '^MALGO-STATS:' "$stats_file" | tail -n 1)
+    case "$stats_line" in
+      ''|*'?'*)
+        log "perf gate: unusable MALGO-STATS line ('$stats_line')"
+        perf_fail=1
+        ;;
+      *)
+        for field in total_allocs dispatches force_depth_max; do
+          actual_v=$(sed -n "s/.*$field=\([0-9]*\).*/\1/p" <<< "$stats_line")
+          base_v=$(jq -r --arg f "$field" '.tiers["selfhost-l1"].counters[$f] // empty' "$BASELINE")
+          if [[ -z "$base_v" ]]; then
+            log "perf gate: no selfhost-l1 baseline for $field -- skipping"
+          elif [[ "$field" == "force_depth_max" && "$actual_v" -ne "$base_v" ]]; then
+            log "perf gate FAIL: force_depth_max changed ($base_v -> $actual_v); see #382"
+            perf_fail=1
+          elif [[ "$field" != "force_depth_max" && "$actual_v" -gt "$base_v" ]]; then
+            log "perf gate FAIL: $field rose ($base_v -> $actual_v, +$((actual_v - base_v)))"
+            perf_fail=1
+          elif [[ "$actual_v" -lt "$base_v" ]]; then
+            log "perf gate: $field improved ($base_v -> $actual_v) -- record with 'mise run perf-baseline -- --tier=selfhost-l1 --update'"
+          fi
+        done
+        ;;
+    esac
+  else
+    log "perf gate: instrumented selfhost-l1 run failed -- not gating"
+  fi
+  rm -f "$stats_file"
+else
+  [[ -f "$BASELINE" ]] || log "perf gate: no $BASELINE -- skipping"
+fi
+
+[[ $fail -eq 0 && $perf_fail -eq 0 ]]

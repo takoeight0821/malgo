@@ -93,6 +93,15 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
   removes allocations, so it is not a standalone signal. `fib-deep` and
   `selfhost-l1` are gated inside `zig-deep-recursion.sh` and `selfhost-golden.sh`,
   which already run those binaries, so CI pays ~1s rather than a new job.
+- **`--tier=l2-ratio` is the one that tracks #385's actual goal.** The counters are
+  a proxy; #385 is a *ratio*, and this measures it directly — one serial Level 2
+  case through Zig and through Chez, back-to-back on one machine, recorded under
+  `l2_ratio` in the baseline with the machine it was taken on. Absolute seconds do
+  not compare across hardware; the ratio does, which is the whole reason the Scheme
+  backend is retained as a control until #400. Local only, never in CI (running L2
+  there is the 16 minutes #385 exists to remove), and gated with a 15% band because
+  wall clock does not deserve more precision than that. Score levers against this,
+  not against a hypothesis.
 - Small `int32`s (`-128..1024`) are interned as `IMMORTAL` statics by `rt.mkInt32`,
   so they cost no allocation and no RC traffic; and RC tracing is compiled out of
   `release-fast` entirely. Both are #385 work — see `docs/perceus-gc.md`.

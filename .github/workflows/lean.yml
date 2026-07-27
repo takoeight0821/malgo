@@ -105,13 +105,23 @@ jobs:
       - name: Self-hosted golden (Level 1 — Malgo-in-Malgo compiler, Zig backend)
         run: bash scripts/selfhost-golden.sh
 
-      # Disabled via lean/ci-gates.env until #385 makes L2 affordable: it is
-      # ~16 minutes on its own, against a target of keeping CI under 10.
+      # Not run on pull requests: L2 is minutes per case, so it would set the
+      # whole run's wall clock (the jobs here are concurrent) and push PR
+      # feedback from ~3 minutes to well over the 10 we want. On master pushes
+      # and the nightly cron it still catches a regression within a day, which
+      # is the coverage that mattered -- since #395 it has been running nowhere.
+      #
+      # PARALLEL_JOBS is the reason this can use a 600s CASE_TIMEOUT at all.
+      # Unthrottled, five concurrent cases contend on a runner with far fewer
+      # cores than a workstation and every case blew past 600s, while the same
+      # sweep is 154-177s per case locally. Lower this further before ever
+      # raising CASE_TIMEOUT again (#385).
       - name: Self-hosted metacircular (Level 2)
-        if: needs.gates.outputs.selfhostL2 == '1'
+        if: needs.gates.outputs.selfhostL2 == '1' && github.event_name != 'pull_request'
         env:
           CASE_TIMEOUT: 600
           PRECOMPILE_TIMEOUT: 300
+          PARALLEL_JOBS: 2
         run: bash scripts/selfhost-level2.sh
 
   lean-zig-golden:

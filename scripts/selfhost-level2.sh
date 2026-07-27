@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
 # selfhost-level2.sh — Level 2 metacircular interpreter test
 #
-# Level 1: the Malgo evaluator (Main.mlg), built into a runnable artifact,
+# Level 1: malgoc (Main.mlg compiled to a native binary via the Zig backend)
 #          evaluates a .mlg program directly
-# Level 2: that artifact evaluates Main.mlg, which evaluates a .mlg program
-#
-# TARGET selects how Main.mlg becomes runnable:
-#   TARGET=zig    (default) `malgo compile --opt release-fast` -> native binary
-#   TARGET=scheme           `malgo eval --target scheme` -> main.scm, run under Chez
-#
-# The Scheme path is retained as the cross-implementation performance reference
-# for #385: it is the only baseline the Zig backend's numbers can be read
-# against. Do not delete it until #385 closes -- see #400.
+# Level 2: malgoc evaluates Main.mlg, which evaluates a .mlg program
 #
 # This script verifies the metacircular property: the Malgo evaluator
 # written in Malgo can evaluate itself while correctly running programs.
@@ -22,18 +14,10 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
 MALGO=${MALGO:-lean/.lake/build/bin/malgo}
-TARGET=${TARGET:-zig}
-SCHEME=${SCHEME:-scheme}
 # Level 2 is ~50-200x slower than Level 1, and the Zig backend is a further
 # ~7.5x slower per case than the Chez Scheme path it replaced (measured:
-# 220s vs 29s on Fib, on an M-series Mac; #385). Hence the per-target default:
-# 300 is the value the Chez path shipped with before #384, and still 10x the
-# 29s observation.
-case "$TARGET" in
-  zig)    CASE_TIMEOUT=${CASE_TIMEOUT:-1200} ;;
-  scheme) CASE_TIMEOUT=${CASE_TIMEOUT:-300} ;;
-  *) echo "unknown TARGET '$TARGET' (expected zig|scheme)" >&2; exit 1 ;;
-esac
+# 220s vs 29s on Fib, on an M-series Mac). Budget accordingly.
+CASE_TIMEOUT=${CASE_TIMEOUT:-1200}
 PRECOMPILE_TIMEOUT=${PRECOMPILE_TIMEOUT:-180}
 KEEP_WORK=${KEEP_WORK:-0}
 MALGO_WORK_DIR=${MALGO_WORK_DIR:-.malgo-work}
@@ -97,41 +81,18 @@ done
 
 log "precompile phase complete (${#precompile[@]} files)"
 
+NATIVE_MAIN="$MALGO_WORK_DIR/malgoc"
 mkdir -p "$MALGO_WORK_DIR"
-
-# Every arm must set RUNNER: under `set -u`, bash 3.2 errors on "${RUNNER[@]}"
-# for an unset/empty array. The `*)` arm above already exited, so RUNNER is
-# always populated by the time run_case uses it.
-case "$TARGET" in
-  zig)
-    EVAL_MAIN="$MALGO_WORK_DIR/malgoc"
-    RUNNER=("$EVAL_MAIN")
-    if ! command -v zig >/dev/null 2>&1; then
-      echo "zig not found on PATH (set ZIG_BIN_DIR or run 'mise install' / activate mise)." >&2
-      exit 1
-    fi
-    log "compiling Main.mlg to a native binary (Level 1 evaluator) via the Zig backend"
-    if ! "$MALGO" compile runtime/malgo/compiler/Main.mlg -o "$EVAL_MAIN" --opt release-fast; then
-      log "native compilation failed"
-      exit 1
-    fi
-    log "native compilation done: $EVAL_MAIN"
-    ;;
-  scheme)
-    EVAL_MAIN="$MALGO_WORK_DIR/main.scm"
-    RUNNER=("$SCHEME" --script "$EVAL_MAIN")
-    if ! command -v "$SCHEME" >/dev/null 2>&1; then
-      echo "'$SCHEME' not found on PATH (run 'mise install' to get chezscheme, or set SCHEME)." >&2
-      exit 1
-    fi
-    log "compiling Main.mlg to Scheme (Level 1 evaluator)"
-    if ! "$MALGO" eval --target scheme runtime/malgo/compiler/Main.mlg > "$EVAL_MAIN"; then
-      log "Scheme compilation failed"
-      exit 1
-    fi
-    log "Scheme compilation done: $EVAL_MAIN"
-    ;;
-esac
+if ! command -v zig >/dev/null 2>&1; then
+  echo "zig not found on PATH (set ZIG_BIN_DIR or run 'mise install' / activate mise)." >&2
+  exit 1
+fi
+log "compiling Main.mlg to a native binary (Level 1 evaluator) via the Zig backend"
+if ! "$MALGO" compile runtime/malgo/compiler/Main.mlg -o "$NATIVE_MAIN" --opt release-fast; then
+  log "native compilation failed"
+  exit 1
+fi
+log "native compilation done: $NATIVE_MAIN"
 
 # Level 2 test cases: a small subset of simple programs that complete quickly
 # even when interpreted by an interpreter.
@@ -144,8 +105,8 @@ level2_cases=(
 )
 
 total_cases=${#level2_cases[@]}
-log "starting Level 2 metacircular checks: ${total_cases} cases (parallel, TARGET=$TARGET)"
-log "command: ${RUNNER[*]} runtime/malgo/compiler/Main.mlg <case.mlg>"
+log "starting Level 2 metacircular checks: ${total_cases} cases (parallel)"
+log "command: ./malgoc runtime/malgo/compiler/Main.mlg <case.mlg>"
 
 results_dir="$MALGO_WORK_DIR/level2-results"
 rm -rf "$results_dir"
@@ -179,7 +140,7 @@ run_case() {
   out=$(mktemp)
   err=$(mktemp)
 
-  if printf 'Hello\n' | timeout "$CASE_TIMEOUT" "${RUNNER[@]}" \
+  if printf 'Hello\n' | timeout "$CASE_TIMEOUT" "$NATIVE_MAIN" \
       runtime/malgo/compiler/Main.mlg "$src" >"$out" 2>"$err"; then
     local case_elapsed=$((SECONDS - case_start))
     if cmp -s "$out" "$expected"; then

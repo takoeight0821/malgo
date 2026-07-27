@@ -92,23 +92,10 @@ Level 1 では通る変更が、Level 2（Malgo → Malgo → Malgo）では失�
 ことがある。評価意味論が異なるため、自己ホスト型コンパイラを変更したら
 必ず Level 2 を手動確認する。
 
-Level 1/2 はどちらも既定では Zig バックエンド経由で走る。`Main.mlg` を
+Level 1/2 はどちらも Zig バックエンド経由で走る。`Main.mlg` を
 `malgo compile` でネイティブバイナリにし、そのバイナリが評価器になる。
-この既定は `malgo_read_file` の実装により可能になった。
-
-Scheme バックエンドは**意図的に残してある**。#385 が記録している 7.5倍の
-性能差は Chez Scheme 経路との比であり、比較対象がなければ再測定できない。
-`scripts/selfhost-level2.sh` は `TARGET=scheme` で Chez 経路に切り替わる。
-測定のためだけに存在する経路なので、新しい機能をこの上に載せないこと。
-#385 が閉じるまで削除しない（削除は #400 で追跡）。
-
-なお Scheme バックエンドは**性能の基準線であって正しさの基準ではない**。
-意味論の基準は常にインタープリタ（`Malgo.Sequent.Eval`）である。
-Scheme バックエンドには golden ゲートが一度も無く、73 件の golden を通すと
-71 件通過する。落ちる 2 件は `EmptyConstructor`（空コンストラクタの表示が違う）
-と `LabelGoto`（継続が `number->string` に漏れる）。どちらのテストケースも
-バックエンド削除より数ヶ月古いので、退行ではなく元からの穴である。
-Level 2 が実際に走らせる 5 ケースはすべて通る。
+以前は Scheme バックエンド経由だったが、`malgo_read_file` の実装により
+移行した（Scheme バックエンドは削除済み）。
 
 ### 手順
 
@@ -129,17 +116,8 @@ printf 'Hello\n' | /tmp/malgoc \
 
 # 4. フルスクリプト
 PRECOMPILE_TIMEOUT=300 CASE_TIMEOUT=1200 bash scripts/selfhost-level2.sh
-
-# 5. Chez 経路（#385 の基準線を測り直すとき。CASE_TIMEOUT の既定は 300）
-lean/.lake/build/bin/malgo eval --target scheme runtime/malgo/compiler/Main.mlg > /tmp/main.scm
-printf 'Hello\n' | scheme --script /tmp/main.scm \
-  runtime/malgo/compiler/Main.mlg test/testcases/malgo/Echo.mlg
-TARGET=scheme PRECOMPILE_TIMEOUT=300 bash scripts/selfhost-level2.sh
 ```
 
 Level 2 は Level 1 より 50〜200 倍遅く、さらに Zig バックエンドは同じ
 ケースで Chez Scheme の約7.5倍遅い（実測: Fib で 220秒 対 29秒）。
 タイムアウトは余裕を持たせること。改善は #385 で追跡している。
-この 220秒 対 29秒 は `TARGET=scheme` で再測定できる。ただし
-`selfhost-level2.sh` は 5 ケースを並列に走らせるので、比を取るときは
-1 ケースずつ直接実行して測ること（並列実行の数値は元の測定と比較できない）。

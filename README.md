@@ -182,11 +182,6 @@ See `mise.toml` for more details and customization.
 - **Publish:** Merging a `release/*` PR to `master` tags the commit and publishes the GitHub Release.
 - **Notes:** Releases use generated notes; excluded labels: `duplicate`, `invalid`. (The workflow's exclusion list also names `skip-changelog`, but no such label exists, so it never matches.)
 
-**Current hold:** the `v4.0.0` release PR (#398) is a draft and the `Create Release PR`
-workflow is disabled until milestone `v4.0.0` is done (#385). Do not merge #398 before
-then, and refresh the draft release's notes before you do — `release.yml` publishes
-whatever draft exists, and the current one was generated at `v3.0.0..bf7c682f`.
-
 To create labels via GitHub CLI:
 
 ```bash

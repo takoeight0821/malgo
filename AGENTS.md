@@ -42,7 +42,7 @@ ParserPass → RenamePass → [InferPass] → [RefinePass]
     ↓
 ToFunPass → ToCorePass → FlatPass → JoinPass
     ↓
-EvalPass (Interpreter) | SchemePass (--target scheme) | ZigPass (--target zig / malgo compile)
+EvalPass (Interpreter) | ZigPass (--target zig / malgo compile)
 ```
 
 **Note**: InferPass and RefinePass can be skipped for fast evaluation without type checking.
@@ -51,8 +51,8 @@ EvalPass (Interpreter) | SchemePass (--target scheme) | ZigPass (--target zig / 
 conversion: it inlines a fully(-or-over-)saturated call of a data constructor
 (`Cons x xs`, or `Cons (f x) (mapList f xs)` — arguments need not be
 immediate) directly into `Fun.Construct`, instead of invoking the
-constructor's own curried closure. This is shared by every backend
-(Eval/Scheme/Zig) and every direct caller of `toCore`, not Zig-specific.
+constructor's own curried closure. This is shared by both backends
+(Eval/Zig) and every direct caller of `toCore`, not Zig-specific.
 
 ### Zig Backend (native executables)
 
@@ -160,25 +160,11 @@ case than the Chez Scheme path self-hosting used to run on (#385). Level 1
 still runs on every PR over all 73 testcases. Run L2 locally before touching
 `runtime/malgo/compiler/`, and re-enable the flag when #385 lands.
 
-**The v4.0.0 release is held on that flag.** Milestone `v4.0.0` gates the
-release on #385, and the Scheme backend is retained until then as the only
-cross-implementation performance reference the 7.5x figure can be measured
-against. Do not delete it early — #400 tracks the eventual removal.
-
-Both levels default to the **Zig backend**: `Main.mlg` is compiled to a native
+Both levels run through the **Zig backend**: `Main.mlg` is compiled to a native
 binary with `malgo compile --opt release-fast` and that binary is the evaluator.
-That default became possible once `malgo_read_file` was implemented in
-`runtime/zig/runtime.zig`, which was the only runtime primitive the self-hosted
-compiler still lacked. `scripts/selfhost-level2.sh` also accepts
-`TARGET=scheme`, which builds the evaluator with `malgo eval --target scheme`
-and runs it under Chez instead; that path exists for measurement, is not a
-supported target, and no new work should build on it. It is a performance
-reference, **not a correctness oracle** — the interpreter (`Malgo.Sequent.Eval`)
-is the oracle. The Scheme backend never had a golden gate, and a sweep of all 73
-goldens through it passes 71: `EmptyConstructor` renders an empty constructor
-differently and `LabelGoto` leaks a continuation into `number->string`. Both
-testcases predate the backend's deletion by months, so these are long-standing
-gaps rather than regressions. The 5 cases Level 2 actually runs all pass.
+They used to go through the Scheme backend; the switch became possible once
+`malgo_read_file` was implemented in `runtime/zig/runtime.zig`, which was the
+only runtime primitive the self-hosted compiler still lacked.
 
 ```bash
 # Level 1: ./malgoc <testcase.mlg>
@@ -191,9 +177,6 @@ bash scripts/selfhost-golden.sh
 # so that the inner Lexer can tokenize integer literals when evaluating
 # nested Malgo sources.
 bash scripts/selfhost-level2.sh
-
-# Level 2 through Chez, for the #385 baseline (CASE_TIMEOUT defaults to 300 here)
-TARGET=scheme bash scripts/selfhost-level2.sh
 ```
 
 ## Coding Style

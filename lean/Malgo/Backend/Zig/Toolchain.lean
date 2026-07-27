@@ -71,6 +71,13 @@ def buildExecutable (zigCacheRoot srcPath outPath : String) (mode : OptMode) : I
        -- default on Linux, so every generated program would fail at link time
        -- there without this.
        "-lc" ]
+       -- Deliberately NOT `-fsingle-threaded`, though nothing in the runtime or
+       -- in generated code spawns a thread: `std.heap.SmpAllocator` opens with
+       -- `assert(!builtin.single_threaded)` ("you're holding it wrong"), so the
+       -- flag is a comptime error while `runtime.zig` uses `smp_allocator` for
+       -- ReleaseFast. Reaching for it again means first giving the runtime an
+       -- allocator that does not require threads -- an Object pool would serve
+       -- both goals at once, since Object is a single fixed size (#385).
   let out ← (IO.Process.output { cmd := "zig", args }).toBaseIO
   match out with
   | .error e =>

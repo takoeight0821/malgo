@@ -125,6 +125,20 @@ Perceus's output specifically, rather than a general-purpose verifier.
 - Every `Value` is a `*Object { rc: u32, kind: Kind, payload: Payload }`. `IMMORTAL`
   (`0xFFFF_FFFF`) marks a value that lives for the whole process (`rt.no_self`);
   `dup`/`drop` are no-ops on it.
+- **Small `int32`s are interned** (`INT32_INTERN_MIN..INT32_INTERN_MAX`, currently
+  `-128..1024`): `mkInt32` returns a pointer into a static table of `IMMORTAL`
+  Objects instead of allocating. Otherwise every arithmetic intermediate is a fresh
+  ~56-byte heap Object, which #385 identifies as the largest single cost on the
+  self-hosting workload. Interning is the part of that win reachable without
+  changing `Value = *Object` everywhere, as full unboxing (tagged pointers, NaN
+  boxing) would. It is sound because `IMMORTAL` already excludes these Objects from
+  `dup`/`drop`, from the leak count, and from `dropReuse` — which returns `null` on
+  an immortal value, so an interned int can never be handed to `mkStructReuse` as a
+  recycling token. Payloads are never mutated in place otherwise.
+  Measured effect: `fib-deep`'s `total_allocs` fell 5.8% (16.63M → 15.66M) with
+  `dispatches` unchanged. Note that `reuse_hits` falls alongside it — interned ints
+  are not allocated, so they are also not available to reuse. That is why
+  `scripts/perf-baseline.sh` gates `total_allocs` but only reports `reuse_hits`.
 - `dup`/`drop` are the primitive ops the compiler inserts directly.
   `drop` decrements and, at zero, queues the Object onto a deferred free worklist
   (`g_free_worklist`) rather than recursing immediately — so dropping a deep
@@ -169,6 +183,22 @@ symbolic name and enclosing function `Malgo.Backend.Zig.Emit` threads through fr
 the IR. Tracing is purely additive: the plain, untraced operations are what every
 `zig test` block in `runtime.zig` exercises directly, so tracing can never perturb
 the RC decisions those tests check.
+
+**Tracing is not compiled into `ReleaseFast`.** `rc_trace_supported`
+(`builtin.mode != .ReleaseFast`) guards each trace body, so in a release-fast build
+the `*Named` wrappers reduce to their untraced operation and nothing else. This is
+a performance measure, not a policy one (#385): checking `g_trace_enabled` at
+runtime cannot recover the cost, because it is a mutable global, so the branch is
+not foldable and the caller must still materialize the arguments — and every
+allocation site passes a stack-built `&[_][]const u8{...}` array of per-slot
+symbolic names plus a `func` literal, two words per slot on every allocation.
+Making the bodies comptime-dead lets LLVM inline the wrappers away, and only then
+does that array become dead code.
+
+`MALGO_RC_TRACE` therefore works in `debug` and `release-safe` only, which is where
+RC is debugged anyway: `rcInvariant` asserts there, and the reuse-token
+investigations in #354 run there. Flip `rc_trace_supported` to `true` if a
+release-only RC bug ever needs `rctrace.py`.
 
 ```
 MALGO_RC_TRACE=1 ./some_compiled_binary 2>trace.jsonl

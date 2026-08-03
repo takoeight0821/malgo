@@ -231,8 +231,8 @@ termination_by b => sizeOf b
 end
 
 def renderCoreFull (p : Full.Program) : String :=
-  renderDefs (p.definitions.map fun (_, name, ret, stmt) =>
-    hangEq (atom "def" <+> renderName name ++ renderArgs [renderName ret]) (renderFullStmt stmt))
+  renderDefs (p.definitions.map fun d =>
+    hangEq (atom "def" <+> renderName d.name ++ renderArgs [renderName d.ret]) (renderFullStmt d.body))
 
 /-! ## Core Flat IR -/
 
@@ -301,8 +301,8 @@ termination_by b => sizeOf b
 end
 
 def renderFlat (p : Flat.Program) : String :=
-  renderDefs (p.definitions.map fun (_, name, ret, stmt) =>
-    hangEq (atom "def" <+> renderName name ++ renderArgs [renderName ret]) (renderFlatStmt stmt))
+  renderDefs (p.definitions.map fun d =>
+    hangEq (atom "def" <+> renderName d.name ++ renderArgs [renderName d.ret]) (renderFlatStmt d.body))
 
 /-! ## Core Join IR (consumer slots are plain names) -/
 
@@ -371,8 +371,8 @@ termination_by b => sizeOf b
 end
 
 def renderJoin (p : Join.Program) : String :=
-  renderDefs (p.definitions.map fun (_, name, ret, stmt) =>
-    hangEq (atom "def" <+> renderName name ++ renderArgs [renderName ret]) (renderJoinStmt stmt))
+  renderDefs (p.definitions.map fun d =>
+    hangEq (atom "def" <+> renderName d.name ++ renderArgs [renderName d.ret]) (renderJoinStmt d.body))
 
 /-! ## Zig backend ANF IR -/
 

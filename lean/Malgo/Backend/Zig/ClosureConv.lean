@@ -474,35 +474,30 @@ end
 
 /-! ## Program entry -/
 
-def convertDefinition (moduleName : ModuleName) :
-    Range × Name × Name × Statement → MalgoM (List Ir.Func)
-  | (defRange, name, retName, rawStmt) => do
-    -- Normalize once per top-level definition: `normalizeStatement` recurses
-    -- into every nested body, so this single call covers the whole tree.
-    let stmt := normalizeStatement rawStmt
-    let selfVar ← Malgo.newTemporalId moduleName "self"
-    let (block, lifted) ← convertStatement moduleName {} (classifyJoins stmt) stmt
-    pure ({ range := defRange, name, kind := .topLevelFn, selfVar, params := [retName],
-            body := block : Ir.Func } :: lifted)
+def convertDefinition (moduleName : ModuleName) (d : Definition) : MalgoM (List Ir.Func) := do
+  -- Normalize once per top-level definition: `normalizeStatement` recurses
+  -- into every nested body, so this single call covers the whole tree.
+  let stmt := normalizeStatement d.body
+  let selfVar ← Malgo.newTemporalId moduleName "self"
+  let (block, lifted) ← convertStatement moduleName {} (classifyJoins stmt) stmt
+  pure ({ range := d.range, name := d.name, kind := .topLevelFn, selfVar, params := [d.ret],
+          body := block : Ir.Func } :: lifted)
 
 /-- Keep only the first definition for each `Id`, dropping later occurrences
 reached via a different import path to the same module. -/
-def nubByName : List (Range × Name × Name × Statement) → List (Range × Name × Name × Statement) :=
+def nubByName : List Definition → List Definition :=
   go {}
 where
-  go (seen : Std.TreeSet Name) :
-      List (Range × Name × Name × Statement) → List (Range × Name × Name × Statement)
+  go (seen : Std.TreeSet Name) : List Definition → List Definition
     | [] => []
     | d :: rest =>
-      let name := d.2.1
-      if seen.contains name then go seen rest
-      else d :: go (seen.insert name) rest
+      if seen.contains d.name then go seen rest
+      else d :: go (seen.insert d.name) rest
 
 /-- Find the definition named `main`, matching `Eval.evalProgram`'s
 bootstrap: the first definition whose `Id.name` is exactly `"main"`. -/
-def findMain (defs : List (Range × Name × Name × Statement)) : Option (Range × Name) :=
-  (defs.filterMap (fun (range, name, _, _) =>
-    if name.name == "main" then some (range, name) else none)).head?
+def findMain (defs : List Definition) : Option (Range × Name) :=
+  (defs.filterMap (fun d => if d.name.name == "main" then some (d.range, d.name) else none)).head?
 
 /-- Build the program's entry-point statement, mirroring
 `Eval.evalProgram`'s bootstrap: run `Invoke main afterMain` where

@@ -299,8 +299,8 @@ instance : FromJson Branch := ⟨branchFromJson⟩
 instance : ToJson Join.Program where
   toJson p :=
     Json.arr #[
-      jList (fun (r, name, ret, body) =>
-        Json.arr #[toJson r, toJson name, toJson ret, statementToJson body]) p.definitions,
+      jList (fun d =>
+        Json.arr #[toJson d.range, toJson d.name, toJson d.ret, statementToJson d.body]) p.definitions,
       jList toJson p.dependencies ]
 
 instance : FromJson Join.Program where
@@ -309,7 +309,9 @@ instance : FromJson Join.Program where
     | [defsJ, depsJ] =>
       let definitions ← jParseList (fun e => do
         match (← e.getArr?).toList with
-        | [r, name, ret, body] => return (← fromJson? r, ← fromJson? name, ← fromJson? ret, ← statementFromJson body)
+        | [r, name, ret, body] =>
+          return ({ range := (← fromJson? r), name := (← fromJson? name), ret := (← fromJson? ret),
+                     body := (← statementFromJson body) } : Join.Definition)
         | _ => .error "Program.definition: expected a 4-element array") defsJ
       return { definitions, dependencies := ← jParseList fromJson? depsJ }
     | _ => .error "Program: expected a 2-element array"
@@ -346,7 +348,8 @@ private def roundtrips [ToJson α] [FromJson α] [BEq α] (x : α) : Bool :=
 #guard roundtrips (Literal.double 3.25)
 -- A small Program round-trips.
 private def prog : Join.Program :=
-  { definitions := [(r0, nm "main", nm "ret", .cut (.var r0 (nm "x")) (nm "ret"))],
+  { definitions := [{ range := r0, name := nm "main", ret := nm "ret",
+                       body := .cut (.var r0 (nm "x")) (nm "ret") }],
     dependencies := [.moduleName "Builtin", .artifact ap] }
 #guard match (fromJson? (toJson prog) : Except String Join.Program) with
   | .ok p => p.definitions.length == 1 && p.dependencies.length == 2

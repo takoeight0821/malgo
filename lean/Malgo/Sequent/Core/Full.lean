@@ -3,6 +3,7 @@ import Malgo.Id
 import Malgo.Module
 import Malgo.SExpr
 import Malgo.Sequent.Fun
+import Malgo.Sequent.Core.Common
 
 /-! Port of `src/Malgo/Sequent/Core/Full.hs`: the sequent-calculus Core IR
 (`Producer`/`Consumer`/`Statement`/`Branch`), with explicit control flow.
@@ -75,8 +76,6 @@ def Statement.range : Statement → Range
 
 instance : HasRange Statement := ⟨Statement.range⟩
 
-private def sym (s : String) : SExpr := .atom (.symbol s)
-
 mutual
 
 def Producer.toSExpr : Producer → SExpr
@@ -146,15 +145,7 @@ instance : ToSExpr Consumer := ⟨Consumer.toSExpr⟩
 instance : ToSExpr Statement := ⟨Statement.toSExpr⟩
 instance : ToSExpr Branch := ⟨Branch.toSExpr⟩
 
-structure Program where
-  definitions : List (Range × Name × Name × Statement)
-  dependencies : List ModuleName
-
-instance : ToSExpr Program where
-  toSExpr p :=
-    .list <|
-      (p.definitions.map fun (_, name, ret, body) =>
-        .list [Malgo.toSExpr name, Malgo.toSExpr ret, Malgo.toSExpr body])
-      ++ [.list (p.dependencies.map Malgo.toSExpr)]
+abbrev Definition := DefinitionOf Statement
+abbrev Program := ProgramOf Statement
 
 end Malgo.Sequent.Core.Full

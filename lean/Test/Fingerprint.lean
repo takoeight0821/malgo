@@ -112,10 +112,10 @@ def renderStats (keys : List String) : String :=
   " ".intercalate pairs
 
 def fingerprintFlat (p : Flat.Program) : String :=
-  renderStats (p.definitions.flatMap fun (_, _, _, stmt) => "definitions" :: flatStmtStats stmt)
+  renderStats (p.definitions.flatMap fun d => "definitions" :: flatStmtStats d.body)
 
 def fingerprintJoin (p : Join.Program) : String :=
-  renderStats (p.definitions.flatMap fun (_, _, _, stmt) => "definitions" :: joinStmtStats stmt)
+  renderStats (p.definitions.flatMap fun d => "definitions" :: joinStmtStats d.body)
 
 /-! ## Sanity checks -/
 
@@ -124,13 +124,15 @@ private def nm (s : String) : Malgo.Sequent.Fun.Name :=
   { name := s, moduleName := .moduleName "t", sort := .external }
 
 #guard fingerprintFlat
-    { definitions := [(r0, nm "f", nm "r", .cut (.var r0 (nm "x")) (.finish r0))],
+    { definitions := [{ range := r0, name := nm "f", ret := nm "r",
+                         body := .cut (.var r0 (nm "x")) (.finish r0) }],
       dependencies := [] }
   == "cuts=1 definitions=1 finishes=1 vars=1"
 
 -- Join's `Cut` consumer is a `Name`, so it contributes no `finishes`/`labels`.
 #guard fingerprintJoin
-    { definitions := [(r0, nm "f", nm "r", .cut (.var r0 (nm "x")) (nm "k"))],
+    { definitions := [{ range := r0, name := nm "f", ret := nm "r",
+                         body := .cut (.var r0 (nm "x")) (nm "k") }],
       dependencies := [] }
   == "cuts=1 definitions=1 vars=1"
 

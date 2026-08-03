@@ -4,6 +4,7 @@ import Malgo.Monad
 import Malgo.Module
 import Malgo.SExpr
 import Malgo.Sequent.Fun
+import Malgo.Sequent.Core.Common
 import Malgo.Sequent.Core.Full
 
 /-! Port of `src/Malgo/Sequent/Core/Flat.hs`: the Flat IR (no nested `Do`
@@ -85,8 +86,6 @@ def Statement.range : Statement → Range
 
 instance : HasRange Statement := ⟨Statement.range⟩
 
-private def sym (s : String) : SExpr := .atom (.symbol s)
-
 mutual
 
 def Producer.toSExpr : Producer → SExpr
@@ -157,16 +156,8 @@ instance : ToSExpr Consumer := ⟨Consumer.toSExpr⟩
 instance : ToSExpr Statement := ⟨Statement.toSExpr⟩
 instance : ToSExpr Branch := ⟨Branch.toSExpr⟩
 
-structure Program where
-  definitions : List (Range × Name × Name × Statement)
-  dependencies : List ModuleName
-
-instance : ToSExpr Program where
-  toSExpr p :=
-    .list <|
-      (p.definitions.map fun (_, name, ret, body) =>
-        .list [Malgo.toSExpr name, Malgo.toSExpr ret, Malgo.toSExpr body])
-      ++ [.list (p.dependencies.map Malgo.toSExpr)]
+abbrev Definition := DefinitionOf Statement
+abbrev Program := ProgramOf Statement
 
 /-- Temporary state of the flattening process: `do'` marks a producer that
 must become a `Join` (a bound continuation); `zero` is a rank-zero
@@ -344,11 +335,9 @@ partial def flatZeros (moduleName : ModuleName) (zeros : List Full.Producer) :
 
 end
 
-def flatDefinition (moduleName : ModuleName) :
-    Range × Name × Name × Full.Statement → MalgoM (Range × Name × Name × Statement)
-  | (range, name, ret, statement) => do
-    let statement ← flatStatement moduleName statement
-    pure (range, name, ret, statement)
+def flatDefinition (moduleName : ModuleName) (d : Full.Definition) : MalgoM Definition := do
+  let body ← flatStatement moduleName d.body
+  pure { range := d.range, name := d.name, ret := d.ret, body }
 
 /-- Flattens a program into one with no nested `Do` producers. -/
 def flatProgram (moduleName : ModuleName) (program : Full.Program) : MalgoM Program := do

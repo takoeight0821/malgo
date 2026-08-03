@@ -114,9 +114,9 @@ def runTrace (srcPath : System.FilePath) (useInfer : Bool) (malgo2025 : Bool) :
           { name := "ToCore", rendered := PrettyIR.renderCoreFull core },
           { name := "Flat", rendered := PrettyIR.renderFlat flat },
           { name := "Join", rendered := PrettyIR.renderJoin joined },
-          { name := "ClosureConv", rendered := PrettyIR.renderZigIr stages.closureConv },
-          { name := "Peephole", rendered := PrettyIR.renderZigIr stages.peephole },
-          { name := "Perceus", rendered := PrettyIR.renderZigIr stages.perceus },
-          { name := "Reuse", rendered := reuseNote ++ PrettyIR.renderZigIr stages.reuse } ]
+          { name := "ClosureConv", rendered := PrettyIR.renderZigIr stages.closureConv.program },
+          { name := "Peephole", rendered := PrettyIR.renderZigIr stages.peephole.program },
+          { name := "Perceus", rendered := PrettyIR.renderZigIr stages.perceus.program },
+          { name := "Reuse", rendered := reuseNote ++ PrettyIR.renderZigIr stages.reuse.program } ]
 
 end Malgo.Debug.Pipeline

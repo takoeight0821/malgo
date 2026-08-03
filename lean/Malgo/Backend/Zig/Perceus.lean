@@ -1,5 +1,6 @@
 import Std.Data.TreeMap
 import Malgo.Backend.Zig.Ir
+import Malgo.Backend.Zig.Stage
 import Malgo.Prelude
 import Malgo.Sequent.Fun
 
@@ -136,8 +137,28 @@ partial def perceusFunc (fn : Func) : Func :=
     if fn.kind == .topLevelFn then base else base.insert fn.selfVar
   { fn with body := insertBlock delta0 fn.body }
 
-def perceusProgram (program : Program) : Program :=
-  { program with funcs := program.funcs.map perceusFunc }
+def perceusProgram (staged : Staged .peephole) : Staged .perceus :=
+  let program := staged.program
+  ⟨{ program with funcs := program.funcs.map perceusFunc }⟩
+
+-- Calling a stage-typed pass on the wrong stage is a compile error, not a
+-- runtime panic three functions later: `perceusProgram` requires
+-- `Staged .peephole`, so a `Staged .closureConv` value is rejected here.
+private def dummyClosureConvProgram : Staged .closureConv :=
+  ⟨{ funcs := [], entry := none }⟩
+
+/--
+error: Application type mismatch: The argument
+  dummyClosureConvProgram
+has type
+  Staged ZigStage.closureConv
+but is expected to have type
+  Staged ZigStage.peephole
+in the application
+  perceusProgram dummyClosureConvProgram
+-/
+#guard_msgs in
+example := perceusProgram dummyClosureConvProgram
 
 private def nm (s : String) : Name := { name := s, moduleName := .moduleName "t", sort := .external }
 private def r0 : Range := { start := SourcePos.initial "", stop := SourcePos.initial "" }

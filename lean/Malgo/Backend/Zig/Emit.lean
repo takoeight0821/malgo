@@ -2,6 +2,7 @@ import Malgo.Module
 import Malgo.Data.ShowFloat
 import Malgo.Backend.Zig.Ir
 import Malgo.Backend.Zig.Runtime
+import Malgo.Backend.Zig.Stage
 
 /-! Port of `src/Malgo/Backend/Zig/Emit.hs`: prints the backend `Ir.Program`
 (produced by `ClosureConv.convertProgram`) as Zig source text.
@@ -227,7 +228,8 @@ private def unlines (xs : List String) : String :=
 /-- Print the whole program to Zig source. The Haskell pass runs under
 `Reader ModuleName` only to name the generated-source comment; the port takes
 the `ModuleName` directly and is otherwise pure. -/
-def emitProgram (modName : ModuleName) (program : Program) : String :=
+def emitProgram (modName : ModuleName) (staged : Staged .reuse) : String :=
+  let program := staged.program
   let entryCall := match program.entry with
     | none => ""
     -- The Finish value comes back out of the trampoline here; dropping it is

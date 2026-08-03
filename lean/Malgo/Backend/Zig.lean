@@ -2,6 +2,7 @@ import Malgo.Monad
 import Malgo.Module
 import Malgo.Sequent.Core.Join
 import Malgo.Backend.Zig.Ir
+import Malgo.Backend.Zig.Stage
 import Malgo.Backend.Zig.ClosureConv
 import Malgo.Backend.Zig.Peephole
 import Malgo.Backend.Zig.Perceus
@@ -28,10 +29,10 @@ in this fixed order (mirrors Haskell `ZigStages`). Kept as a record so a future
 debug tracer / linearity-corpus test can inspect each stage without re-running
 the pipeline. -/
 structure ZigStages where
-  closureConv : Ir.Program
-  peephole : Ir.Program
-  perceus : Ir.Program
-  reuse : Ir.Program
+  closureConv : Staged .closureConv
+  peephole : Staged .peephole
+  perceus : Staged .perceus
+  reuse : Staged .reuse
 
 def runZigStages (mn : ModuleName) (program : Malgo.Sequent.Core.Join.Program) : MalgoM ZigStages := do
   let ir ← ClosureConv.convertProgram mn program

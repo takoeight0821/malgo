@@ -750,12 +750,12 @@ def run (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR)) (names : List St
       let ir ← Malgo.Test.getAllIR memo path
       let stages ← MalgoM.run Malgo.Test.flag {}
         (Malgo.Backend.Zig.runZigStages ir.moduleName ir.join)
-      if stages.closureConv.funcs.any (fun fn => hasRcOps fn.body) then
+      if stages.closureConv.program.funcs.any (fun fn => hasRcOps fn.body) then
         IO.println s!"FAIL Malgo.Backend.Zig.corpus/{name}: ClosureConv inserted an RC op"
         failed := failed + 1
       else match Malgo.Backend.Zig.RcCheck.checkProgram stages.reuse with
         | .ok () =>
-          if stages.reuse.funcs.any (fun fn => hasReuseOp fn.body) then
+          if stages.reuse.program.funcs.any (fun fn => hasReuseOp fn.body) then
             reuseFired := true
           IO.println s!"ok Malgo.Backend.Zig.corpus/{name}"
         | .error vs =>

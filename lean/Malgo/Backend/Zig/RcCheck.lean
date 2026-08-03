@@ -1,9 +1,12 @@
 import Std.Data.TreeMap
 import Std.Data.TreeSet
 import Malgo.Backend.Zig.Ir
+import Malgo.Backend.Zig.Stage
 
 /-! Port of `src/Malgo/Backend/Zig/RcCheck.hs`: a linearity checker over the
-RC-annotated `Ir.Program` produced by `Perceus.perceusProgram`. It symbolically
+RC-annotated `Ir.Program` produced by `Reuse.reuseProgram` (the last stage
+before this one — it also checks the reuse-token discipline `Reuse` adds,
+not just Perceus's `Dup`/`Drop`). It symbolically
 executes each function, counting each variable's owned references along every
 control-flow path, reporting any path where a reference is consumed twice, used
 after being consumed, or never consumed.
@@ -139,8 +142,8 @@ def checkFunc (fn : Func) : List RcViolation :=
   let st0 : St := { counts := initial.foldl (fun m (k, v) => m.insert k v) {} }
   goBlock fn.name st0 fn.body
 
-def checkProgram (program : Program) : Except (List RcViolation) Unit :=
-  match program.funcs.flatMap checkFunc with
+def checkProgram (staged : Staged .reuse) : Except (List RcViolation) Unit :=
+  match staged.program.funcs.flatMap checkFunc with
   | [] => .ok ()
   | violations => .error violations
 
@@ -162,7 +165,8 @@ private def doubleConsume : Func :=
     params := [n "x"]
     body := .mk [.drop (n "x")] (.«return» (n "x")) }
 
-#guard (match checkProgram { funcs := [wellFormed], entry := none } with | .ok () => true | _ => false)
+#guard (match checkProgram (⟨{ funcs := [wellFormed], entry := none }⟩ : Staged .reuse) with
+  | .ok () => true | _ => false)
 #guard checkFunc doubleConsume == [.useAfterConsume (n "g") (n "x")]
 
 /-! ## Reuse-token linearity (port of `ReuseSpec.hs`'s `rcCheckSpec`)
@@ -180,9 +184,10 @@ private def reuseFn (body : Block) : Func :=
     params := [n "a", n "b", n "k"], body }
 
 -- Well-formed: token produced, then consumed by a same-arity rebuild.
-#guard (match checkProgram { funcs := [reuseFn
+#guard (match checkProgram (⟨{ funcs := [reuseFn
     (.mk [.dropReuse rtok (n "a") 1, .let (n "s") (.mkStructReuse rtok .tuple [n "b"])]
-      (.applyCo (n "k") (n "s")))], entry := none } with | .ok () => true | _ => false)
+      (.applyCo (n "k") (n "s")))], entry := none }⟩ : Staged .reuse) with
+  | .ok () => true | _ => false)
 
 -- Consuming a token that was never produced.
 #guard (checkFunc (reuseFn

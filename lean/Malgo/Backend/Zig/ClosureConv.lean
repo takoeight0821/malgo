@@ -8,6 +8,7 @@ import Malgo.Sequent.Core.Join
 import Malgo.Sequent.Fun
 import Malgo.Backend.Zig.Ir
 import Malgo.Backend.Zig.Normalize
+import Malgo.Backend.Zig.Stage
 
 /-! Port of `src/Malgo/Backend/Zig/ClosureConv.hs`: closure conversion and
 lambda lifting from (normalized) Join IR to the first-order `Ir.Program`.
@@ -518,7 +519,7 @@ def mainEntryStatement (moduleName : ModuleName) (entryRange : Range) (mainName 
         .invoke entryRange mainName afterMain
 
 /-- Convert a linked Join IR program into the backend `Ir.Program`. -/
-def convertProgram (moduleName : ModuleName) (program : Program) : MalgoM Ir.Program := do
+def convertProgram (moduleName : ModuleName) (program : Program) : MalgoM (Staged .closureConv) := do
   -- A module reachable via more than one import path appears once per path
   -- in `Program.definitions`; deduplicate by `Id` (stable across paths).
   let definitions := nubByName program.definitions
@@ -527,7 +528,7 @@ def convertProgram (moduleName : ModuleName) (program : Program) : MalgoM Ir.Pro
   -- A module with no top-level `main` compiles to a no-op executable,
   -- matching `Eval.evalProgram`.
   match findMain definitions with
-  | none => pure { funcs := defFuncsFlat, entry := none }
+  | none => pure ⟨{ funcs := defFuncsFlat, entry := none }⟩
   | some (entryRange, mainName) => do
     let entryStmt ← mainEntryStatement moduleName entryRange mainName
     let fnName ← Malgo.newTemporalId moduleName "zig_main"
@@ -536,7 +537,7 @@ def convertProgram (moduleName : ModuleName) (program : Program) : MalgoM Ir.Pro
     let fn : Ir.Func :=
       { range := entryRange, name := fnName, kind := .topLevelFn, selfVar, params := [],
         body := block }
-    pure { funcs := defFuncsFlat ++ (fn :: lifted), entry := some fnName }
+    pure ⟨{ funcs := defFuncsFlat ++ (fn :: lifted), entry := some fnName }⟩
 
 section Test
 private def r0 : Range := ⟨SourcePos.initial "", SourcePos.initial ""⟩

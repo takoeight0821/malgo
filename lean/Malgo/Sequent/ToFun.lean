@@ -44,11 +44,11 @@ inductive ToFunError where
   deriving Repr
 
 def ToFunError.render : ToFunError → String
-  | .emptyCoClauses range => s!"{pretty range}: empty coclauses"
-  | .mismatchCopatterns range => s!"{pretty range}: mismatch copatterns"
-  | .internalError range msg => s!"{pretty range}: {msg}"
+  | .emptyCoClauses _ => "empty coclauses"
+  | .mismatchCopatterns _ => "mismatch copatterns"
+  | .internalError _ msg => msg
 
-def ToFunError.range? : ToFunError → Option Range
+def ToFunError.rangeOf : ToFunError → Option Range
   | .emptyCoClauses range => some range
   | .mismatchCopatterns range => some range
   | .internalError range _ => some range
@@ -300,6 +300,6 @@ def toFun (mn : ModuleName) (bg : BindGroup .rename) : ToFunM Fun.Program := do
 /-- Pass entry: lower a renamed bind group into the Fun IR, wrapping any
 `ToFunError` into the uniform `CompileError`. -/
 def pass (mn : ModuleName) (bg : BindGroup .rename) : MalgoM Fun.Program :=
-  wrapError "ToFun" ToFunError.render ToFunError.range? (toFun mn bg)
+  wrapError "ToFun" ToFunError.render ToFunError.rangeOf (toFun mn bg)
 
 end Malgo.Sequent.ToFun

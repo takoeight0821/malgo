@@ -153,23 +153,23 @@ instance : Inhabited EvalError := ⟨.noMatch default default⟩
 `show value` (its derived `Show`) instead, so error strings are not
 byte-parity — no golden exercises an eval error, so this is intentional. -/
 def EvalError.render : EvalError → String
-  | .undefinedVariable range name => s!"{pretty range}: Undefined variable: {pretty name}"
-  | .expectConsumer range value => s!"{pretty range}: Expecting a consumer, but got: {valueToText value}"
-  | .expectFunction range value => s!"{pretty range}: Expecting a function, but got: {valueToText value}"
-  | .expectRecord range value => s!"{pretty range}: Expecting a record, but got: {valueToText value}"
-  | .expectNumber range value => s!"{pretty range}: Expecting a number, but got: {valueToText value}"
-  | .noSuchField range field value => s!"{pretty range}: No such field: {field} in {valueToText value}"
-  | .noMatch range value => s!"{pretty range}: No match for {valueToText value}"
-  | .primitiveNotImplemented range name values =>
-    s!"{pretty range}: Primitive {name} is not implemented for " ++
+  | .undefinedVariable _ name => s!"Undefined variable: {pretty name}"
+  | .expectConsumer _ value => s!"Expecting a consumer, but got: {valueToText value}"
+  | .expectFunction _ value => s!"Expecting a function, but got: {valueToText value}"
+  | .expectRecord _ value => s!"Expecting a record, but got: {valueToText value}"
+  | .expectNumber _ value => s!"Expecting a number, but got: {valueToText value}"
+  | .noSuchField _ field value => s!"No such field: {field} in {valueToText value}"
+  | .noMatch _ value => s!"No match for {valueToText value}"
+  | .primitiveNotImplemented _ name values =>
+    s!"Primitive {name} is not implemented for " ++
       String.intercalate ", " (values.map valueToText)
-  | .invalidArguments range name values =>
-    s!"{pretty range}: Invalid arguments for {name}: " ++
+  | .invalidArguments _ name values =>
+    s!"Invalid arguments for {name}: " ++
       String.intercalate ", " (values.map valueToText)
-  | .divideByZero range => s!"{pretty range}: divide by zero"
+  | .divideByZero _ => "divide by zero"
   | .exitSuccess => "ExitSuccess"
 
-def EvalError.range? : EvalError → Option Range
+def EvalError.rangeOf : EvalError → Option Range
   | .undefinedVariable r _ => some r
   | .expectConsumer r _ => some r
   | .expectFunction r _ => some r
@@ -850,6 +850,6 @@ def evalProgram (moduleName : ModuleName) (handlers : Handlers) (program : JProg
     match result with
     | .ok () => pure ()
     | .error .exitSuccess => pure ()  -- malgo_exit_success: clean termination
-    | .error e => throw { passName := "Eval", message := e.render, range? := e.range? }
+    | .error e => throw { passName := "Eval", message := e.render, range? := e.rangeOf }
 
 end Malgo.Sequent.Eval

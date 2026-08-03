@@ -190,6 +190,6 @@ def bigStepEvalProgram (moduleName : ModuleName) (handlers : Handlers)
     match result with
     | .ok _ => pure ()
     | .error .exitSuccess => pure ()
-    | .error e => throw { passName := "BigStepEval", message := e.render, range? := e.range? }
+    | .error e => throw { passName := "BigStepEval", message := e.render, range? := e.rangeOf }
 
 end Malgo.Sequent.BigStepEval

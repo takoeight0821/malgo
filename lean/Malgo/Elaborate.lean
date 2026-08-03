@@ -47,11 +47,11 @@ inductive ElaborateError where
   deriving Repr
 
 def ElaborateError.render : ElaborateError → String
-  | .mixedAccessors range => s!"{pretty range}: mixed field and call accessors in codata"
-  | .emptyCopattern range => s!"{pretty range}: empty copattern"
-  | .internalError range msg => s!"{pretty range}: {msg}"
+  | .mixedAccessors _ => "mixed field and call accessors in codata"
+  | .emptyCopattern _ => "empty copattern"
+  | .internalError _ msg => msg
 
-def ElaborateError.range? : ElaborateError → Option Range
+def ElaborateError.rangeOf : ElaborateError → Option Range
   | .mixedAccessors range => some range
   | .emptyCopattern range => some range
   | .internalError range _ => some range
@@ -120,9 +120,7 @@ partial def elabExpr (mn : ModuleName) : Expr .rename → ElaborateM (Expr .rena
     let e' ← elabExpr mn e
     pure (.project pos e' field)
   | .fn pos clauses => do
-    let h ← elabClause mn clauses.head
-    let t ← clauses.tail.mapM (elabClause mn)
-    pure (.fn pos ⟨h, t⟩)
+    pure (.fn pos (← NEList.mapM (elabClause mn) clauses))
   | .tuple pos es => do
     let es' ← es.mapM (elabExpr mn)
     pure (.tuple pos es')
@@ -133,9 +131,7 @@ partial def elabExpr (mn : ModuleName) : Expr .rename → ElaborateM (Expr .rena
     let e' ← elabExpr mn e
     pure (.ann pos e' t)
   | .seq pos stmts => do
-    let h ← elabStmt mn stmts.head
-    let t ← stmts.tail.mapM (elabStmt mn)
-    pure (.seq pos ⟨h, t⟩)
+    pure (.seq pos (← NEList.mapM (elabStmt mn) stmts))
   | .parens pos e => do
     let e' ← elabExpr mn e
     pure (.parens pos e')
@@ -238,6 +234,6 @@ def elaborate (mn : ModuleName) (bg : BindGroup .rename) : ElaborateM (BindGroup
 /-- Pass entry: elaborate a renamed bind group, wrapping any `ElaborateError`
 into the uniform `CompileError`. -/
 def pass (moduleName : ModuleName) (bg : BindGroup .rename) : MalgoM (BindGroup .rename) :=
-  wrapError "Elaborate" ElaborateError.render ElaborateError.range? (elaborate moduleName bg)
+  wrapError "Elaborate" ElaborateError.render ElaborateError.rangeOf (elaborate moduleName bg)
 
 end Malgo.Elaborate

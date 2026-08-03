@@ -140,6 +140,43 @@ partial def unifyList (pos : Range) : List Ty → List Ty → UnifyM Subst
     pure (composeSubst s2 s1)
   | _, _ => pure {}
 
+/-- Shared tail of `unifyRecords`/`unifyVariants`, after each has already
+partitioned into common/only-left/only-right entries and unified the common
+ones into `commonSubst`: a four-way match on whether either side's row is
+open. `substPayload`/`wrap` abstract over the one thing that differs -- a
+record entry's payload is a bare `Ty`, a variant's is an arity-checked
+`List Ty` -- everything else (which combination of open/closed rows is
+legal, and applying `commonSubst` to the leftover entries before folding
+them into the continued unification) is identical for both. -/
+partial def unifyRow {α : Type} (pos : Range)
+    (substPayload : Subst → α → α) (wrap : List (String × α) → Option Ty → Ty)
+    (baseMismatchMsg mismatchWord : String)
+    (only1 only2 : List (String × α)) (commonSubst : Subst)
+    (r1 r2 : Option Ty) (fullTy1 fullTy2 : Ty) : UnifyM Subst := do
+  match r1, r2 with
+  | none, none =>
+    if only1.isEmpty && only2.isEmpty then pure commonSubst
+    else throw (.unificationError pos fullTy1 fullTy2 baseMismatchMsg)
+  | some row1, none =>
+    if only1.isEmpty then do
+      let only2' := only2.map (fun (n, t) => (n, substPayload commonSubst t))
+      let s ← unifyTypes pos (applySubst commonSubst row1) (wrap only2' none)
+      pure (composeSubst s commonSubst)
+    else throw (.unificationError pos fullTy1 fullTy2 s!"{baseMismatchMsg}: left has extra {mismatchWord}")
+  | none, some row2 =>
+    if only2.isEmpty then do
+      let only1' := only1.map (fun (n, t) => (n, substPayload commonSubst t))
+      let s ← unifyTypes pos (applySubst commonSubst row2) (wrap only1' none)
+      pure (composeSubst s commonSubst)
+    else throw (.unificationError pos fullTy1 fullTy2 s!"{baseMismatchMsg}: right has extra {mismatchWord}")
+  | some row1, some row2 => do
+    let freshRow ← freshTyVar
+    let only2' := only2.map (fun (n, t) => (n, substPayload commonSubst t))
+    let only1' := only1.map (fun (n, t) => (n, substPayload commonSubst t))
+    let s1 ← unifyTypes pos (applySubst commonSubst row1) (wrap only2' (some freshRow))
+    let s2 ← unifyTypes pos (applySubst (composeSubst s1 commonSubst) row2) (applySubst s1 (wrap only1' (some freshRow)))
+    pure (composeSubst s2 (composeSubst s1 commonSubst))
+
 partial def unifyRecords (pos : Range) (fs1 : List (String × Ty)) (r1 : Option Ty)
     (fs2 : List (String × Ty)) (r2 : Option Ty) : UnifyM Subst := do
   let names1 := fs1.map (·.1)
@@ -152,29 +189,8 @@ partial def unifyRecords (pos : Range) (fs1 : List (String × Ty)) (r1 : Option 
     let t2 := applySubst s (lookupField name fs2)
     let s' ← unifyTypes pos t1 t2
     pure (composeSubst s' s)
-  match r1, r2 with
-  | none, none =>
-    if only1.isEmpty && only2.isEmpty then pure commonSubst
-    else throw (.unificationError pos (.tRecord fs1 r1) (.tRecord fs2 r2) "Record field mismatch")
-  | some row1, none =>
-    if only1.isEmpty then do
-      let only2' := only2.map (fun (n, t) => (n, applySubst commonSubst t))
-      let s ← unifyTypes pos (applySubst commonSubst row1) (.tRecord only2' none)
-      pure (composeSubst s commonSubst)
-    else throw (.unificationError pos (.tRecord fs1 r1) (.tRecord fs2 r2) "Record field mismatch: left has extra fields")
-  | none, some row2 =>
-    if only2.isEmpty then do
-      let only1' := only1.map (fun (n, t) => (n, applySubst commonSubst t))
-      let s ← unifyTypes pos (applySubst commonSubst row2) (.tRecord only1' none)
-      pure (composeSubst s commonSubst)
-    else throw (.unificationError pos (.tRecord fs1 r1) (.tRecord fs2 r2) "Record field mismatch: right has extra fields")
-  | some row1, some row2 => do
-    let freshRow ← freshTyVar
-    let only2' := only2.map (fun (n, t) => (n, applySubst commonSubst t))
-    let only1' := only1.map (fun (n, t) => (n, applySubst commonSubst t))
-    let s1 ← unifyTypes pos (applySubst commonSubst row1) (.tRecord only2' (some freshRow))
-    let s2 ← unifyTypes pos (applySubst (composeSubst s1 commonSubst) row2) (applySubst s1 (.tRecord only1' (some freshRow)))
-    pure (composeSubst s2 (composeSubst s1 commonSubst))
+  unifyRow pos applySubst .tRecord "Record field mismatch" "fields"
+    only1 only2 commonSubst r1 r2 (.tRecord fs1 r1) (.tRecord fs2 r2)
 
 partial def unifyVariants (pos : Range) (cs1 : List (String × List Ty)) (r1 : Option Ty)
     (cs2 : List (String × List Ty)) (r2 : Option Ty) : UnifyM Subst := do
@@ -191,25 +207,8 @@ partial def unifyVariants (pos : Range) (cs1 : List (String × List Ty)) (r1 : O
     else do
       let s' ← unifyList pos (tys1.map (applySubst s)) (tys2.map (applySubst s))
       pure (composeSubst s' s)
-  match r1, r2 with
-  | none, none =>
-    if only1.isEmpty && only2.isEmpty then pure commonSubst
-    else throw (.unificationError pos (.tVariant cs1 r1) (.tVariant cs2 r2) "Variant mismatch")
-  | some row1, none =>
-    if only1.isEmpty then do
-      let s ← unifyTypes pos (applySubst commonSubst row1) (.tVariant only2 none)
-      pure (composeSubst s commonSubst)
-    else throw (.unificationError pos (.tVariant cs1 r1) (.tVariant cs2 r2) "Variant mismatch: left has extra constructors")
-  | none, some row2 =>
-    if only2.isEmpty then do
-      let s ← unifyTypes pos (applySubst commonSubst row2) (.tVariant only1 none)
-      pure (composeSubst s commonSubst)
-    else throw (.unificationError pos (.tVariant cs1 r1) (.tVariant cs2 r2) "Variant mismatch: right has extra constructors")
-  | some row1, some row2 => do
-    let freshRow ← freshTyVar
-    let s1 ← unifyTypes pos (applySubst commonSubst row1) (.tVariant only2 (some freshRow))
-    let s2 ← unifyTypes pos (applySubst (composeSubst s1 commonSubst) row2) (applySubst s1 (.tVariant only1 (some freshRow)))
-    pure (composeSubst s2 (composeSubst s1 commonSubst))
+  unifyRow pos (fun s ts => ts.map (applySubst s)) .tVariant "Variant mismatch" "constructors"
+    only1 only2 commonSubst r1 r2 (.tVariant cs1 r1) (.tVariant cs2 r2)
 
 end
 

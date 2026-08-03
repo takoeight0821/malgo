@@ -102,50 +102,42 @@ def getDiffBy (eq : α → α → Bool) (as bs : List α) : List (PolyDiff α α
 def getDiff [BEq α] (as bs : List α) : List (PolyDiff α α) :=
   getDiffBy (· == ·) as bs
 
-private def goFirsts : List (PolyDiff α α) → List α × List (PolyDiff α α)
-  | PolyDiff.first x :: xs => let (fs, rest) := goFirsts xs; (x :: fs, rest)
-  | xs => ([], xs)
+/-- Peel a maximal same-tagged prefix off the front of a `PolyDiff` list,
+mapped through `extract`, stopping at (and returning unconsumed) the first
+element `extract` doesn't match. `goFirsts`/`goSeconds`/`goBoth` are this
+one decision three times over — which tag, and what to pull out of it. -/
+private def goExtract (extract : PolyDiff α α → Option β) :
+    List (PolyDiff α α) → List β × List (PolyDiff α α)
+  | x :: xs =>
+    match extract x with
+    | some b => let (bs, rest) := goExtract extract xs; (b :: bs, rest)
+    | none => ([], x :: xs)
+  | [] => ([], [])
 
-private def goSeconds : List (PolyDiff α α) → List α × List (PolyDiff α α)
-  | PolyDiff.second x :: xs => let (fs, rest) := goSeconds xs; (x :: fs, rest)
-  | xs => ([], xs)
+private def goFirsts : List (PolyDiff α α) → List α × List (PolyDiff α α) :=
+  goExtract fun | .first x => some x | _ => none
 
-private def goBoth : List (PolyDiff α α) → List (α × α) × List (PolyDiff α α)
-  | PolyDiff.both x y :: xs => let (fs, rest) := goBoth xs; ((x, y) :: fs, rest)
-  | xs => ([], xs)
+private def goSeconds : List (PolyDiff α α) → List α × List (PolyDiff α α) :=
+  goExtract fun | .second x => some x | _ => none
 
-/-- `goFirsts` only ever peels a `first`-tagged prefix off the front and
+private def goBoth : List (PolyDiff α α) → List (α × α) × List (PolyDiff α α) :=
+  goExtract fun | .both x y => some (x, y) | _ => none
+
+/-- `goExtract` only ever peels a matching-tagged prefix off the front and
 returns the untouched remainder — its second component is never bigger
 than the input. Termination-only helper for `groupGo`. -/
-private theorem goFirsts_snd_sizeOf_le : (xs : List (PolyDiff α α)) → sizeOf (goFirsts xs).2 ≤ sizeOf xs
-  | [] => by simp [goFirsts]
-  | .first _ :: xs => by
-    simp only [goFirsts]
-    have := goFirsts_snd_sizeOf_le xs
-    simp_wf
-    omega
-  | .second _ :: _ => by simp [goFirsts]
-  | .both _ _ :: _ => by simp [goFirsts]
-
-private theorem goSeconds_snd_sizeOf_le : (xs : List (PolyDiff α α)) → sizeOf (goSeconds xs).2 ≤ sizeOf xs
-  | [] => by simp [goSeconds]
-  | .first _ :: _ => by simp [goSeconds]
-  | .second _ :: xs => by
-    simp only [goSeconds]
-    have := goSeconds_snd_sizeOf_le xs
-    simp_wf
-    omega
-  | .both _ _ :: _ => by simp [goSeconds]
-
-private theorem goBoth_snd_sizeOf_le : (xs : List (PolyDiff α α)) → sizeOf (goBoth xs).2 ≤ sizeOf xs
-  | [] => by simp [goBoth]
-  | .first _ :: _ => by simp [goBoth]
-  | .second _ :: _ => by simp [goBoth]
-  | .both _ _ :: xs => by
-    simp only [goBoth]
-    have := goBoth_snd_sizeOf_le xs
-    simp_wf
-    omega
+private theorem goExtract_snd_sizeOf_le (extract : PolyDiff α α → Option β) :
+    (xs : List (PolyDiff α α)) → sizeOf (goExtract extract xs).2 ≤ sizeOf xs
+  | [] => by simp [goExtract]
+  | x :: xs => by
+    simp only [goExtract]
+    cases extract x with
+    | none => simp
+    | some b =>
+      simp only
+      have := goExtract_snd_sizeOf_le extract xs
+      simp_wf
+      omega
 
 private def groupGo : List (PolyDiff α α) → List (PolyDiff (List α) (List α))
   | PolyDiff.first x :: xs =>
@@ -160,9 +152,7 @@ decreasing_by
   all_goals simp_wf
   all_goals first
     | omega
-    | exact Nat.lt_of_le_of_lt (goFirsts_snd_sizeOf_le xs) (by omega)
-    | exact Nat.lt_of_le_of_lt (goSeconds_snd_sizeOf_le xs) (by omega)
-    | exact Nat.lt_of_le_of_lt (goBoth_snd_sizeOf_le xs) (by omega)
+    | exact Nat.lt_of_le_of_lt (goExtract_snd_sizeOf_le _ xs) (by omega)
 
 def getGroupedDiffBy (eq : α → α → Bool) (as bs : List α) :
     List (PolyDiff (List α) (List α)) :=

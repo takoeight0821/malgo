@@ -42,10 +42,6 @@ inductive Atom where
   | str (s : String)
   deriving BEq, Repr
 
-namespace Atom
-
-end Atom
-
 -- `Malgo.haskellShowFloat` (Haskell `show @Double` parity) lives in
 -- `Malgo.Data.ShowFloat`; both the golden dumps and the interpreter's
 -- `to_string`/print primitives use it.

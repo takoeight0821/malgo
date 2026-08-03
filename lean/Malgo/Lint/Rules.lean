@@ -87,10 +87,10 @@ private def caseOfBoundArgCheck : Expr .parse → List Diagnostic
           else
             match boundPosition x pats with
             | .lastParam =>
-              [warn "case-of-bound-arg" (clauseRange c)
+              [warn "case-of-bound-arg" (range c)
                 s!"`{x}` is bound only to be matched; drop `{x} -> case {x}` and match the argument directly."]
             | .nestedBind =>
-              [warn "case-of-bound-arg" (clauseRange c)
+              [warn "case-of-bound-arg" (range c)
                 s!"`{x}` is bound by a pattern only to be matched; fold the `case` arms into the pattern that binds it."]
             | .elsewhere => []
         | _ => []

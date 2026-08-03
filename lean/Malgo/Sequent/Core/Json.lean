@@ -257,8 +257,6 @@ partial def consumerFromJson (j : Json) : Except String Consumer := do
     | "proj" => return .project (← fromJson? r) (← a.getStr?) (← fromJson? b)
     | "then" => return .«then» (← fromJson? r) (← fromJson? a) (← statementFromJson b)
     | other => .error s!"Consumer: unknown 4-element tag {other}"
-  | [tag, r, a, b, c] => match ← tag.getStr? with
-    | other => .error s!"Consumer: unknown 5-element tag {other}"
   | _ => .error "Consumer: unexpected shape"
 
 partial def statementFromJson (j : Json) : Except String Statement := do

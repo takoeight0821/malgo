@@ -9,20 +9,29 @@ equivalent AND, unlike Haskell's `readProcessWithExitCode`, does not raise an
 `IO.Error` when the command is missing — empirically (verified against this
 binary) it instead returns `.ok` with a nonzero exit code and a `stderr` of
 "could not execute external process 'zig'". Checking `PATH` up front with
-`findOnPath` (re-implementing `findExecutable`'s search) and never spawning
-at all when `zig` is absent avoids depending on that message's exact text,
-mirrors Haskell's actual control flow instead of guessing at Lean's
-process-spawn error shape, and — critically — still lets a REAL spawn/exit
-failure (a `zig` that IS on `PATH` but errors for some other reason:
-permissions, a full cache-dir disk, a resource limit) fall through to the
-generic "zig build-exe failed" branch with its own stderr intact, rather
-than being misdiagnosed as "not installed". -/
+`findOnPath` and never spawning at all when no `zig` is present avoids
+depending on that message's exact text, and — critically — still lets a REAL
+spawn/exit failure (a `zig` that IS on `PATH` but errors for some other
+reason: permissions, a full cache-dir disk, a resource limit) fall through
+to the generic "zig build-exe failed" branch with its own stderr intact,
+rather than being misdiagnosed as "not installed".
+
+`findOnPath` is a coarser check than Haskell's `findExecutable`: it only
+confirms a file named `zig` exists on `PATH`, not that it is executable.
+Lean's `IO.FS.Metadata` (v4.32.0) has no field exposing POSIX access rights
+(`IO.setAccessRights` exists to set permissions, but there is no matching
+getter) — checked directly against the pinned toolchain's source, not
+assumed — so there is no portable way to check the execute bit from here. A
+`zig` on `PATH` that exists but lacks the execute bit is therefore still
+misreported as "found"; the resulting spawn failure surfaces as whatever
+`IO.Process.output` produces for that case (see the `.error e` branch below),
+not as the "not installed" message. -/
 
 namespace Malgo.Backend.Zig.Toolchain
 
-/-- Port of `System.Directory.findExecutable "zig"`: search `$PATH` for an
-executable file named `zig`. Returns `none` if `$PATH` is unset or no
-directory on it contains one. -/
+/-- Search `$PATH` for a file named `name`. Only checks existence, not
+executability (see the module doc for why). Returns `false` if `$PATH` is
+unset or no directory on it contains a matching file. -/
 private def findOnPath (name : String) : IO Bool := do
   let some path ← IO.getEnv "PATH" | return false
   for dir in path.splitOn ":" do

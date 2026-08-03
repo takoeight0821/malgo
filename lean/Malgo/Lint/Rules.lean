@@ -75,7 +75,7 @@ private def boundPosition (x : String) (pats : NEList (Pat .parse)) : BoundPosit
         ({} : Std.TreeSet String)
       if nested.contains x then .nestedBind else .elsewhere
 
-private def caseOfBoundArgCheck : Expr .parse → List Diagnostic
+private def caseOfBoundArgCheck (id : String) : Expr .parse → List Diagnostic
   | .fn _ clauses => clauses.toList.flatMap fun c =>
     match c with
     | .mk _ pats body =>
@@ -87,10 +87,10 @@ private def caseOfBoundArgCheck : Expr .parse → List Diagnostic
           else
             match boundPosition x pats with
             | .lastParam =>
-              [warn "case-of-bound-arg" (range c)
+              [warn id (range c)
                 s!"`{x}` is bound only to be matched; drop `{x} -> case {x}` and match the argument directly."]
             | .nestedBind =>
-              [warn "case-of-bound-arg" (range c)
+              [warn id (range c)
                 s!"`{x}` is bound by a pattern only to be matched; fold the `case` arms into the pattern that binds it."]
             | .elsewhere => []
         | _ => []
@@ -101,12 +101,12 @@ private def caseOfBoundArg : Rule .parse := exprRule "case-of-bound-arg" caseOfB
 
 /-! ## Rule: single-branch-case -/
 
-private def singleBranchCaseCheck (e : Expr .parse) : List Diagnostic :=
+private def singleBranchCaseCheck (id : String) (e : Expr .parse) : List Diagnostic :=
   match matchCase e with
   | some (_, .fn _ ⟨.mk _ ⟨pat, []⟩ _, []⟩) =>
     match pat with
-    | .var .. => [warn "single-branch-case" (range e) "single-branch `case`; bind with `let` instead."]
-    | _ => [warn "single-branch-case" (range e) "single-branch `case`; consider a `let` if the match is irrefutable."]
+    | .var .. => [warn id (range e) "single-branch `case`; bind with `let` instead."]
+    | _ => [warn id (range e) "single-branch `case`; consider a `let` if the match is irrefutable."]
   | _ => []
 
 private def singleBranchCase : Rule .parse := exprRule "single-branch-case" singleBranchCaseCheck
@@ -121,11 +121,11 @@ private def forwards : Clause .parse → Bool
     | _ => false
   | _ => false
 
-private def redundantCaseForwardCheck (e : Expr .parse) : List Diagnostic :=
+private def redundantCaseForwardCheck (id : String) (e : Expr .parse) : List Diagnostic :=
   match matchCase e with
   | some (_, .fn _ clauses) =>
     if clauses.toList.any forwards then
-      [warn "redundant-case-forward" (range e)
+      [warn id (range e)
         "a `case` branch rebuilds its scrutinee unchanged; consider an `orElse`/`maybe`-style combinator."]
     else []
   | _ => []
@@ -140,12 +140,12 @@ private def asBool : Expr .parse → Option Bool
   | .var _ "False" => some false
   | _ => none
 
-private def ifReturningBoolCheck (e : Expr .parse) : List Diagnostic :=
+private def ifReturningBoolCheck (id : String) (e : Expr .parse) : List Diagnostic :=
   match matchIf e with
   | some (_, t, el) =>
     match asBool t, asBool el with
-    | some true, some false => [warn "if-returning-bool" (range e) "`if c { True } { False }` is just `c`."]
-    | some false, some true => [warn "if-returning-bool" (range e) "`if c { False } { True }` is just `not c`."]
+    | some true, some false => [warn id (range e) "`if c { True } { False }` is just `c`."]
+    | some false, some true => [warn id (range e) "`if c { False } { True }` is just `not c`."]
     | _, _ => []
   | none => []
 
@@ -190,19 +190,20 @@ private partial def chainLinks (e : Expr .parse) (mscrut : Option String) :
     | none => (0, [], e)
   | none => (0, [], e)
 
-private partial def scan (e : Expr .parse) : List Diagnostic :=
+private partial def scan (id : String) (e : Expr .parse) : List Diagnostic :=
   let (n, thenBodies, dflt) := chainLinks e none
   if n >= 3 then
-    warn "nested-if-equality-chain" (range e)
+    warn id (range e)
         s!"nested `if` chain of depth {n} over `{scrutOf e}`; match it with multi-clause patterns or `case`."
-      :: (thenBodies ++ [dflt]).flatMap scan
+      :: (thenBodies ++ [dflt]).flatMap (scan id)
   else
-    (children e).flatMap scan
+    (children e).flatMap (scan id)
 
 private def nestedIfEqualityChain : Rule .parse :=
-  { ruleId := "nested-if-equality-chain",
+  let ruleId := "nested-if-equality-chain"
+  { ruleId,
     run := fun decls =>
-      (decls.filterMap fun | .scDef _ _ e => some e | _ => none).flatMap scan }
+      (decls.filterMap fun | .scDef _ _ e => some e | _ => none).flatMap (scan ruleId) }
 
 /-! ## The default rule set -/
 

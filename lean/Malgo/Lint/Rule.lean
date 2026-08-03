@@ -14,8 +14,9 @@ structure Rule (p : Phase) where
   run : List (Decl p) → List Diagnostic
 
 /-- A rule that inspects every sub-expression of every definition
-independently. -/
-def exprRule (ruleId : String) (check : Expr p → List Diagnostic) : Rule p :=
-  { ruleId, run := fun decls => (universeDecls decls).flatMap check }
+independently. `check` receives the rule's own `ruleId`, so a `warn` call
+inside it can't drift from the ID this rule was actually registered under. -/
+def exprRule (ruleId : String) (check : String → Expr p → List Diagnostic) : Rule p :=
+  { ruleId, run := fun decls => (universeDecls decls).flatMap (check ruleId) }
 
 end Malgo.Lint

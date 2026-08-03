@@ -365,16 +365,12 @@ instance [ToSExpr (XId p)] : ToSExpr (BindGroup p) where
   toSExpr bg :=
     .list
       [ .list (bg.scDefs.map fun group =>
-          SExpr.list (group.map fun (_, f, e) => .list [sym "def", toSExpr f, toSExpr e])),
-        .list (bg.scSigs.map fun (_, f, t) => .list [sym "sig", toSExpr f, toSExpr t]),
-        .list (bg.dataDefs.map fun (_, name, ps, cons) =>
-          .list [sym "data", toSExpr name,
-            .list (ps.map fun (_, p) => toSExpr p),
-            .list (cons.map fun (_, c, ts) => .list [toSExpr c, .list (ts.map toSExpr)])]),
-        .list (bg.typeSynonyms.map fun (_, name, ps, ty) =>
-          .list [sym "type", toSExpr name, .list (ps.map toSExpr), toSExpr ty]),
-        .list (bg.foreigns.map fun (_, n, t) => .list [sym "foreign", toSExpr n, toSExpr t]),
-        .list (bg.imports.map fun (_, m, list) => .list [sym "import", toSExpr m, toSExpr list]) ]
+          SExpr.list (group.map fun (ext, name, expr) => Decl.dump (.scDef ext name expr))),
+        .list (bg.scSigs.map fun (ext, name, ty) => Decl.dump (.scSig ext name ty)),
+        .list (bg.dataDefs.map fun (ext, name, ps, cons) => Decl.dump (.dataDef ext name ps cons)),
+        .list (bg.typeSynonyms.map fun (ext, name, ps, ty) => Decl.dump (.typeSynonym ext name ps ty)),
+        .list (bg.foreigns.map fun (ext, name, ty) => Decl.dump (.foreign ext name ty)),
+        .list (bg.imports.map fun (ext, m, list) => Decl.dump (.«import» ext m list)) ]
 
 instance [ToSExpr (XId p)] [ToSExpr (XModule p)] : ToSExpr (Module p) where
   toSExpr m := .list [sym "module", toSExpr m.moduleName, toSExpr m.moduleDefinition]

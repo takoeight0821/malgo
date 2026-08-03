@@ -268,6 +268,12 @@ def toList (xs : NEList α) : List α := xs.head :: xs.tail
 
 def map (f : α → β) (xs : NEList α) : NEList β := ⟨f xs.head, xs.tail.map f⟩
 
+/-- Monadic map, head first (mirrors `traverse` on a `NonEmpty`). -/
+def mapM [Monad m] (f : α → m β) (xs : NEList α) : m (NEList β) := do
+  let h ← f xs.head
+  let t ← xs.tail.mapM f
+  pure ⟨h, t⟩
+
 def singleton (a : α) : NEList α := ⟨a, []⟩
 
 def length (xs : NEList α) : Nat := 1 + xs.tail.length

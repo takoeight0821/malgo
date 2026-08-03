@@ -144,6 +144,7 @@ def group (x : Doc) : Doc :=
 /-- Port of `Prettyprinter.Internal.unsafeTextWithoutNewlines`: wrap a
 newline-free string in the smallest matching `Doc` constructor. -/
 def atom (s : String) : Doc :=
+  assert! !s.contains '\n'
   match s.toList with
   | [] => .empty
   | [c] => .char c

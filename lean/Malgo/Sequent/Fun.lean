@@ -29,9 +29,11 @@ inductive Tag where
   | tag (name : String)
   deriving BEq, Repr
 
+private def sym (s : String) : SExpr := .atom (.symbol s)
+
 instance : ToSExpr Tag where
   toSExpr
-    | .tuple => .atom (.symbol "tuple")
+    | .tuple => sym "tuple"
     | .tag t => toSExpr t
 
 inductive Literal where
@@ -66,8 +68,6 @@ def Pattern.range : Pattern → Range
   | .expand r _ => r
 
 instance : HasRange Pattern := ⟨Pattern.range⟩
-
-private def sym (s : String) : SExpr := .atom (.symbol s)
 
 partial def Pattern.toSExpr : Pattern → SExpr
   | .pvar _ name => Malgo.toSExpr name
@@ -141,8 +141,8 @@ partial def Expr.toSExpr : Expr → SExpr
     .list [sym "project", callee.toSExpr, Malgo.toSExpr field]
   | .primitive _ operator arguments =>
     .list [sym "primitive", Malgo.toSExpr operator, .list (arguments.map Expr.toSExpr)]
-  | .select _ scrutinees branches =>
-    .list [sym "select", scrutinees.toSExpr, .list (branches.map Branch.toSExpr)]
+  | .select _ scrutinee branches =>
+    .list [sym "select", scrutinee.toSExpr, .list (branches.map Branch.toSExpr)]
   | .invoke _ name => .list [sym "invoke", Malgo.toSExpr name]
   | .fix _ name body => .list [sym "fix", Malgo.toSExpr name, body.toSExpr]
 

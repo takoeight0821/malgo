@@ -16,8 +16,9 @@ query kind) — the union of Haskell's `Query.hs` (the effect surface) and
 `Malgo/Query/Engine.lean`.
 
 Deviations from Haskell:
-- no `cacheInferredModule` yet — type inference is M3 (`useInfer = false`
-  everywhere for now), so the inferred cache is a `-- TODO(M3)`;
+- `cacheInferredModule` is populated only when `Flag.useInfer` is set;
+  inference is gated behind that flag, not unconditionally absent — see
+  `fetchInferredModule`/`buildDepsEnv` in `Malgo/Query/Engine.lean`;
 - `buildInterface` lives here (it projects `RnState`, which this module
   already imports) rather than in `Interface.lean`, which stays free of the
   rename layer. -/

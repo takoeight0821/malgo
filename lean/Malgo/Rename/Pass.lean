@@ -209,18 +209,25 @@ def buildListP (pos : Range) (nilName consName : Id) : List (Pat .rename) → Pa
   | [] => .con pos nilName []
   | x :: xs => .con pos consName [x, buildListP pos nilName consName xs]
 
-/-- `(nofix_error, associate_right)` from Haskell `compareFixity`. -/
-def compareFixity (f1 f2 : Assoc × Int) : Bool × Bool :=
+/-- The outcome of comparing two operators' fixity: which side associates,
+or that the two operators cannot be mixed at all. -/
+inductive FixityDecision where
+  | error
+  | associateLeft
+  | associateRight
+
+/-- Port of Haskell `compareFixity`. -/
+def compareFixity (f1 f2 : Assoc × Int) : FixityDecision :=
   let (assoc1, prec1) := f1
   let (assoc2, prec2) := f2
   match compare prec1 prec2 with
-  | .gt => (false, false)  -- left-associate
-  | .lt => (false, true)   -- right-associate
+  | .gt => .associateLeft
+  | .lt => .associateRight
   | .eq =>
     match assoc1, assoc2 with
-    | .rightA, .rightA => (false, true)
-    | .leftA, .leftA => (false, false)
-    | _, _ => (true, false)
+    | .rightA, .rightA => .associateRight
+    | .leftA, .leftA => .associateLeft
+    | _, _ => .error
 
 /-- `OpApp` recombination: the parser emits everything left-associative;
 this rewrites to the declared associativity/precedence. Pure control-flow,
@@ -230,13 +237,13 @@ partial def mkOpApp (pos2 : Range) (fix2 : Assoc × Int) (op2 : Id)
   match lhs with
   | .opApp ext op1 e11 e12 =>
     let (pos1, fix1) := ext
-    let (nofix_error, associate_right) := compareFixity fix1 fix2
-    if nofix_error then
+    match compareFixity fix1 fix2 with
+    | .error =>
       errorOn pos1 s!"Precedence parsing error: cannot mix '{pretty op1}' [{pretty fix1.1}{fix1.2}] and '{pretty op2}' [{pretty fix2.1}{fix2.2}] in the same infix expression"
-    else if associate_right then
+    | .associateRight =>
       let e' ← mkOpApp pos2 fix2 op2 e12 rhs
       pure (.opApp (pos1, fix1) op1 e11 e')
-    else
+    | .associateLeft =>
       pure (.opApp (pos2, fix2) op2 lhs rhs)
   | _ => pure (.opApp (pos2, fix2) op2 lhs rhs)
 
@@ -353,13 +360,6 @@ def infixDecls (ds : List (Decl .parse)) : RnM (Std.TreeMap Id (Assoc × Int)) :
 
 /-! ## The renamer proper -/
 
-/-- Monadic map over `NEList`, head first (mirrors `traverse` on a
-`NonEmpty`). -/
-private def neMapM [Monad m] (f : α → m β) (xs : NEList α) : m (NEList β) := do
-  let h ← f xs.head
-  let t ← xs.tail.mapM f
-  pure ⟨h, t⟩
-
 mutual
 
 /-- Rename an expression; also performs `OpApp` recombination. -/
@@ -389,7 +389,7 @@ partial def rnExpr : Expr .parse → RnM (Expr .rename)
       else
         pure (.project range (← rnExpr (.var vRange name)) field)
     | _ => pure (.project range (← rnExpr expr) field)
-  | .fn pos cs => do pure (.fn pos (← neMapM rnClause cs))
+  | .fn pos cs => do pure (.fn pos (← NEList.mapM rnClause cs))
   | .tuple pos es => do pure (.tuple pos (← es.mapM rnExpr))
   | .record pos kvs => do pure (.record pos (← kvs.mapM (fun (k, v) => do pure (k, ← rnExpr v))))
   | .list pos es => do
@@ -449,7 +449,7 @@ partial def rnClause : Clause .parse → RnM (Clause .rename)
     let resolved ← vars.mapM resolveName  -- uniq: pattern binders in bind order
     let vm := vars.zip (resolved.map (fun i => (⟨.implicit, i⟩ : Resolved)))
     localEnv (insertVarIdent vm) do
-      let ps' ← neMapM rnPat ps  -- patterns before body (body may consume uniqs)
+      let ps' ← NEList.mapM rnPat ps  -- patterns before body (body may consume uniqs)
       pure (.mk pos ps' (← rnExpr e))
 
 partial def rnCoClause : CoClause .parse → RnM (CoClause .rename)

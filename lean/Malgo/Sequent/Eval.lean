@@ -448,6 +448,11 @@ def unaryPrim (range : Range) (name : String) (f : Range → Value → EvalM Val
   | [a] => f range a
   | values => throw (.invalidArguments range name values)
 
+def ternaryPrim (range : Range) (name : String)
+    (f : Range → Value → Value → Value → EvalM Value) : List Value → EvalM Value
+  | [a, b, c] => f range a b c
+  | values => throw (.invalidArguments range name values)
+
 def toStringPrim (range : Range) (name : String) : List Value → EvalM Value
   | [.immediate (.int32 n)] => pure (.immediate (.string (toString n.toInt)))
   | [.immediate (.int64 n)] => pure (.immediate (.string (toString n.toInt)))
@@ -519,14 +524,8 @@ def stringAtImpl (range : Range) (i : Int64) (s : String) : EvalM Value :=
 /-! ## Primitive dispatch (`fetchPrimitive`) -/
 
 def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM Value := do
-  if name == "reuseHint" then
-    match values with
-    | [value] => pure value
-    | _ => throw (.invalidArguments range "reuseHint" values)
-  else if name == "malgo_unsafe_cast" then
-    match values with
-    | [value] => pure value
-    | _ => throw (.invalidArguments range "malgo_unsafe_cast" values)
+  if name == "reuseHint" then unaryPrim range name (fun _ v => pure v) values
+  else if name == "malgo_unsafe_cast" then unaryPrim range name (fun _ v => pure v) values
   else if name.startsWith "malgo_add_" then binaryPrim range name addValue values
   else if name.startsWith "malgo_sub_" then binaryPrim range name subValue values
   else if name.startsWith "malgo_mul_" then binaryPrim range name mulValue values
@@ -544,148 +543,149 @@ def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM
     let h := (← read).handlers
     match name with
     | "malgo_print_string" =>
-      match values with
-      | [.immediate (.string text)] => do putTextTo h.stdout text; pure (.struct .tuple [])
-      | _ => throw (.invalidArguments range "malgo_print_string" values)
-    | "malgo_newline" => do h.stdout '\n'; pure (.struct .tuple [])
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string text) => do putTextTo h.stdout text; pure (.struct .tuple [])
+        | _ => throw (.invalidArguments range name [v])) values
+    | "malgo_newline" =>
+      unaryPrim range name (fun _ _ => do h.stdout '\n'; pure (.struct .tuple [])) values
     | "malgo_print_char" =>
-      match values with
-      | [.immediate (.char c)] => do h.stdout c; pure (.struct .tuple [])
-      | _ => throw (.invalidArguments range "malgo_print_char" values)
-    | "malgo_get_contents" => do
-      let cs ← readAllContents h []
-      pure (.immediate (.string (String.ofList cs)))
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.char c) => do h.stdout c; pure (.struct .tuple [])
+        | _ => throw (.invalidArguments range name [v])) values
+    | "malgo_get_contents" =>
+      unaryPrim range name (fun _ _ => do
+        let cs ← readAllContents h []
+        pure (.immediate (.string (String.ofList cs)))) values
     | "malgo_string_append" =>
-      match values with
-      | [.immediate (.string a), .immediate (.string b)] => pure (.immediate (.string (a ++ b)))
-      | _ => throw (.invalidArguments range "malgo_string_append" values)
+      binaryPrim range name (fun _ a b => match a, b with
+        | .immediate (.string a), .immediate (.string b) => pure (.immediate (.string (a ++ b)))
+        | _, _ => throw (.invalidArguments range name [a, b])) values
     | "malgo_string_length" =>
-      match values with
-      | [.immediate (.string s)] => pure (.immediate (.int64 (Int64.ofNat s.length)))
-      | _ => throw (.invalidArguments range "malgo_string_length" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string s) => pure (.immediate (.int64 (Int64.ofNat s.length)))
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_string_at" =>
-      match values with
-      | [.immediate (.int64 i), .immediate (.string s)] => stringAtImpl range i s
-      | _ => throw (.invalidArguments range "malgo_string_at" values)
+      binaryPrim range name (fun _ a b => match a, b with
+        | .immediate (.int64 i), .immediate (.string s) => stringAtImpl range i s
+        | _, _ => throw (.invalidArguments range name [a, b])) values
     | "malgo_string_cons" =>
-      match values with
-      | [.immediate (.char c), .immediate (.string s)] =>
-        pure (.immediate (.string (String.ofList (c :: s.toList))))
-      | _ => throw (.invalidArguments range "malgo_string_cons" values)
+      binaryPrim range name (fun _ a b => match a, b with
+        | .immediate (.char c), .immediate (.string s) =>
+          pure (.immediate (.string (String.ofList (c :: s.toList))))
+        | _, _ => throw (.invalidArguments range name [a, b])) values
     | "malgo_substring" =>
-      match values with
-      | [.immediate (.string s), .immediate (.int64 start), .immediate (.int64 e)] =>
-        let st := start.toInt.toNat
-        let len := (e.toInt - start.toInt).toNat
-        pure (.immediate (.string (String.ofList ((s.toList.drop st).take len))))
-      | _ => throw (.invalidArguments range "malgo_substring" values)
+      ternaryPrim range name (fun _ a b c => match a, b, c with
+        | .immediate (.string s), .immediate (.int64 start), .immediate (.int64 e) =>
+          let st := start.toInt.toNat
+          let len := (e.toInt - start.toInt).toNat
+          pure (.immediate (.string (String.ofList ((s.toList.drop st).take len))))
+        | _, _, _ => throw (.invalidArguments range name [a, b, c])) values
     | "malgo_string_reverse" =>
-      match values with
-      | [.immediate (.string s)] => pure (.immediate (.string (String.ofList s.toList.reverse)))
-      | _ => throw (.invalidArguments range "malgo_string_reverse" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string s) => pure (.immediate (.string (String.ofList s.toList.reverse)))
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_print" =>
-      match values with
-      | [value] => do putTextTo h.stdout (valueToText value); pure (.struct .tuple [])
-      | _ => throw (.invalidArguments range "malgo_print" values)
+      unaryPrim range name (fun _ v => do
+        putTextTo h.stdout (valueToText v); pure (.struct .tuple [])) values
     | "malgo_str_len" =>
-      match values with
-      | [.immediate (.string s)] => pure (.immediate (.int64 (Int64.ofNat s.length)))
-      | _ => throw (.invalidArguments range "malgo_str_len" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string s) => pure (.immediate (.int64 (Int64.ofNat s.length)))
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_str_at" =>
-      match values with
-      | [.immediate (.string s), .immediate (.int64 i)] => stringAtImpl range i s
-      | _ => throw (.invalidArguments range "malgo_str_at" values)
+      binaryPrim range name (fun _ a b => match a, b with
+        | .immediate (.string s), .immediate (.int64 i) => stringAtImpl range i s
+        | _, _ => throw (.invalidArguments range name [a, b])) values
     | "malgo_str_sub" =>
-      match values with
-      | [.immediate (.string s), .immediate (.int64 start), .immediate (.int64 len)] =>
-        pure (.immediate (.string (String.ofList ((s.toList.drop start.toInt.toNat).take len.toInt.toNat))))
-      | _ => throw (.invalidArguments range "malgo_str_sub" values)
+      ternaryPrim range name (fun _ a b c => match a, b, c with
+        | .immediate (.string s), .immediate (.int64 start), .immediate (.int64 len) =>
+          pure (.immediate (.string (String.ofList ((s.toList.drop start.toInt.toNat).take len.toInt.toNat))))
+        | _, _, _ => throw (.invalidArguments range name [a, b, c])) values
     | "malgo_str_to_int" =>
-      match values with
-      | [.immediate (.string s)] =>
-        match readsInt s with
-        | some n => pure (.immediate (.int64 (Int64.ofInt n)))
-        | none => throw (.invalidArguments range "malgo_str_to_int" [.immediate (.string s)])
-      | _ => throw (.invalidArguments range "malgo_str_to_int" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string s) =>
+          match readsInt s with
+          | some n => pure (.immediate (.int64 (Int64.ofInt n)))
+          | none => throw (.invalidArguments range name [v])
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_int_to_str" =>
-      match values with
-      | [.immediate (.int64 n)] => pure (.immediate (.string (toString n.toInt)))
-      | _ => throw (.invalidArguments range "malgo_int_to_str" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.int64 n) => pure (.immediate (.string (toString n.toInt)))
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_rune_to_str" =>
-      match values with
-      | [.immediate (.char c)] => pure (.immediate (.string (String.singleton c)))
-      | _ => throw (.invalidArguments range "malgo_rune_to_str" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.char c) => pure (.immediate (.string (String.singleton c)))
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_int_to_rune" =>
-      match values with
-      | [.immediate (.int64 n)] => do
-        pure (.immediate (.char (← intToChar range "malgo_int_to_rune" values n.toInt)))
-      | _ => throw (.invalidArguments range "malgo_int_to_rune" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.int64 n) => do pure (.immediate (.char (← intToChar range name [v] n.toInt)))
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_rune_to_int" =>
-      match values with
-      | [.immediate (.char c)] => pure (.immediate (.int64 (Int64.ofNat c.toNat)))
-      | _ => throw (.invalidArguments range "malgo_rune_to_int" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.char c) => pure (.immediate (.int64 (Int64.ofNat c.toNat)))
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_is_digit" =>
-      match values with
-      | [.immediate (.char c)] => pure (boolI32 c.isDigit)
-      | _ => throw (.invalidArguments range "malgo_is_digit" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.char c) => pure (boolI32 c.isDigit)
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_is_lower" =>
-      match values with
-      | [.immediate (.char c)] => pure (boolI32 c.isLower)
-      | _ => throw (.invalidArguments range "malgo_is_lower" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.char c) => pure (boolI32 c.isLower)
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_is_upper" =>
-      match values with
-      | [.immediate (.char c)] => pure (boolI32 c.isUpper)
-      | _ => throw (.invalidArguments range "malgo_is_upper" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.char c) => pure (boolI32 c.isUpper)
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_is_alphanum" =>
-      match values with
-      | [.immediate (.char c)] => pure (boolI32 c.isAlphanum)
-      | _ => throw (.invalidArguments range "malgo_is_alphanum" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.char c) => pure (boolI32 c.isAlphanum)
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_char_ord" =>
-      match values with
-      | [.immediate (.char c)] => pure (.immediate (.int32 (Int32.ofNat c.toNat)))
-      | _ => throw (.invalidArguments range "malgo_char_ord" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.char c) => pure (.immediate (.int32 (Int32.ofNat c.toNat)))
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_int32_t_to_char" =>
-      match values with
-      | [.immediate (.int32 n)] => do
-        pure (.immediate (.char (← intToChar range "malgo_int32_t_to_char" values n.toInt)))
-      | _ => throw (.invalidArguments range "malgo_int32_t_to_char" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.int32 n) => do pure (.immediate (.char (← intToChar range name [v] n.toInt)))
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_read_file" =>
-      match values with
-      | [.immediate (.string path)] => do
-        let contents ← IO.FS.readFile (System.FilePath.mk path)
-        pure (.immediate (.string contents))
-      | _ => throw (.invalidArguments range "malgo_read_file" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string path) => do
+          let contents ← IO.FS.readFile (System.FilePath.mk path)
+          pure (.immediate (.string contents))
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_write_file" =>
-      match values with
-      | [.immediate (.string path), .immediate (.string content)] => do
-        IO.FS.writeFile (System.FilePath.mk path) content
-        pure (.struct .tuple [])
-      | _ => throw (.invalidArguments range "malgo_write_file" values)
-    | "malgo_get_line" => do
-      let cs ← readLineChars h []
-      pure (.immediate (.string (String.ofList cs)))
+      binaryPrim range name (fun _ a b => match a, b with
+        | .immediate (.string path), .immediate (.string content) => do
+          IO.FS.writeFile (System.FilePath.mk path) content
+          pure (.struct .tuple [])
+        | _, _ => throw (.invalidArguments range name [a, b])) values
+    | "malgo_get_line" =>
+      unaryPrim range name (fun _ _ => do
+        let cs ← readLineChars h []
+        pure (.immediate (.string (String.ofList cs)))) values
     | "malgo_get_args" =>
-      pure (.immediate (.string (String.intercalate "\n" h.arguments)))
+      unaryPrim range name (fun _ _ =>
+        pure (.immediate (.string (String.intercalate "\n" h.arguments)))) values
     | "malgo_exit_success" =>
-      throw .exitSuccess
+      unaryPrim range name (fun _ _ => throw .exitSuccess) values
     | "malgo_stderr_string" =>
-      match values with
-      | [.immediate (.string text)] => do putTextTo h.stderr text; pure (.struct .tuple [])
-      | _ => throw (.invalidArguments range "malgo_stderr_string" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string text) => do putTextTo h.stderr text; pure (.struct .tuple [])
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_string_to_int32" =>
-      match values with
-      | [.immediate (.string s)] =>
-        match readsInt s with
-        | some n => pure (.immediate (.int32 (Int32.ofInt n)))
-        | none => throw (.invalidArguments range "malgo_string_to_int32" [.immediate (.string s)])
-      | _ => throw (.invalidArguments range "malgo_string_to_int32" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string s) =>
+          match readsInt s with
+          | some n => pure (.immediate (.int32 (Int32.ofInt n)))
+          | none => throw (.invalidArguments range name [v])
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_string_to_int64" =>
-      match values with
-      | [.immediate (.string s)] =>
-        match readsInt s with
-        | some n => pure (.immediate (.int64 (Int64.ofInt n)))
-        | none => throw (.invalidArguments range "malgo_string_to_int64" [.immediate (.string s)])
-      | _ => throw (.invalidArguments range "malgo_string_to_int64" values)
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string s) =>
+          match readsInt s with
+          | some n => pure (.immediate (.int64 (Int64.ofInt n)))
+          | none => throw (.invalidArguments range name [v])
+        | _ => throw (.invalidArguments range name [v])) values
     | _ => throw (.primitiveNotImplemented range name values)
 
 /-! ## The evaluator -/

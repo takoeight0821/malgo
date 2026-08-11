@@ -1,0 +1,28 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- Exercises malgo_run_process end to end: argument quoting (a single
+-- quote, a double quote, `$()`/backtick command substitution, an embedded
+-- newline -- everything the Scheme backend's shell-quoting must neutralize
+-- rather than execute), the empty-string-argument case, the zero-argument
+-- case, and exit-code/stdout/stderr capture together. Uses only `sh`, which
+-- every environment this runs in (dev machine, CI) has -- deliberately not
+-- a real-world tool like `jq` whose exact output could vary.
+def showResult : (Int32, String, String) -> String
+def showResult = { {code, out, err} ->
+  appendString "code=" (appendString (toStringInt32 code)
+    (appendString "|out=" (appendString out (appendString "|err=" err))))
+}
+
+def main = { () ->
+  printString (showResult (runProcess "sh"
+    (Cons "-c" (Cons "printf out; printf err 1>&2; exit 3" Nil))));
+  printString "\n";
+  printString (showResult (runProcess "sh"
+    (Cons "-c" (Cons "printf '%s' \"$1\"" (Cons "_" (Cons "it's $(a) `b` tricky\nwith a newline" Nil))))));
+  printString "\n";
+  printString (showResult (runProcess "sh"
+    (Cons "-c" (Cons "printf '%s' \"$1\"" (Cons "_" (Cons "" Nil))))));
+  printString "\n";
+  printString (showResult (runProcess "sh" Nil))
+}

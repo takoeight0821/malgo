@@ -605,6 +605,21 @@ foreign import malgo_get_env : String# -> String#
 def getEnvRaw# : String# -> String#
 def getEnvRaw# = { name -> malgo_get_env name }
 
+-- Subprocess execution: run `cmd` with `args`, where `args` encodes a list
+-- of argv elements as each one followed by a NUL terminator (NUL, not the
+-- newline `malgo_get_args` uses, since NUL is the one byte a POSIX argv
+-- element can never legitimately contain -- unlike newline, which could be
+-- part of a real argument; a *trailing* terminator per element rather than
+-- a separator *between* elements so the empty list and a one-element list
+-- containing "" encode differently -- see Prelude.mlg's `joinWithNul`).
+-- Returns (exit code, stdout, stderr). No shell is involved on the
+-- interpreter side (a real argv array is passed straight to the OS); the
+-- Scheme backend has no shell-free spawn, so it shell-quotes each argument
+-- instead -- see Backend/Scheme.lean for that half.
+foreign import malgo_run_process : String# -> String# -> (Int32, String, String)
+def runProcess# : String# -> String# -> (Int32, String, String)
+def runProcess# = { cmd args -> malgo_run_process cmd args }
+
 -- String -> Int conversion
 foreign import malgo_string_to_int32 : String# -> Int32#
 def parseIntString32# : String# -> Int32#

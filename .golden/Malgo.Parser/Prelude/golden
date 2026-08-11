@@ -82,6 +82,40 @@
                         (apply
                            (apply Cons (apply f x))
                            (apply (apply mapList f) xs))))))))
+      (sig joinWithNul (-> (app List (String)) String))
+      (def
+         joinWithNul
+         (fn
+            ((clause (Nil) (seq (do (string ""))))
+               (clause
+                  ((con Cons (s rest)))
+                  (seq
+                     (do
+                        (apply
+                           (apply appendString s)
+                           (apply
+                              (apply appendString (string "\NUL"))
+                              (apply joinWithNul rest)))))))))
+      (sig runProcessBoxed# (-> String# (-> String (tuple Int32 String String))))
+      (def
+         runProcessBoxed#
+         (fn
+            ((clause
+                (cmd (con String# (argsBlob)))
+                (seq (do (apply (apply runProcess# cmd) argsBlob)))))))
+      (sig
+         runProcess
+         (-> String (-> (app List (String)) (tuple Int32 String String))))
+      (def
+         runProcess
+         (fn
+            ((clause
+                ((con String# (cmd)) args)
+                (seq
+                   (do
+                      (apply
+                         (apply runProcessBoxed# cmd)
+                         (apply joinWithNul args))))))))
       (sig listToString (-> (app List (Char)) String))
       (def
          listToString

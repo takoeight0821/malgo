@@ -78,6 +78,28 @@ def mapList =
     f (Cons x xs) -> Cons (f x) (mapList f xs),
   }
 
+-- Encode a list of strings as each element followed by a NUL terminator
+-- (see Builtin.mlg's malgo_run_process for why NUL rather than newline).
+-- A *trailing* terminator per element, not a separator *between* elements,
+-- so the empty list ("") and a one-element list of the empty string ("\0")
+-- encode differently -- joining with a separator can't tell those apart.
+def joinWithNul : List String -> String
+def joinWithNul =
+  { Nil -> "",
+    (Cons s rest) -> appendString s (appendString "\0" (joinWithNul rest)),
+  }
+
+-- Run `cmd` with `args`, returning (exit code, stdout, stderr). Unboxes
+-- `joinWithNul`'s result through this helper's own parameter pattern
+-- (matching every other boxed-argument wrapper in this file) rather than a
+-- `case`/`let`, since `String` has exactly one constructor and the lint
+-- flags that kind of match as irrefutable.
+def runProcessBoxed# : String# -> String -> (Int32, String, String)
+def runProcessBoxed# = { cmd (String# argsBlob) -> runProcess# cmd argsBlob }
+
+def runProcess : String -> List String -> (Int32, String, String)
+def runProcess = { (String# cmd) args -> runProcessBoxed# cmd (joinWithNul args) }
+
 -- convert a list of character to a string
 def listToString : List Char -> String
 def listToString =

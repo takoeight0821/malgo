@@ -418,6 +418,24 @@ def neValue (_range : Range) (a b : Value) : EvalM Value :=
 
 private def boolI32 (b : Bool) : Value := .immediate (.int32 (if b then 1 else 0))
 
+/-- Undo `Prelude.mlg`'s `joinWithNul`: each element is followed by a NUL
+terminator rather than separated by one, so splitting on NUL and dropping
+the final piece recovers the original list without special-casing the
+empty-blob case -- `"".splitOn "\x00" = [""]`, and `dropLast` on that is
+`[]`, matching zero arguments; `"\x00".splitOn "\x00" = ["", ""]`, and
+`dropLast` on that is `[""]`, matching one empty-string argument. -/
+private def splitNulTerminated (s : String) : List String :=
+  (s.splitOn "\x00").dropLast
+
+/-- Box a raw value as its `Builtin.mlg` ADT (`Int32# n`/`String# s`), the
+runtime representation `(Int32# x)`/`(String# x)` patterns expect. Every
+other foreign import returns the raw, unboxed form and leaves boxing to a
+Malgo-level wrapper (e.g. `readFile = { (String# path) -> String# (readFile# path) }`)
+-- but a tuple's own components have no such unboxed form to defer to, so a
+primitive that returns one directly must box them itself. -/
+private def boxInt32 (n : Int32) : Value := .struct (.tag "Int32#") [.immediate (.int32 n)]
+private def boxString (s : String) : Value := .struct (.tag "String#") [.immediate (.string s)]
+
 def ltValue (range : Range) : Value → Value → EvalM Value
   | .immediate (.int32 a), .immediate (.int32 b) => pure (boolI32 (a.toInt < b.toInt))
   | .immediate (.int64 a), .immediate (.int64 b) => pure (boolI32 (a.toInt < b.toInt))
@@ -696,6 +714,16 @@ def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM
       match values with
       | [.immediate (.string text)] => do putTextTo h.stderr text; pure (.struct .tuple [])
       | _ => throw (.invalidArguments range "malgo_stderr_string" values)
+    | "malgo_run_process" =>
+      match values with
+      | [.immediate (.string cmd), .immediate (.string argsBlob)] => do
+        let args := splitNulTerminated argsBlob
+        let result ← IO.Process.output { cmd, args := args.toArray }
+        pure (.struct .tuple
+          [ boxInt32 (Int32.ofNat result.exitCode.toNat),
+            boxString result.stdout,
+            boxString result.stderr ])
+      | _ => throw (.invalidArguments range "malgo_run_process" values)
     | "malgo_string_to_int32" =>
       match values with
       | [.immediate (.string s)] =>

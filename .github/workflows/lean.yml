@@ -251,8 +251,29 @@ jobs:
       - name: Zig backend deep-recursion gate
         run: bash scripts/zig-deep-recursion.sh
 
+  # Unconditional (no ci-gates.env flag), unlike lean-selfhost/l2/lean-zig-golden:
+  # the sweep is 73 short-lived interpreted Scheme scripts, not a native build+
+  # link+run cycle, so it has no slow-CI-job reason to be gated off. See #416.
+  lean-scheme-golden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
+        with:
+          lake-package-directory: lean
+          build: true
+          test: false
+
+      - name: Install Chez Scheme
+        run: sudo apt-get update && sudo apt-get install -y chezscheme
+
+      - name: Chez Scheme backend golden parity sweep
+        run: bash scripts/scheme-golden.sh
+
   actions-timeline:
-    needs: [gates, lean-build, cli-gate, lean-selfhost, lean-zig-golden, l2-build, l2-case]
+    needs: [gates, lean-build, cli-gate, lean-selfhost, lean-zig-golden, lean-scheme-golden, l2-build, l2-case]
     if: always()
     runs-on: ubuntu-latest
     permissions:

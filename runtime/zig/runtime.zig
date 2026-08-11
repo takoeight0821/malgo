@@ -1327,6 +1327,10 @@ pub fn malgo_exit_success(args: []const Value) Value {
     _ = args;
     std.process.exit(0);
 }
+pub fn malgo_exit_with_code(args: []const Value) Value {
+    const bits: u32 = @bitCast(asI32(args[0]));
+    std.process.exit(@truncate(bits));
+}
 
 pub fn malgo_newline(args: []const Value) Value {
     _ = args;
@@ -1412,6 +1416,21 @@ pub fn malgo_get_args(args: []const Value) Value {
 pub fn malgo_stderr_string(args: []const Value) Value {
     writeStderr(asStr(args[0]));
     return unitValue();
+}
+
+// std.c.getenv, not std.posix (removed in Zig 0.16); libc is always linked
+// (see the runtime unit tests' `-lc` requirement in AGENTS.md). Distinct
+// has/get primitives (rather than treating "" as absent) so a variable
+// explicitly set to the empty string is distinguishable from an unset one --
+// matches the interpreter (`IO.getEnv`) and Scheme (`getenv`) backends.
+pub fn malgo_has_env(args: []const Value) Value {
+    const name = scratch().dupeZ(u8, asStr(args[0])) catch @panic("Malgo: out of memory");
+    return boolValue(std.c.getenv(name) != null);
+}
+pub fn malgo_get_env(args: []const Value) Value {
+    const name = scratch().dupeZ(u8, asStr(args[0])) catch @panic("Malgo: out of memory");
+    const value = std.c.getenv(name) orelse return mkString("");
+    return mkString(std.mem.sliceTo(value, 0));
 }
 
 pub fn malgo_panic(args: []const Value) Value {

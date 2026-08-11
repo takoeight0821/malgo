@@ -244,7 +244,7 @@ private def evalGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     let ir ← getAllIR memo (testcasePath name)
     let linked := Malgo.Driver.linkPrograms [builtin.join, prel.join, ir.join]
     let (handlers, outRef) ← Malgo.Sequent.Eval.Handlers.buffered "Hello\n"
-    MalgoM.run flag {} (Malgo.Sequent.Eval.evalProgram ir.moduleName handlers linked)
+    let _exitCode ← MalgoM.run flag {} (Malgo.Sequent.Eval.evalProgram ir.moduleName handlers linked)
     outRef.get
   catch e => return s!"ERROR: {toString e}"
 
@@ -270,7 +270,7 @@ private def bigStepEvalGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.Al
     let ir ← getAllIR memo (testcasePath name)
     let linked := Malgo.Driver.linkPrograms [builtin.join, prel.join, ir.join]
     let (handlers, outRef) ← Malgo.Sequent.Eval.Handlers.buffered "Hello\n"
-    MalgoM.run flag {} (Malgo.Sequent.BigStepEval.bigStepEvalProgram ir.moduleName handlers linked)
+    let _exitCode ← MalgoM.run flag {} (Malgo.Sequent.BigStepEval.bigStepEvalProgram ir.moduleName handlers linked)
     outRef.get
   catch e => return s!"ERROR: {toString e}"
 
@@ -299,7 +299,7 @@ private def forthGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     let linked := Malgo.Driver.linkPrograms [builtin.join, prel.join, forth.join]
     let input ← IO.FS.readFile (forthTestcaseDir / s!"{caseName}.fs")
     let (handlers, outRef) ← Malgo.Sequent.Eval.Handlers.buffered input
-    MalgoM.run flag {} (Malgo.Sequent.Eval.evalProgram forth.moduleName handlers linked)
+    let _exitCode ← MalgoM.run flag {} (Malgo.Sequent.Eval.evalProgram forth.moduleName handlers linked)
     outRef.get
   catch e => return s!"ERROR: {toString e}"
 

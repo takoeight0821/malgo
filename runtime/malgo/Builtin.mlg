@@ -578,12 +578,26 @@ foreign import malgo_exit_success : () -> a
 def exitSuccess : () -> a
 def exitSuccess = { _ -> malgo_exit_success () }
 
+foreign import malgo_exit_with_code : Int32# -> a
+def exitWith : Int32 -> a
+def exitWith = { (Int32# code) -> malgo_exit_with_code code }
+
 -- Stderr
 foreign import malgo_stderr_string : String# -> ()
 def printStderr# : String# -> ()
 def printStderr# = { s -> malgo_stderr_string s }
 def printStderr : String -> ()
 def printStderr = { (String# s) -> printStderr# s }
+
+-- Environment variables. The safe `Maybe`-returning wrapper (`getEnv`) lives
+-- in Prelude.mlg since `Maybe` is defined there, not here.
+foreign import malgo_has_env : String# -> Int32#
+def hasEnv# : String# -> Int32#
+def hasEnv# = { name -> malgo_has_env name }
+
+foreign import malgo_get_env : String# -> String#
+def getEnvRaw# : String# -> String#
+def getEnvRaw# = { name -> malgo_get_env name }
 
 -- String -> Int conversion
 foreign import malgo_string_to_int32 : String# -> Int32#

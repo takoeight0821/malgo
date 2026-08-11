@@ -168,11 +168,11 @@ end
 the same synthetic entry statement, allocates and seeds the top-level result
 slot (Haskell's `newIORef (Struct Tuple [])`), and runs. -/
 def bigStepEvalProgram (moduleName : ModuleName) (handlers : Handlers)
-    (program : Malgo.Sequent.Core.Join.Program) : MalgoM Unit := do
+    (program : Malgo.Sequent.Core.Join.Program) : MalgoM UInt32 := do
   let toplevels : Toplevels :=
     program.definitions.foldl (fun m (_, name, ret, stmt) => m.insert name (ret, stmt)) {}
   match toplevels.toList.find? (fun (k, _) => k.name == "main") with
-  | none => pure ()
+  | none => pure 0
   | some (_, (ret, statement)) => do
     let finish ← newTemporalId moduleName "finish"
     let slots ← IO.mkRef (∅ : Std.HashMap Nat Value)
@@ -188,8 +188,9 @@ def bigStepEvalProgram (moduleName : ModuleName) (handlers : Handlers)
       evalStatement slot0 emptyEnv entry
     let result ← MalgoM.io ((run.run ctx).run)
     match result with
-    | .ok _ => pure ()
-    | .error .exitSuccess => pure ()
+    | .ok _ => pure 0
+    | .error .exitSuccess => pure 0
+    | .error (.exitWith code) => pure code.toUInt32
     | .error e => throw { passName := "BigStepEval", message := e.render, range? := e.range? }
 
 end Malgo.Sequent.BigStepEval

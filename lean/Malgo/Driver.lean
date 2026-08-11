@@ -237,7 +237,6 @@ def compileAndEval (flag : Flag) (path : System.FilePath) : IO UInt32 := do
     match flag.evalMode with
     | .smallStep => Malgo.Sequent.Eval.evalProgram moduleName handlers linked
     | .bigStep => Malgo.Sequent.BigStepEval.bigStepEvalProgram moduleName handlers linked
-  return 0
 
 /-- CLI entry for `malgo eval --target scheme`: link exactly as
 `compileAndEval` but, instead of interpreting, emit the Scheme source for the

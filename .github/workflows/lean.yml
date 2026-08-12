@@ -272,8 +272,17 @@ jobs:
       # version-skew scenario the zig pin's own comment (mise.toml) exists to
       # prevent, for a backend nix-config now builds on. mise installs the
       # identical pinned build both places.
+      #
+      # mise's chezscheme plugin has no Linux binary release to fetch, so
+      # `mise install` here means "build Chez from source" -- which needs two
+      # headers/libraries `ubuntu-latest` doesn't ship by default:
+      # `X11/Xlib.h` (`c/expeditor.c`'s line editor) and `-lncurses` (the
+      # final link step). Confirmed by actually building 10.4.1 in a plain
+      # `ubuntu:latest` container until it succeeded clean, not guessed from
+      # the first error alone -- the X11 fix alone still failed to link.
       - name: Install Chez Scheme (pinned via mise, matches mise.toml)
         run: |
+          sudo apt-get update && sudo apt-get install -y libx11-dev libncurses-dev
           curl https://mise.run | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/mise" install chezscheme

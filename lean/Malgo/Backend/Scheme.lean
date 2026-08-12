@@ -232,9 +232,8 @@ def compilePrimitive (name : String) (args : List String) (ret : String) : Strin
     match args with
     | [s] => "(begin (put-string (current-error-port) " ++ s ++ ") (" ++ ret ++ " '()))"
     | _ => "(error 'prim \"malgo_stderr_string: wrong number of arguments\")"
-  -- Distinct has/get primitives (rather than treating "" as absent) so a
-  -- variable explicitly set to the empty string is distinguishable from an
-  -- unset one -- matches the interpreter and Zig backends.
+  -- See Builtin.mlg's `malgo_has_env`/`malgo_get_env` for why this is two
+  -- primitives rather than one that treats "" as absent.
   | "malgo_has_env" =>
     match args with
     | [name] => "(" ++ ret ++ " (if (getenv " ++ name ++ ") 1 0))"

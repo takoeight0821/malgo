@@ -1419,10 +1419,9 @@ pub fn malgo_stderr_string(args: []const Value) Value {
 }
 
 // std.c.getenv, not std.posix (removed in Zig 0.16); libc is always linked
-// (see the runtime unit tests' `-lc` requirement in AGENTS.md). Distinct
-// has/get primitives (rather than treating "" as absent) so a variable
-// explicitly set to the empty string is distinguishable from an unset one --
-// matches the interpreter (`IO.getEnv`) and Scheme (`getenv`) backends.
+// (see the runtime unit tests' `-lc` requirement in AGENTS.md). See
+// Builtin.mlg's `malgo_has_env`/`malgo_get_env` for why this is two
+// primitives rather than one that treats "" as absent.
 pub fn malgo_has_env(args: []const Value) Value {
     const name = scratch().dupeZ(u8, asStr(args[0])) catch @panic("Malgo: out of memory");
     return boolValue(std.c.getenv(name) != null);

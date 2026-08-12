@@ -31,7 +31,12 @@ def orElse = {
   Nothing  k -> k ()
 }
 
--- Unwrap a `Maybe`, substituting `d` for `Nothing`.
+-- Unwrap a `Maybe`, substituting `d` for `Nothing`. Unlike `orElse` above,
+-- `d` is a plain value, not a thunk -- it's always evaluated, even when
+-- the first argument is `Just _` and `d` goes unused. Reasonable for a
+-- cheap default (a literal, an already-computed value); wrap the call
+-- site's own argument in `{...}` and force it explicitly if `d` is itself
+-- an expensive computation that should only run on `Nothing`.
 def fromMaybe : Maybe a -> a -> a
 def fromMaybe = {
   (Just v) _ -> v,
@@ -141,13 +146,13 @@ def runProcessBoxed# = { cmd (String# argsBlob) -> runProcess# cmd argsBlob }
 -- IMPORTANT: construct and pattern-match this (and any record) as a *bare*
 -- structural literal/pattern (`{ exitCode = ..., ... }`), never tagged with
 -- the constructor name (`ProcessResult { exitCode = ..., ... }`). Dot-access
--- and bare-pattern destructuring both work correctly (verified against both
--- the interpreter and the Scheme backend); the tagged form is a confirmed
--- compiler bug -- it evaluates to a function instead of destructuring,
--- surfacing as "No match for <function>" whichever primitive the result
--- next flows into. Reproduces with the existing (but never actually called)
--- `g` in test/testcases/malgo/RecordFieldAccess.mlg. Tracked as malgo#422;
--- not fixed here since it's a compiler bug, not this addition's scope.
+-- and bare construction/pattern destructuring all work correctly (verified
+-- against both the interpreter and the Scheme backend); the tagged form is
+-- a confirmed compiler bug on *both* sides: tagged construction builds
+-- `ProcessResult` applied to the record as one argument (not a merged
+-- tagged record), and tagged pattern-matching evaluates to a function
+-- instead of destructuring. Tracked as malgo#422 (not fixed here, since
+-- it's a compiler bug, not this addition's scope).
 data ProcessResult = ProcessResult { exitCode: Int32, stdout: String, stderr: String }
 
 -- Unboxed via this helper's own parameter pattern (matching every other

@@ -80,4 +80,62 @@ if ! diff -u "$WORK/interp.out" "$WORK/scheme.out"; then
   exit 1
 fi
 
+# An embedded NUL byte in an argument is expected to fail loudly (exit 1,
+# same stderr message) on *both* backends -- the guard lives once, in
+# Prelude.mlg's `joinWithNul`/`containsNul`, ahead of either backend's own
+# `malgo_run_process` dispatch. A nonzero exit here is the pass condition,
+# not a script failure, so this doesn't reuse the "capture stdout, exit 0"
+# pattern above.
+NUL_SRC="test/testcases/scheme-only/RunProcessNulGuard.mlg"
+echo "=== NUL-byte guard: interpreter ==="
+interp_nul_out="$(timeout "$CASE_TIMEOUT" "$MALGO" eval "$NUL_SRC" 2>&1)"
+interp_nul_exit=$?
+echo "$interp_nul_out"
+echo "exit: $interp_nul_exit"
+
+echo "=== NUL-byte guard: scheme backend ==="
+if ! timeout "$COMPILE_TIMEOUT" "$MALGO" eval --target scheme "$NUL_SRC" >"$WORK/nul.scm" 2>"$WORK/nul.compile.err"; then
+  echo "FAIL: --target scheme compilation failed for $NUL_SRC:" >&2
+  cat "$WORK/nul.compile.err" >&2
+  exit 1
+fi
+scheme_nul_out="$(timeout "$CASE_TIMEOUT" "$SCHEME" --script "$WORK/nul.scm" 2>&1)"
+scheme_nul_exit=$?
+echo "$scheme_nul_out"
+echo "exit: $scheme_nul_exit"
+
+if [ "$interp_nul_exit" -ne 1 ] || [ "$scheme_nul_exit" -ne 1 ]; then
+  echo "FAIL: NUL-byte guard should exit 1 on both backends (got interpreter=$interp_nul_exit, scheme=$scheme_nul_exit)" >&2
+  exit 1
+fi
+if [ "$interp_nul_out" != "$scheme_nul_out" ]; then
+  echo "FAIL: NUL-byte guard message differs between backends" >&2
+  diff <(echo "$interp_nul_out") <(echo "$scheme_nul_out") >&2
+  exit 1
+fi
+
+# `exit`/`exec` as `cmd` are shell builtins, not real executables -- only
+# meaningful for the Scheme backend, which runs `cmd` through /bin/sh -c.
+# The interpreter's IO.Process.output spawns a real executable via argv, so
+# "exit" there is just a nonexistent command, not a comparable scenario;
+# this fixture is Scheme-only and asserts the real exit code directly
+# instead of diffing against the interpreter.
+BUILTIN_SRC="test/testcases/scheme-only/RunProcessShellBuiltin.mlg"
+echo "=== shell-builtin cmd (Scheme-only): scheme backend ==="
+if ! timeout "$COMPILE_TIMEOUT" "$MALGO" eval --target scheme "$BUILTIN_SRC" >"$WORK/builtin.scm" 2>"$WORK/builtin.compile.err"; then
+  echo "FAIL: --target scheme compilation failed for $BUILTIN_SRC:" >&2
+  cat "$WORK/builtin.compile.err" >&2
+  exit 1
+fi
+if ! builtin_out="$(timeout "$CASE_TIMEOUT" "$SCHEME" --script "$WORK/builtin.scm" 2>"$WORK/builtin.run.err")"; then
+  echo "FAIL: scheme run failed for $BUILTIN_SRC:" >&2
+  cat "$WORK/builtin.run.err" >&2
+  exit 1
+fi
+echo "$builtin_out"
+if [ "$builtin_out" != "code=7|out=|err=" ]; then
+  echo "FAIL: expected code=7|out=|err=, got: $builtin_out" >&2
+  exit 1
+fi
+
 echo "=== scheme-process-check OK ==="

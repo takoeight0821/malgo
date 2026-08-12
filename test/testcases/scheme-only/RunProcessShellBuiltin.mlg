@@ -1,0 +1,24 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- `exit` is a shell builtin, not a real executable -- the Scheme backend's
+-- generated command line runs `cmd` through /bin/sh -c, and before this
+-- fix, a builtin like `exit`/`exec` as `cmd` would terminate that shell
+-- before the trailing exit-code marker ever printed, so the *real* exit
+-- code was silently lost and reported as a plain 0 (success). Fixed by
+-- running the quoted command in a `( ... )` subshell, so the builtin only
+-- ends the subshell, not the whole script. Scheme-only (not diffed against
+-- the interpreter, unlike every other fixture in this directory): the
+-- interpreter's `IO.Process.output` spawns a real executable via argv, no
+-- shell involved, so "exit" as `cmd` isn't a builtin there at all -- it's
+-- just a nonexistent executable, a fundamentally different scenario with
+-- no equivalent oracle behavior to diff against.
+def showResult : (Int32, String, String) -> String
+def showResult = { {code, out, err} ->
+  appendString "code=" (appendString (toStringInt32 code)
+    (appendString "|out=" (appendString out (appendString "|err=" err))))
+}
+
+def main = { () ->
+  printString (showResult (runProcess "exit" (Cons "7" Nil)))
+}

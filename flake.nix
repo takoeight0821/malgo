@@ -20,19 +20,23 @@
       system = "aarch64-darwin";
 
       # `binary = false` builds Lean from source (lean4-nix's own CMake
-      # bootstrap: a stage0 compiler, then Init/Std/Lean/Lake compiled by
-      # it) instead of the default `binary = true`, which fetches a
-      # pre-built macOS release. The pre-built release's own
-      # `libInit_shared.dylib` has no Mach-O header slack for
-      # `install_name_tool` to rewrite its rpath ("load commands do not fit
-      # in __TEXT segment filesize"), and every workaround tried for that
-      # (a no-op `fixDarwinDylibNames`, setting `DYLD_LIBRARY_PATH`) failed
-      # to make the resulting binary loadable. Building from source
-      # sidesteps this: a binary Nix's own `stdenv` compiles gets its
-      # rpaths right as a normal side effect of compilation, no post-hoc
-      # rewrite needed. `manifests/v4.32.0.nix`'s `bootstrap` is exactly
-      # this version -- it already carries an OpenSSL >=3 fix specific to
-      # 4.32.0's TLS support, so it's not a generic/untested path.
+      # bootstrap) instead of the default `binary = true`, which fetches a
+      # pre-built macOS release whose `libInit_shared.dylib` has no Mach-O
+      # header slack for `install_name_tool` to rewrite its rpath -- every
+      # workaround tried for that failed to make the binary loadable; a
+      # from-source build gets correct rpaths as a normal side effect of
+      # compilation instead. Full history of what was tried: PR #421.
+      #
+      # This means no `cache.nixos.org` substitute (nixpkgs' own `lean4`
+      # package is pinned to 4.30.0, not this project's 4.32.0), so the
+      # first build is a genuinely slow, full local Lean bootstrap --
+      # several thousand tiny per-module derivations, roughly 45-60 minutes
+      # measured on an M-series Mac. That tradeoff was not weighed against
+      # downgrading malgo's own toolchain to nixpkgs' cached 4.30.0:
+      # `lean/lean-toolchain` has pinned 4.32.0 since the Lean port's
+      # original scaffold, predating this flake by months, and the M0-M9
+      # port is large enough that revisiting the toolchain version is a
+      # separate decision from packaging it, not a free substitution here.
       lean432Overlay = lean4-nix.readToolchainFile {
         toolchain = ./lean/lean-toolchain;
         binary = false;
@@ -66,7 +70,9 @@
       # present alongside `lean/` in the Nix build sandbox.
       malgo = pkgs.stdenv.mkDerivation {
         pname = "malgo";
-        version = "0.1.0";
+        # Matches the latest release tag (`git tag`), not an independent
+        # flake-only version line.
+        version = "4.0.0";
         src = pkgs.lib.cleanSourceWith {
           src = ./.;
           filter =
@@ -93,10 +99,25 @@
           runHook postBuild
         '';
 
+        # `$out/bin/malgo` alone isn't a complete package: any real `.mlg`
+        # program needs `import "Builtin.mlg"`/`"Prelude.mlg"` (and often
+        # `Either.mlg`) to resolve to *something*, and those live in this
+        # source tree, not inside the compiled binary. Installing them
+        # under `$out/share` makes that an explicit, versioned part of this
+        # derivation's output instead of an implicit contract on this
+        # flake's own `runtime/malgo/` layout -- a consumer reaching past
+        # `${malgo}` into `${self}`'s raw source tree (as a first attempt
+        # at using this flake did) breaks the moment that layout changes,
+        # silently, in neither repo. Not `runtime/malgo/compiler/` (the
+        # self-hosted evaluator's own internals, not meant for external
+        # `.mlg` programs to import) or `runtime/zig/` (already embedded
+        # into the compiled binary via `include_str`, per Runtime.lean).
         installPhase = ''
           runHook preInstall
-          mkdir -p "$out/bin"
+          mkdir -p "$out/bin" "$out/share/malgo/runtime/malgo"
           cp lean/.lake/build/bin/malgo "$out/bin/malgo"
+          cp runtime/malgo/Builtin.mlg runtime/malgo/Prelude.mlg runtime/malgo/Either.mlg \
+            "$out/share/malgo/runtime/malgo/"
           wrapProgram "$out/bin/malgo" --prefix PATH : ${pkgs.lib.makeBinPath [ zig ]}
           runHook postInstall
         '';

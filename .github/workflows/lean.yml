@@ -266,8 +266,18 @@ jobs:
           build: true
           test: false
 
-      - name: Install Chez Scheme
-        run: sudo apt-get update && sudo apt-get install -y chezscheme
+      # Not `apt-get install chezscheme`: Ubuntu's apt package tracks its own
+      # release cadence, not Chez's upstream version, so it silently drifts
+      # from whatever version mise.toml pins for local dev -- exactly the
+      # version-skew scenario the zig pin's own comment (mise.toml) exists to
+      # prevent, for a backend nix-config now builds on. mise installs the
+      # identical pinned build both places.
+      - name: Install Chez Scheme (pinned via mise, matches mise.toml)
+        run: |
+          curl https://mise.run | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/mise" install chezscheme
+          echo "$("$HOME/.local/bin/mise" where chezscheme)/bin" >> "$GITHUB_PATH"
 
       - name: Chez Scheme backend golden parity sweep
         run: bash scripts/scheme-golden.sh

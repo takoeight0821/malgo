@@ -29,29 +29,34 @@ namespace Malgo.Backend.Scheme
 open Malgo.Sequent.Fun (Name Literal Tag Pattern)
 open Malgo.Sequent.Core
 
+/-- ASCII punctuation Chez Scheme's reader accepts directly as a symbol
+constituent (embedded or trailing) -- verified against Chez 10.4.1 with
+each character mid- and end-of-symbol (`Foo.bar`, `Foo-`, `Foo?`, etc., all
+parse as plain symbols). Only `#` and `'` are genuinely unsafe (`#` is a
+reader-syntax prefix -- "invalid sharp-sign prefix" if it appears bare
+mid-symbol; `'` is the quote shorthand), so those two are the only ASCII
+punctuation `mangleChar` still escapes below. -/
+def isSafeSchemeSymbolChar (c : Char) : Bool :=
+  c == '.' || c == '-' || c == '?' || c == '!' || c == '/' ||
+  c == '+' || c == '*' || c == '<' || c == '>' || c == '='
+
 /-- Mangle a single character to a valid-Scheme-identifier fragment. -/
 def mangleChar (c : Char) : String :=
   match c with
   | '#' => "_hash_"
-  | '.' => "_dot_"
   | '\'' => "_prime_"
-  | '-' => "_dash_"
-  | '?' => "_q_"
-  | '!' => "_bang_"
-  | '/' => "_slash_"
-  | '+' => "_plus_"
-  | '*' => "_star_"
-  | '<' => "_lt_"
-  | '>' => "_gt_"
-  | '=' => "_eq_"
-  -- Greek letters
-  | 'α' => "alpha"
-  | 'β' => "beta"
-  | 'γ' => "gamma"
-  | 'δ' => "delta"
-  | 'λ' => "lambda_"
-  | 'μ' => "mu"
-  | c => if c.isAlphanum || c == '_' then String.singleton c else "_u" ++ toString c.toNat ++ "_"
+  -- Greek letters that occur in Malgo identifiers: Chez's reader accepts
+  -- them directly as symbol constituents (verified), so they pass through
+  -- unmangled. Lean's `Char.isAlphanum` is ASCII-only and would otherwise
+  -- route these into the numeric fallback below, unlike the original
+  -- Haskell backend's Unicode-aware `isAlphaNum`, which already treated
+  -- them as safe -- this restores that parity instead of introducing a
+  -- second, ASCII-only rendering for the same identifiers.
+  | 'α' | 'β' | 'γ' | 'δ' | 'λ' | 'μ' => String.singleton c
+  | c =>
+    if c.isAlphanum || c == '_' || isSafeSchemeSymbolChar c
+    then String.singleton c
+    else "_u" ++ toString c.toNat ++ "_"
 
 /-- Mangle a text string to be a valid Scheme identifier. -/
 def mangleText (s : String) : String :=
@@ -415,10 +420,21 @@ partial def compileProducer : Join.Producer → String
     | [] => "(lambda () " ++ bodyStr ++ ")"
     | [x] => "(lambda (" ++ x ++ ") " ++ bodyStr ++ ")"
     | _ => "(lambda (" ++ " ".intercalate nameStrs ++ ") " ++ bodyStr ++ ")"
-  | .mu _ name stmt =>
-    let nameStr := mangleId name
-    let bodyStr := compileStatement stmt
-    "(lambda (" ++ nameStr ++ ") " ++ bodyStr ++ ")"
+  | .mu .. =>
+    -- `Producer.mu` should only ever appear directly as the producer of a
+    -- `Statement.cut`, handled by `compileStatement`'s dedicated `.cut (.mu
+    -- ..) ..` case above (which substitutes, matching `cut (mu a. c) b ==
+    -- c[a := b]`) -- never reached as a plain producer. Enforced by
+    -- `IrInvariants` in `Test/Main.lean` (checked over every golden case's
+    -- Flat IR, which this pass's `Join.lean` input preserves unchanged) and
+    -- mirrored by the Zig backend's `ClosureConv.lean`, which raises an
+    -- error for the same "should be impossible" case -- `compileProducer`
+    -- is pure and can't raise, so `panic!` is this codebase's convention
+    -- for the equivalent situation in a pure function (see e.g.
+    -- `Zig/Peephole.lean:152,159`). Returning some plausible-looking string
+    -- here instead would be silently wrong, not caught, if that invariant
+    -- is ever broken by a future pass change.
+    panic! "Malgo.Backend.Scheme: Mu in producer position should have been eliminated (see IrInvariants)"
   | .object _ fields =>
     let fieldStrs := (sortAssocAscending fields).map compileField
     "(list " ++ " ".intercalate fieldStrs ++ ")"
@@ -523,32 +539,39 @@ def schemeRuntime : String :=
       "  (malgo-print-value v)",
       "  (newline))",
       "",
+      ";; Reverses the two remaining named escapes `mangleChar` applies (`#`",
+      ";; and `'`, the only ASCII punctuation Chez's reader can't take bare",
+      ";; mid-symbol -- see Backend/Scheme.lean's `isSafeSchemeSymbolChar`).",
+      ";; Everything else `compileTag` emits is already the source-level",
+      ";; name verbatim, so this is a small, exact fixup, not a general",
+      ";; unmangler -- a `_u<N>_` numeric-escape tag (non-Greek Unicode)",
+      ";; still displays in its escaped form.",
+      "(define (malgo-replace-all str from to)",
+      "  (let ((flen (string-length from)))",
+      "    (let loop ((s str))",
+      "      (let ((idx (let find ((i 0))",
+      "                   (cond",
+      "                     ((> (+ i flen) (string-length s)) #f)",
+      "                     ((string=? (substring s i (+ i flen)) from) i)",
+      "                     (else (find (+ i 1)))))))",
+      "        (if idx",
+      "            (loop (string-append (substring s 0 idx) to (substring s (+ idx flen) (string-length s))))",
+      "            s)))))",
+      "(define (malgo-demangle-tag sym)",
+      "  (malgo-replace-all (malgo-replace-all (symbol->string sym) \"_hash_\" \"#\") \"_prime_\" \"'\"))",
+      "",
       "(define (malgo-print-value v)",
       "  (cond",
       "    ((boolean? v) (display (if v \"true\" \"false\")))",
       "    ((null? v) (display \"()\"))",
-      "    ((string? v)",
-      "     (display \"\\\"\")",
-      "     (display v)",
-      "     (display \"\\\"\"))",
-      "    ((char? v)",
-      "     (display \"'\")",
-      "     (display v)",
-      "     (display \"'\"))",
+      "    ((string? v) (display v))",
+      "    ((char? v) (display v))",
       "    ((pair? v)",
       "     (if (and (pair? (car v)) (symbol? (caar v)))",
-      "         ;; Record",
-      "         (begin",
-      "           (display \"{ \")",
-      "           (let loop ((fields v))",
-      "             (unless (null? fields)",
-      "               (display (caar fields))",
-      "               (display \" = \")",
-      "               (malgo-print-value (cdar fields))",
-      "               (unless (null? (cdr fields))",
-      "                 (display \", \"))",
-      "               (loop (cdr fields))))",
-      "           (display \" }\"))",
+      "         ;; Record (valueToText: always \"<record>\", fields are never",
+      "         ;; pretty-printed -- also sidesteps that object fields compile",
+      "         ;; to thunks here, which would need forcing to print at all)",
+      "         (display \"<record>\")",
       "         ;; Tagged data (valueToText: tuples print as {a, b}, other",
       "         ;; constructors as Name or Name(a, b) -- never S-expression style)",
       "         (if (symbol? (car v))",
@@ -562,9 +585,9 @@ def schemeRuntime : String :=
       "                       (loop (cdr args))))",
       "                   (display \"}\"))",
       "                 (if (null? (cdr v))",
-      "                     (display (car v))",
+      "                     (display (malgo-demangle-tag (car v)))",
       "                     (begin",
-      "                       (display (car v))",
+      "                       (display (malgo-demangle-tag (car v)))",
       "                       (display \"(\")",
       "                       (let loop ((args (cdr v)))",
       "                         (unless (null? args)",
@@ -610,9 +633,12 @@ private def r0 : Range := ⟨SourcePos.initial "", SourcePos.initial ""⟩
 private def nm (s : String) : Name := { name := s, moduleName := .moduleName "t", sort := .external }
 
 -- Mangling / literal / small-tree checks.
-#guard mangleText "foo-bar?" == "foo_dash_bar_q_"
--- External ids mangle "<module>.<name>", so the dot becomes "_dot_".
-#guard mangleId (nm "map") == "t_dot_map"
+-- `.`, `-`, and `?` are all valid Chez Scheme symbol constituents (verified
+-- against 10.4.1: `Foo.bar`/`Foo-`/`Foo?` all parse and `define`/reference
+-- correctly as plain symbols) -- only `#` and `'` still get mangled.
+#guard mangleText "foo-bar?" == "foo-bar?"
+#guard mangleText "Int32#" == "Int32_hash_"
+#guard mangleId (nm "map") == "t.map"
 #guard mangleId { name := "x", moduleName := .moduleName "t", sort := .temporal 3 } == "_t_x_3"
 #guard mangleId { name := "y", moduleName := .moduleName "t", sort := .internal 7 } == "y_7"
 #guard escapeString "a\"b\\c" == "a\\\"b\\\\c"
@@ -620,9 +646,9 @@ private def nm (s : String) : Name := { name := s, moduleName := .moduleName "t"
 #guard compileLiteral (.float 3.14) == "3.14"
 #guard compileLiteral (.string "hi\n") == "\"hi\\n\""
 #guard compileLiteral (.char ' ') == "#\\space"
-#guard compileStatement (.invoke r0 (nm "f") (nm "k")) == "(t_dot_f t_dot_k)"
-#guard compileStatement (.cut (.literal r0 (.int32 1)) (nm "k")) == "(t_dot_k 1)"
+#guard compileStatement (.invoke r0 (nm "f") (nm "k")) == "(t.f t.k)"
+#guard compileStatement (.cut (.literal r0 (.int32 1)) (nm "k")) == "(t.k 1)"
 #guard compileStatement (.binOp r0 "add_i32" (.var r0 (nm "a")) (.var r0 (nm "b")) (nm "k"))
-  == "(t_dot_k (+ t_dot_a t_dot_b))"
+  == "(t.k (+ t.a t.b))"
 
 end Malgo.Backend.Scheme

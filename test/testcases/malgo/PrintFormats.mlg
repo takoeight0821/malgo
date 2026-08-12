@@ -1,0 +1,30 @@
+#c-style-apply
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- Regression coverage for the Scheme backend's malgo-print-value fix (and,
+-- incidentally, the self-hosted evaluator's matching bug in valueToText):
+-- records collapse to the literal "<record>" (matching Malgo.Sequent.Eval's
+-- valueToText, not a pretty-printed field list), and a `#`-suffixed
+-- constructor tag prints its source name, not the mangled Scheme identifier
+-- used internally for dispatch. `Marker#` is nullary specifically so
+-- printing it never recurses into an argument's own value -- see below for
+-- why that recursion needs avoiding here.
+--
+-- Deliberately not covering a *non-nullary* tagged constructor, or plain
+-- String/Char, here: the self-hosted evaluator represents primitive
+-- literals (Int32, String, Char, ...) natively rather than through the same
+-- `Int32#`/`String#`/`Char#` boxing wrapper the interpreter/Zig/Scheme
+-- backends use for the same source text, so printing any *argument* would
+-- diverge in self-host for that unrelated, pre-existing reason (confirmed:
+-- `print(Wrapped#(5))` for `data Wrapped = Wrapped# Int32` renders the
+-- interpreter's boxed `Wrapped#(Int32#(5))` as self-host's unboxed
+-- `Wrapped#(5)`). That's a real but separate, deeper divergence (filed
+-- separately, malgo#425); the String/Char print-format fix itself was
+-- verified directly against the interpreter and Scheme backend instead.
+data Marker = Marker#
+
+def main = { () ->
+  print({ a = 1, b = 2 });
+  print(Marker#)
+}

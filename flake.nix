@@ -7,9 +7,9 @@
     # revision), and that attribute name is a hard requirement, not a
     # preference -- Zig minor releases break std (see mise.toml), so
     # silently falling back to zig_0_15 would be the wrong kind of quiet.
-    # `readToolchainFile`'s overlay only fetches a pinned Lean *binary*
-    # release; it doesn't depend on nixpkgs' own package versions, so
-    # applying it to an independently-pinned nixpkgs is safe.
+    # The Lean source-build overlay below only needs long-stable nixpkgs
+    # packages (cmake, gmp, git, ...), not anything as version-sensitive as
+    # `zig_0_16`, so applying it to an independently-pinned nixpkgs is safe.
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     lean4-nix.url = "github:lenianiva/lean4-nix";
   };
@@ -19,29 +19,24 @@
     let
       system = "aarch64-darwin";
 
-      # Not the `lean4-nix.readToolchainFile ./lean/lean-toolchain`
-      # convenience wrapper: it calls `toolchain.nix` with no override, so
-      # `fixDarwinDylibNames` resolves to nixpkgs' real hook, which fails on
-      # this pre-built (not Nix-compiled) macOS binary --
-      # `install_name_tool: ... larger updated load commands do not fit
-      # (the program must be relinked)`. The reference flake at
-      # github.com/lenianiva/lean4-nix/blob/main/templates/mathlib-demo/flake.nix
-      # works around the identical failure the same way: call `toolchain.nix`
-      # directly with a no-op override.
-      lean432Overlay =
-        final: prev:
-        {
-          lean = (
-            (final.callPackage "${lean4-nix}/lib/toolchain.nix" {
-              fixDarwinDylibNames = final.writeTextFile {
-                name = "noop-fix-darwin-dylib-names-hook";
-                destination = "/nix-support/setup-hook";
-                text = "";
-              };
-            }).fetchBinaryLean
-              (import "${lean4-nix}/manifests/v4.32.0.nix")
-          );
-        };
+      # `binary = false` builds Lean from source (lean4-nix's own CMake
+      # bootstrap: a stage0 compiler, then Init/Std/Lean/Lake compiled by
+      # it) instead of the default `binary = true`, which fetches a
+      # pre-built macOS release. The pre-built release's own
+      # `libInit_shared.dylib` has no Mach-O header slack for
+      # `install_name_tool` to rewrite its rpath ("load commands do not fit
+      # in __TEXT segment filesize"), and every workaround tried for that
+      # (a no-op `fixDarwinDylibNames`, setting `DYLD_LIBRARY_PATH`) failed
+      # to make the resulting binary loadable. Building from source
+      # sidesteps this: a binary Nix's own `stdenv` compiles gets its
+      # rpaths right as a normal side effect of compilation, no post-hoc
+      # rewrite needed. `manifests/v4.32.0.nix`'s `bootstrap` is exactly
+      # this version -- it already carries an OpenSSL >=3 fix specific to
+      # 4.32.0's TLS support, so it's not a generic/untested path.
+      lean432Overlay = lean4-nix.readToolchainFile {
+        toolchain = ./lean/lean-toolchain;
+        binary = false;
+      };
 
       pkgs = import nixpkgs {
         inherit system;
@@ -90,53 +85,8 @@
           pkgs.makeWrapper
         ];
 
-        # STATUS: this derivation does not build yet. `lake build malgo`
-        # fails with:
-        #   dyld[...]: Library not loaded: @rpath/libInit_shared.dylib
-        #   Referenced from: .../lean/bin/.lake-wrapped
-        #   Reason: tried: '.../lean/lib/lean/libInit_shared.dylib'
-        #     (load commands do not fit in __TEXT segment filesize) ...
-        #
-        # Root cause is upstream in lean4-nix's handling of the pre-built
-        # (not Nix-compiled) Lean 4.32.0 darwin_aarch64 release, not in this
-        # flake's own derivation. What's been ruled out, each confirmed by
-        # direct testing rather than assumption:
-        #   - Not a stale-rpath-with-a-fixup-available problem: the real
-        #     `fixDarwinDylibNames` hook's `install_name_tool` rewrite fails
-        #     outright on this binary ("larger updated load commands do not
-        #     fit (the program must be relinked)") -- there is no free
-        #     header space to rewrite the load command in place, which is
-        #     why the no-op override above exists at all.
-        #   - Not a missing-file problem: `libInit_shared.dylib` genuinely
-        #     exists at the exact path dyld's own error message lists as
-        #     "tried" (${pkgs.lean}/lib/lean/libInit_shared.dylib) --
-        #     confirmed with `find` against the built `pkgs.lean` output.
-        #   - Not stdenv-darwin's DYLD_* stripping: `DYLD_LIBRARY_PATH` was
-        #     set both as a derivation attribute and as an `export` inside
-        #     this phase's own script body (i.e. after stdenv's setup
-        #     script runs); neither took effect, and reading `lean`'s own
-        #     `lake` wrapper script confirms it doesn't touch DYLD_* itself
-        #     -- it only rewrites PATH before `exec -a "$0" .lake-wrapped`.
-        #   - Not a hardened-runtime/entitlement problem: `codesign -dv
-        #     --entitlements -` on `.lake-wrapped` shows
-        #     `flags=0x20002(adhoc,linker-signed)`, no restrict flag and no
-        #     entitlements at all, so macOS has no declared reason to ignore
-        #     DYLD_* for this binary.
-        # None of these four rule-outs identifies what dyld is actually
-        # doing instead, so the true root cause is still open. Two
-        # escape hatches for whoever picks this up next, neither attempted
-        # here: (a) build Lean from source via lean4-nix's bootstrap path
-        # instead of fetching the pre-built binary release, sidestepping
-        # binary relocation entirely; (b) drop the flake and have
-        # consumers invoke a `mise`-built `malgo` directly -- the actual
-        # Phase 2 requirement was always "a reproducible way to get
-        # compiled `.scm`", not "a flake" specifically, and nixpkgs'
-        # `chez` (10.4.1, matching what's already validated locally) is
-        # confirmed available on aarch64-darwin regardless of how `malgo`
-        # itself gets built.
         buildPhase = ''
           runHook preBuild
-          export DYLD_LIBRARY_PATH="${pkgs.lean}/lib:${pkgs.lean}/lib/lean"
           cd lean
           lake build malgo
           cd ..

@@ -31,6 +31,13 @@ def orElse = {
   Nothing  k -> k ()
 }
 
+-- Unwrap a `Maybe`, substituting `d` for `Nothing`.
+def fromMaybe : Maybe a -> a -> a
+def fromMaybe = {
+  (Just v) _ -> v,
+  Nothing  d -> d
+}
+
 -- Look up an environment variable (see Builtin.mlg's `malgo_has_env`/
 -- `malgo_get_env` for why this is two primitives, checked separately,
 -- rather than one that treats "" as absent).
@@ -127,12 +134,41 @@ def joinWithNul =
 def runProcessBoxed# : String# -> String -> (Int32, String, String)
 def runProcessBoxed# = { cmd (String# argsBlob) -> runProcess# cmd argsBlob }
 
-def runProcess : String -> List String -> (Int32, String, String)
+-- A named record instead of a positional tuple, so callers get `.exitCode`/
+-- `.stdout`/`.stderr` dot-access instead of spelling out field order via a
+-- `{code, _, _}`-style pattern at every call site.
+--
+-- IMPORTANT: construct and pattern-match this (and any record) as a *bare*
+-- structural literal/pattern (`{ exitCode = ..., ... }`), never tagged with
+-- the constructor name (`ProcessResult { exitCode = ..., ... }`). Dot-access
+-- and bare-pattern destructuring both work correctly (verified against both
+-- the interpreter and the Scheme backend); the tagged form is a confirmed
+-- compiler bug -- it evaluates to a function instead of destructuring,
+-- surfacing as "No match for <function>" whichever primitive the result
+-- next flows into. Reproduces with the existing (but never actually called)
+-- `g` in test/testcases/malgo/RecordFieldAccess.mlg. Tracked as malgo#422;
+-- not fixed here since it's a compiler bug, not this addition's scope.
+data ProcessResult = ProcessResult { exitCode: Int32, stdout: String, stderr: String }
+
+-- Unboxed via this helper's own parameter pattern (matching every other
+-- boxed-argument wrapper in this file) rather than a `case`, since a tuple
+-- has exactly one shape and the lint flags that kind of match as irrefutable.
+def toProcessResult : (Int32, String, String) -> ProcessResult
+def toProcessResult = { {code, out, err} -> { exitCode = code, stdout = out, stderr = err } }
+
+def runProcess : String -> List String -> ProcessResult
 def runProcess = { (String# cmd) args ->
   if (containsNul (String# cmd))
     { failLoudly "runProcess: cmd contains an embedded NUL byte" }
-    { runProcessBoxed# cmd (joinWithNul args) }
+    { toProcessResult (runProcessBoxed# cmd (joinWithNul args)) }
 }
+
+-- Print `msg` to stderr (with a trailing newline) and exit with `code`.
+-- For an expected, recoverable condition (a tool is missing, a downstream
+-- step failed) that a script wants to report and gracefully exit from --
+-- distinct from `panic`, which signals a genuine bug.
+def bail : Int32 -> String -> a
+def bail = { code msg -> printStderr (appendString msg "\n"); exitWith code }
 
 -- convert a list of character to a string
 def listToString : List Char -> String

@@ -20,6 +20,12 @@
          (fn
             ((clause ((con Just (v)) _) (seq (do (apply Just v))))
                (clause (Nothing k) (seq (do (apply k (tuple))))))))
+      (sig fromMaybe (-> (app Maybe (a)) (-> a a)))
+      (def
+         fromMaybe
+         (fn
+            ((clause ((con Just (v)) _) (seq (do v)))
+               (clause (Nothing d) (seq (do d))))))
       (sig getEnv (-> String (app Maybe (String))))
       (def
          getEnv
@@ -82,67 +88,6 @@
                         (apply
                            (apply Cons (apply f x))
                            (apply (apply mapList f) xs))))))))
-      (sig containsNul (-> String Bool))
-      (def
-         containsNul
-         (fn
-            ((clause
-                (s)
-                (seq
-                   (do
-                      (apply
-                         (apply (apply containsNulAt s) (int64 0))
-                         (apply lengthString s))))))))
-      (sig containsNulAt (-> String (-> Int64 (-> Int64 Bool))))
-      (def
-         containsNulAt
-         (fn
-            ((clause
-                (s i len)
-                (seq
-                   (do
-                      (apply
-                         (apply
-                            (apply if (apply (apply geInt64 i) len))
-                            (fn ((clause (_) (seq (do False))))))
-                         (fn
-                            ((clause
-                                (_)
-                                (seq
-                                   (do
-                                      (apply
-                                         (apply
-                                            (apply
-                                               if
-                                               (apply
-                                                  (apply
-                                                     eqChar
-                                                     (apply (apply atString i) s))
-                                                  (apply Char# (char '\NUL'))))
-                                            (fn ((clause (_) (seq (do True))))))
-                                         (fn
-                                            ((clause
-                                                (_)
-                                                (seq
-                                                   (do
-                                                      (apply
-                                                         (apply
-                                                            (apply
-                                                               containsNulAt
-                                                               s)
-                                                            (apply
-                                                               (apply addInt64 i)
-                                                               (int64 1)))
-                                                         len)))))))))))))))))))
-      (sig failLoudly (-> String a))
-      (def
-         failLoudly
-         (fn
-            ((clause
-                (msg)
-                (seq
-                   (let _ (apply printStderr msg))
-                   (do (apply exitWith (int32 1))))))))
       (sig joinWithNul (-> (app List (String)) String))
       (def
          joinWithNul
@@ -153,27 +98,10 @@
                   (seq
                      (do
                         (apply
+                           (apply appendString s)
                            (apply
-                              (apply if (apply containsNul s))
-                              (fn
-                                 ((clause
-                                     (_)
-                                     (seq
-                                        (do
-                                           (apply
-                                              failLoudly
-                                              (string
-                                                 "runProcess: an argument contains an embedded NUL byte, which the NUL-terminated wire encoding cannot represent"))))))))
-                           (fn
-                              ((clause
-                                  (_)
-                                  (seq
-                                     (do
-                                        (apply
-                                           (apply appendString s)
-                                           (apply
-                                              (apply appendString (string "\NUL"))
-                                              (apply joinWithNul rest)))))))))))))))
+                              (apply appendString (string "\NUL"))
+                              (apply joinWithNul rest)))))))))
       (sig runProcessBoxed# (-> String# (-> String (tuple Int32 String String))))
       (def
          runProcessBoxed#
@@ -181,9 +109,19 @@
             ((clause
                 (cmd (con String# (argsBlob)))
                 (seq (do (apply (apply runProcess# cmd) argsBlob)))))))
-      (sig
-         runProcess
-         (-> String (-> (app List (String)) (tuple Int32 String String))))
+      (data
+         ProcessResult
+         ()
+         ((ProcessResult
+             ((record (exitCode Int32) (stdout String) (stderr String))))))
+      (sig toProcessResult (-> (tuple Int32 String String) ProcessResult))
+      (def
+         toProcessResult
+         (fn
+            ((clause
+                ((tuple code out err))
+                (seq (do (record (exitCode code) (stdout out) (stderr err))))))))
+      (sig runProcess (-> String (-> (app List (String)) ProcessResult)))
       (def
          runProcess
          (fn
@@ -192,25 +130,22 @@
                 (seq
                    (do
                       (apply
+                         toProcessResult
                          (apply
-                            (apply if (apply containsNul (apply String# cmd)))
-                            (fn
-                               ((clause
-                                   (_)
-                                   (seq
-                                      (do
-                                         (apply
-                                            failLoudly
-                                            (string
-                                               "runProcess: cmd contains an embedded NUL byte"))))))))
-                         (fn
-                            ((clause
-                                (_)
-                                (seq
-                                   (do
-                                      (apply
-                                         (apply runProcessBoxed# cmd)
-                                         (apply joinWithNul args))))))))))))))
+                            (apply runProcessBoxed# cmd)
+                            (apply joinWithNul args)))))))))
+      (sig bail (-> Int32 (-> String a)))
+      (def
+         bail
+         (fn
+            ((clause
+                (code msg)
+                (seq
+                   (do
+                      (apply
+                         printStderr
+                         (apply (apply appendString msg) (string "\n"))))
+                   (do (apply exitWith code)))))))
       (sig listToString (-> (app List (Char)) String))
       (def
          listToString

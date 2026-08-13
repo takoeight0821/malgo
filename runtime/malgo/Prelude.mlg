@@ -272,6 +272,78 @@ infixr 9 (<<)
 def (<<) : (b -> c) -> (a -> b) -> (a -> c)
 def (<<) = {f g -> {x -> f (g x)}}
 
+-- Whether `needle` occurs anywhere in `haystack` (naive O(n*m) scan -- these
+-- strings are short command-output blobs in practice, not something that
+-- needs a real substring-search algorithm). Argument order matches the rest
+-- of this file's predicate-first style (`filter pred xs`, `any pred xs`):
+-- `stringContains needle` alone is a reusable `String -> Bool` predicate.
+def stringContains : String -> String -> Bool
+def stringContains = { needle haystack -> stringContainsFrom needle haystack 0i64 }
+
+def stringContainsFrom : String -> String -> Int64 -> Bool
+def stringContainsFrom = { needle haystack i ->
+  if (gtInt64 (addInt64 i (lengthString needle)) (lengthString haystack))
+    { False }
+    { if (eqString (substring haystack i (addInt64 i (lengthString needle))) needle)
+        { True }
+        { stringContainsFrom needle haystack (addInt64 i 1i64) }
+    }
+}
+
+-- Strip every trailing `\n`, matching bash's `"$(cmd)"` command-substitution
+-- semantics -- `runProcess`'s captured stdout is a raw pipe read and keeps
+-- whatever trailing newlines the child wrote, so callers treating it as one
+-- scalar value (a temp-dir path, a config value, a decrypted token) need
+-- this before using it as one.
+def trimTrailingNewlines : String -> String
+def trimTrailingNewlines = { s ->
+  reverseString (dropWhileString (eqChar (Char# '\n'#)) (reverseString s))
+}
+
+-- Split on runs of whitespace, ignoring leading/trailing whitespace --
+-- matches shell word-splitting and Haskell's `words`, not a naive
+-- single-character split.
+def words : String -> List String
+def words = { s ->
+  let trimmed = dropWhileString isWhiteSpace s;
+  if (eqString trimmed "")
+    { Nil }
+    { Cons (takeWhileString (not << isWhiteSpace) trimmed)
+           (words (dropWhileString (not << isWhiteSpace) trimmed)) }
+}
+
+-- Split on `\n` as a terminator, matching `unlines`'s convention below: a
+-- trailing `\n` ends the last real segment rather than starting an empty
+-- one after it, so `lines "a\nb\n"` is `["a", "b"]`, `lines "a\nb"` (no
+-- trailing terminator) is also `["a", "b"]`, `lines "a\n\nb"` is `["a", "",
+-- "b"]`, and `lines ""` is `Nil` -- zero terminated segments in no content.
+def lines : String -> List String
+def lines = { s ->
+  if (eqString s "")
+    { Nil }
+    { Cons (takeWhileString (neChar (Char# '\n'#)) s)
+           (linesRest (dropWhileString (neChar (Char# '\n'#)) s)) }
+}
+
+def linesRest : String -> List String
+def linesRest = { s ->
+  if (eqString s "")
+    { Nil }
+    { lines (tailString s) }
+}
+
+-- Join with `\n` as a *trailing terminator per element*, not a separator
+-- between elements -- same reasoning as `joinWithNul` above (an empty list
+-- and a one-element list of "" would otherwise encode identically). This
+-- is `lines`'s inverse for the file-content shape scripts actually have:
+-- `unlines (lines s) == s` when `s` is empty or ends in `\n`, which every
+-- real text file being idempotently rewritten does.
+def unlines : List String -> String
+def unlines =
+  { Nil -> "",
+    (Cons x xs) -> appendString x (appendString "\n" (unlines xs))
+  }
+
 infixl 0 (|>)
 def (|>) : a -> (a -> b) -> b
 def (|>) = {x f -> f x}

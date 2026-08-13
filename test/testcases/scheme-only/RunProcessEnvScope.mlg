@@ -1,0 +1,22 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- `runProcess` has no env-var-override parameter, and adding one would mean
+-- a new primitive implemented (and adversarially quoting-tested) across the
+-- interpreter and Scheme backend both, for a need that already has a
+-- standard-Unix answer: POSIX `env NAME=value... cmd [args...]` sets
+-- variables for exactly that one child process, no shell interpretation of
+-- `=` required (`env` parses its own leading `NAME=value` argv entries).
+-- Confirms this composes cleanly with `runProcess`'s existing per-arg
+-- shell-quoting on the Scheme side, and matches the interpreter's real-argv
+-- `IO.Process.output` path -- both spawn a real `env` executable, no
+-- backend-specific behavior here.
+def showResult : ProcessResult -> String
+def showResult = { r ->
+  appendString "code=" (appendString (toStringInt32 r.exitCode)
+    (appendString "|out=" (appendString r.stdout (appendString "|err=" r.stderr))))
+}
+
+def main = { () ->
+  printString (showResult (runProcess "env" (Cons "FOO=bar" (Cons "sh" (Cons "-c" (Cons "echo $FOO" Nil))))))
+}

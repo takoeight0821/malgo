@@ -378,18 +378,22 @@ def if =
     False _ f -> f (),
   }
 
--- Short-circuiting: the second argument is a thunk, not evaluated when the
--- first argument alone decides the result. Several real call sites depend
--- on this (not just brevity) -- e.g. `geInt64 (lengthString s) 4i64 && eqString
--- (substring s 0i64 4i64) "age1"` would index out of bounds on a short `s`
--- if the right side were evaluated eagerly.
+-- Eager, not short-circuiting -- malgo is call-by-value and infix
+-- application doesn't thunk either side (`a && b` evaluates both `a` and
+-- `b` before calling `(&&)`, same as any other function call; there's no
+-- implicit coercion into `{a}`'s `() -> a` desugaring). Safe for
+-- combining independently-safe checks (e.g. `isAlphanum c || eqChar c
+-- (Char# '_'#) || eqChar c (Char# '-'#)`); NOT a substitute for a guard
+-- that must skip an unsafe second check (e.g. a length check before a
+-- `substring` on the same string) -- that still needs `if`/the existing
+-- `|> {True -> ..., False -> ...}` idiom.
 infixr 3 (&&)
-def (&&) : Bool -> {Bool} -> Bool
-def (&&) = { True r -> r (), False _ -> False }
+def (&&) : Bool -> Bool -> Bool
+def (&&) = { True b -> b, False _ -> False }
 
 infixr 2 (||)
-def (||) : Bool -> {Bool} -> Bool
-def (||) = { True _ -> True, False r -> r () }
+def (||) : Bool -> Bool -> Bool
+def (||) = { True _ -> True, False b -> b }
 
 def unless : Bool -> a -> {a} -> a
 def unless = { c tValue f -> if c {tValue} f }

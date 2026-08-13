@@ -256,6 +256,15 @@ def dropWhileString = { pred str ->
   }
 }
 
+-- whether every character in `str` satisfies `pred` (vacuously true on "")
+def allString : (Char -> Bool) -> String -> Bool
+def allString = { pred str ->
+  case (headString str) {
+    Nothing -> True,
+    (Just c) -> if (pred c) { allString pred (tailString str) } { False }
+  }
+}
+
 def concatString : List String -> String
 def concatString =
   { Nil -> "",
@@ -368,6 +377,19 @@ def if =
   { True t _ -> t (),
     False _ f -> f (),
   }
+
+-- Short-circuiting: the second argument is a thunk, not evaluated when the
+-- first argument alone decides the result. Several real call sites depend
+-- on this (not just brevity) -- e.g. `geInt64 (lengthString s) 4i64 && eqString
+-- (substring s 0i64 4i64) "age1"` would index out of bounds on a short `s`
+-- if the right side were evaluated eagerly.
+infixr 3 (&&)
+def (&&) : Bool -> {Bool} -> Bool
+def (&&) = { True r -> r (), False _ -> False }
+
+infixr 2 (||)
+def (||) : Bool -> {Bool} -> Bool
+def (||) = { True _ -> True, False r -> r () }
 
 def unless : Bool -> a -> {a} -> a
 def unless = { c tValue f -> if c {tValue} f }

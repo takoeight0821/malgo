@@ -61,6 +61,12 @@ def getEnv = { (String# name) ->
     { Nothing }
 }
 
+-- The XDG Base Directory Specification's cache directory: `$XDG_CACHE_HOME`
+-- if set, otherwise `$HOME/.cache`. Not specific to any one script -- any
+-- program choosing where to write cache files wants this.
+def xdgCacheHome : String
+def xdgCacheHome = fromMaybe (getEnv "XDG_CACHE_HOME") (appendString (fromMaybe (getEnv "HOME") "") "/.cache")
+
 -- list
 data List a = Nil | Cons a (List a)
 
@@ -167,6 +173,25 @@ def runProcess = { (String# cmd) args ->
     { failLoudly "runProcess: cmd contains an embedded NUL byte" }
     { toProcessResult (runProcessBoxed# cmd (joinWithNul args)) }
 }
+
+-- Whether `r` represents a successful run (exit code 0). The most basic
+-- accessor any script using `runProcess` wants, so it doesn't need to spell
+-- out `eqInt32 r.exitCode 0i32` itself at every call site.
+def isSuccess : ProcessResult -> Bool
+def isSuccess = { r -> eqInt32 r.exitCode 0i32 }
+
+-- Whether every command in `names` is on PATH, checked via `command -v`.
+-- Direct recursion (not built from `all`, defined later in this file, to
+-- avoid a forward reference) -- matches the style `joinWithNul`/
+-- `containsNulAt` above already use for the same reason.
+def commandsExist : List String -> Bool
+def commandsExist =
+  { Nil -> True,
+    (Cons name rest) ->
+      if (isSuccess (runProcess "command" (Cons "-v" (Cons name Nil))))
+        { commandsExist rest }
+        { False },
+  }
 
 -- Print `msg` to stderr (with a trailing newline) and exit with `code`.
 -- For an expected, recoverable condition (a tool is missing, a downstream

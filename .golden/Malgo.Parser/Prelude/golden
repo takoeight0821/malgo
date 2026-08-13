@@ -54,6 +54,18 @@
                                                String#
                                                (apply getEnvRaw# name)))))))))
                          (fn ((clause (_) (seq (do Nothing))))))))))))
+      (sig xdgCacheHome String)
+      (def
+         xdgCacheHome
+         (apply
+            (apply fromMaybe (apply getEnv (string "XDG_CACHE_HOME")))
+            (apply
+               (apply
+                  appendString
+                  (apply
+                     (apply fromMaybe (apply getEnv (string "HOME")))
+                     (string "")))
+               (string "/.cache"))))
       (data List (a) ((Nil ()) (Cons (a (app List (a))))))
       (sig head (-> (app List (a)) a))
       (def
@@ -229,6 +241,39 @@
                                          (apply
                                             (apply runProcessBoxed# cmd)
                                             (apply joinWithNul args)))))))))))))))
+      (sig isSuccess (-> ProcessResult Bool))
+      (def
+         isSuccess
+         (fn
+            ((clause
+                (r)
+                (seq
+                   (do (apply (apply eqInt32 (project r "exitCode")) (int32 0))))))))
+      (sig commandsExist (-> (app List (String)) Bool))
+      (def
+         commandsExist
+         (fn
+            ((clause (Nil) (seq (do True)))
+               (clause
+                  ((con Cons (name rest)))
+                  (seq
+                     (do
+                        (apply
+                           (apply
+                              (apply
+                                 if
+                                 (apply
+                                    isSuccess
+                                    (apply
+                                       (apply runProcess (string "command"))
+                                       (apply
+                                          (apply Cons (string "-v"))
+                                          (apply (apply Cons name) Nil)))))
+                              (fn
+                                 ((clause
+                                     (_)
+                                     (seq (do (apply commandsExist rest)))))))
+                           (fn ((clause (_) (seq (do False))))))))))))
       (sig bail (-> Int32 (-> String a)))
       (def
          bail

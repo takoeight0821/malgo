@@ -300,13 +300,22 @@ jobs:
   # see PR #421) takes 45-60 minutes with no cache.nixos.org substitute --
   # far too slow for per-PR feedback. Runs on master pushes and the nightly
   # cron only, so a flake regression still surfaces within a day.
-  # aarch64-darwin specifically, matching the flake's own hardcoded
-  # `system` and its one real consumer's (nix-config) target -- there is
-  # no ubuntu-latest equivalent here, unlike every other job in this file.
+  # Matrixed across both of GitHub's native runner architectures now that
+  # the flake supports more than aarch64-darwin: macos-latest is genuine
+  # aarch64-darwin hardware, ubuntu-latest is genuine x86_64-linux hardware
+  # -- nix-config (the one real consumer) runs its own CI on the latter, so
+  # this is that exact target, not an emulated stand-in for it.
+  # aarch64-linux (the flake's third supported system) has no matching
+  # GitHub-hosted runner and isn't covered here; it was verified once,
+  # manually, via a native-architecture Docker container.
   nix-build:
     needs: gates
     if: needs.gates.outputs.nixBuild == '1' && github.event_name != 'pull_request'
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

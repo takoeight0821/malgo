@@ -644,10 +644,7 @@ def parseAtom = { ftable ts ->
       (TkIdent s)  ->
         if (eqString s "label")
           { parseLabelExpr ftable ts2 }
-          { if (eqString s "not")
-              { parseNotExpr ftable ts2 }
-              { parseIdentExpr s ts2 }
-          },
+          { parseIdentExpr s ts2 },
       (TkInt32 n)  -> Right {val = ExLit (LitInt32 n), rest = ts2},
       (TkInt64 n)  -> Right {val = ExLit (LitInt64 n), rest = ts2},
       (TkChar c)   -> Right {val = ExLit (LitChar c), rest = ts2},
@@ -668,15 +665,6 @@ def parseLabelExpr = { ftable ts ->
       let identity = ExCase(Cons (ExArm(Cons (PatVar valueName) Nil, ExVar valueName)) Nil);
       Right {val = ExLet(name, identity, body), rest = ts3}
     }
-  }
-}
-
-def parseNotExpr : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
-def parseNotExpr = { ftable ts ->
-  bindRight (parseApp ftable ts) { {val = cond, rest = ts2} ->
-    let trueThunk = ExCase(Cons (ExArm(Cons PatWild Nil, ExVar "False")) Nil);
-    let falseThunk = ExCase(Cons (ExArm(Cons PatWild Nil, ExVar "True")) Nil);
-    Right {val = ExApp(ExApp(ExApp(ExVar "if", cond), trueThunk), falseThunk), rest = ts2}
   }
 }
 

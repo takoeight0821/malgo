@@ -138,4 +138,40 @@ if [ "$builtin_out" != "code=7|out=|err=" ]; then
   exit 1
 fi
 
+# `env NAME=value cmd args...` scoping a variable to one child process --
+# comparable on both backends (unlike the shell-builtin case above), so this
+# diffs interpreter vs. scheme like the top RunProcess.mlg block does.
+ENV_SRC="test/testcases/scheme-only/RunProcessEnvScope.mlg"
+echo "=== env-scoped var (interpreter) ==="
+if ! env_interp_out="$(timeout "$CASE_TIMEOUT" "$MALGO" eval "$ENV_SRC" 2>"$WORK/env.interp.err")"; then
+  echo "FAIL: interpreter run failed for $ENV_SRC:" >&2
+  cat "$WORK/env.interp.err" >&2
+  exit 1
+fi
+echo "$env_interp_out"
+
+echo "=== env-scoped var (scheme backend) ==="
+if ! timeout "$COMPILE_TIMEOUT" "$MALGO" eval --target scheme "$ENV_SRC" >"$WORK/env.scm" 2>"$WORK/env.compile.err"; then
+  echo "FAIL: --target scheme compilation failed for $ENV_SRC:" >&2
+  cat "$WORK/env.compile.err" >&2
+  exit 1
+fi
+if ! env_scheme_out="$(timeout "$CASE_TIMEOUT" "$SCHEME" --script "$WORK/env.scm" 2>"$WORK/env.run.err")"; then
+  echo "FAIL: scheme run failed for $ENV_SRC:" >&2
+  cat "$WORK/env.run.err" >&2
+  exit 1
+fi
+echo "$env_scheme_out"
+
+if [ "$env_interp_out" != "$env_scheme_out" ]; then
+  echo "FAIL: interpreter and scheme backend disagree on $ENV_SRC" >&2
+  diff <(echo "$env_interp_out") <(echo "$env_scheme_out") >&2
+  exit 1
+fi
+if [ "$env_interp_out" != "code=0|out=bar
+|err=" ]; then
+  echo "FAIL: expected code=0|out=bar / err= (with FOO=bar echoed), got: $env_interp_out" >&2
+  exit 1
+fi
+
 echo "=== scheme-process-check OK ==="

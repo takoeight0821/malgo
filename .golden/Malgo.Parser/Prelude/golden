@@ -442,6 +442,192 @@
             ((clause
                 (f g)
                 (seq (do (fn ((clause (x) (seq (do (apply f (apply g x)))))))))))))
+      (sig stringContains (-> String (-> String Bool)))
+      (def
+         stringContains
+         (fn
+            ((clause
+                (needle haystack)
+                (seq
+                   (do
+                      (apply
+                         (apply (apply stringContainsFrom needle) haystack)
+                         (int64 0))))))))
+      (sig stringContainsFrom (-> String (-> String (-> Int64 Bool))))
+      (def
+         stringContainsFrom
+         (fn
+            ((clause
+                (needle haystack i)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply
+                               if
+                               (apply
+                                  (apply
+                                     gtInt64
+                                     (apply
+                                        (apply addInt64 i)
+                                        (apply lengthString needle)))
+                                  (apply lengthString haystack)))
+                            (fn ((clause (_) (seq (do False))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply
+                                            (apply
+                                               if
+                                               (apply
+                                                  (apply
+                                                     eqString
+                                                     (apply
+                                                        (apply
+                                                           (apply
+                                                              substring
+                                                              haystack)
+                                                           i)
+                                                        (apply
+                                                           (apply addInt64 i)
+                                                           (apply
+                                                              lengthString
+                                                              needle))))
+                                                  needle))
+                                            (fn ((clause (_) (seq (do True))))))
+                                         (fn
+                                            ((clause
+                                                (_)
+                                                (seq
+                                                   (do
+                                                      (apply
+                                                         (apply
+                                                            (apply
+                                                               stringContainsFrom
+                                                               needle)
+                                                            haystack)
+                                                         (apply
+                                                            (apply addInt64 i)
+                                                            (int64 1)))))))))))))))))))))
+      (sig trimTrailingNewlines (-> String String))
+      (def
+         trimTrailingNewlines
+         (fn
+            ((clause
+                (s)
+                (seq
+                   (do
+                      (apply
+                         reverseString
+                         (apply
+                            (apply
+                               dropWhileString
+                               (apply eqChar (apply Char# (char '\n'))))
+                            (apply reverseString s)))))))))
+      (sig words (-> String (app List (String))))
+      (def
+         words
+         (fn
+            ((clause
+                (s)
+                (seq
+                   (let trimmed (apply (apply dropWhileString isWhiteSpace) s))
+                   (do
+                      (apply
+                         (apply
+                            (apply
+                               if
+                               (apply (apply eqString trimmed) (string "")))
+                            (fn ((clause (_) (seq (do Nil))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply
+                                            Cons
+                                            (apply
+                                               (apply
+                                                  takeWhileString
+                                                  (opapp << not isWhiteSpace))
+                                               trimmed))
+                                         (apply
+                                            words
+                                            (apply
+                                               (apply
+                                                  dropWhileString
+                                                  (opapp << not isWhiteSpace))
+                                               trimmed)))))))))))))))
+      (sig lines (-> String (app List (String))))
+      (def
+         lines
+         (fn
+            ((clause
+                (s)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (apply (apply eqString s) (string "")))
+                            (fn ((clause (_) (seq (do Nil))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply
+                                            Cons
+                                            (apply
+                                               (apply
+                                                  takeWhileString
+                                                  (apply
+                                                     neChar
+                                                     (apply Char# (char '\n'))))
+                                               s))
+                                         (apply
+                                            linesRest
+                                            (apply
+                                               (apply
+                                                  dropWhileString
+                                                  (apply
+                                                     neChar
+                                                     (apply Char# (char '\n'))))
+                                               s)))))))))))))))
+      (sig linesRest (-> String (app List (String))))
+      (def
+         linesRest
+         (fn
+            ((clause
+                (s)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (apply (apply eqString s) (string "")))
+                            (fn ((clause (_) (seq (do Nil))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq (do (apply lines (apply tailString s))))))))))))))
+      (sig unlines (-> (app List (String)) String))
+      (def
+         unlines
+         (fn
+            ((clause (Nil) (seq (do (string ""))))
+               (clause
+                  ((con Cons (x xs)))
+                  (seq
+                     (do
+                        (apply
+                           (apply appendString x)
+                           (apply
+                              (apply appendString (string "\n"))
+                              (apply unlines xs)))))))))
       (infix left 0 |>)
       (sig |> (-> a (-> (-> a b) b)))
       (def |> (fn ((clause (x f) (seq (do (apply f x)))))))

@@ -635,6 +635,17 @@ def joinWithArrow = {
 
 -- ─── Import evaluation with full target enforcement ──────────────────────────
 
+-- `import Builtin.mlg` never actually reads/parses that file below -- it
+-- substitutes `makeBaseEnv`'s synthetic roster (builtinNames/
+-- preludeBuiltinNames + applyBuiltinN's dispatch + foreignArityN) instead.
+-- Any Builtin.mlg name a real program can reference under self-hosting has
+-- to be manually mirrored into all three of those, in sync by hand -- there
+-- is no way for a name to "just work" here by virtue of being a normal
+-- equation in the real file, however ordinary its definition. Two names
+-- (`not`, `neChar`) were missing this way until a nix-config script port
+-- exercised them for the first time; if a future Prelude/Builtin addition
+-- goes "undefined: <name>" only under self-hosting (selfhost-golden.sh),
+-- start here, not in the parser or the real interpreter.
 def isPreloadedImport : String -> Bool
 def isPreloadedImport = { path ->
   eqString path "runtime/malgo/Builtin.mlg"
@@ -860,6 +871,7 @@ def applyBuiltin3 = { gEnv name args ->
     "isUpper"       -> case args { (Cons (VChar c) Nil) -> Right (boolVal (isUpper c)),    _ -> Left "isUpper: type error" },
     "isLower"       -> case args { (Cons (VChar c) Nil) -> Right (boolVal (isLower c)),    _ -> Left "isLower: type error" },
     "isAlphanum"    -> case args { (Cons (VChar c) Nil) -> Right (boolVal (isAlphanum c)), _ -> Left "isAlphanum: type error" },
+    "not"           -> case args { (Cons v Nil) -> Right (boolVal (not (isTrueCon v))), _ -> Left "not: type error" },
     "ordChar"       -> case args { (Cons (VChar c) Nil) -> Right (VInt32 (ordChar c)),     _ -> Left "ordChar: type error" },
     "chrInt32"      -> case args { (Cons (VInt32 n) Nil) -> Right (VChar (chrInt32 n)),    _ -> Left "chrInt32: type error" },
     -- "if": Bool -> thunk -> thunk -> a
@@ -971,6 +983,7 @@ def applyBuiltin8 : Env -> String -> List Value -> Either String Value
 def applyBuiltin8 = { gEnv name args ->
   case name {
     "eqChar" -> case args { (Cons (VChar a) (Cons (VChar b) Nil)) -> Right (boolVal (eqChar a b)), _ -> Left "eqChar: type error" },
+    "neChar" -> case args { (Cons (VChar a) (Cons (VChar b) Nil)) -> Right (boolVal (neChar a b)), _ -> Left "neChar: type error" },
     "geInt32" -> case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (geInt32 a b)), _ -> Left "geInt32: type error" },
     "neInt32" -> case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (neInt32 a b)), _ -> Left "neInt32: type error" },
     "neInt64" -> case args { (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (neInt64 a b)), _ -> Left "neInt64: type error" },
@@ -1110,6 +1123,7 @@ def foreignArity3 = {
   "isAlphanum"    -> 1i32,
   "ordChar"       -> 1i32,
   "chrInt32"      -> 1i32,
+  "not"           -> 1i32,
   "if"            -> 3i32,
   "case"          -> 2i32,
   name -> foreignArity4 name
@@ -1191,6 +1205,7 @@ def foreignArity7 = {
 def foreignArity8 : String -> Int32
 def foreignArity8 = {
   "eqChar" -> 2i32,
+  "neChar" -> 2i32,
   "geInt32" -> 2i32,
   "neInt32" -> 2i32,
   "neInt64" -> 2i32,
@@ -1253,8 +1268,9 @@ def coreBuiltinNames =
   Cons "toStringInt64" (Cons "lengthString" (Cons "atString" (Cons "consString" (
   Cons "substring" (Cons "reverseString" (Cons "isDigit" (Cons "isUpper" (
   Cons "isLower" (Cons "isAlphanum" (Cons "ordChar" (Cons "chrInt32" (
+  Cons "not" (
   Cons "if" (Cons "case" Nil
-  )))))))))))))))))))))))))))
+  ))))))))))))))))))))))))))))
 
 def extraBuiltinNames : List String
 def extraBuiltinNames = append ioBuiltinNames (append int64BuiltinNames (append rawInt32BuiltinNames (append stringConvBuiltinNames (append wrapperBuiltinNames preludeBuiltinNames))))
@@ -1296,14 +1312,14 @@ def preludeBuiltinNames : List String
 def preludeBuiltinNames =
   Cons "max" (Cons "min" (Cons "abs" (Cons "const" (Cons "getContents" (Cons "print" (Cons "malgo_print" (Cons "toStringDouble" (Cons "negInt32" (
   Cons "addDouble#" (Cons "subDouble#" (Cons "mulDouble#" (Cons "goto" (
-  Cons "eqChar" (Cons "geInt32" (Cons "neInt32" (Cons "neInt64" (Cons "geInt64" (Cons "negInt64" (Cons "modInt64" (
+  Cons "eqChar" (Cons "neChar" (Cons "geInt32" (Cons "neInt32" (Cons "neInt64" (Cons "geInt64" (Cons "negInt64" (Cons "modInt64" (
   Cons "exitSuccess" (Cons "malgo_exit_success" (Cons "malgo_panic" (Cons "malgo_unsafe_cast" (
   Cons "getRawArgs" (Cons "readFile" (Cons "charToString" (Cons "hasEnv#" (Cons "getEnvRaw#" (Cons "modInt64#" (
   Cons "malgo_mod_int64_t" (Cons "malgo_neg_int64_t" (Cons "malgo_mod_int32_t" (Cons "malgo_neg_int32_t" (
   Cons "malgo_gt_int32_t" (Cons "malgo_ge_int32_t" (Cons "malgo_ne_int32_t" (
   Cons "malgo_eq_int64_t" (Cons "malgo_lt_int64_t" (Cons "malgo_le_int64_t" (
   Cons "malgo_gt_int64_t" (Cons "malgo_ge_int64_t" (Cons "malgo_ne_int64_t" Nil
-  ))))))))))))))))))))))))))))))))))))))))))
+  )))))))))))))))))))))))))))))))))))))))))))
 def makeBaseEnv : Env
 def makeBaseEnv = addBaseConstructors (foldl addBuiltin EnvEmpty builtinNames)
 

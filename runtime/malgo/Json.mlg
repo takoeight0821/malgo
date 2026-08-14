@@ -1,11 +1,10 @@
 module {..} = import "../../runtime/malgo/Builtin.mlg"
 module {..} = import "../../runtime/malgo/Prelude.mlg"
 
--- A minimal JSON reader: parse + read-only accessors, for scripts that
--- need to pull a few fields out of a config file (see nix-config's
--- permissions-config.json use case). No writer/serializer and no
--- deep-merge yet -- add those (jsonToString, a recursive merge) when a
--- real call site needs them, not speculatively ahead of one.
+-- A minimal JSON reader/writer: parse, read-only accessors, a jq-`*`-style
+-- recursive merge, and a serializer -- for scripts that pull fields out of
+-- a config file and, in nix-config's manifest-merge use case, combine two
+-- of them back into one.
 --
 -- `JNumber` keeps the raw numeral text rather than decoding it to a
 -- `Double`: there is no `String -> Double` (or `Int -> Double`)
@@ -63,6 +62,88 @@ def jsonAsString : Json -> Maybe String
 def jsonAsString =
   { (JString str) -> Just str,
     _ -> Nothing
+  }
+
+-- ─── Merge (jq's `*`) ────────────────────────────────────────────────────
+
+-- Recursive merge matching jq's `*` exactly: when both sides are objects,
+-- merge recursively per shared key (keys unique to either side pass
+-- through); for any other combination (array/array, object/scalar,
+-- scalar/object, etc.) `b` wins outright -- arrays are replaced, not
+-- concatenated. A caller that wants jq's `(.a // []) + (.b // []) | unique`
+-- array-union-dedup for one specific key builds that themselves via
+-- `jsonArrayItems`, same as jq needs it spelled out as a separate `|=`
+-- override rather than folding it into `*` itself.
+def jsonMerge : Json -> Json -> Json
+def jsonMerge =
+  { (JObject aEntries) (JObject bEntries) -> JObject (jsonMergeEntries aEntries bEntries),
+    _ b -> b
+  }
+
+def jsonMergeEntries : List (String, Json) -> List (String, Json) -> List (String, Json)
+def jsonMergeEntries = { aEntries bEntries ->
+  appendList
+    (mapList (jsonMergeOneEntry bEntries) aEntries)
+    (filter (jsonIsNewKey aEntries) bEntries)
+}
+
+def jsonMergeOneEntry : List (String, Json) -> (String, Json) -> (String, Json)
+def jsonMergeOneEntry = { bEntries {k, v} ->
+  case (jsonLookupEntry k bEntries) {
+    Nothing -> (k, v),
+    (Just bVal) -> (k, jsonMerge v bVal)
+  }
+}
+
+def jsonIsNewKey : List (String, Json) -> (String, Json) -> Bool
+def jsonIsNewKey = { aEntries {k, _} ->
+  case (jsonLookupEntry k aEntries) {
+    Nothing -> True,
+    (Just _) -> False
+  }
+}
+
+-- ─── Serialize ───────────────────────────────────────────────────────────
+
+def jsonToString : Json -> String
+def jsonToString =
+  { JNull -> "null",
+    (JBool True) -> "true",
+    (JBool False) -> "false",
+    (JNumber s) -> s,
+    (JString s) -> jsonEncodeString s,
+    (JArray items) -> appendString "[" (appendString (concatString (punctuate "," (mapList jsonToString items))) "]"),
+    (JObject entries) -> appendString "{" (appendString (concatString (punctuate "," (mapList jsonEncodeEntry entries))) "}")
+  }
+
+def jsonEncodeEntry : (String, Json) -> String
+def jsonEncodeEntry = { {k, v} -> appendString (jsonEncodeString k) (appendString ":" (jsonToString v)) }
+
+def jsonEncodeString : String -> String
+def jsonEncodeString = { s -> appendString "\"" (appendString (jsonEscapeChars s) "\"") }
+
+-- Escapes exactly the characters `jsonParseEscapeAt` (above) already
+-- decodes, so parse/serialize stay symmetric -- other control characters
+-- pass through raw, same "add real support if a call site ever needs it"
+-- discipline as this file's `\uXXXX` decoding gap.
+def jsonEscapeChars : String -> String
+def jsonEscapeChars = { s ->
+  case (headString s) {
+    Nothing -> "",
+    (Just c) -> appendString (jsonEscapeChar c) (jsonEscapeChars (tailString s))
+  }
+}
+
+def jsonEscapeChar : Char -> String
+def jsonEscapeChar =
+  { (Char# '"'#)  -> "\\\"",
+    (Char# '\\'#) -> "\\\\",
+    (Char# '\n'#) -> "\\n",
+    (Char# '\t'#) -> "\\t",
+    (Char# '\r'#) -> "\\r",
+    (Char# '\b'#) -> "\\b",
+    (Char# '\f'#) -> "\\f",
+    c -> consString c ""
   }
 
 -- ─── Whitespace ──────────────────────────────────────────────────────────

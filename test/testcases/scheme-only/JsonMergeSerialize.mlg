@@ -1,0 +1,83 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Json.mlg"
+
+-- Deliberately NOT a `test/testcases/malgo` case -- same reason as
+-- JsonQueryLikeJq.mlg: any corpus fixture importing Builtin.mlg+Prelude.mlg
+-- directly alongside Json.mlg (a third module that itself imports them)
+-- hits the pre-existing `--infer` module-diamond bug (malgo#429).
+
+def assertEq : String -> String -> String -> ()
+def assertEq = { caseName expected actual ->
+  if (eqString expected actual)
+    { putStrLn (appendString "ok: " caseName) }
+    { putStrLn (appendString "FAIL: " (appendString caseName (appendString " expected=" (appendString expected (appendString " actual=" actual))))) }
+}
+
+def unwrapJson : Maybe Json -> Json
+def unwrapJson =
+  { (Just j) -> j,
+    Nothing -> JNull
+  }
+
+def parseUnwrap : String -> Json
+def parseUnwrap = { s -> unwrapJson (parseJson s) }
+
+-- Mirrors the real shapes in nix-config's plugins-manifest.json /
+-- .work.json: nested objects (3+ levels), an array of strings, an empty
+-- object, and a boolean.
+def baseJson : String
+def baseJson = "{\"copilotCli\":{\"declarative\":true,\"excludeSkills\":[\"claude-api\"],\"mcpServers\":{}},\"claudeCode\":{\"excludeSkills\":[\"copilot-artifact\"]}}"
+
+def workJson : String
+def workJson = "{\"claudeCode\":{\"mcpServers\":{\"linear-server\":{\"type\":\"http\",\"url\":\"https://mcp.linear.app/mcp\"}}}}"
+
+def mergedResult : Json
+def mergedResult = jsonMerge (parseUnwrap baseJson) (parseUnwrap workJson)
+
+def main = { () ->
+  -- object+object recurses per shared key; a key only one side has passes through
+  assertEq "merge keeps a key only base has (copilotCli.declarative untouched)"
+    "true"
+    (jsonToString (unwrapJson (jsonField "declarative" (unwrapJson (jsonField "copilotCli" mergedResult)))));
+
+  assertEq "merge keeps a key only base has, inside a recursively-merged object (claudeCode.excludeSkills)"
+    "[\"copilot-artifact\"]"
+    (jsonToString (unwrapJson (jsonField "excludeSkills" (unwrapJson (jsonField "claudeCode" mergedResult)))));
+
+  assertEq "merge adds a key only work has, nested 3 levels deep (claudeCode.mcpServers.linear-server.url)"
+    "\"https://mcp.linear.app/mcp\""
+    (jsonToString (unwrapJson (jsonField "url" (unwrapJson (jsonField "linear-server" (unwrapJson (jsonField "mcpServers" (unwrapJson (jsonField "claudeCode" mergedResult)))))))));
+
+  -- non-object combinations: b wins outright, arrays are NOT concatenated
+  assertEq "merge replaces an array wholesale, does not concatenate"
+    "[3,4]"
+    (jsonToString (jsonMerge (parseUnwrap "[1,2]") (parseUnwrap "[3,4]")));
+
+  assertEq "merge: scalar vs object, b (object) wins entirely"
+    "{\"nested\":true}"
+    (jsonToString (jsonMerge (parseUnwrap "\"left\"") (parseUnwrap "{\"nested\":true}")));
+
+  assertEq "merge: null vs object, b (object) wins"
+    "{\"x\":1}"
+    (jsonToString (jsonMerge JNull (parseUnwrap "{\"x\":1}")));
+
+  assertEq "merge: empty object with non-empty object"
+    "{\"a\":1}"
+    (jsonToString (jsonMerge (parseUnwrap "{}") (parseUnwrap "{\"a\":1}")));
+
+  -- jsonToString: every constructor
+  assertEq "serialize JNull" "null" (jsonToString JNull);
+  assertEq "serialize JBool True" "true" (jsonToString (JBool True));
+  assertEq "serialize JBool False" "false" (jsonToString (JBool False));
+  assertEq "serialize JNumber (raw passthrough)" "42" (jsonToString (JNumber "42"));
+  assertEq "serialize empty array" "[]" (jsonToString (JArray Nil));
+  assertEq "serialize empty object" "{}" (jsonToString (JObject Nil));
+
+  -- string escaping round-trips through parseJson (quote, backslash, newline, tab)
+  let trickyString = "line1\nline2\ttab\"quote\\backslash";
+  let roundTripped = unwrapJson (parseJson (jsonToString (JString trickyString)));
+  assertEq "string escaping round-trips through parseJson"
+    trickyString
+    (case roundTripped { (JString s) -> s, _ -> "NOT A STRING" })
+}

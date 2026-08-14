@@ -213,11 +213,16 @@ def compilePrimitive (name : String) (args : List String) (ret : String) : Strin
   -- malgo_* foreign import names
   | "malgo_read_file" =>
     match args with
-    | [path] => "(" ++ ret ++ " (call-with-input-file " ++ path ++ " (lambda (p) (get-string-all p))))"
+    | [path] => "(" ++ ret ++ " (call-with-input-file " ++ path ++ " (lambda (p) (let ((s (get-string-all p))) (if (eof-object? s) \"\" s)))))"
     | _ => "(error 'prim \"malgo_read_file: wrong number of arguments\")"
   | "malgo_write_file" =>
     match args with
-    | [path, content] => "(begin (call-with-output-file " ++ path ++ " (lambda (p) (put-string p " ++ content ++ "))) (" ++ ret ++ " '()))"
+    -- `call-with-output-file` opens in Chez's default exclusive-create
+    -- mode, erroring "file exists" the moment the target already has
+    -- content -- unlike the interpreter's IO.FS.writeFile, which always
+    -- overwrites. `'replace` matches that: creates if absent, truncates
+    -- if present.
+    | [path, content] => "(begin (call-with-port (open-output-file " ++ path ++ " 'replace) (lambda (p) (put-string p " ++ content ++ "))) (" ++ ret ++ " '()))"
     | _ => "(error 'prim \"malgo_write_file: wrong number of arguments\")"
   | "malgo_get_line" =>
     "(" ++ ret ++ " (let ((line (read-line))) (if (eof-object? line) \"\" line)))"
@@ -360,7 +365,7 @@ def compilePrimitive (name : String) (args : List String) (ret : String) : Strin
   | "malgo_get_char" =>
     "(" ++ ret ++ " (let ((c (read-char))) (if (eof-object? c) #\\nul c)))"
   | "malgo_get_contents" =>
-    "(" ++ ret ++ " (get-string-all (current-input-port)))"
+    "(" ++ ret ++ " (let ((s (get-string-all (current-input-port)))) (if (eof-object? s) \"\" s)))"
   -- Error / control
   | "malgo_panic" =>
     match args with

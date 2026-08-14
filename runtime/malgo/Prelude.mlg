@@ -31,6 +31,17 @@ def orElse = {
   Nothing  k -> k ()
 }
 
+-- Chain a `Maybe`-returning step onto another, short-circuiting on
+-- `Nothing` -- the `Maybe` counterpart to Either.mlg's `bindRight`. A
+-- multi-step recursive-descent parser (see runtime/malgo/Json.mlg) is
+-- exactly the kind of thing that needs this at every step, not just once
+-- or twice.
+def bindMaybe : Maybe a -> (a -> Maybe b) -> Maybe b
+def bindMaybe = {
+  Nothing  _ -> Nothing,
+  (Just x) f -> f x
+}
+
 -- Unwrap a `Maybe`, substituting `d` for `Nothing`. Unlike `orElse` above,
 -- `d` is a plain value, not a thunk -- it's always evaluated, even when
 -- the first argument is `Just _` and `d` goes unused. Reasonable for a

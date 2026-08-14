@@ -1044,7 +1044,15 @@ def valueToText = {
   (VScoped _ v) -> valueToText v,
   (VClosure _ _ _) -> "<function>",
   (VCoClosure _ _ _) -> "<codata>",
-  (VRecord fields) -> showValue (VRecord fields),
+  -- Matches Malgo.Sequent.Eval.valueToText (the Lean interpreter, the
+  -- oracle this self-hosted evaluator is checked against): records always
+  -- render as the literal "<record>", never pretty-printed. The previous
+  -- `showValue (VRecord fields)` delegation was wrong on two counts, not
+  -- just format -- `showValue` is the separate, debug-oriented "show any
+  -- Value" function used by error messages (see its "cannot apply: ..."
+  -- call site above), and its own `VThunk` case renders unforced field
+  -- thunks as the literal text "<thunk>" instead of forcing them.
+  (VRecord _) -> "<record>",
   (VBuiltin name _ _) -> appendString "<builtin:" (appendString name ">"),
   (VThunk _ _) -> "<thunk>"
 }

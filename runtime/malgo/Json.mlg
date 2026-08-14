@@ -26,7 +26,7 @@ data Json
 def parseJson : String -> Maybe Json
 def parseJson = { s ->
   let p0 = jsonSkipWs s 0i64;
-  bindMaybe (jsonParseValue s p0) { {value = v, pos = p1} ->
+  bindMaybe (jsonParseValue s p0) { {.value -> v, .pos -> p1} ->
     let p2 = jsonSkipWs s p1;
     if (eqInt64 p2 (lengthString s))
       { Just v }
@@ -212,7 +212,7 @@ def jsonParseLit = { s pos lit j ->
   if (gtInt64 endPos (lengthString s))
     { Nothing }
     { if (eqString (substring s pos endPos) lit)
-        { Just {value = j, pos = endPos} }
+        { Just {.value -> j, .pos -> endPos} }
         { Nothing }
     }
 }
@@ -222,8 +222,8 @@ def jsonParseLit = { s pos lit j ->
 def jsonParseStringValue : String -> Int64 -> Maybe {value: Json, pos: Int64}
 def jsonParseStringValue = { s pos ->
   -- `pos` points at the opening quote.
-  bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {value = str, pos = p} ->
-    Just {value = JString str, pos = p}
+  bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {.value -> str, .pos -> p} ->
+    Just {.value -> JString str, .pos -> p}
   }
 }
 
@@ -238,11 +238,11 @@ def jsonParseRawString = { s pos ->
 
 def jsonParseRawStringAt : Char -> String -> Int64 -> Maybe {value: String, pos: Int64}
 def jsonParseRawStringAt =
-  { (Char# '"'#)  _ pos -> Just {value = "", pos = addInt64 pos 1i64},
+  { (Char# '"'#)  _ pos -> Just {.value -> "", .pos -> addInt64 pos 1i64},
     (Char# '\\'#) s pos -> jsonParseEscape s (addInt64 pos 1i64),
     c s pos ->
-      bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {value = rest, pos = p} ->
-        Just {value = consString c rest, pos = p}
+      bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {.value -> rest, .pos -> p} ->
+        Just {.value -> consString c rest, .pos -> p}
       }
   }
 
@@ -273,8 +273,8 @@ def jsonParseEscapeAt =
 
 def jsonConsEscaped : Char -> String -> Int64 -> Maybe {value: String, pos: Int64}
 def jsonConsEscaped = { c s pos ->
-  bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {value = rest, pos = p} ->
-    Just {value = consString c rest, pos = p}
+  bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {.value -> rest, .pos -> p} ->
+    Just {.value -> consString c rest, .pos -> p}
   }
 }
 
@@ -283,7 +283,7 @@ def jsonConsEscaped = { c s pos ->
 def jsonParseNumber : String -> Int64 -> Maybe {value: Json, pos: Int64}
 def jsonParseNumber = { s pos ->
   bindMaybe (jsonScanNumber s pos) { endPos ->
-    Just {value = JNumber (substring s pos endPos), pos = endPos}
+    Just {.value -> JNumber (substring s pos endPos), .pos -> endPos}
   }
 }
 
@@ -352,25 +352,25 @@ def jsonParseArray = { s pos ->
   -- `pos` points at '['.
   let p1 = jsonSkipWs s (addInt64 pos 1i64);
   if (jsonAtChar s p1 (Char# ']'#))
-    { Just {value = JArray Nil, pos = addInt64 p1 1i64} }
-    { bindMaybe (jsonParseArrayItems s p1) { {value = items, pos = p2} ->
-        Just {value = JArray items, pos = p2}
+    { Just {.value -> JArray Nil, .pos -> addInt64 p1 1i64} }
+    { bindMaybe (jsonParseArrayItems s p1) { {.value -> items, .pos -> p2} ->
+        Just {.value -> JArray items, .pos -> p2}
       }
     }
 }
 
 def jsonParseArrayItems : String -> Int64 -> Maybe {value: List Json, pos: Int64}
 def jsonParseArrayItems = { s pos ->
-  bindMaybe (jsonParseValue s pos) { {value = v, pos = p1} ->
+  bindMaybe (jsonParseValue s pos) { {.value -> v, .pos -> p1} ->
     let p2 = jsonSkipWs s p1;
     if (jsonAtChar s p2 (Char# ','#))
       { let p3 = jsonSkipWs s (addInt64 p2 1i64);
-        bindMaybe (jsonParseArrayItems s p3) { {value = rest, pos = p4} ->
-          Just {value = Cons v rest, pos = p4}
+        bindMaybe (jsonParseArrayItems s p3) { {.value -> rest, .pos -> p4} ->
+          Just {.value -> Cons v rest, .pos -> p4}
         }
       }
       { if (jsonAtChar s p2 (Char# ']'#))
-          { Just {value = Cons v Nil, pos = addInt64 p2 1i64} }
+          { Just {.value -> Cons v Nil, .pos -> addInt64 p2 1i64} }
           { Nothing }
       }
   }
@@ -383,25 +383,25 @@ def jsonParseObject = { s pos ->
   -- `pos` points at '{'.
   let p1 = jsonSkipWs s (addInt64 pos 1i64);
   if (jsonAtChar s p1 (Char# '}'#))
-    { Just {value = JObject Nil, pos = addInt64 p1 1i64} }
-    { bindMaybe (jsonParseObjectEntries s p1) { {value = entries, pos = p2} ->
-        Just {value = JObject entries, pos = p2}
+    { Just {.value -> JObject Nil, .pos -> addInt64 p1 1i64} }
+    { bindMaybe (jsonParseObjectEntries s p1) { {.value -> entries, .pos -> p2} ->
+        Just {.value -> JObject entries, .pos -> p2}
       }
     }
 }
 
 def jsonParseObjectEntries : String -> Int64 -> Maybe {value: List (String, Json), pos: Int64}
 def jsonParseObjectEntries = { s pos ->
-  bindMaybe (jsonParseObjectEntry s pos) { {value = entry, pos = p1} ->
+  bindMaybe (jsonParseObjectEntry s pos) { {.value -> entry, .pos -> p1} ->
     let p2 = jsonSkipWs s p1;
     if (jsonAtChar s p2 (Char# ','#))
       { let p3 = jsonSkipWs s (addInt64 p2 1i64);
-        bindMaybe (jsonParseObjectEntries s p3) { {value = rest, pos = p4} ->
-          Just {value = Cons entry rest, pos = p4}
+        bindMaybe (jsonParseObjectEntries s p3) { {.value -> rest, .pos -> p4} ->
+          Just {.value -> Cons entry rest, .pos -> p4}
         }
       }
       { if (jsonAtChar s p2 (Char# '}'#))
-          { Just {value = Cons entry Nil, pos = addInt64 p2 1i64} }
+          { Just {.value -> Cons entry Nil, .pos -> addInt64 p2 1i64} }
           { Nothing }
       }
   }
@@ -410,12 +410,12 @@ def jsonParseObjectEntries = { s pos ->
 def jsonParseObjectEntry : String -> Int64 -> Maybe {value: (String, Json), pos: Int64}
 def jsonParseObjectEntry = { s pos ->
   if (jsonAtChar s pos (Char# '"'#))
-    { bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {value = key, pos = p1} ->
+    { bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {.value -> key, .pos -> p1} ->
         let p2 = jsonSkipWs s p1;
         if (jsonAtChar s p2 (Char# ':'#))
           { let p3 = jsonSkipWs s (addInt64 p2 1i64);
-            bindMaybe (jsonParseValue s p3) { {value = v, pos = p4} ->
-              Just {value = (key, v), pos = p4}
+            bindMaybe (jsonParseValue s p3) { {.value -> v, .pos -> p4} ->
+              Just {.value -> (key, v), .pos -> p4}
             }
           }
           { Nothing }

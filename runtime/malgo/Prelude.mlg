@@ -78,6 +78,62 @@ def mapList =
     f (Cons x xs) -> Cons (f x) (mapList f xs),
   }
 
+-- Whether `s` contains an embedded NUL byte. Nothing else in this codebase
+-- needs this, but `joinWithNul`/`runProcess` do: NUL is the one byte their
+-- wire encoding can't represent inside an element (see `joinWithNul`
+-- below), so a caller passing one through needs a loud failure here, not
+-- a silently mis-split argument list on the decode side.
+def containsNul : String -> Bool
+def containsNul = { s -> containsNulAt s 0i64 (lengthString s) }
+
+def containsNulAt : String -> Int64 -> Int64 -> Bool
+def containsNulAt = { s i len ->
+  if (geInt64 i len)
+    { False }
+    { if (eqChar (atString i s) (Char# '\0'#))
+        { True }
+        { containsNulAt s (addInt64 i 1i64) len }
+    }
+}
+
+-- Print `msg` to stderr and exit 1. `panic` (Builtin.mlg) would be the
+-- obvious choice for an invariant violation like this, but it's only
+-- implemented on the Zig and Scheme backends today -- unimplemented on
+-- the interpreter (`malgo_panic` throws "Primitive malgo_panic is not
+-- implemented"), so a guard meant to fire identically everywhere can't
+-- use it yet. Tracked as malgo#426; not this fix's scope.
+def failLoudly : String -> a
+def failLoudly = { msg -> let _ = printStderr msg; exitWith 1i32 }
+
+-- Encode a list of strings as each element followed by a NUL terminator
+-- (see Builtin.mlg's malgo_run_process for why NUL rather than newline).
+-- A *trailing* terminator per element, not a separator *between* elements,
+-- so the empty list ("") and a one-element list of the empty string ("\0")
+-- encode differently -- joining with a separator can't tell those apart.
+def joinWithNul : List String -> String
+def joinWithNul =
+  { Nil -> "",
+    (Cons s rest) ->
+      if (containsNul s)
+        { failLoudly "runProcess: an argument contains an embedded NUL byte, which the NUL-terminated wire encoding cannot represent" }
+        { appendString s (appendString "\0" (joinWithNul rest)) },
+  }
+
+-- Run `cmd` with `args`, returning (exit code, stdout, stderr). Unboxes
+-- `joinWithNul`'s result through this helper's own parameter pattern
+-- (matching every other boxed-argument wrapper in this file) rather than a
+-- `case`/`let`, since `String` has exactly one constructor and the lint
+-- flags that kind of match as irrefutable.
+def runProcessBoxed# : String# -> String -> (Int32, String, String)
+def runProcessBoxed# = { cmd (String# argsBlob) -> runProcess# cmd argsBlob }
+
+def runProcess : String -> List String -> (Int32, String, String)
+def runProcess = { (String# cmd) args ->
+  if (containsNul (String# cmd))
+    { failLoudly "runProcess: cmd contains an embedded NUL byte" }
+    { runProcessBoxed# cmd (joinWithNul args) }
+}
+
 -- convert a list of character to a string
 def listToString : List Char -> String
 def listToString =

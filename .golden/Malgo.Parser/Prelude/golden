@@ -82,6 +82,135 @@
                         (apply
                            (apply Cons (apply f x))
                            (apply (apply mapList f) xs))))))))
+      (sig containsNul (-> String Bool))
+      (def
+         containsNul
+         (fn
+            ((clause
+                (s)
+                (seq
+                   (do
+                      (apply
+                         (apply (apply containsNulAt s) (int64 0))
+                         (apply lengthString s))))))))
+      (sig containsNulAt (-> String (-> Int64 (-> Int64 Bool))))
+      (def
+         containsNulAt
+         (fn
+            ((clause
+                (s i len)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (apply (apply geInt64 i) len))
+                            (fn ((clause (_) (seq (do False))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply
+                                            (apply
+                                               if
+                                               (apply
+                                                  (apply
+                                                     eqChar
+                                                     (apply (apply atString i) s))
+                                                  (apply Char# (char '\NUL'))))
+                                            (fn ((clause (_) (seq (do True))))))
+                                         (fn
+                                            ((clause
+                                                (_)
+                                                (seq
+                                                   (do
+                                                      (apply
+                                                         (apply
+                                                            (apply
+                                                               containsNulAt
+                                                               s)
+                                                            (apply
+                                                               (apply addInt64 i)
+                                                               (int64 1)))
+                                                         len)))))))))))))))))))
+      (sig failLoudly (-> String a))
+      (def
+         failLoudly
+         (fn
+            ((clause
+                (msg)
+                (seq
+                   (let _ (apply printStderr msg))
+                   (do (apply exitWith (int32 1))))))))
+      (sig joinWithNul (-> (app List (String)) String))
+      (def
+         joinWithNul
+         (fn
+            ((clause (Nil) (seq (do (string ""))))
+               (clause
+                  ((con Cons (s rest)))
+                  (seq
+                     (do
+                        (apply
+                           (apply
+                              (apply if (apply containsNul s))
+                              (fn
+                                 ((clause
+                                     (_)
+                                     (seq
+                                        (do
+                                           (apply
+                                              failLoudly
+                                              (string
+                                                 "runProcess: an argument contains an embedded NUL byte, which the NUL-terminated wire encoding cannot represent"))))))))
+                           (fn
+                              ((clause
+                                  (_)
+                                  (seq
+                                     (do
+                                        (apply
+                                           (apply appendString s)
+                                           (apply
+                                              (apply appendString (string "\NUL"))
+                                              (apply joinWithNul rest)))))))))))))))
+      (sig runProcessBoxed# (-> String# (-> String (tuple Int32 String String))))
+      (def
+         runProcessBoxed#
+         (fn
+            ((clause
+                (cmd (con String# (argsBlob)))
+                (seq (do (apply (apply runProcess# cmd) argsBlob)))))))
+      (sig
+         runProcess
+         (-> String (-> (app List (String)) (tuple Int32 String String))))
+      (def
+         runProcess
+         (fn
+            ((clause
+                ((con String# (cmd)) args)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (apply containsNul (apply String# cmd)))
+                            (fn
+                               ((clause
+                                   (_)
+                                   (seq
+                                      (do
+                                         (apply
+                                            failLoudly
+                                            (string
+                                               "runProcess: cmd contains an embedded NUL byte"))))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply runProcessBoxed# cmd)
+                                         (apply joinWithNul args))))))))))))))
       (sig listToString (-> (app List (Char)) String))
       (def
          listToString

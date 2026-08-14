@@ -224,10 +224,24 @@ def compilePrimitive (name : String) (args : List String) (ret : String) : Strin
   | "malgo_get_args" =>
     "(" ++ ret ++ " (malgo-string-join (cdr (command-line)) \"\\n\"))"
   | "malgo_exit_success" => "(exit 0)"
+  | "malgo_exit_with_code" =>
+    match args with
+    | [code] => "(exit " ++ code ++ ")"
+    | _ => "(error 'prim \"malgo_exit_with_code: wrong number of arguments\")"
   | "malgo_stderr_string" =>
     match args with
     | [s] => "(begin (put-string (current-error-port) " ++ s ++ ") (" ++ ret ++ " '()))"
     | _ => "(error 'prim \"malgo_stderr_string: wrong number of arguments\")"
+  -- See Builtin.mlg's `malgo_has_env`/`malgo_get_env` for why this is two
+  -- primitives rather than one that treats "" as absent.
+  | "malgo_has_env" =>
+    match args with
+    | [name] => "(" ++ ret ++ " (if (getenv " ++ name ++ ") 1 0))"
+    | _ => "(error 'prim \"malgo_has_env: wrong number of arguments\")"
+  | "malgo_get_env" =>
+    match args with
+    | [name] => "(" ++ ret ++ " (or (getenv " ++ name ++ ") \"\"))"
+    | _ => "(error 'prim \"malgo_get_env: wrong number of arguments\")"
   | "malgo_string_to_int32" => unaryop "string->number" args ret
   | "malgo_string_to_int64" => unaryop "string->number" args ret
   -- Arithmetic (malgo_* foreign import names from Builtin.mlg)

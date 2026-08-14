@@ -1005,6 +1005,12 @@ def applyBuiltin9 = { gEnv name args ->
     "malgo_unsafe_cast" -> case args { (Cons x Nil) -> Right x, _ -> Left "malgo_unsafe_cast: type error" },
     "getRawArgs" -> case args { (Cons VUnit Nil) -> Right (VString (dropFirstLine (getRawArgs ()))), _ -> Left "getRawArgs: type error" },
     "readFile" -> case args { (Cons (VString path) Nil) -> Right (VString (readFile path)), _ -> Left "readFile: type error" },
+    -- `hasEnv#`/`getEnvRaw#` are unboxed (String# -> Int32#/String#) in the
+    -- real Builtin.mlg, but this evaluator's Value model boxes String/Int32
+    -- (see `VString`/`VInt32` next to `readFile`/`negInt32` above), so the
+    -- boxed constructor pattern is destructured first and the result reboxed.
+    "hasEnv#" -> case args { (Cons (VString (String# s)) Nil) -> Right (VInt32 (Int32# (malgo_has_env s))), _ -> Left "hasEnv#: type error" },
+    "getEnvRaw#" -> case args { (Cons (VString (String# s)) Nil) -> Right (VString (String# (malgo_get_env s))), _ -> Left "getEnvRaw#: type error" },
     "charToString" -> case args { (Cons (VChar c) Nil) -> Right (VString (consString c "")), _ -> Left "charToString: type error" },
     "modInt64#" -> applyInt64_2 modInt64 "modInt64#" args,
     "malgo_mod_int64_t" -> applyInt64_2 modInt64 "malgo_mod_int64_t" args,
@@ -1217,6 +1223,14 @@ def foreignArity9 = {
   "malgo_gt_int64_t" -> 2i32,
   "malgo_ge_int64_t" -> 2i32,
   "malgo_ne_int64_t" -> 2i32,
+  -- Registered explicitly, not relying on the `_ -> 1i32` fallback below:
+  -- both happen to be arity 1 today, but that's a coincidence this table
+  -- shouldn't depend on silently -- a future primitive added the same way
+  -- (in `builtinNames`/`applyBuiltin`'s dispatch, forgotten here) with a
+  -- higher arity would have `VBuiltin` saturate and fire one argument too
+  -- early, a real wrong-arity bug, not just a missing name.
+  "hasEnv#" -> 1i32,
+  "getEnvRaw#" -> 1i32,
   _ -> 1i32
 }
 
@@ -1284,12 +1298,12 @@ def preludeBuiltinNames =
   Cons "addDouble#" (Cons "subDouble#" (Cons "mulDouble#" (Cons "goto" (
   Cons "eqChar" (Cons "geInt32" (Cons "neInt32" (Cons "neInt64" (Cons "geInt64" (Cons "negInt64" (Cons "modInt64" (
   Cons "exitSuccess" (Cons "malgo_exit_success" (Cons "malgo_panic" (Cons "malgo_unsafe_cast" (
-  Cons "getRawArgs" (Cons "readFile" (Cons "charToString" (Cons "modInt64#" (
+  Cons "getRawArgs" (Cons "readFile" (Cons "charToString" (Cons "hasEnv#" (Cons "getEnvRaw#" (Cons "modInt64#" (
   Cons "malgo_mod_int64_t" (Cons "malgo_neg_int64_t" (Cons "malgo_mod_int32_t" (Cons "malgo_neg_int32_t" (
   Cons "malgo_gt_int32_t" (Cons "malgo_ge_int32_t" (Cons "malgo_ne_int32_t" (
   Cons "malgo_eq_int64_t" (Cons "malgo_lt_int64_t" (Cons "malgo_le_int64_t" (
   Cons "malgo_gt_int64_t" (Cons "malgo_ge_int64_t" (Cons "malgo_ne_int64_t" Nil
-  ))))))))))))))))))))))))))))))))))))))))
+  ))))))))))))))))))))))))))))))))))))))))))
 def makeBaseEnv : Env
 def makeBaseEnv = addBaseConstructors (foldl addBuiltin EnvEmpty builtinNames)
 

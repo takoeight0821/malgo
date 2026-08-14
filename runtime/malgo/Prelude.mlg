@@ -31,6 +31,24 @@ def orElse = {
   Nothing  k -> k ()
 }
 
+-- Look up an environment variable (see Builtin.mlg's `malgo_has_env`/
+-- `malgo_get_env` for why this is two primitives, checked separately,
+-- rather than one that treats "" as absent).
+--
+-- Uses `eqInt32` (a boxed, Bool-returning Builtin.mlg function), not the raw
+-- `isTrue#` helper, even though both are equally valid at the type level:
+-- the self-hosted compiler's (runtime/malgo/compiler/) cross-module name
+-- resolution fails on a direct `isTrue#` reference from Prelude.mlg with
+-- "undefined: isTrue#", while every other numeric comparison Prelude.mlg
+-- does goes through a Builtin.mlg wrapper like `leInt32`/`gtInt32` and never
+-- names `isTrue#` directly -- this follows that existing, working pattern.
+def getEnv : String -> Maybe String
+def getEnv = { (String# name) ->
+  if (eqInt32 (Int32# (hasEnv# name)) (Int32# 1#))
+    { Just (String# (getEnvRaw# name)) }
+    { Nothing }
+}
+
 -- list
 data List a = Nil | Cons a (List a)
 

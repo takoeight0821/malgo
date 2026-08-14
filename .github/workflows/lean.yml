@@ -29,6 +29,7 @@ jobs:
       selfhost: ${{ steps.g.outputs.LEAN_SELFHOST }}
       selfhostL2: ${{ steps.g.outputs.LEAN_SELFHOST_L2 }}
       zig: ${{ steps.g.outputs.LEAN_ZIG }}
+      nixBuild: ${{ steps.g.outputs.NIX_BUILD }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - id: g
@@ -294,8 +295,45 @@ jobs:
       - name: Subprocess-exec regression check (interpreter vs Scheme backend)
         run: bash scripts/scheme-process-check.sh
 
+  # Gated off pull requests for the same reason as l2-build/l2-case: a
+  # from-source Lean bootstrap (flake.nix pins an off-nixpkgs-cache 4.32.0,
+  # see PR #421) takes 45-60 minutes with no cache.nixos.org substitute --
+  # far too slow for per-PR feedback. Runs on master pushes and the nightly
+  # cron only, so a flake regression still surfaces within a day.
+  # Matrixed across both of GitHub's native runner architectures now that
+  # the flake supports more than aarch64-darwin: macos-latest is genuine
+  # aarch64-darwin hardware, ubuntu-latest is genuine x86_64-linux hardware
+  # -- nix-config (the one real consumer) runs its own CI on the latter, so
+  # this is that exact target, not an emulated stand-in for it.
+  # aarch64-linux (the flake's third supported system) has no matching
+  # GitHub-hosted runner and isn't covered here; it was verified once,
+  # manually, via a native-architecture Docker container.
+  nix-build:
+    needs: gates
+    if: needs.gates.outputs.nixBuild == '1' && github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+
+      - name: nix build
+        run: nix build .#default -L
+
+      - name: Smoke test against nixpkgs' chez (not the mise-installed one)
+        run: |
+          ./result/bin/malgo eval examples/malgo/Hello.mlg --target scheme > hello.scm
+          out="$(nix shell nixpkgs#chez -c scheme --script hello.scm)"
+          echo "$out"
+          [ "$out" = "Hello, world!" ]
+
   actions-timeline:
-    needs: [gates, lean-build, cli-gate, lean-selfhost, lean-zig-golden, lean-scheme-golden, l2-build, l2-case]
+    needs: [gates, lean-build, cli-gate, lean-selfhost, lean-zig-golden, lean-scheme-golden, l2-build, l2-case, nix-build]
     if: always()
     runs-on: ubuntu-latest
     permissions:

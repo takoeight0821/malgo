@@ -407,6 +407,38 @@
                                                                  tailString
                                                                  str))))))))
                                            (fn ((clause (_) (seq (do str))))))))))))))))))
+      (sig allString (-> (-> Char Bool) (-> String Bool)))
+      (def
+         allString
+         (fn
+            ((clause
+                (pred str)
+                (seq
+                   (do
+                      (apply
+                         (apply case (apply headString str))
+                         (fn
+                            ((clause (Nothing) (seq (do True)))
+                               (clause
+                                  ((con Just (c)))
+                                  (seq
+                                     (do
+                                        (apply
+                                           (apply
+                                              (apply if (apply pred c))
+                                              (fn
+                                                 ((clause
+                                                     (_)
+                                                     (seq
+                                                        (do
+                                                           (apply
+                                                              (apply
+                                                                 allString
+                                                                 pred)
+                                                              (apply
+                                                                 tailString
+                                                                 str))))))))
+                                           (fn ((clause (_) (seq (do False))))))))))))))))))
       (sig concatString (-> (app List (String)) String))
       (def
          concatString
@@ -648,6 +680,16 @@
          (fn
             ((clause (True t _) (seq (do (apply t (tuple)))))
                (clause (False _ f) (seq (do (apply f (tuple))))))))
+      (infix right 3 &&)
+      (sig && (-> Bool (-> Bool Bool)))
+      (def
+         &&
+         (fn ((clause (True b) (seq (do b))) (clause (False _) (seq (do False))))))
+      (infix right 2 ||)
+      (sig || (-> Bool (-> Bool Bool)))
+      (def
+         ||
+         (fn ((clause (True _) (seq (do True))) (clause (False b) (seq (do b))))))
       (sig unless (-> Bool (-> a (-> (block a) a))))
       (def
          unless

@@ -395,8 +395,12 @@ infixr 2 (||)
 def (||) : Bool -> Bool -> Bool
 def (||) = { True _ -> True, False b -> b }
 
-def unless : Bool -> a -> {a} -> a
-def unless = { c tValue f -> if c {tValue} f }
+-- Narrowed from `Bool -> a -> {a} -> a`: every real call site passed `()`
+-- for the "condition holds, do nothing" value, since guard clauses don't
+-- usually produce a value worth keeping. `unless cond () { body }` becomes
+-- `unless cond { body }`.
+def unless : Bool -> {()} -> ()
+def unless = { c f -> if c {()} f }
 
 -- multiway if
 def cond : List (Bool, {a}) -> a

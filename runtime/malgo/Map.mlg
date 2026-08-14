@@ -144,7 +144,7 @@ def mapMember = { cmp k m ->
 def mapMinEntry : Map k v -> Maybe {key: k, val: v}
 def mapMinEntry = {
   MapEmpty                   -> Nothing,
-  (MapNode MapEmpty k v _ _) -> Just {key = k, val = v},
+  (MapNode MapEmpty k v _ _) -> Just {.key -> k, .val -> v},
   (MapNode l _ _ _ _)        -> mapMinEntry l
 }
 
@@ -162,7 +162,7 @@ def mapMerge = {
   l r ->
     case (mapMinEntry r) {
       Nothing              -> l,
-      (Just {key = k, val = v}) ->
+      (Just {.key -> k, .val -> v}) ->
         mapBalance l k v (mapDeleteMin r)
     }
 }
@@ -188,19 +188,19 @@ def mapToList : Map k v -> List {key: k, val: v}
 def mapToList = {
   MapEmpty            -> Nil,
   (MapNode l k v r _) ->
-    append (mapToList l) (Cons {key = k, val = v} (mapToList r))
+    append (mapToList l) (Cons {.key -> k, .val -> v} (mapToList r))
 }
 
 def mapFromList : (k -> k -> Int32) -> List {key: k, val: v} -> Map k v
 def mapFromList = { cmp pairs ->
-  foldl { m {key = k, val = v} -> mapInsert cmp k v m } mapEmpty pairs
+  foldl { m {.key -> k, .val -> v} -> mapInsert cmp k v m } mapEmpty pairs
 }
 
 def mapKeys : Map k v -> List k
-def mapKeys = { m -> mapList { {key = k, val = _} -> k } (mapToList m) }
+def mapKeys = { m -> mapList { {.key -> k, .val -> _} -> k } (mapToList m) }
 
 def mapValues : Map k v -> List v
-def mapValues = { m -> mapList { {key = _, val = v} -> v } (mapToList m) }
+def mapValues = { m -> mapList { {.key -> _, .val -> v} -> v } (mapToList m) }
 
 def mapMap : (v -> w) -> Map k v -> Map k w
 def mapMap = {

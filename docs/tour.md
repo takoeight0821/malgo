@@ -78,7 +78,7 @@ def fromMaybe = { default m ->
 
 ```malgo
 type Person = { name: String, age: Int32 }
-def personAge = { { name = _, age = age } -> age }
+def personAge = { { .name -> _, .age -> age } -> age }
 ```
 
 ### Tuples

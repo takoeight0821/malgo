@@ -290,8 +290,9 @@ partial def pRecord : P (Expr .parse) := P.captureRange do
   pure fun range => Expr.record range fields.toList
 
 partial def pRecordField : P (String × Expr .parse) := do
+  P.reservedOperator "."
   let field ← P.ident
-  P.reservedOperator "="
+  P.reservedOperator "->"
   let value ← pExpr
   pure (field, value)
 
@@ -406,8 +407,9 @@ partial def pRecordP : P (Pat .parse) := P.captureRange do
   pure fun range => Pat.record range fields.toList
 
 partial def pRecordPField : P (String × Pat .parse) := do
+  P.reservedOperator "."
   let field ← P.ident
-  P.reservedOperator "="
+  P.reservedOperator "->"
   let value ← pPat
   pure (field, value)
 

@@ -303,7 +303,7 @@ def keepScopedValue = { scopedEnv v ->
 def matchCoApply : Env -> List Pat -> List Value -> Either String {env: Env, rest: List Value}
 def matchCoApply = { lEnv pats args ->
   case pats {
-    Nil -> Right {env = lEnv, rest = args},
+    Nil -> Right {.env -> lEnv, .rest -> args},
     (Cons pat patRest) ->
       case args {
         Nil -> Left "mismatch",
@@ -319,13 +319,13 @@ def matchCoPrefix : Env -> List Value -> String -> List CoSeg -> Either String {
 def matchCoPrefix = {
   lEnv args field Nil -> Left "mismatch",
   lEnv args field (Cons (CoApply pats) restSegs) ->
-    bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
+    bindRight (matchCoApply lEnv pats args) { {.env -> lEnv2, .rest -> remainingArgs} ->
       matchCoPrefix lEnv2 remainingArgs field restSegs
     },
   lEnv args field (Cons (CoField name) restSegs) ->
     if (eqString name field)
       { case args {
-          Nil -> Right {env = lEnv, rest = restSegs},
+          Nil -> Right {.env -> lEnv, .rest -> restSegs},
           _ -> Left "mismatch"
         }
       }
@@ -357,7 +357,7 @@ def matchCoApplyOnly = {
       _ -> Left "mismatch"
     },
   lEnv args (Cons (CoApply pats) restSegs) ->
-    bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
+    bindRight (matchCoApply lEnv pats args) { {.env -> lEnv2, .rest -> remainingArgs} ->
       matchCoApplyOnly lEnv2 remainingArgs restSegs
     },
   lEnv args (Cons (CoField _) restSegs) -> Left "mismatch"
@@ -390,7 +390,7 @@ def projectCoArms = { gEnv lEnv acc field arms conts contEnv ->
     (Cons (ExCoArm segs body) restArms) ->
       case (matchCoPrefix lEnv acc field segs) {
         (Left _) -> projectCoArms gEnv lEnv acc field restArms conts contEnv,
-        (Right {env = armEnv, rest = restSegs}) ->
+        (Right {.env -> armEnv, .rest -> restSegs}) ->
           case restSegs {
             Nil -> eval gEnv armEnv body,
             _ -> projectCoArms gEnv lEnv acc field restArms (append conts (Cons (ExCoArm(restSegs, body)) Nil)) (Just armEnv)
@@ -406,7 +406,7 @@ def projectCoArms = { gEnv lEnv acc field arms conts contEnv ->
 -- Only DeclImport uses bindRight since it's the only decl that can fail or update state.
 def evalDecls : Env -> CompilerState -> List Decl -> Either String {state: CompilerState, env: Env}
 def evalDecls = {
-  gEnv state Nil -> Right {state = state, env = gEnv},
+  gEnv state Nil -> Right {.state -> state, .env -> gEnv},
   gEnv state (Cons (DeclDef name expr) rest) ->
     case (envLookup name gEnv) {
       (Just (VBuiltin _ _ _)) -> evalDecls gEnv state rest,
@@ -415,7 +415,7 @@ def evalDecls = {
   gEnv state (Cons (DeclData _ _ cons) rest) ->
     evalDecls (addConstructors gEnv cons) state rest,
   gEnv state (Cons (DeclImport target path) rest) ->
-    bindRight (evalImport gEnv state target path) { {state = state2, env = gEnv2} ->
+    bindRight (evalImport gEnv state target path) { {.state -> state2, .env -> gEnv2} ->
       evalDecls gEnv2 state2 rest
     },
   gEnv state (Cons (DeclForeign fname _) rest) ->
@@ -656,19 +656,19 @@ def evalImport = { gEnv state target rawPath ->
   let path = normalizeImportPathFrom (stateCurrentDir state) rawPath;
   if (isPreloadedImport path)
     { bindRight (extendFromModuleEnv target gEnv makeBaseEnv) { newEnv ->
-        Right {state = state, env = newEnv}
+        Right {.state -> state, .env -> newEnv}
       }
     }
     { case (cacheLookup path (stateCache state)) {
         (Just Loading) -> Left (formatImportCycle path (stateStack state)),
         (Just (Loaded moduleEnv)) ->
           bindRight (extendFromModuleEnv target gEnv moduleEnv) { newEnv ->
-            Right {state = state, env = newEnv}
+            Right {.state -> state, .env -> newEnv}
           },
         Nothing ->
-          bindRight (loadModule makeBaseEnv state path) { {state = nextState, moduleEnv = moduleEnv} ->
+          bindRight (loadModule makeBaseEnv state path) { {.state -> nextState, .moduleEnv -> moduleEnv} ->
             bindRight (extendFromModuleEnv target gEnv moduleEnv) { newEnv ->
-              Right {state = nextState, env = newEnv}
+              Right {.state -> nextState, .env -> newEnv}
             }
           }
       }
@@ -683,9 +683,9 @@ def loadModule = { baseEnv state path ->
   let src = readFile path;
   bindRight (tokenize src) { toks ->
     bindRight (parseModule toks) { m ->
-      bindRight (evalModuleWithState baseEnv loadingState m) { {state = loadedState, env = moduleEnv} ->
+      bindRight (evalModuleWithState baseEnv loadingState m) { {.state -> loadedState, .env -> moduleEnv} ->
         let cachedState = withLoadedModuleEnv path moduleEnv loadedState;
-        Right {state = restoreModuleContext parentDir parentStack cachedState, moduleEnv = moduleEnv}
+        Right {.state -> restoreModuleContext parentDir parentStack cachedState, .moduleEnv -> moduleEnv}
       }
     }
   }
@@ -1340,7 +1340,7 @@ def evalModuleWithState = { baseEnv state (Module decls) -> evalDecls baseEnv st
 
 def evalModule : Env -> Module -> Either String Env
 def evalModule = { baseEnv modl ->
-  bindRight (evalModuleWithState baseEnv emptyState modl) { {state = _, env = moduleEnv} ->
+  bindRight (evalModuleWithState baseEnv emptyState modl) { {.state -> _, .env -> moduleEnv} ->
     Right moduleEnv
   }
 }
@@ -1357,7 +1357,7 @@ def evalModuleAt = { baseEnv sourcePath modl ->
           dirname normalizedPath
         )
       };
-  bindRight (evalModuleWithState baseEnv initialState modl) { {state = _, env = moduleEnv} ->
+  bindRight (evalModuleWithState baseEnv initialState modl) { {.state -> _, .env -> moduleEnv} ->
     Right moduleEnv
   }
 }

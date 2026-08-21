@@ -1,0 +1,1850 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data Point  = Point({x : Int32, y : Int32})
+
+def sumPoint =
+  fn {
+    Point({x = x, y = y}) ->
+      {
+        addInt32(x)(y)
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        printString(toStringInt32(sumPoint(Point({x = 4, y = 9}))))
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data Point  = Point({x : Int32, y : Int32})
+
+def sumPoint =
+  fn {
+    Point({x = x#0, y = y#1}) ->
+      {
+        addInt32(x#0)(y#1)
+      }
+  }
+
+def main =
+  fn {
+    _#2 ->
+      {
+        printString( toStringInt32( sumPoint( Point( { x = Int32#(4)
+        , y = Int32#(9) } ) ) ) )
+      }
+  }
+
+=== ToFun ===
+def sumPoint =
+  \param$3 ->
+    case param$3 of {
+      Point(x#0, y#1) -> invoke addInt32(x#0)(y#1)
+    }
+
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#2 ->
+        invoke printString( invoke toStringInt32( invoke sumPoint( invoke Point( { x = invoke Int32#( 4 )
+        , y = invoke Int32#(9) } ) ) ) )
+    }
+
+def Point = \constructor$5 -> Point(constructor$5.x, constructor$5.y)
+
+=== SaturateCtor ===
+def sumPoint =
+  \param$3 ->
+    case param$3 of {
+      Point(x#0, y#1) -> invoke addInt32(x#0)(y#1)
+    }
+
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#2 ->
+        invoke printString( invoke toStringInt32( invoke sumPoint( invoke Point( { x = invoke Int32#( 4 )
+        , y = invoke Int32#(9) } ) ) ) )
+    }
+
+def Point = \constructor$5 -> Point(constructor$5.x, constructor$5.y)
+
+=== ReuseSpecialize ===
+def sumPoint =
+  \param$3 ->
+    case param$3 of {
+      Point(x#0, y#1) -> invoke addInt32(x#0)(y#1)
+    }
+
+def main =
+  \param$4 ->
+    case param$4 of {
+      _#2 ->
+        invoke printString( invoke toStringInt32( invoke sumPoint( invoke Point( { x = invoke Int32#( 4 )
+        , y = invoke Int32#(9) } ) ) ) )
+    }
+
+def Point = \constructor$5 -> Point(constructor$5.x, constructor$5.y)
+
+=== ToCore ===
+def sumPoint(return$6) =
+  \param$3 return$7 . {
+    param$3 ~ select {
+      Point(x#0, y#1) -> invoke addInt32 ~ (x#0, (y#1, return$7))
+    }
+  } ~ return$6
+
+def main(return$8) =
+  \param$4 return$9 . {
+    param$4 ~ select {
+      _#2 ->
+        invoke printString ~ ( do return$10 . {
+          invoke toStringInt32 ~ ( do return$11 . {
+            invoke sumPoint ~ ( do return$12 . {
+              invoke Point ~ ( { x(return$13) = {
+                invoke Int32# ~ (4, return$13)
+              }
+              , y(return$14) = {
+                invoke Int32# ~ (9, return$14)
+              } }
+              , return$12 )
+            }
+            , return$11 )
+          }
+          , return$10 )
+        }
+        , return$9 )
+    }
+  } ~ return$8
+
+def Point(return$15) =
+  \constructor$5 return$16 . {
+    Point( do return$17 . {
+      constructor$5 ~ .x -> return$17
+    }
+    , do return$18 . {
+      constructor$5 ~ .y -> return$18
+    } ) ~ return$16
+  } ~ return$15
+
+=== Flat ===
+def sumPoint(return$6) =
+  \param$3 return$7 . {
+    param$3 ~ select {
+      Point(x#0, y#1) -> invoke addInt32 ~ (x#0, (y#1, return$7))
+    }
+  } ~ return$6
+
+def main(return$8) =
+  \param$4 return$9 . {
+    param$4 ~ select {
+      _#2 ->
+        invoke printString ~ then outer$19 -> {
+          join return$10 = then inner$20 -> {
+            outer$19 ~ (inner$20, return$9)
+          }
+          in invoke toStringInt32 ~ then outer$21 -> {
+            join return$11 = then inner$22 -> {
+              outer$21 ~ (inner$22, return$10)
+            }
+            in invoke sumPoint ~ then outer$23 -> {
+              join return$12 = then inner$24 -> {
+                outer$23 ~ (inner$24, return$11)
+              }
+              in invoke Point ~ ( { x(return$13) = {
+                invoke Int32# ~ (4, return$13)
+              }
+              , y(return$14) = {
+                invoke Int32# ~ (9, return$14)
+              } }
+              , return$12 )
+            }
+          }
+        }
+    }
+  } ~ return$8
+
+def Point(return$15) =
+  \constructor$5 return$16 . {
+    join label$25 = return$16
+    in join return$17 = then var$26 -> {
+      join label$27 = label$25
+      in join return$18 = then var$28 -> {
+        Point(var$26, var$28) ~ label$27
+      }
+      in constructor$5 ~ .y -> return$18
+    }
+    in constructor$5 ~ .x -> return$17
+  } ~ return$15
+
+=== Join ===
+def sumPoint(return$6) =
+  \param$3 return$7 . {
+    join select$31 = select {
+      Point(x#0, y#1) ->
+        join apply$29 = (y#1, return$7)
+        in join apply$30 = (x#0, apply$29)
+        in invoke addInt32 ~ apply$30
+    }
+    in param$3 ~ select$31
+  } ~ return$6
+
+def main(return$8) =
+  \param$4 return$9 . {
+    join select$41 = select {
+      _#2 ->
+        join then$40 = then outer$19 -> {
+          join return$10 = then inner$20 -> {
+            join apply$39 = (inner$20, return$9)
+            in outer$19 ~ apply$39
+          }
+          in join then$38 = then outer$21 -> {
+            join return$11 = then inner$22 -> {
+              join apply$37 = (inner$22, return$10)
+              in outer$21 ~ apply$37
+            }
+            in join then$36 = then outer$23 -> {
+              join return$12 = then inner$24 -> {
+                join apply$35 = (inner$24, return$11)
+                in outer$23 ~ apply$35
+              }
+              in join apply$34 = ( { x(return$13) = {
+                join apply$32 = (4, return$13)
+                in invoke Int32# ~ apply$32
+              }
+              , y(return$14) = {
+                join apply$33 = (9, return$14)
+                in invoke Int32# ~ apply$33
+              } }
+              , return$12 )
+              in invoke Point ~ apply$34
+            }
+            in invoke sumPoint ~ then$36
+          }
+          in invoke toStringInt32 ~ then$38
+        }
+        in invoke printString ~ then$40
+    }
+    in param$4 ~ select$41
+  } ~ return$8
+
+def Point(return$15) =
+  \constructor$5 return$16 . {
+    join label$25 = return$16
+    in join return$17 = then var$26 -> {
+      join label$27 = label$25
+      in join return$18 = then var$28 -> {
+        Point(var$26, var$28) ~ label$27
+      }
+      in join project$43 = .y -> return$18
+      in constructor$5 ~ project$43
+    }
+    in join project$42 = .x -> return$17
+    in constructor$5 ~ project$42
+  } ~ return$15
+
+=== ClosureConv ===
+toplevel fn sumPoint(return$6) =
+  let closure$53 = closure lambda$45()
+  return return$6(closure$53)
+
+closure fn lambda$45(self$46, param$3, return$7) =
+  if param$3.tag == Point then {
+    let x#0 = param$3.0
+    let y#1 = param$3.1
+    let apply$29 = closure join$47(return$7, y#1)
+    let apply$30 = closure join$50(apply$29, x#0)
+    return addInt32(apply$30)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$47(self$48, value$49) =
+  let return$7 = self$48.cap[0]
+  let y#1 = self$48.cap[1]
+  return value$49(y#1, return$7)
+
+closure fn join$50(self$51, value$52) =
+  let apply$29 = self$51.cap[0]
+  let x#0 = self$51.cap[1]
+  return value$52(x#0, apply$29)
+
+toplevel fn main(return$8) =
+  let closure$91 = closure lambda$55()
+  return return$8(closure$91)
+
+closure fn lambda$55(self$56, param$4, return$9) =
+  if  then {
+    let _#2 = param$4
+    let then$40 = closure join$57(return$9)
+    return printString(then$40)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$57(self$58, value$59) =
+  let return$9 = self$58.cap[0]
+  let return$10 = closure join$60(return$9, value$59)
+  let then$38 = closure join$63(return$10)
+  return toStringInt32(then$38)
+
+closure fn join$60(self$61, value$62) =
+  let return$9 = self$61.cap[0]
+  let value$59 = self$61.cap[1]
+  return value$59(value$62, return$9)
+
+closure fn join$63(self$64, value$65) =
+  let return$10 = self$64.cap[0]
+  let return$11 = closure join$66(return$10, value$65)
+  let then$36 = closure join$69(return$11)
+  return sumPoint(then$36)
+
+closure fn join$66(self$67, value$68) =
+  let return$10 = self$67.cap[0]
+  let value$65 = self$67.cap[1]
+  return value$65(value$68, return$10)
+
+closure fn join$69(self$70, value$71) =
+  let return$11 = self$70.cap[0]
+  let return$12 = closure join$72(return$11, value$71)
+  let apply$34 = closure join$75(return$12)
+  return Point(apply$34)
+
+closure fn join$72(self$73, value$74) =
+  let return$11 = self$73.cap[0]
+  let value$71 = self$73.cap[1]
+  return value$71(value$74, return$11)
+
+closure fn join$75(self$76, value$77) =
+  let return$12 = self$76.cap[0]
+  let record$90 = record(x = field$78, y = field$84) captures()
+  return value$77(record$90, return$12)
+
+field fn field$78(self$79, return$13) =
+  let apply$32 = closure join$80(return$13)
+  return Int32#(apply$32)
+
+closure fn join$80(self$81, value$82) =
+  let return$13 = self$81.cap[0]
+  let lit$83 = 4
+  return value$82(lit$83, return$13)
+
+field fn field$84(self$85, return$14) =
+  let apply$33 = closure join$86(return$14)
+  return Int32#(apply$33)
+
+closure fn join$86(self$87, value$88) =
+  let return$14 = self$87.cap[0]
+  let lit$89 = 9
+  return value$88(lit$89, return$14)
+
+toplevel fn Point(return$15) =
+  let closure$102 = closure lambda$93()
+  return return$15(closure$102)
+
+closure fn lambda$93(self$94, constructor$5, return$16) =
+  let return$17 = closure join$95(constructor$5, return$16)
+  return constructor$5.x(return$17)
+
+closure fn join$95(self$96, value$97) =
+  let constructor$5 = self$96.cap[0]
+  let return$16 = self$96.cap[1]
+  let return$18 = closure join$98(return$16, value$97)
+  return constructor$5.y(return$18)
+
+closure fn join$98(self$99, value$100) =
+  let return$16 = self$99.cap[0]
+  let value$97 = self$99.cap[1]
+  let struct$101 = Point(value$97, value$100)
+  return return$16(struct$101)
+
+toplevel fn zig_main$105() =
+  let finish$103 = closure join$107()
+  let after_main$104 = closure join$110(finish$103)
+  return main(after_main$104)
+
+closure fn join$107(self$108, value$109) = return value$109
+
+closure fn join$110(self$111, value$112) =
+  let finish$103 = self$111.cap[0]
+  let struct$113 = Tuple()
+  return value$112(struct$113, finish$103)
+
+entry = zig_main$105
+
+=== Peephole ===
+toplevel fn sumPoint(return$6) =
+  let closure$53 = closure lambda$45()
+  return return$6(closure$53)
+
+closure fn lambda$45(self$46, param$3, return$7) =
+  if param$3.tag == Point then {
+    let x#0 = param$3.0
+    let y#1 = param$3.1
+    let apply$29 = closure join$47(return$7, y#1)
+    let apply$30 = closure join$50(apply$29, x#0)
+    return addInt32(apply$30)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$47(self$48, value$49) =
+  let return$7 = self$48.cap[0]
+  let y#1 = self$48.cap[1]
+  return value$49(y#1, return$7)
+
+closure fn join$50(self$51, value$52) =
+  let apply$29 = self$51.cap[0]
+  let x#0 = self$51.cap[1]
+  return value$52(x#0, apply$29)
+
+toplevel fn main(return$8) =
+  let closure$91 = closure lambda$55()
+  return return$8(closure$91)
+
+closure fn lambda$55(self$56, param$4, return$9) =
+  if  then {
+    let then$40 = closure join$57(return$9)
+    return printString(then$40)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$57(self$58, value$59) =
+  let return$9 = self$58.cap[0]
+  let return$10 = closure join$60(return$9, value$59)
+  let then$38 = closure join$63(return$10)
+  return toStringInt32(then$38)
+
+closure fn join$60(self$61, value$62) =
+  let return$9 = self$61.cap[0]
+  let value$59 = self$61.cap[1]
+  return value$59(value$62, return$9)
+
+closure fn join$63(self$64, value$65) =
+  let return$10 = self$64.cap[0]
+  let return$11 = closure join$66(return$10, value$65)
+  let then$36 = closure join$69(return$11)
+  return sumPoint(then$36)
+
+closure fn join$66(self$67, value$68) =
+  let return$10 = self$67.cap[0]
+  let value$65 = self$67.cap[1]
+  return value$65(value$68, return$10)
+
+closure fn join$69(self$70, value$71) =
+  let return$11 = self$70.cap[0]
+  let return$12 = closure join$72(return$11, value$71)
+  let apply$34 = closure join$75(return$12)
+  return Point(apply$34)
+
+closure fn join$72(self$73, value$74) =
+  let return$11 = self$73.cap[0]
+  let value$71 = self$73.cap[1]
+  return value$71(value$74, return$11)
+
+closure fn join$75(self$76, value$77) =
+  let return$12 = self$76.cap[0]
+  let record$90 = record(x = field$78, y = field$84) captures()
+  return value$77(record$90, return$12)
+
+field fn field$78(self$79, return$13) =
+  let apply$32 = closure join$80(return$13)
+  return Int32#(apply$32)
+
+closure fn join$80(self$81, value$82) =
+  let return$13 = self$81.cap[0]
+  let lit$83 = 4
+  return value$82(lit$83, return$13)
+
+field fn field$84(self$85, return$14) =
+  let apply$33 = closure join$86(return$14)
+  return Int32#(apply$33)
+
+closure fn join$86(self$87, value$88) =
+  let return$14 = self$87.cap[0]
+  let lit$89 = 9
+  return value$88(lit$89, return$14)
+
+toplevel fn Point(return$15) =
+  let closure$102 = closure lambda$93()
+  return return$15(closure$102)
+
+closure fn lambda$93(self$94, constructor$5, return$16) =
+  let return$17 = closure join$95(constructor$5, return$16)
+  return constructor$5.x(return$17)
+
+closure fn join$95(self$96, value$97) =
+  let constructor$5 = self$96.cap[0]
+  let return$16 = self$96.cap[1]
+  let return$18 = closure join$98(return$16, value$97)
+  return constructor$5.y(return$18)
+
+closure fn join$98(self$99, value$100) =
+  let return$16 = self$99.cap[0]
+  let value$97 = self$99.cap[1]
+  let struct$101 = Point(value$97, value$100)
+  return return$16(struct$101)
+
+toplevel fn zig_main$105() =
+  let finish$103 = closure join$107()
+  let after_main$104 = closure join$110(finish$103)
+  return main(after_main$104)
+
+closure fn join$107(self$108, value$109) = return value$109
+
+closure fn join$110(self$111, value$112) =
+  let finish$103 = self$111.cap[0]
+  let struct$113 = Tuple()
+  return value$112(struct$113, finish$103)
+
+entry = zig_main$105
+
+=== Perceus ===
+toplevel fn sumPoint(return$6) =
+  let closure$53 = closure lambda$45()
+  return return$6(closure$53)
+
+closure fn lambda$45(self$46, param$3, return$7) =
+  drop self$46
+  if param$3.tag == Point then {
+    let x#0 = param$3.0
+    dup x#0
+    let y#1 = param$3.1
+    dup y#1
+    drop param$3
+    let apply$29 = closure join$47(return$7, y#1)
+    let apply$30 = closure join$50(apply$29, x#0)
+    return addInt32(apply$30)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$47(self$48, value$49) =
+  let return$7 = self$48.cap[0]
+  dup return$7
+  let y#1 = self$48.cap[1]
+  dup y#1
+  drop self$48
+  return value$49(y#1, return$7)
+
+closure fn join$50(self$51, value$52) =
+  let apply$29 = self$51.cap[0]
+  dup apply$29
+  let x#0 = self$51.cap[1]
+  dup x#0
+  drop self$51
+  return value$52(x#0, apply$29)
+
+toplevel fn main(return$8) =
+  let closure$91 = closure lambda$55()
+  return return$8(closure$91)
+
+closure fn lambda$55(self$56, param$4, return$9) =
+  drop param$4
+  drop self$56
+  if  then {
+    let then$40 = closure join$57(return$9)
+    return printString(then$40)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$57(self$58, value$59) =
+  let return$9 = self$58.cap[0]
+  dup return$9
+  drop self$58
+  let return$10 = closure join$60(return$9, value$59)
+  let then$38 = closure join$63(return$10)
+  return toStringInt32(then$38)
+
+closure fn join$60(self$61, value$62) =
+  let return$9 = self$61.cap[0]
+  dup return$9
+  let value$59 = self$61.cap[1]
+  dup value$59
+  drop self$61
+  return value$59(value$62, return$9)
+
+closure fn join$63(self$64, value$65) =
+  let return$10 = self$64.cap[0]
+  dup return$10
+  drop self$64
+  let return$11 = closure join$66(return$10, value$65)
+  let then$36 = closure join$69(return$11)
+  return sumPoint(then$36)
+
+closure fn join$66(self$67, value$68) =
+  let return$10 = self$67.cap[0]
+  dup return$10
+  let value$65 = self$67.cap[1]
+  dup value$65
+  drop self$67
+  return value$65(value$68, return$10)
+
+closure fn join$69(self$70, value$71) =
+  let return$11 = self$70.cap[0]
+  dup return$11
+  drop self$70
+  let return$12 = closure join$72(return$11, value$71)
+  let apply$34 = closure join$75(return$12)
+  return Point(apply$34)
+
+closure fn join$72(self$73, value$74) =
+  let return$11 = self$73.cap[0]
+  dup return$11
+  let value$71 = self$73.cap[1]
+  dup value$71
+  drop self$73
+  return value$71(value$74, return$11)
+
+closure fn join$75(self$76, value$77) =
+  let return$12 = self$76.cap[0]
+  dup return$12
+  drop self$76
+  let record$90 = record(x = field$78, y = field$84) captures()
+  return value$77(record$90, return$12)
+
+field fn field$78(self$79, return$13) =
+  drop self$79
+  let apply$32 = closure join$80(return$13)
+  return Int32#(apply$32)
+
+closure fn join$80(self$81, value$82) =
+  let return$13 = self$81.cap[0]
+  dup return$13
+  drop self$81
+  let lit$83 = 4
+  return value$82(lit$83, return$13)
+
+field fn field$84(self$85, return$14) =
+  drop self$85
+  let apply$33 = closure join$86(return$14)
+  return Int32#(apply$33)
+
+closure fn join$86(self$87, value$88) =
+  let return$14 = self$87.cap[0]
+  dup return$14
+  drop self$87
+  let lit$89 = 9
+  return value$88(lit$89, return$14)
+
+toplevel fn Point(return$15) =
+  let closure$102 = closure lambda$93()
+  return return$15(closure$102)
+
+closure fn lambda$93(self$94, constructor$5, return$16) =
+  drop self$94
+  dup constructor$5
+  let return$17 = closure join$95(constructor$5, return$16)
+  return constructor$5.x(return$17)
+
+closure fn join$95(self$96, value$97) =
+  let constructor$5 = self$96.cap[0]
+  dup constructor$5
+  let return$16 = self$96.cap[1]
+  dup return$16
+  drop self$96
+  let return$18 = closure join$98(return$16, value$97)
+  return constructor$5.y(return$18)
+
+closure fn join$98(self$99, value$100) =
+  let return$16 = self$99.cap[0]
+  dup return$16
+  let value$97 = self$99.cap[1]
+  dup value$97
+  drop self$99
+  let struct$101 = Point(value$97, value$100)
+  return return$16(struct$101)
+
+toplevel fn zig_main$105() =
+  let finish$103 = closure join$107()
+  let after_main$104 = closure join$110(finish$103)
+  return main(after_main$104)
+
+closure fn join$107(self$108, value$109) =
+  drop self$108
+  return value$109
+
+closure fn join$110(self$111, value$112) =
+  let finish$103 = self$111.cap[0]
+  dup finish$103
+  drop self$111
+  let struct$113 = Tuple()
+  return value$112(struct$113, finish$103)
+
+entry = zig_main$105
+
+=== Reuse ===
+toplevel fn sumPoint(return$6) =
+  let closure$53 = closure lambda$45()
+  return return$6(closure$53)
+
+closure fn lambda$45(self$46, param$3, return$7) =
+  drop self$46
+  if param$3.tag == Point then {
+    let x#0 = param$3.0
+    dup x#0
+    let y#1 = param$3.1
+    dup y#1
+    let apply$29 = closure join$47(return$7, y#1)
+    let apply$30 = closure join$50(apply$29, x#0)
+    drop param$3
+    return addInt32(apply$30)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$47(self$48, value$49) =
+  let return$7 = self$48.cap[0]
+  dup return$7
+  let y#1 = self$48.cap[1]
+  dup y#1
+  drop self$48
+  return value$49(y#1, return$7)
+
+closure fn join$50(self$51, value$52) =
+  let apply$29 = self$51.cap[0]
+  dup apply$29
+  let x#0 = self$51.cap[1]
+  dup x#0
+  drop self$51
+  return value$52(x#0, apply$29)
+
+toplevel fn main(return$8) =
+  let closure$91 = closure lambda$55()
+  return return$8(closure$91)
+
+closure fn lambda$55(self$56, param$4, return$9) =
+  drop param$4
+  drop self$56
+  if  then {
+    let then$40 = closure join$57(return$9)
+    return printString(then$40)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$57(self$58, value$59) =
+  let return$9 = self$58.cap[0]
+  dup return$9
+  let return$10 = closure join$60(return$9, value$59)
+  let then$38 = closure join$63(return$10)
+  drop self$58
+  return toStringInt32(then$38)
+
+closure fn join$60(self$61, value$62) =
+  let return$9 = self$61.cap[0]
+  dup return$9
+  let value$59 = self$61.cap[1]
+  dup value$59
+  drop self$61
+  return value$59(value$62, return$9)
+
+closure fn join$63(self$64, value$65) =
+  let return$10 = self$64.cap[0]
+  dup return$10
+  let return$11 = closure join$66(return$10, value$65)
+  let then$36 = closure join$69(return$11)
+  drop self$64
+  return sumPoint(then$36)
+
+closure fn join$66(self$67, value$68) =
+  let return$10 = self$67.cap[0]
+  dup return$10
+  let value$65 = self$67.cap[1]
+  dup value$65
+  drop self$67
+  return value$65(value$68, return$10)
+
+closure fn join$69(self$70, value$71) =
+  let return$11 = self$70.cap[0]
+  dup return$11
+  let return$12 = closure join$72(return$11, value$71)
+  let apply$34 = closure join$75(return$12)
+  drop self$70
+  return Point(apply$34)
+
+closure fn join$72(self$73, value$74) =
+  let return$11 = self$73.cap[0]
+  dup return$11
+  let value$71 = self$73.cap[1]
+  dup value$71
+  drop self$73
+  return value$71(value$74, return$11)
+
+closure fn join$75(self$76, value$77) =
+  let return$12 = self$76.cap[0]
+  dup return$12
+  let record$90 = record(x = field$78, y = field$84) captures()
+  drop self$76
+  return value$77(record$90, return$12)
+
+field fn field$78(self$79, return$13) =
+  let apply$32 = closure join$80(return$13)
+  drop self$79
+  return Int32#(apply$32)
+
+closure fn join$80(self$81, value$82) =
+  let return$13 = self$81.cap[0]
+  dup return$13
+  let lit$83 = 4
+  drop self$81
+  return value$82(lit$83, return$13)
+
+field fn field$84(self$85, return$14) =
+  let apply$33 = closure join$86(return$14)
+  drop self$85
+  return Int32#(apply$33)
+
+closure fn join$86(self$87, value$88) =
+  let return$14 = self$87.cap[0]
+  dup return$14
+  let lit$89 = 9
+  drop self$87
+  return value$88(lit$89, return$14)
+
+toplevel fn Point(return$15) =
+  let closure$102 = closure lambda$93()
+  return return$15(closure$102)
+
+closure fn lambda$93(self$94, constructor$5, return$16) =
+  dup constructor$5
+  let return$17 = closure join$95(constructor$5, return$16)
+  drop self$94
+  return constructor$5.x(return$17)
+
+closure fn join$95(self$96, value$97) =
+  let constructor$5 = self$96.cap[0]
+  dup constructor$5
+  let return$16 = self$96.cap[1]
+  dup return$16
+  let return$18 = closure join$98(return$16, value$97)
+  drop self$96
+  return constructor$5.y(return$18)
+
+closure fn join$98(self$99, value$100) =
+  let return$16 = self$99.cap[0]
+  dup return$16
+  let value$97 = self$99.cap[1]
+  dup value$97
+  dropReuse reuse$114 = self$99 /2
+  let struct$101 = reuse reuse$114 Point(value$97, value$100)
+  return return$16(struct$101)
+
+toplevel fn zig_main$105() =
+  let finish$103 = closure join$107()
+  let after_main$104 = closure join$110(finish$103)
+  return main(after_main$104)
+
+closure fn join$107(self$108, value$109) =
+  drop self$108
+  return value$109
+
+closure fn join$110(self$111, value$112) =
+  let finish$103 = self$111.cap[0]
+  dup finish$103
+  dropReuse reuse$115 = self$111 /0
+  let struct$113 = reuse reuse$115 Tuple()
+  return value$112(struct$113, finish$103)
+
+entry = zig_main$105
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  data Point  = Point({x : Int32, y : Int32})
+  
+  def sumPoint =
+    fn {
+-     Point({x = x, y = y}) ->
++     Point({x = x#0, y = y#1}) ->
+        {
+-         addInt32(x)(y)
++         addInt32(x#0)(y#1)
+        }
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#2 ->
+        {
+-         printString(toStringInt32(sumPoint(Point({x = 4, y = 9}))))
++         printString( toStringInt32( sumPoint( Point( { x = Int32#(4)
++         , y = Int32#(9) } ) ) ) )
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- data Point  = Point({x : Int32, y : Int32})
+- 
+  def sumPoint =
+-   fn {
++   \param$3 ->
+-     Point({x = x#0, y = y#1}) ->
++     case param$3 of {
+-       {
++       Point(x#0, y#1) -> invoke addInt32(x#0)(y#1)
+-         addInt32(x#0)(y#1)
++     }
+-       }
+-   }
+  
+  def main =
+-   fn {
++   \param$4 ->
+-     _#2 ->
++     case param$4 of {
+-       {
++       _#2 ->
+-         printString( toStringInt32( sumPoint( Point( { x = Int32#(4)
++         invoke printString( invoke toStringInt32( invoke sumPoint( invoke Point( { x = invoke Int32#( 4 )
+-         , y = Int32#(9) } ) ) ) )
++         , y = invoke Int32#(9) } ) ) ) )
+-       }
++     }
+-   }
++ 
++ def Point = \constructor$5 -> Point(constructor$5.x, constructor$5.y)
+
+
+=== ToFun -> SaturateCtor ===
+  def sumPoint =
+    \param$3 ->
+      case param$3 of {
+        Point(x#0, y#1) -> invoke addInt32(x#0)(y#1)
+      }
+  
+  def main =
+    \param$4 ->
+      case param$4 of {
+        _#2 ->
+          invoke printString( invoke toStringInt32( invoke sumPoint( invoke Point( { x = invoke Int32#( 4 )
+          , y = invoke Int32#(9) } ) ) ) )
+      }
+  
+  def Point = \constructor$5 -> Point(constructor$5.x, constructor$5.y)
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def sumPoint =
+    \param$3 ->
+      case param$3 of {
+        Point(x#0, y#1) -> invoke addInt32(x#0)(y#1)
+      }
+  
+  def main =
+    \param$4 ->
+      case param$4 of {
+        _#2 ->
+          invoke printString( invoke toStringInt32( invoke sumPoint( invoke Point( { x = invoke Int32#( 4 )
+          , y = invoke Int32#(9) } ) ) ) )
+      }
+  
+  def Point = \constructor$5 -> Point(constructor$5.x, constructor$5.y)
+
+
+=== ReuseSpecialize -> ToCore ===
+- def sumPoint =
++ def sumPoint(return$6) =
+-   \param$3 ->
++   \param$3 return$7 . {
+-     case param$3 of {
++     param$3 ~ select {
+-       Point(x#0, y#1) -> invoke addInt32(x#0)(y#1)
++       Point(x#0, y#1) -> invoke addInt32 ~ (x#0, (y#1, return$7))
+      }
++   } ~ return$6
+  
+- def main =
++ def main(return$8) =
+-   \param$4 ->
++   \param$4 return$9 . {
+-     case param$4 of {
++     param$4 ~ select {
+        _#2 ->
+-         invoke printString( invoke toStringInt32( invoke sumPoint( invoke Point( { x = invoke Int32#( 4 )
++         invoke printString ~ ( do return$10 . {
+-         , y = invoke Int32#(9) } ) ) ) )
++           invoke toStringInt32 ~ ( do return$11 . {
++             invoke sumPoint ~ ( do return$12 . {
++               invoke Point ~ ( { x(return$13) = {
++                 invoke Int32# ~ (4, return$13)
++               }
++               , y(return$14) = {
++                 invoke Int32# ~ (9, return$14)
++               } }
++               , return$12 )
++             }
++             , return$11 )
++           }
++           , return$10 )
++         }
++         , return$9 )
+      }
++   } ~ return$8
+  
+- def Point = \constructor$5 -> Point(constructor$5.x, constructor$5.y)
++ def Point(return$15) =
++   \constructor$5 return$16 . {
++     Point( do return$17 . {
++       constructor$5 ~ .x -> return$17
++     }
++     , do return$18 . {
++       constructor$5 ~ .y -> return$18
++     } ) ~ return$16
++   } ~ return$15
+
+
+=== ToCore -> Flat ===
+  def sumPoint(return$6) =
+    \param$3 return$7 . {
+      param$3 ~ select {
+        Point(x#0, y#1) -> invoke addInt32 ~ (x#0, (y#1, return$7))
+      }
+    } ~ return$6
+  
+  def main(return$8) =
+    \param$4 return$9 . {
+      param$4 ~ select {
+        _#2 ->
+-         invoke printString ~ ( do return$10 . {
++         invoke printString ~ then outer$19 -> {
+-           invoke toStringInt32 ~ ( do return$11 . {
++           join return$10 = then inner$20 -> {
+-             invoke sumPoint ~ ( do return$12 . {
++             outer$19 ~ (inner$20, return$9)
+-               invoke Point ~ ( { x(return$13) = {
++           }
++           in invoke toStringInt32 ~ then outer$21 -> {
++             join return$11 = then inner$22 -> {
++               outer$21 ~ (inner$22, return$10)
++             }
++             in invoke sumPoint ~ then outer$23 -> {
++               join return$12 = then inner$24 -> {
++                 outer$23 ~ (inner$24, return$11)
++               }
++               in invoke Point ~ ( { x(return$13) = {
+                  invoke Int32# ~ (4, return$13)
+                }
+                , y(return$14) = {
+                  invoke Int32# ~ (9, return$14)
+                } }
+                , return$12 )
+              }
+-             , return$11 )
+            }
+-           , return$10 )
+          }
+-         , return$9 )
+      }
+    } ~ return$8
+  
+  def Point(return$15) =
+    \constructor$5 return$16 . {
+-     Point( do return$17 . {
++     join label$25 = return$16
+-       constructor$5 ~ .x -> return$17
++     in join return$17 = then var$26 -> {
++       join label$27 = label$25
++       in join return$18 = then var$28 -> {
++         Point(var$26, var$28) ~ label$27
++       }
++       in constructor$5 ~ .y -> return$18
+      }
+-     , do return$18 . {
++     in constructor$5 ~ .x -> return$17
+-       constructor$5 ~ .y -> return$18
+-     } ) ~ return$16
+    } ~ return$15
+
+
+=== Flat -> Join ===
+  def sumPoint(return$6) =
+    \param$3 return$7 . {
+-     param$3 ~ select {
++     join select$31 = select {
+-       Point(x#0, y#1) -> invoke addInt32 ~ (x#0, (y#1, return$7))
++       Point(x#0, y#1) ->
++         join apply$29 = (y#1, return$7)
++         in join apply$30 = (x#0, apply$29)
++         in invoke addInt32 ~ apply$30
+      }
++     in param$3 ~ select$31
+    } ~ return$6
+  
+  def main(return$8) =
+    \param$4 return$9 . {
+-     param$4 ~ select {
++     join select$41 = select {
+        _#2 ->
+-         invoke printString ~ then outer$19 -> {
++         join then$40 = then outer$19 -> {
+            join return$10 = then inner$20 -> {
+-             outer$19 ~ (inner$20, return$9)
++             join apply$39 = (inner$20, return$9)
++             in outer$19 ~ apply$39
+            }
+-           in invoke toStringInt32 ~ then outer$21 -> {
++           in join then$38 = then outer$21 -> {
+              join return$11 = then inner$22 -> {
+-               outer$21 ~ (inner$22, return$10)
++               join apply$37 = (inner$22, return$10)
++               in outer$21 ~ apply$37
+              }
+-             in invoke sumPoint ~ then outer$23 -> {
++             in join then$36 = then outer$23 -> {
+                join return$12 = then inner$24 -> {
+-                 outer$23 ~ (inner$24, return$11)
++                 join apply$35 = (inner$24, return$11)
++                 in outer$23 ~ apply$35
+                }
+-               in invoke Point ~ ( { x(return$13) = {
++               in join apply$34 = ( { x(return$13) = {
+-                 invoke Int32# ~ (4, return$13)
++                 join apply$32 = (4, return$13)
++                 in invoke Int32# ~ apply$32
+                }
+                , y(return$14) = {
+-                 invoke Int32# ~ (9, return$14)
++                 join apply$33 = (9, return$14)
++                 in invoke Int32# ~ apply$33
+                } }
+                , return$12 )
++               in invoke Point ~ apply$34
+              }
++             in invoke sumPoint ~ then$36
+            }
++           in invoke toStringInt32 ~ then$38
+          }
++         in invoke printString ~ then$40
+      }
++     in param$4 ~ select$41
+    } ~ return$8
+  
+  def Point(return$15) =
+    \constructor$5 return$16 . {
+      join label$25 = return$16
+      in join return$17 = then var$26 -> {
+        join label$27 = label$25
+        in join return$18 = then var$28 -> {
+          Point(var$26, var$28) ~ label$27
+        }
+-       in constructor$5 ~ .y -> return$18
++       in join project$43 = .y -> return$18
++       in constructor$5 ~ project$43
+      }
+-     in constructor$5 ~ .x -> return$17
++     in join project$42 = .x -> return$17
++     in constructor$5 ~ project$42
+    } ~ return$15
+
+
+=== Join -> ClosureConv ===
+- def sumPoint(return$6) =
++ toplevel fn sumPoint(return$6) =
+-   \param$3 return$7 . {
++   let closure$53 = closure lambda$45()
+-     join select$31 = select {
++   return return$6(closure$53)
+-       Point(x#0, y#1) ->
+-         join apply$29 = (y#1, return$7)
+-         in join apply$30 = (x#0, apply$29)
+-         in invoke addInt32 ~ apply$30
+-     }
+-     in param$3 ~ select$31
+-   } ~ return$6
+  
+- def main(return$8) =
++ closure fn lambda$45(self$46, param$3, return$7) =
+-   \param$4 return$9 . {
++   if param$3.tag == Point then {
+-     join select$41 = select {
++     let x#0 = param$3.0
+-       _#2 ->
++     let y#1 = param$3.1
+-         join then$40 = then outer$19 -> {
++     let apply$29 = closure join$47(return$7, y#1)
+-           join return$10 = then inner$20 -> {
++     let apply$30 = closure join$50(apply$29, x#0)
+-             join apply$39 = (inner$20, return$9)
++     return addInt32(apply$30)
+-             in outer$19 ~ apply$39
++   } else {
+-           }
++     panic "no matching branch"
+-           in join then$38 = then outer$21 -> {
++   }
+-             join return$11 = then inner$22 -> {
+-               join apply$37 = (inner$22, return$10)
+-               in outer$21 ~ apply$37
+-             }
+-             in join then$36 = then outer$23 -> {
+-               join return$12 = then inner$24 -> {
+-                 join apply$35 = (inner$24, return$11)
+-                 in outer$23 ~ apply$35
+-               }
+-               in join apply$34 = ( { x(return$13) = {
+-                 join apply$32 = (4, return$13)
+-                 in invoke Int32# ~ apply$32
+-               }
+-               , y(return$14) = {
+-                 join apply$33 = (9, return$14)
+-                 in invoke Int32# ~ apply$33
+-               } }
+-               , return$12 )
+-               in invoke Point ~ apply$34
+-             }
+-             in invoke sumPoint ~ then$36
+-           }
+-           in invoke toStringInt32 ~ then$38
+-         }
+-         in invoke printString ~ then$40
+-     }
+-     in param$4 ~ select$41
+-   } ~ return$8
+  
+- def Point(return$15) =
++ closure fn join$47(self$48, value$49) =
+-   \constructor$5 return$16 . {
++   let return$7 = self$48.cap[0]
+-     join label$25 = return$16
++   let y#1 = self$48.cap[1]
+-     in join return$17 = then var$26 -> {
++   return value$49(y#1, return$7)
+-       join label$27 = label$25
++ 
+-       in join return$18 = then var$28 -> {
++ closure fn join$50(self$51, value$52) =
+-         Point(var$26, var$28) ~ label$27
++   let apply$29 = self$51.cap[0]
+-       }
++   let x#0 = self$51.cap[1]
+-       in join project$43 = .y -> return$18
++   return value$52(x#0, apply$29)
+-       in constructor$5 ~ project$43
++ 
+-     }
++ toplevel fn main(return$8) =
+-     in join project$42 = .x -> return$17
++   let closure$91 = closure lambda$55()
+-     in constructor$5 ~ project$42
++   return return$8(closure$91)
+-   } ~ return$15
++ 
++ closure fn lambda$55(self$56, param$4, return$9) =
++   if  then {
++     let _#2 = param$4
++     let then$40 = closure join$57(return$9)
++     return printString(then$40)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$57(self$58, value$59) =
++   let return$9 = self$58.cap[0]
++   let return$10 = closure join$60(return$9, value$59)
++   let then$38 = closure join$63(return$10)
++   return toStringInt32(then$38)
++ 
++ closure fn join$60(self$61, value$62) =
++   let return$9 = self$61.cap[0]
++   let value$59 = self$61.cap[1]
++   return value$59(value$62, return$9)
++ 
++ closure fn join$63(self$64, value$65) =
++   let return$10 = self$64.cap[0]
++   let return$11 = closure join$66(return$10, value$65)
++   let then$36 = closure join$69(return$11)
++   return sumPoint(then$36)
++ 
++ closure fn join$66(self$67, value$68) =
++   let return$10 = self$67.cap[0]
++   let value$65 = self$67.cap[1]
++   return value$65(value$68, return$10)
++ 
++ closure fn join$69(self$70, value$71) =
++   let return$11 = self$70.cap[0]
++   let return$12 = closure join$72(return$11, value$71)
++   let apply$34 = closure join$75(return$12)
++   return Point(apply$34)
++ 
++ closure fn join$72(self$73, value$74) =
++   let return$11 = self$73.cap[0]
++   let value$71 = self$73.cap[1]
++   return value$71(value$74, return$11)
++ 
++ closure fn join$75(self$76, value$77) =
++   let return$12 = self$76.cap[0]
++   let record$90 = record(x = field$78, y = field$84) captures()
++   return value$77(record$90, return$12)
++ 
++ field fn field$78(self$79, return$13) =
++   let apply$32 = closure join$80(return$13)
++   return Int32#(apply$32)
++ 
++ closure fn join$80(self$81, value$82) =
++   let return$13 = self$81.cap[0]
++   let lit$83 = 4
++   return value$82(lit$83, return$13)
++ 
++ field fn field$84(self$85, return$14) =
++   let apply$33 = closure join$86(return$14)
++   return Int32#(apply$33)
++ 
++ closure fn join$86(self$87, value$88) =
++   let return$14 = self$87.cap[0]
++   let lit$89 = 9
++   return value$88(lit$89, return$14)
++ 
++ toplevel fn Point(return$15) =
++   let closure$102 = closure lambda$93()
++   return return$15(closure$102)
++ 
++ closure fn lambda$93(self$94, constructor$5, return$16) =
++   let return$17 = closure join$95(constructor$5, return$16)
++   return constructor$5.x(return$17)
++ 
++ closure fn join$95(self$96, value$97) =
++   let constructor$5 = self$96.cap[0]
++   let return$16 = self$96.cap[1]
++   let return$18 = closure join$98(return$16, value$97)
++   return constructor$5.y(return$18)
++ 
++ closure fn join$98(self$99, value$100) =
++   let return$16 = self$99.cap[0]
++   let value$97 = self$99.cap[1]
++   let struct$101 = Point(value$97, value$100)
++   return return$16(struct$101)
++ 
++ toplevel fn zig_main$105() =
++   let finish$103 = closure join$107()
++   let after_main$104 = closure join$110(finish$103)
++   return main(after_main$104)
++ 
++ closure fn join$107(self$108, value$109) = return value$109
++ 
++ closure fn join$110(self$111, value$112) =
++   let finish$103 = self$111.cap[0]
++   let struct$113 = Tuple()
++   return value$112(struct$113, finish$103)
++ 
++ entry = zig_main$105
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn sumPoint(return$6) =
+    let closure$53 = closure lambda$45()
+    return return$6(closure$53)
+  
+  closure fn lambda$45(self$46, param$3, return$7) =
+    if param$3.tag == Point then {
+      let x#0 = param$3.0
+      let y#1 = param$3.1
+      let apply$29 = closure join$47(return$7, y#1)
+      let apply$30 = closure join$50(apply$29, x#0)
+      return addInt32(apply$30)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$47(self$48, value$49) =
+    let return$7 = self$48.cap[0]
+    let y#1 = self$48.cap[1]
+    return value$49(y#1, return$7)
+  
+  closure fn join$50(self$51, value$52) =
+    let apply$29 = self$51.cap[0]
+    let x#0 = self$51.cap[1]
+    return value$52(x#0, apply$29)
+  
+  toplevel fn main(return$8) =
+    let closure$91 = closure lambda$55()
+    return return$8(closure$91)
+  
+  closure fn lambda$55(self$56, param$4, return$9) =
+    if  then {
+-     let _#2 = param$4
+      let then$40 = closure join$57(return$9)
+      return printString(then$40)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$57(self$58, value$59) =
+    let return$9 = self$58.cap[0]
+    let return$10 = closure join$60(return$9, value$59)
+    let then$38 = closure join$63(return$10)
+    return toStringInt32(then$38)
+  
+  closure fn join$60(self$61, value$62) =
+    let return$9 = self$61.cap[0]
+    let value$59 = self$61.cap[1]
+    return value$59(value$62, return$9)
+  
+  closure fn join$63(self$64, value$65) =
+    let return$10 = self$64.cap[0]
+    let return$11 = closure join$66(return$10, value$65)
+    let then$36 = closure join$69(return$11)
+    return sumPoint(then$36)
+  
+  closure fn join$66(self$67, value$68) =
+    let return$10 = self$67.cap[0]
+    let value$65 = self$67.cap[1]
+    return value$65(value$68, return$10)
+  
+  closure fn join$69(self$70, value$71) =
+    let return$11 = self$70.cap[0]
+    let return$12 = closure join$72(return$11, value$71)
+    let apply$34 = closure join$75(return$12)
+    return Point(apply$34)
+  
+  closure fn join$72(self$73, value$74) =
+    let return$11 = self$73.cap[0]
+    let value$71 = self$73.cap[1]
+    return value$71(value$74, return$11)
+  
+  closure fn join$75(self$76, value$77) =
+    let return$12 = self$76.cap[0]
+    let record$90 = record(x = field$78, y = field$84) captures()
+    return value$77(record$90, return$12)
+  
+  field fn field$78(self$79, return$13) =
+    let apply$32 = closure join$80(return$13)
+    return Int32#(apply$32)
+  
+  closure fn join$80(self$81, value$82) =
+    let return$13 = self$81.cap[0]
+    let lit$83 = 4
+    return value$82(lit$83, return$13)
+  
+  field fn field$84(self$85, return$14) =
+    let apply$33 = closure join$86(return$14)
+    return Int32#(apply$33)
+  
+  closure fn join$86(self$87, value$88) =
+    let return$14 = self$87.cap[0]
+    let lit$89 = 9
+    return value$88(lit$89, return$14)
+  
+  toplevel fn Point(return$15) =
+    let closure$102 = closure lambda$93()
+    return return$15(closure$102)
+  
+  closure fn lambda$93(self$94, constructor$5, return$16) =
+    let return$17 = closure join$95(constructor$5, return$16)
+    return constructor$5.x(return$17)
+  
+  closure fn join$95(self$96, value$97) =
+    let constructor$5 = self$96.cap[0]
+    let return$16 = self$96.cap[1]
+    let return$18 = closure join$98(return$16, value$97)
+    return constructor$5.y(return$18)
+  
+  closure fn join$98(self$99, value$100) =
+    let return$16 = self$99.cap[0]
+    let value$97 = self$99.cap[1]
+    let struct$101 = Point(value$97, value$100)
+    return return$16(struct$101)
+  
+  toplevel fn zig_main$105() =
+    let finish$103 = closure join$107()
+    let after_main$104 = closure join$110(finish$103)
+    return main(after_main$104)
+  
+  closure fn join$107(self$108, value$109) = return value$109
+  
+  closure fn join$110(self$111, value$112) =
+    let finish$103 = self$111.cap[0]
+    let struct$113 = Tuple()
+    return value$112(struct$113, finish$103)
+  
+  entry = zig_main$105
+
+
+=== Peephole -> Perceus ===
+  toplevel fn sumPoint(return$6) =
+    let closure$53 = closure lambda$45()
+    return return$6(closure$53)
+  
+  closure fn lambda$45(self$46, param$3, return$7) =
++   drop self$46
+    if param$3.tag == Point then {
+      let x#0 = param$3.0
++     dup x#0
+      let y#1 = param$3.1
++     dup y#1
++     drop param$3
+      let apply$29 = closure join$47(return$7, y#1)
+      let apply$30 = closure join$50(apply$29, x#0)
+      return addInt32(apply$30)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$47(self$48, value$49) =
+    let return$7 = self$48.cap[0]
++   dup return$7
+    let y#1 = self$48.cap[1]
++   dup y#1
++   drop self$48
+    return value$49(y#1, return$7)
+  
+  closure fn join$50(self$51, value$52) =
+    let apply$29 = self$51.cap[0]
++   dup apply$29
+    let x#0 = self$51.cap[1]
++   dup x#0
++   drop self$51
+    return value$52(x#0, apply$29)
+  
+  toplevel fn main(return$8) =
+    let closure$91 = closure lambda$55()
+    return return$8(closure$91)
+  
+  closure fn lambda$55(self$56, param$4, return$9) =
++   drop param$4
++   drop self$56
+    if  then {
+      let then$40 = closure join$57(return$9)
+      return printString(then$40)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$57(self$58, value$59) =
+    let return$9 = self$58.cap[0]
++   dup return$9
++   drop self$58
+    let return$10 = closure join$60(return$9, value$59)
+    let then$38 = closure join$63(return$10)
+    return toStringInt32(then$38)
+  
+  closure fn join$60(self$61, value$62) =
+    let return$9 = self$61.cap[0]
++   dup return$9
+    let value$59 = self$61.cap[1]
++   dup value$59
++   drop self$61
+    return value$59(value$62, return$9)
+  
+  closure fn join$63(self$64, value$65) =
+    let return$10 = self$64.cap[0]
++   dup return$10
++   drop self$64
+    let return$11 = closure join$66(return$10, value$65)
+    let then$36 = closure join$69(return$11)
+    return sumPoint(then$36)
+  
+  closure fn join$66(self$67, value$68) =
+    let return$10 = self$67.cap[0]
++   dup return$10
+    let value$65 = self$67.cap[1]
++   dup value$65
++   drop self$67
+    return value$65(value$68, return$10)
+  
+  closure fn join$69(self$70, value$71) =
+    let return$11 = self$70.cap[0]
++   dup return$11
++   drop self$70
+    let return$12 = closure join$72(return$11, value$71)
+    let apply$34 = closure join$75(return$12)
+    return Point(apply$34)
+  
+  closure fn join$72(self$73, value$74) =
+    let return$11 = self$73.cap[0]
++   dup return$11
+    let value$71 = self$73.cap[1]
++   dup value$71
++   drop self$73
+    return value$71(value$74, return$11)
+  
+  closure fn join$75(self$76, value$77) =
+    let return$12 = self$76.cap[0]
++   dup return$12
++   drop self$76
+    let record$90 = record(x = field$78, y = field$84) captures()
+    return value$77(record$90, return$12)
+  
+  field fn field$78(self$79, return$13) =
++   drop self$79
+    let apply$32 = closure join$80(return$13)
+    return Int32#(apply$32)
+  
+  closure fn join$80(self$81, value$82) =
+    let return$13 = self$81.cap[0]
++   dup return$13
++   drop self$81
+    let lit$83 = 4
+    return value$82(lit$83, return$13)
+  
+  field fn field$84(self$85, return$14) =
++   drop self$85
+    let apply$33 = closure join$86(return$14)
+    return Int32#(apply$33)
+  
+  closure fn join$86(self$87, value$88) =
+    let return$14 = self$87.cap[0]
++   dup return$14
++   drop self$87
+    let lit$89 = 9
+    return value$88(lit$89, return$14)
+  
+  toplevel fn Point(return$15) =
+    let closure$102 = closure lambda$93()
+    return return$15(closure$102)
+  
+  closure fn lambda$93(self$94, constructor$5, return$16) =
++   drop self$94
++   dup constructor$5
+    let return$17 = closure join$95(constructor$5, return$16)
+    return constructor$5.x(return$17)
+  
+  closure fn join$95(self$96, value$97) =
+    let constructor$5 = self$96.cap[0]
++   dup constructor$5
+    let return$16 = self$96.cap[1]
++   dup return$16
++   drop self$96
+    let return$18 = closure join$98(return$16, value$97)
+    return constructor$5.y(return$18)
+  
+  closure fn join$98(self$99, value$100) =
+    let return$16 = self$99.cap[0]
++   dup return$16
+    let value$97 = self$99.cap[1]
++   dup value$97
++   drop self$99
+    let struct$101 = Point(value$97, value$100)
+    return return$16(struct$101)
+  
+  toplevel fn zig_main$105() =
+    let finish$103 = closure join$107()
+    let after_main$104 = closure join$110(finish$103)
+    return main(after_main$104)
+  
+- closure fn join$107(self$108, value$109) = return value$109
++ closure fn join$107(self$108, value$109) =
++   drop self$108
++   return value$109
+  
+  closure fn join$110(self$111, value$112) =
+    let finish$103 = self$111.cap[0]
++   dup finish$103
++   drop self$111
+    let struct$113 = Tuple()
+    return value$112(struct$113, finish$103)
+  
+  entry = zig_main$105
+
+
+=== Perceus -> Reuse ===
+  toplevel fn sumPoint(return$6) =
+    let closure$53 = closure lambda$45()
+    return return$6(closure$53)
+  
+  closure fn lambda$45(self$46, param$3, return$7) =
+    drop self$46
+    if param$3.tag == Point then {
+      let x#0 = param$3.0
+      dup x#0
+      let y#1 = param$3.1
+      dup y#1
+-     drop param$3
+      let apply$29 = closure join$47(return$7, y#1)
+      let apply$30 = closure join$50(apply$29, x#0)
++     drop param$3
+      return addInt32(apply$30)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$47(self$48, value$49) =
+    let return$7 = self$48.cap[0]
+    dup return$7
+    let y#1 = self$48.cap[1]
+    dup y#1
+    drop self$48
+    return value$49(y#1, return$7)
+  
+  closure fn join$50(self$51, value$52) =
+    let apply$29 = self$51.cap[0]
+    dup apply$29
+    let x#0 = self$51.cap[1]
+    dup x#0
+    drop self$51
+    return value$52(x#0, apply$29)
+  
+  toplevel fn main(return$8) =
+    let closure$91 = closure lambda$55()
+    return return$8(closure$91)
+  
+  closure fn lambda$55(self$56, param$4, return$9) =
+    drop param$4
+    drop self$56
+    if  then {
+      let then$40 = closure join$57(return$9)
+      return printString(then$40)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$57(self$58, value$59) =
+    let return$9 = self$58.cap[0]
+    dup return$9
+-   drop self$58
+    let return$10 = closure join$60(return$9, value$59)
+    let then$38 = closure join$63(return$10)
++   drop self$58
+    return toStringInt32(then$38)
+  
+  closure fn join$60(self$61, value$62) =
+    let return$9 = self$61.cap[0]
+    dup return$9
+    let value$59 = self$61.cap[1]
+    dup value$59
+    drop self$61
+    return value$59(value$62, return$9)
+  
+  closure fn join$63(self$64, value$65) =
+    let return$10 = self$64.cap[0]
+    dup return$10
+-   drop self$64
+    let return$11 = closure join$66(return$10, value$65)
+    let then$36 = closure join$69(return$11)
++   drop self$64
+    return sumPoint(then$36)
+  
+  closure fn join$66(self$67, value$68) =
+    let return$10 = self$67.cap[0]
+    dup return$10
+    let value$65 = self$67.cap[1]
+    dup value$65
+    drop self$67
+    return value$65(value$68, return$10)
+  
+  closure fn join$69(self$70, value$71) =
+    let return$11 = self$70.cap[0]
+    dup return$11
+-   drop self$70
+    let return$12 = closure join$72(return$11, value$71)
+    let apply$34 = closure join$75(return$12)
++   drop self$70
+    return Point(apply$34)
+  
+  closure fn join$72(self$73, value$74) =
+    let return$11 = self$73.cap[0]
+    dup return$11
+    let value$71 = self$73.cap[1]
+    dup value$71
+    drop self$73
+    return value$71(value$74, return$11)
+  
+  closure fn join$75(self$76, value$77) =
+    let return$12 = self$76.cap[0]
+    dup return$12
+-   drop self$76
+    let record$90 = record(x = field$78, y = field$84) captures()
++   drop self$76
+    return value$77(record$90, return$12)
+  
+  field fn field$78(self$79, return$13) =
+-   drop self$79
+    let apply$32 = closure join$80(return$13)
++   drop self$79
+    return Int32#(apply$32)
+  
+  closure fn join$80(self$81, value$82) =
+    let return$13 = self$81.cap[0]
+    dup return$13
+-   drop self$81
+    let lit$83 = 4
++   drop self$81
+    return value$82(lit$83, return$13)
+  
+  field fn field$84(self$85, return$14) =
+-   drop self$85
+    let apply$33 = closure join$86(return$14)
++   drop self$85
+    return Int32#(apply$33)
+  
+  closure fn join$86(self$87, value$88) =
+    let return$14 = self$87.cap[0]
+    dup return$14
+-   drop self$87
+    let lit$89 = 9
++   drop self$87
+    return value$88(lit$89, return$14)
+  
+  toplevel fn Point(return$15) =
+    let closure$102 = closure lambda$93()
+    return return$15(closure$102)
+  
+  closure fn lambda$93(self$94, constructor$5, return$16) =
+-   drop self$94
+    dup constructor$5
+    let return$17 = closure join$95(constructor$5, return$16)
++   drop self$94
+    return constructor$5.x(return$17)
+  
+  closure fn join$95(self$96, value$97) =
+    let constructor$5 = self$96.cap[0]
+    dup constructor$5
+    let return$16 = self$96.cap[1]
+    dup return$16
+-   drop self$96
+    let return$18 = closure join$98(return$16, value$97)
++   drop self$96
+    return constructor$5.y(return$18)
+  
+  closure fn join$98(self$99, value$100) =
+    let return$16 = self$99.cap[0]
+    dup return$16
+    let value$97 = self$99.cap[1]
+    dup value$97
+-   drop self$99
++   dropReuse reuse$114 = self$99 /2
+-   let struct$101 = Point(value$97, value$100)
++   let struct$101 = reuse reuse$114 Point(value$97, value$100)
+    return return$16(struct$101)
+  
+  toplevel fn zig_main$105() =
+    let finish$103 = closure join$107()
+    let after_main$104 = closure join$110(finish$103)
+    return main(after_main$104)
+  
+  closure fn join$107(self$108, value$109) =
+    drop self$108
+    return value$109
+  
+  closure fn join$110(self$111, value$112) =
+    let finish$103 = self$111.cap[0]
+    dup finish$103
+-   drop self$111
++   dropReuse reuse$115 = self$111 /0
+-   let struct$113 = Tuple()
++   let struct$113 = reuse reuse$115 Tuple()
+    return value$112(struct$113, finish$103)
+  
+  entry = zig_main$105

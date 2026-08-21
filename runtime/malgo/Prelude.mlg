@@ -169,16 +169,16 @@ def runProcessBoxed# = { cmd (String# argsBlob) -> runProcess# cmd argsBlob }
 -- `.stdout`/`.stderr` dot-access instead of spelling out field order via a
 -- `{code, _, _}`-style pattern at every call site.
 --
--- IMPORTANT: construct and pattern-match this (and any record) as a *bare*
--- structural literal/pattern (`{ exitCode = ..., ... }`), never tagged with
--- the constructor name (`ProcessResult { exitCode = ..., ... }`). Dot-access
--- and bare construction/pattern destructuring all work correctly (verified
--- against both the interpreter and the Scheme backend); the tagged form is
--- a confirmed compiler bug on *both* sides: tagged construction builds
--- `ProcessResult` applied to the record as one argument (not a merged
--- tagged record), and tagged pattern-matching evaluates to a function
--- instead of destructuring. Tracked as malgo#422 (not fixed here, since
--- it's a compiler bug, not this addition's scope).
+-- malgo#422 fixed both tagged construction (`ProcessResult { .exitCode -> c,
+-- ... }`) and tagged pattern-matching *within this module*. From a
+-- different module, though, a tagged pattern for `ProcessResult` still
+-- silently never matches: the compiler's tag->field-order table is built
+-- per module from its own local `data` declarations, so a caller outside
+-- `Prelude.mlg` can't see this constructor's fields to flatten the pattern
+-- against — the clause compiles and type-checks, it just never fires. Bare
+-- structural literal/pattern (`{ .exitCode -> ..., ... }`, no `ProcessResult`
+-- tag) has no such gap and works everywhere; prefer it for any code that
+-- isn't itself inside `Prelude.mlg`.
 data ProcessResult = ProcessResult { exitCode: Int32, stdout: String, stderr: String }
 
 -- Unboxed via this helper's own parameter pattern (matching every other

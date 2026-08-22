@@ -74,8 +74,22 @@ log "native compilation done"
 
 # Not `mapfile`: it is a bash 4 builtin, and macOS still ships bash 3.2, so
 # this gate could not run at all on a Mac.
+#
+# TaggedRecordCrossModuleDef.mlg defines no `main` -- it's a library
+# companion imported (unqualified) by TaggedRecordCrossModuleUse.mlg, which
+# defines its own `main`, so this file can't have one too. The primary Lean
+# interpreter treats a missing main as a silent no-op (empty golden), but
+# the self-hosted evaluator errors on it, so it's excluded here the same way
+# lean/Test/Main.lean's evalHarnessUnsupported excludes its companion.
+skip_cases=("TaggedRecordCrossModuleDef")
+
 cases=()
 while IFS= read -r case_name; do
+  skip=0
+  for skip_case in "${skip_cases[@]}"; do
+    [[ "$case_name" == "$skip_case" ]] && skip=1
+  done
+  [[ "$skip" -eq 1 ]] && continue
   cases+=("$case_name")
 done < <(find .golden/Malgo.Sequent.Eval -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
 total_cases=${#cases[@]}

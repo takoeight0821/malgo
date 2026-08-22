@@ -169,16 +169,17 @@ def runProcessBoxed# = { cmd (String# argsBlob) -> runProcess# cmd argsBlob }
 -- `.stdout`/`.stderr` dot-access instead of spelling out field order via a
 -- `{code, _, _}`-style pattern at every call site.
 --
--- IMPORTANT: construct and pattern-match this (and any record) as a *bare*
--- structural literal/pattern (`{ exitCode = ..., ... }`), never tagged with
--- the constructor name (`ProcessResult { exitCode = ..., ... }`). Dot-access
--- and bare construction/pattern destructuring all work correctly (verified
--- against both the interpreter and the Scheme backend); the tagged form is
--- a confirmed compiler bug on *both* sides: tagged construction builds
--- `ProcessResult` applied to the record as one argument (not a merged
--- tagged record), and tagged pattern-matching evaluates to a function
--- instead of destructuring. Tracked as malgo#422 (not fixed here, since
--- it's a compiler bug, not this addition's scope).
+-- Construct and pattern-match this (and any record) as a bare structural
+-- literal/pattern, never tagged with the constructor name (`ProcessResult
+-- { .exitCode -> ... }`): tagged construction/pattern-matching for
+-- record-shaped constructors works correctly and needs no per-module
+-- lookup (#422), but a tagged value's fields are not directly
+-- dot-accessible — `pr.exitCode` on a genuinely `ProcessResult`-tagged
+-- value fails at runtime (`Expecting a record, but got:
+-- ProcessResult(<record>)`), by design: a constructor and the record it
+-- happens to wrap are different things. `isSuccess`'s `r.exitCode` below
+-- requires `r` to be a bare record, which is exactly what `toProcessResult`
+-- returns.
 data ProcessResult = ProcessResult { exitCode: Int32, stdout: String, stderr: String }
 
 -- Unboxed via this helper's own parameter pattern (matching every other

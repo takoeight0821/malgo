@@ -57,6 +57,14 @@ trap cleanup EXIT
 GOLDEN_ROOT=".golden/Malgo.Sequent.Eval"
 TESTCASE_DIR="test/testcases/malgo"
 
+# TaggedRecordCrossModuleDef.mlg defines no `main` -- it's a library
+# companion imported (unqualified) by TaggedRecordCrossModuleUse.mlg, which
+# defines its own `main`, so this file can't have one too. The primary Lean
+# interpreter treats a missing main as a silent no-op (empty golden), but
+# this backend errors on it, so it's excluded here the same way
+# lean/Test/Main.lean's evalHarnessUnsupported excludes its companion.
+SKIP_CASES=("TaggedRecordCrossModuleDef")
+
 pass=0
 compile_fail=0
 run_fail=0
@@ -70,6 +78,13 @@ for dir in "$GOLDEN_ROOT"/*/; do
   case=$(basename "$dir")
   src="$TESTCASE_DIR/$case.mlg"
   if [ ! -f "$src" ]; then
+    continue
+  fi
+  skip=0
+  for skip_case in "${SKIP_CASES[@]}"; do
+    [ "$case" = "$skip_case" ] && skip=1
+  done
+  if [ "$skip" -eq 1 ]; then
     continue
   fi
   golden="$dir/golden"

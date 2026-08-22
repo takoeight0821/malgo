@@ -133,10 +133,11 @@ Prelude). -/
 def representatives : List String :=
   [ "Primitive", "ListOps", "HelloImport", "RecordTest", "RowPoly", "CodataE2E",
     "FibCopattern", "LabelGoto", "NestedMatch", "CStyleApply", "ZeroArgs", "Eventually",
-    "TuplePattern", "NestedRecursive", "StringPattern", "LetPattern" ]
+    "TuplePattern", "NestedRecursive", "StringPattern", "LetPattern",
+    "TaggedRecordCrossModuleUse" ]
 
-/-- The 18 non-error Rename goldens: Builtin/Prelude (from `runtime/malgo/`)
-plus the 16 representative testcases. -/
+/-- The 19 non-error Rename goldens: Builtin/Prelude (from `runtime/malgo/`)
+plus the 17 representative testcases. -/
 def renameCases : List GoldenCase :=
   [ renameCase "Builtin" "runtime/malgo/Builtin.mlg",
     renameCase "Prelude" "runtime/malgo/Prelude.mlg" ] ++
@@ -146,7 +147,7 @@ def renameCases : List GoldenCase :=
 
 Each case runs `compileToRenamed` then `Elaborate.pass` and dumps `sShow` of
 the resulting `BindGroup .rename` — exactly what the Haskell `ElaborateSpec`'s
-`driveElaborate` dumps. Only the 16 representatives get full goldens (no
+`driveElaborate` dumps. Only the 17 representatives get full goldens (no
 Builtin/Prelude here). -/
 
 private def elaborateGolden (path : System.FilePath) : IO String := do
@@ -236,6 +237,22 @@ Linking mirrors Haskell `compileTestCase`: `builtin <> prelude <> program`
 the ToCore gate validated), stdin is the fixed `"Hello\n"` of
 `setupTestStdin`, and the golden is the captured stdout. -/
 
+/-- Testcases this fixed three-program link can't run correctly, so they're
+excluded from `evalCases`/`bigStepEvalCases` entirely rather than pinned
+with a golden this harness can only ever get wrong. `TaggedRecordCrossModuleUse`
+imports a third module (`TaggedRecordCrossModuleDef.mlg`) beyond
+Builtin/Prelude to regression-test a #422 cross-module fix; `linkPrograms
+[builtin, prelude, ir]` above has no way to see that third module's compiled
+program, so evaluating the linked result always fails with "Undefined
+variable: Point" here regardless of whether the compiler itself is correct.
+The real CLI's `Query.Engine.fetchLinkedProgram` does link the full
+dependency closure and evaluates this case correctly (verified manually) —
+excluding it here keeps `scripts/cli-gate.sh`'s `eval` mode (which runs that
+real CLI against these same `.golden/Malgo.Sequent.Eval` files) from ever
+diffing a correct answer against a golden this harness structurally cannot
+produce. -/
+def evalHarnessUnsupported : List String := ["TaggedRecordCrossModuleUse"]
+
 private def evalGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     (name : String) : IO String := do
   try
@@ -322,8 +339,8 @@ def enumerateTestcases : IO (List String) := do
     if e.fileName.endsWith ".mlg" then (System.FilePath.mk e.fileName).fileStem else none
   return (names.toArray.qsort (· < ·)).toList
 
-/-- The 18 non-error Parser goldens, mirroring `renameCases`: Builtin/Prelude
-from `runtime/malgo/` plus the 16 representative testcases. Previously only
+/-- The 19 non-error Parser goldens, mirroring `renameCases`: Builtin/Prelude
+from `runtime/malgo/` plus the 17 representative testcases. Previously only
 three were registered, leaving 15 of the committed `.golden/Malgo.Parser`
 files ungated on the Lean side. The `error/*` cases are registered
 separately (`parserErrorCases`) because their goldens are Lean-owned. -/
@@ -1101,6 +1118,7 @@ def main (args : List String) : IO UInt32 := do
   | .ok cfg =>
     let memo ← IO.mkRef ({} : Std.HashMap String Malgo.Driver.AllIR)
     let names ← Malgo.Test.enumerateTestcases
+    let evalNames := names.filter (!Malgo.Test.evalHarnessUnsupported.contains ·)
     let forthNames ← Malgo.Test.enumerateForthTestcases
     let lintNames ← Malgo.Test.enumerateLintCases
     let exampleNames ← Malgo.Test.enumerateExamples
@@ -1110,8 +1128,8 @@ def main (args : List String) : IO UInt32 := do
       ++ Malgo.Test.parserErrorCases parserErrorNames
       ++ Malgo.Test.renameErrorCases renameErrorNames
       ++ Malgo.Test.toCoreCases memo names
-      ++ Malgo.Test.evalCases memo names
-      ++ Malgo.Test.bigStepEvalCases memo names
+      ++ Malgo.Test.evalCases memo evalNames
+      ++ Malgo.Test.bigStepEvalCases memo evalNames
       ++ Malgo.Test.forthCases memo forthNames
       ++ Malgo.Test.lintCases lintNames
       ++ Malgo.Test.prettyIRCases names exampleNames

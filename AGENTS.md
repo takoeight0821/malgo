@@ -174,7 +174,7 @@ All under `lean/Malgo/`.
 - `Malgo.Driver` - Pipeline orchestration
 - `Malgo.Syntax` - Phase-indexed AST
 - `Malgo.Pass` - Compiler pass abstraction
-- `Malgo.Parser.*` - Parsing (Regular and CStyle variants)
+- `Malgo.Parser.*` - Parsing (CStyle grammar; the historical Regular-syntax parser was removed)
 - `Malgo.Rename.*` - Name resolution and desugaring
 - `Malgo.Sequent.Eval` - Interpreter for Join IR
 - `Malgo.Monad` - `MalgoM`, the compiler's monad (`ReaderT Ctx (EIO CompileError)`)

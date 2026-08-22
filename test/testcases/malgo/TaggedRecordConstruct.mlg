@@ -1,9 +1,14 @@
 module {..} = import "../../../runtime/malgo/Builtin.mlg"
 module {..} = import "../../../runtime/malgo/Prelude.mlg"
 
--- #422: `Point { .x -> v, .y -> w }` merges the tag and record fields into
--- one value, rather than nesting the whole record inside the tag as a
--- single positional slot.
+-- #422: in bare (unparenthesized) clause-parameter position, `Point { .x
+-- -> v, .y -> w }` used to mis-parse as two separate patterns (`Point` as
+-- a bare variable, then the record as a second parameter) instead of one
+-- compound pattern; `pTaggedRecordP` fixes the parse. Once parsed as one
+-- `Pat.con Point [record]`/one-argument `Construct`, the existing generic
+-- constructor machinery already handles it — a record-typed constructor
+-- argument is just an ordinary argument that happens to be a record; it
+-- is not merged into the tag.
 data Point = Point { x: Int32, y: Int32 }
 
 def sumPoint = { Point { .x -> x, .y -> y } -> addInt32(x, y) }

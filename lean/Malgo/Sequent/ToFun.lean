@@ -1,4 +1,3 @@
-import Std.Data.TreeMap
 import Malgo.Prelude
 import Malgo.Id
 import Malgo.Module
@@ -83,35 +82,12 @@ def fromLiteral : Literal .unboxed → Fun.Literal
   | .char c => .char c
   | .str s => .string s
 
-/-- `recordFields` maps a record-shaped constructor's tag name (see
-`recordCtorFields`) to its declared field names, in the order
-`fromConstructor` projects them in. A `.con` pattern whose sole argument is
-a record pattern (`Ctor { .field -> pat, ... }`, #422) looks its tag up
-here: a hit reorders the pattern's fields to that declared order and
-destructures positionally; a miss — an ordinary constructor like `Just`
-applied to a record *value* rather than a record-*shaped* one — destructures
-the nested `expand` as a single sub-pattern. `recordCtorFields`'s own
-doc comment covers the case where a miss instead means "record-shaped but
-declared in another module." A field the record pattern omits is simply
-dropped rather than padded with a wildcard — the resulting arity mismatch
-makes `matchMany` reject the clause, the same "list every field, `_` for
-don't-care" discipline positional constructor patterns already require
-elsewhere in this language. -/
-partial def fromPattern (recordFields : Std.TreeMap String (List String)) :
-    Pat .rename → Fun.Pattern
+partial def fromPattern : Pat .rename → Fun.Pattern
   | .var range name => .pvar range name
-  | .con range tag [.record _ fields] =>
-    match recordFields.get? tag.name with
-    | some declared =>
-      let positional := declared.filterMap fun field =>
-        (fields.find? (fun kv => kv.1 == field)).map (fun kv => fromPattern recordFields kv.2)
-      .destruct range (.tag tag.name) positional
-    | none =>
-      .destruct range (.tag tag.name) [fromPattern recordFields (.record range fields)]
-  | .con range tag pats => .destruct range (.tag tag.name) (pats.map (fromPattern recordFields))
-  | .tuple range pats => .destruct range .tuple (pats.map (fromPattern recordFields))
+  | .con range tag pats => .destruct range (.tag tag.name) (pats.map fromPattern)
+  | .tuple range pats => .destruct range .tuple (pats.map fromPattern)
   | .record range fields =>
-    .expand range (sortAssocAscending (fields.map fun (k, p) => (k, fromPattern recordFields p)))
+    .expand range (sortAssocAscending (fields.map fun (k, p) => (k, fromPattern p)))
   | .unboxed range lit => .pliteral range (fromLiteral lit)
   | .list ext _ => nomatch ext
   | .boxed ext _ => nomatch ext
@@ -145,65 +121,18 @@ def countArrows : Ty .rename → Nat
 
 /-! ## Constructors, data defs, foreigns -/
 
-/-- #422: the shape a tagged-record merge applies to — exactly one *closed*
-record-typed parameter (`data B = B { a: Int32, b: Int32 }`). An open row
-(`{a: Int32 | r}`, a `some` row tail) has no closed field set to project or
-key a table by, so it isn't this shape; neither is a type-variable-typed
-parameter (`data Maybe a = Just a`) — `Just { .val -> v, .rest -> r }`
-(used throughout `Json.mlg`/`Lexer.mlg`/`Parser.mlg`) applies an ordinary
-constructor to a record *value*, not a record-*shaped* one. -/
-def closedRecordFields? : List (Ty .rename) → Option (List (String × Ty .rename))
-  | [Ty.record _ fields none] => some fields
-  | _ => none
-
-/-- A record-shaped constructor's closure projects each declared field out
-of the record argument it receives, building the tag and fields into one
-merged value (`Construct B [v, w]`), instead of wrapping the whole record
-as one nested positional slot (`Construct B [record]`). Every other
-constructor keeps its plain curried-lambda shape. -/
 def fromConstructor (mn : ModuleName) :
     Range × Name × List (Ty .rename) → ToFunM (Range × Name × Fun.Expr)
-  | (range, name, parameters) =>
-    match closedRecordFields? parameters with
-    | some fields => do
-      let p ← newTemporalId mn "constructor"
-      let body := Fun.Expr.construct range (.tag name.name)
-        (fields.map fun (field, _) => Fun.Expr.project range (Fun.Expr.var range p) field)
-      pure (range, name, Fun.Expr.lambda range [p] body)
-    | none => do
-      let arity := parameters.length
-      let params ← (List.range arity).mapM (fun _ => newTemporalId mn "constructor")
-      let body := Fun.Expr.construct range (.tag name.name) (params.map (Fun.Expr.var range))
-      let lambda := params.foldr (fun p acc => Fun.Expr.lambda range [p] acc) body
-      pure (range, name, lambda)
+  | (range, name, parameters) => do
+    let arity := parameters.length
+    let params ← (List.range arity).mapM (fun _ => newTemporalId mn "constructor")
+    let body := Fun.Expr.construct range (.tag name.name) (params.map (Fun.Expr.var range))
+    let lambda := params.foldr (fun p acc => Fun.Expr.lambda range [p] acc) body
+    pure (range, name, lambda)
 
 def fromDataDef (mn : ModuleName) :
     DataDef .rename → ToFunM (List (Range × Name × Fun.Expr))
   | (_, _, _, constructors) => constructors.mapM (fromConstructor mn)
-
-/-- The tag→declared-field-order table `fromPattern` consults to recognize a
-#422 record-shaped constructor pattern (`Ctor { .field -> pat, ... }`) and
-flatten it to match `fromConstructor`'s merged representation.
-
-Built from this module's own `dataDefs` only — a constructor's `Ty.record`
-parameter type is known at the point it's declared, not at every site that
-pattern-matches it, and this pass never sees another module's `dataDefs`.
-This is a real gap, not a graceful fallback: `fromConstructor` merges a
-record-shaped constructor's tag and fields unconditionally, wherever it's
-declared, so *every* value of that constructor is merged regardless of
-which module constructs it — but a `Ctor { .field -> pat }` pattern for a
-constructor declared in a *different* module misses this table and falls
-back to `fromPattern`'s nested `destruct [expand ...]` reading, which no
-longer matches any value of that constructor. The clause compiles and
-type-checks; it just never fires. Construction has no such gap (calling a
-constructor's closure works identically from any module) — only pattern
-flattening needs a lookup this table can't yet provide across modules. -/
-def recordCtorFields (dataDefs : List (DataDef .rename)) : Std.TreeMap String (List String) :=
-  dataDefs.foldl (init := ({} : Std.TreeMap String (List String))) fun acc (_, _, _, cons) =>
-    cons.foldl (init := acc) fun acc (_, name, parameters) =>
-      match closedRecordFields? parameters with
-      | some fields => acc.insert name.name (fields.map Prod.fst)
-      | none => acc
 
 def fromForeign (mn : ModuleName) :
     Foreign .rename → ToFunM (Range × Name × Fun.Expr)
@@ -221,103 +150,96 @@ def fromForeign (mn : ModuleName) :
 
 mutual
 
-partial def fromExpr (mn : ModuleName) (recordFields : Std.TreeMap String (List String)) :
-    Expr .rename → ToFunM Fun.Expr
+partial def fromExpr (mn : ModuleName) : Expr .rename → ToFunM Fun.Expr
   | .var range name =>
     if name.isExternal then pure (.invoke range name) else pure (.var range name)
   | .unboxed range lit => pure (.literal range (fromLiteral lit))
   | .apply range f x => do
-    let f' ← fromExpr mn recordFields f
-    let x' ← fromExpr mn recordFields x
+    let f' ← fromExpr mn f
+    let x' ← fromExpr mn x
     pure (.apply range f' [x'])
   | .opApp ext op x y => do
     let range := ext.1
     let f := if op.isExternal then Fun.Expr.invoke range op else Fun.Expr.var range op
-    let x' ← fromExpr mn recordFields x
-    let y' ← fromExpr mn recordFields y
+    let x' ← fromExpr mn x
+    let y' ← fromExpr mn y
     pure (.apply range (.apply range f [x']) [y'])
   | .project range expr field => do
-    let expr' ← fromExpr mn recordFields expr
+    let expr' ← fromExpr mn expr
     pure (.project range expr' field)
   | .fn range clauses => do
     let numPats := match clauses.head with | .mk _ pats _ => pats.length
     let parameters ← (List.range numPats).mapM (fun _ => newTemporalId mn "param")
-    let body ← fromClauses mn recordFields range parameters clauses
+    let body ← fromClauses mn range parameters clauses
     pure (parameters.foldr (fun p acc => Fun.Expr.lambda range [p] acc) body)
   | .tuple range exprs => do
-    let exprs' ← exprs.mapM (fromExpr mn recordFields)
+    let exprs' ← exprs.mapM (fromExpr mn)
     pure (.construct range .tuple exprs')
   | .record range fields => do
-    let fields' ← fields.mapM (fun (k, e) => do let e' ← fromExpr mn recordFields e; pure (k, e'))
+    let fields' ← fields.mapM (fun (k, e) => do let e' ← fromExpr mn e; pure (k, e'))
     pure (.object range (sortAssocAscending fields'))
-  | .ann _ expr _ => fromExpr mn recordFields expr
-  | .seq _ stmts => fromStmts mn recordFields stmts
-  | .parens _ expr => fromExpr mn recordFields expr
-  | .codata range coclauses => fromCoClauses mn recordFields range coclauses
+  | .ann _ expr _ => fromExpr mn expr
+  | .seq _ stmts => fromStmts mn stmts
+  | .parens _ expr => fromExpr mn expr
+  | .codata range coclauses => fromCoClauses mn range coclauses
   | .label range name body => do
-    let body' ← fromExpr mn recordFields body
+    let body' ← fromExpr mn body
     pure (.fix range name body')
   | .goto range value label => do
-    let value' ← fromExpr mn recordFields value
-    let label' ← fromExpr mn recordFields label
+    let value' ← fromExpr mn value
+    let label' ← fromExpr mn label
     pure (.apply range label' [value'])
   | .boxed ext _ => nomatch ext
   | .list ext _ => nomatch ext
 
-partial def fromStmts (mn : ModuleName) (recordFields : Std.TreeMap String (List String)) :
-    NEList (Stmt .rename) → ToFunM Fun.Expr
-  | ⟨.noBind _ expr, []⟩ => fromExpr mn recordFields expr
+partial def fromStmts (mn : ModuleName) : NEList (Stmt .rename) → ToFunM Fun.Expr
+  | ⟨.noBind _ expr, []⟩ => fromExpr mn expr
   | ⟨.noBind range value, stmt :: stmts⟩ => do
     let tmp ← newTemporalId mn "tmp"
-    let value' ← fromExpr mn recordFields value
-    let expr ← fromStmts mn recordFields ⟨stmt, stmts⟩
+    let value' ← fromExpr mn value
+    let expr ← fromStmts mn ⟨stmt, stmts⟩
     pure (.apply range (.lambda range [tmp] expr) [value'])
   | ⟨.letS range name value, stmt :: stmts⟩ => do
-    let value' ← fromExpr mn recordFields value
-    let expr ← fromStmts mn recordFields ⟨stmt, stmts⟩
+    let value' ← fromExpr mn value
+    let expr ← fromStmts mn ⟨stmt, stmts⟩
     pure (.«let» range name value' expr)
-  | ⟨.letS _ _ value, []⟩ => fromExpr mn recordFields value
+  | ⟨.letS _ _ value, []⟩ => fromExpr mn value
   | ⟨.letPS ext _ _, _⟩ => nomatch ext
   | ⟨.withS ext _ _, _⟩ => nomatch ext
 
-partial def fromClauses (mn : ModuleName) (recordFields : Std.TreeMap String (List String))
-    (range : Range) :
+partial def fromClauses (mn : ModuleName) (range : Range) :
     List Name → NEList (Clause .rename) → ToFunM Fun.Expr
   | [parameter], clauses => do
-    let bs ← clauses.toList.mapM (fromClause mn recordFields)
+    let bs ← clauses.toList.mapM (fromClause mn)
     pure (.select range (.var range parameter) bs)
   | parameters, clauses => do
-    let bs ← clauses.toList.mapM (fromClause mn recordFields)
+    let bs ← clauses.toList.mapM (fromClause mn)
     pure (.select range (.construct range .tuple (parameters.map (Fun.Expr.var range))) bs)
 
-partial def fromClause (mn : ModuleName) (recordFields : Std.TreeMap String (List String)) :
-    Clause .rename → ToFunM Fun.Branch
+partial def fromClause (mn : ModuleName) : Clause .rename → ToFunM Fun.Branch
   | .mk range ⟨pat, []⟩ body => do
-    let b ← fromExpr mn recordFields body
-    pure (.branch range (fromPattern recordFields pat) b)
+    let b ← fromExpr mn body
+    pure (.branch range (fromPattern pat) b)
   | .mk range pats body => do
-    let b ← fromExpr mn recordFields body
-    pure (.branch range (.destruct range .tuple (pats.toList.map (fromPattern recordFields))) b)
+    let b ← fromExpr mn body
+    pure (.branch range (.destruct range .tuple (pats.toList.map fromPattern)) b)
 
-partial def fromCoClauses (mn : ModuleName) (recordFields : Std.TreeMap String (List String))
-    (range : Range) :
+partial def fromCoClauses (mn : ModuleName) (range : Range) :
     List (CoClause .rename) → ToFunM Fun.Expr
   | coclauses =>
     let coclauses' := coclauses.map fun (copat, body) =>
-      CoClause'.mk (makeCoPatList copat) [] (fromExpr mn recordFields body)
-    build mn recordFields [] range coclauses'
+      CoClause'.mk (makeCoPatList copat) [] (fromExpr mn body)
+    build mn [] range coclauses'
 
-partial def build (mn : ModuleName) (recordFields : Std.TreeMap String (List String))
-    (scrutinees : List Name) (range : Range)
+partial def build (mn : ModuleName) (scrutinees : List Name) (range : Range)
     (clauses : List CoClause') : ToFunM Fun.Expr :=
   match classify clauses with
-  | .case => buildCase mn recordFields scrutinees range clauses
-  | .field => buildObject mn recordFields scrutinees range clauses
-  | .function => buildLambda mn recordFields scrutinees range clauses
+  | .case => buildCase mn scrutinees range clauses
+  | .field => buildObject mn scrutinees range clauses
+  | .function => buildLambda mn scrutinees range clauses
   | .mismatch => throw (.mismatchCopatterns range)
 
-partial def buildCase (mn : ModuleName) (recordFields : Std.TreeMap String (List String))
-    (scrutinees : List Name) (range : Range)
+partial def buildCase (mn : ModuleName) (scrutinees : List Name) (range : Range)
     (clauses : List CoClause') : ToFunM Fun.Expr :=
   match scrutinees, clauses with
   | [], c :: _ => c.body
@@ -327,7 +249,7 @@ partial def buildCase (mn : ModuleName) (recordFields : Std.TreeMap String (List
     let branches ← noCoPats.mapM (fun c => do
       let b ← c.body
       pure (Fun.Branch.branch range (.destruct range .tuple c.pats) b))
-    let restBody ← build mn recordFields scrutinees range rest
+    let restBody ← build mn scrutinees range rest
     let anyPatterns ← scrutinees.mapM (fun _ => do
       let n ← newTemporalId mn "_"
       pure (Fun.Pattern.pvar range n))
@@ -335,27 +257,24 @@ partial def buildCase (mn : ModuleName) (recordFields : Std.TreeMap String (List
     pure (.select range (.construct range .tuple (scrutinees.map (Fun.Expr.var range)))
       (branches ++ [restBranch]))
 
-partial def buildLambda (mn : ModuleName) (recordFields : Std.TreeMap String (List String))
-    (scrutinees : List Name) (range : Range)
+partial def buildLambda (mn : ModuleName) (scrutinees : List Name) (range : Range)
     (clauses : List CoClause') : ToFunM Fun.Expr := do
   let clauses' ← clauses.mapM (fun c =>
     match c.copats with
-    | .applyP _ pat :: rest =>
-      pure (CoClause'.mk rest (c.pats ++ [fromPattern recordFields pat]) c.body)
+    | .applyP _ pat :: rest => pure (CoClause'.mk rest (c.pats ++ [fromPattern pat]) c.body)
     | _ => throw (.internalError range "invalid function clauses"))
   let param ← newTemporalId mn "param"
-  let body ← build mn recordFields (scrutinees ++ [param]) range clauses'
+  let body ← build mn (scrutinees ++ [param]) range clauses'
   pure (.lambda range [param] body)
 
-partial def buildObject (mn : ModuleName) (recordFields : Std.TreeMap String (List String))
-    (scrutinees : List Name) (range : Range)
+partial def buildObject (mn : ModuleName) (scrutinees : List Name) (range : Range)
     (clauses : List CoClause') : ToFunM Fun.Expr := do
   let grouped ← clauses.foldlM (init := ([] : List (String × List CoClause'))) (fun acc c =>
     match c.copats with
     | .projectP _ field :: rest => pure (insertGrouped field (CoClause'.mk rest c.pats c.body) acc)
     | _ => throw (.internalError range "invalid object clauses"))
   let fields ← grouped.mapM (fun (k, cs) => do
-    let e ← build mn recordFields scrutinees range cs
+    let e ← build mn scrutinees range cs
     pure (k, e))
   pure (.object range fields)
 
@@ -363,15 +282,14 @@ end
 
 /-! ## Entry point -/
 
-def fromScDef (mn : ModuleName) (recordFields : Std.TreeMap String (List String)) :
+def fromScDef (mn : ModuleName) :
     ScDef .rename → ToFunM (Range × Name × Fun.Expr)
   | (range, name, expr) => do
-    let e ← fromExpr mn recordFields expr
+    let e ← fromExpr mn expr
     pure (range, name, e)
 
 def toFun (mn : ModuleName) (bg : BindGroup .rename) : ToFunM Fun.Program := do
-  let recordFields := recordCtorFields bg.dataDefs
-  let scGroups ← bg.scDefs.mapM (fun group => group.mapM (fromScDef mn recordFields))
+  let scGroups ← bg.scDefs.mapM (fun group => group.mapM (fromScDef mn))
   let scDefs := scGroups.flatten
   let dataGroups ← bg.dataDefs.mapM (fromDataDef mn)
   let dataDefs := dataGroups.flatten
@@ -383,35 +301,5 @@ def toFun (mn : ModuleName) (bg : BindGroup .rename) : ToFunM Fun.Program := do
 `ToFunError` into the uniform `CompileError`. -/
 def pass (mn : ModuleName) (bg : BindGroup .rename) : MalgoM Fun.Program :=
   wrapError "ToFun" ToFunError.render ToFunError.range? (toFun mn bg)
-
-/-! #422 regression tests: `Pair`'s fields are declared out of alphabetical
-order (z before a) on purpose, so a `recordCtorFields`/`fromPattern`
-implementation that resorted them (alphabetically, or by pattern-source
-order) rather than keeping the declared order would still pass every
-type-checked `.mlg` golden — record syntax hides positional order from any
-program that only ever addresses fields by name — but would fail here. -/
-section Test
-
-private def r0 : Range := ⟨SourcePos.initial "", SourcePos.initial ""⟩
-private def extId (s : String) : Name := { name := s, moduleName := .moduleName "t", sort := .external }
-
-private def pairDataDef : DataDef .rename :=
-  (r0, extId "Pair", [],
-    [(r0, extId "Pair",
-      [Ty.record r0 [("z", Ty.var r0 (extId "Int32")), ("a", Ty.var r0 (extId "Int32"))] none])])
-
-#guard (recordCtorFields [pairDataDef]).get? "Pair" == some ["z", "a"]
-
-/-- The pattern lists `a` before `z` — the reverse of `Pair`'s declared
-order — to confirm `fromPattern` reorders by declaration, not by how the
-source happens to write the fields. -/
-private def pairPat : Pat .rename :=
-  .con r0 (extId "Pair") [.record r0 [("a", .var r0 (extId "av")), ("z", .var r0 (extId "zv"))]]
-
-#guard Malgo.sShow (fromPattern (recordCtorFields [pairDataDef]) pairPat) ==
-  Malgo.sShow (Fun.Pattern.destruct r0 (Fun.Tag.tag "Pair")
-    [Fun.Pattern.pvar r0 (extId "zv"), Fun.Pattern.pvar r0 (extId "av")])
-
-end Test
 
 end Malgo.Sequent.ToFun

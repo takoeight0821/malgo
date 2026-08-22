@@ -39,7 +39,7 @@ def lexAll = { src acc ->
                 }
                 { if (isBlockCommentStart src)
                 { bindRight (skipBlockComment src) { r -> lexAll r acc } }
-                { bindRight (lexOne src) { {val = tok, rest = rest} -> lexAll rest (Cons tok acc) } }
+                { bindRight (lexOne src) { {.val -> tok, .rest -> rest} -> lexAll rest (Cons tok acc) } }
               }
             }
         }
@@ -166,17 +166,17 @@ def skipBlockCommentInner = { src depth ->
 def lexOne : String -> Either String {val: Token, rest: String}
 def lexOne = { src ->
   if (eqString src "")
-    { Right {val = TkEof, rest = src} }
+    { Right {.val -> TkEof, .rest -> src} }
     { let c = atString 0i64 src;
       let rest = substring src 1i64 (lengthString src);
       case c {
-        '{'  -> Right {val = TkLBrace, rest = rest},
-        '}'  -> Right {val = TkRBrace, rest = rest},
-        '('  -> Right {val = TkLParen, rest = rest},
-        ')'  -> Right {val = TkRParen, rest = rest},
-        '['  -> Right {val = TkLBracket, rest = rest},
-        ']'  -> Right {val = TkRBracket, rest = rest},
-        ','  -> Right {val = TkComma, rest = rest},
+        '{'  -> Right {.val -> TkLBrace, .rest -> rest},
+        '}'  -> Right {.val -> TkRBrace, .rest -> rest},
+        '('  -> Right {.val -> TkLParen, .rest -> rest},
+        ')'  -> Right {.val -> TkRParen, .rest -> rest},
+        '['  -> Right {.val -> TkLBracket, .rest -> rest},
+        ']'  -> Right {.val -> TkRBracket, .rest -> rest},
+        ','  -> Right {.val -> TkComma, .rest -> rest},
         '"'  -> lexString rest "",
         '\'' -> lexChar rest,
         _ ->
@@ -205,9 +205,9 @@ def lexString = { src acc ->
     { let c = atString 0i64 src;
       let tail = substring src 1i64 (lengthString src);
       if (eqChar c '"')
-        { Right {val = TkString (reverseString acc), rest = dropUnboxedSuffix tail} }
+        { Right {.val -> TkString (reverseString acc), .rest -> dropUnboxedSuffix tail} }
         { if (eqChar c '\\')
-            { bindRight (lexEscape tail) { {val = esc, rest = rest} -> lexString rest (consString esc acc) } }
+            { bindRight (lexEscape tail) { {.val -> esc, .rest -> rest} -> lexString rest (consString esc acc) } }
             { lexString tail (consString c acc) }
         }
     }
@@ -224,11 +224,11 @@ def lexChar = { src ->
     { let c = atString 0i64 src;
       let tail = substring src 1i64 (lengthString src);
       if (eqChar c '\\')
-        { bindRight (lexEscape tail) { {val = esc, rest = rest} ->
-            bindRight (expectChar '\'' rest) { r -> Right {val = TkChar esc, rest = dropUnboxedSuffix r} }
+        { bindRight (lexEscape tail) { {.val -> esc, .rest -> rest} ->
+            bindRight (expectChar '\'' rest) { r -> Right {.val -> TkChar esc, .rest -> dropUnboxedSuffix r} }
           }
         }
-        { bindRight (expectChar '\'' tail) { r -> Right {val = TkChar c, rest = dropUnboxedSuffix r} } }
+        { bindRight (expectChar '\'' tail) { r -> Right {.val -> TkChar c, .rest -> dropUnboxedSuffix r} } }
     }
 }
 
@@ -254,13 +254,13 @@ def lexEscape = { src ->
     { let c = atString 0i64 src;
       let rest = substring src 1i64 (lengthString src);
       case c {
-        'n'  -> Right {val = '\n', rest = rest},
-        't'  -> Right {val = '\t', rest = rest},
-        'r'  -> Right {val = '\r', rest = rest},
-        '\\' -> Right {val = '\\', rest = rest},
-        '"'  -> Right {val = '"',  rest = rest},
-        '\'' -> Right {val = '\'', rest = rest},
-        '0'  -> Right {val = '\0', rest = rest},
+        'n'  -> Right {.val -> '\n', .rest -> rest},
+        't'  -> Right {.val -> '\t', .rest -> rest},
+        'r'  -> Right {.val -> '\r', .rest -> rest},
+        '\\' -> Right {.val -> '\\', .rest -> rest},
+        '"'  -> Right {.val -> '"',  .rest -> rest},
+        '\'' -> Right {.val -> '\'', .rest -> rest},
+        '0'  -> Right {.val -> '\0', .rest -> rest},
         _    -> Left (appendString "unknown escape: \\" (consString c ""))
       }
     }
@@ -278,13 +278,13 @@ def lexNumber = { src ->
   if (hasDecimalSuffix rest)
     { let frac = takeDigits (substring rest 1i64 (lengthString rest));
       let rest2 = substring rest (addInt64 1i64 (lengthString frac)) (lengthString rest);
-      Right {val = TkString (appendString digs (appendString "." frac)), rest = dropUnboxedSuffix rest2}
+      Right {.val -> TkString (appendString digs (appendString "." frac)), .rest -> dropUnboxedSuffix rest2}
     }
     { if (hasI64Suffix rest)
-    { Right {val = TkInt64 n64, rest = dropUnboxedSuffix (substring rest 3i64 (lengthString rest))} }
+    { Right {.val -> TkInt64 n64, .rest -> dropUnboxedSuffix (substring rest 3i64 (lengthString rest))} }
     { if (hasI32Suffix rest)
-        { Right {val = TkInt32 (parseIntString32 digs), rest = dropUnboxedSuffix (substring rest 3i64 (lengthString rest))} }
-        { Right {val = TkInt32 (parseIntString32 digs), rest = dropUnboxedSuffix rest} }
+        { Right {.val -> TkInt32 (parseIntString32 digs), .rest -> dropUnboxedSuffix (substring rest 3i64 (lengthString rest))} }
+        { Right {.val -> TkInt32 (parseIntString32 digs), .rest -> dropUnboxedSuffix rest} }
     }
     }
 }
@@ -382,7 +382,7 @@ def lexIdent = { src ->
   let len = identLen src 0i64;
   let name = substring src 0i64 len;
   let rest = substring src len (lengthString src);
-  Right {val = TkIdent name, rest = rest}
+  Right {.val -> TkIdent name, .rest -> rest}
 }
 
 def identLen : String -> Int64 -> Int64
@@ -404,7 +404,7 @@ def lexOp = { src ->
   let len = opLen src 0i64;
   let op = substring src 0i64 len;
   let rest = substring src len (lengthString src);
-  Right {val = TkOp op, rest = rest}
+  Right {.val -> TkOp op, .rest -> rest}
 }
 
 def opLen : String -> Int64 -> Int64
@@ -483,7 +483,7 @@ def lexAllWithPos = { src pos acc ->
                     lexAllWithPos rest newPos acc
                   }
                 }
-                { bindRight (lexOne src) { {val = tok, rest = rest} ->
+                { bindRight (lexOne src) { {.val -> tok, .rest -> rest} ->
                     let consumed = substring src 0i64 (subInt64 (lengthString src) (lengthString rest));
                     let newPos = advancePosStr pos consumed;
                     lexAllWithPos rest newPos (Cons (Located(tok, pos)) acc)

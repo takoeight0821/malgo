@@ -28,7 +28,7 @@ This will be lowered to a Core `Invoke` of `hello` with no arguments.
 - **Function Application**: Arguments are passed with parentheses and commas, e.g., `f(x, y)`.
 - **Data Definition**: Type parameters and constructor arguments use parentheses and commas, e.g., `data Foo(a, b) = Bar(a) | Baz(b)`.
 - **Type Synonym**: `type Pair(a, b) = { fst: a, snd: b }`
-- **Record/Tuple**: Expressed as `{ x, y }` or `{ x = 1, y = 2 }`.
+- **Record/Tuple**: Expressed as `{ x, y }` or `{ .x -> 1, .y -> 2 }`.
 - **List**: `[1, 2, 3]`
 - **Pattern Matching**: Multiple patterns can be written comma-separated, e.g., `def f = { (x, y) -> x + y, (z) -> z }`.
 - **Copatterns**: Supports copattern syntax starting with `#`, e.g., `def g = { #.field -> ... }`.
@@ -46,7 +46,7 @@ def add = { (x, y) -> x + y }
 data Either(a, b) = Left(a) | Right(b)
 
 -- Record
-def person = { name = "Alice", age = 30 }
+def person = { .name -> "Alice", .age -> 30 }
 
 -- Tuple
 def point = { 1, 2 }

@@ -139,7 +139,7 @@ with expr
 
 ### Structured Data
 
-- **Records:** `{ x = 1, y = 2 }`
+- **Records:** `{ .x -> 1, .y -> 2 }`
 - **Lists:** `[1, 2, 3]`, `[]`
 - **Tuples:** `(a, b)`, `(1, "foo")`
 
@@ -151,7 +151,7 @@ with expr
 - **Literal pattern:** `1`, `'a'`, `"foo"`
 - **Constructor pattern:** `Cons x xs`, `Int# x`
 - **Tuple pattern:** `(x, y)`
-- **Record pattern:** `{ x = x, y = y }`
+- **Record pattern:** `{ .x -> x, .y -> y }`
 - **List pattern:** `[x, y, z]`, `[]`
 
 Example:
@@ -213,9 +213,9 @@ foreign import malgo_int64_t_to_string : Int64# -> String#
 ```malgo
 type Point2D = { x : Int32, y : Int32 }
 def zero2D : Point2D
-def zero2D = { x = 0, y = 0 }
+def zero2D = { .x -> 0, .y -> 0 }
 def x2D : Point2D -> Int32
-def x2D = { { x = x, y = _ } -> x }
+def x2D = { { .x -> x, .y -> _ } -> x }
 ```
 
 ### Use of `with` Statements

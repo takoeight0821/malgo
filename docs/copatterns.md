@@ -152,7 +152,7 @@ data Expr x
 
 ### Parsing Strategy
 
-The parser in `lean/Malgo/Parser/Regular.lean` is updated to build this AST:
+The parser in `lean/Malgo/Parser/CStyle.lean` is updated to build this AST:
 
 1.  A `pCoPat` parser handles the left-hand side of a clause. It starts by parsing the `#` hole and then iteratively applies suffixes for projections (`.field`) and applications (`(pattern)`).
 2.  A `pBlock` parser, responsible for `{...}` blocks, is modified to first `try` parsing the content as a `Codata` expression. If it fails (i.e., no `#` is found), it falls back to parsing it as a regular function or record.

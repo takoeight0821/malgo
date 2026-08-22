@@ -1,0 +1,15 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- An embedded NUL byte in an argument can't be represented by the
+-- NUL-terminated wire encoding `runProcess` uses (see Prelude.mlg's
+-- `joinWithNul`) -- without a guard, it silently splits into two argv
+-- elements instead of the one the caller intended (real argument
+-- injection). Both backends share the same guard (`containsNul` +
+-- `failLoudly` in Prelude.mlg, called before either backend's own
+-- `malgo_run_process` dispatch ever runs), so this should fail identically
+-- on both, not diverge.
+def main = { () ->
+  let _ = runProcess "sh" (Cons (appendString "a" (appendString "\0" "b")) Nil);
+  printString "unreached"
+}

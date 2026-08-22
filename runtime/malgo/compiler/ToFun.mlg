@@ -7,16 +7,16 @@ module {..} = import "../../../runtime/malgo/compiler/FunIR.mlg"
 
 def freshName : Int32 -> String -> {count: Int32, name: String}
 def freshName = { count prefix ->
-  {count = addInt32 count 1i32, name = appendString prefix (toStringInt32 count)}
+  {.count -> addInt32 count 1i32, .name -> appendString prefix (toStringInt32 count)}
 }
 
 def makeNFreshParams : Int32 -> Int32 -> String -> {count: Int32, params: List String}
 def makeNFreshParams = { count n prefix ->
   if (eqInt32 n 0i32)
-    { {count = count, params = Nil} }
+    { {.count -> count, .params -> Nil} }
     { let nr = freshName count prefix;
       let restr = makeNFreshParams nr.count (subInt32 n 1i32) prefix;
-      {count = restr.count, params = append (Cons nr.name Nil) restr.params}
+      {.count -> restr.count, .params -> append (Cons nr.name Nil) restr.params}
     }
 }
 
@@ -91,45 +91,45 @@ def caseArity = {
 def lowerExpr : Int32 -> Expr -> {count: Int32, expr: FunExpr}
 def lowerExpr = {
   count (ExVar name) ->
-    {count = count, expr = FunVar name},
+    {.count -> count, .expr -> FunVar name},
   count (ExLit lit) ->
-    {count = count, expr = FunLiteral (lowerLit lit)},
+    {.count -> count, .expr -> FunLiteral (lowerLit lit)},
   count ExUnit ->
-    {count = count, expr = FunConstruct(FunTagTuple, Nil)},
+    {.count -> count, .expr -> FunConstruct(FunTagTuple, Nil)},
   count (ExApp f x) ->
     let fr = lowerExpr count f;
     let xr = lowerExpr fr.count x;
-    {count = xr.count, expr = FunApply(fr.expr, Cons xr.expr Nil)},
+    {.count -> xr.count, .expr -> FunApply(fr.expr, Cons xr.expr Nil)},
   count (ExLet name bindE body) ->
     let er = lowerExpr count bindE;
     let br = lowerExpr er.count body;
-    {count = br.count, expr = FunLet(name, er.expr, br.expr)},
+    {.count -> br.count, .expr -> FunLet(name, er.expr, br.expr)},
   count (ExCase arms) ->
     lowerCase count arms,
   count (ExCoCase arms) ->
     lowerCoCase count arms,
   count (ExRecord fields) ->
     let fr = lowerExprFields count fields;
-    {count = fr.count, expr = FunObject fr.fields},
+    {.count -> fr.count, .expr -> FunObject fr.fields},
   count (ExField e field) ->
     let er = lowerExpr count e;
-    {count = er.count, expr = FunProject(er.expr, field)},
+    {.count -> er.count, .expr -> FunProject(er.expr, field)},
   count (ExTuple exprs) ->
     let er = lowerExprs count exprs;
-    {count = er.count, expr = FunConstruct(FunTagTuple, er.exprs)},
+    {.count -> er.count, .expr -> FunConstruct(FunTagTuple, er.exprs)},
   count (ExArm _ _) ->
-    {count = count, expr = FunLiteral(FunLitString "error: bare arm")},
+    {.count -> count, .expr -> FunLiteral(FunLitString "error: bare arm")},
   count (ExCoArm _ _) ->
-    {count = count, expr = FunLiteral(FunLitString "error: bare coarm")}
+    {.count -> count, .expr -> FunLiteral(FunLitString "error: bare coarm")}
 }
 
 def lowerExprs : Int32 -> List Expr -> {count: Int32, exprs: List FunExpr}
 def lowerExprs = {
-  count Nil -> {count = count, exprs = Nil},
+  count Nil -> {.count -> count, .exprs -> Nil},
   count (Cons e rest) ->
     let er = lowerExpr count e;
     let restr = lowerExprs er.count rest;
-    {count = restr.count, exprs = Cons er.expr restr.exprs}
+    {.count -> restr.count, .exprs -> Cons er.expr restr.exprs}
 }
 
 -- ── ExCase lowering ───────────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ def lowerCase = { count arms ->
       let outerParam = headParam pr.params;
       let restParams = tailParams pr.params;
       let br = lowerCaseArms pr.count restParams arms;
-      {count = br.count, expr = FunLambda(pr.params, FunSelect(FunVar outerParam, br.branches))}
+      {.count -> br.count, .expr -> FunLambda(pr.params, FunSelect(FunVar outerParam, br.branches))}
     }
 }
 
@@ -151,21 +151,21 @@ def lowerCase = { count arms ->
 def lowerZeroArityCase : Int32 -> List Expr -> {count: Int32, expr: FunExpr}
 def lowerZeroArityCase = {
   count Nil ->
-    {count = count, expr = FunLambda(Nil, FunLiteral(FunLitString "error: no arm"))},
+    {.count -> count, .expr -> FunLambda(Nil, FunLiteral(FunLitString "error: no arm"))},
   count (Cons (ExArm _ body) _) ->
     let br = lowerExpr count body;
-    {count = br.count, expr = FunLambda(Nil, br.expr)},
+    {.count -> br.count, .expr -> FunLambda(Nil, br.expr)},
   count (Cons _ _) ->
-    {count = count, expr = FunLambda(Nil, FunLiteral(FunLitString "error: bad arm"))}
+    {.count -> count, .expr -> FunLambda(Nil, FunLiteral(FunLitString "error: bad arm"))}
 }
 
 def lowerCaseArms : Int32 -> List String -> List Expr -> {count: Int32, branches: List FunBranch}
 def lowerCaseArms = {
-  count restParams Nil -> {count = count, branches = Nil},
+  count restParams Nil -> {.count -> count, .branches -> Nil},
   count restParams (Cons arm rest) ->
     let ar = lowerCaseArm count restParams arm;
     let restr = lowerCaseArms ar.count restParams rest;
-    {count = restr.count, branches = Cons ar.branch restr.branches}
+    {.count -> restr.count, .branches -> Cons ar.branch restr.branches}
 }
 
 def lowerCaseArm : Int32 -> List String -> Expr -> {count: Int32, branch: FunBranch}
@@ -174,13 +174,13 @@ def lowerCaseArm = {
     let br = lowerExpr count body;
     case pats {
       Nil ->
-        {count = br.count, branch = FunBranch(FunPWild, br.expr)},
+        {.count -> br.count, .branch -> FunBranch(FunPWild, br.expr)},
       (Cons outerPat restPats) ->
         let branchBody = buildBranchBody restParams restPats br.expr;
-        {count = br.count, branch = FunBranch(lowerPat outerPat, branchBody)}
+        {.count -> br.count, .branch -> FunBranch(lowerPat outerPat, branchBody)}
     },
   count restParams _ ->
-    {count = count, branch = FunBranch(FunPWild, FunLiteral(FunLitString "error: bad arm"))}
+    {.count -> count, .branch -> FunBranch(FunPWild, FunLiteral(FunLitString "error: bad arm"))}
 }
 
 -- ── ExCoCase lowering ─────────────────────────────────────────────────────────
@@ -196,32 +196,32 @@ def lowerCoCase : Int32 -> List Expr -> {count: Int32, expr: FunExpr}
 def lowerCoCase = { count arms ->
   if (allFieldCoArms arms)
     { let fr = lowerCoArmFields count arms;
-      {count = fr.count, expr = FunObject fr.fields}
+      {.count -> fr.count, .expr -> FunObject fr.fields}
     }
     { let nr = freshName count "co";
       let br = lowerCoApplyBranches nr.count arms;
-      {count = br.count, expr = FunLambda(Cons nr.name Nil, FunSelect(FunVar nr.name, br.branches))}
+      {.count -> br.count, .expr -> FunLambda(Cons nr.name Nil, FunSelect(FunVar nr.name, br.branches))}
     }
 }
 
 def lowerCoArmFields : Int32 -> List Expr -> {count: Int32, fields: List FunField}
 def lowerCoArmFields = {
-  count Nil -> {count = count, fields = Nil},
+  count Nil -> {.count -> count, .fields -> Nil},
   count (Cons (ExCoArm (Cons (CoField field) _) body) rest) ->
     let br = lowerExpr count body;
     let restr = lowerCoArmFields br.count rest;
-    {count = restr.count, fields = Cons (FunField(field, br.expr)) restr.fields},
+    {.count -> restr.count, .fields -> Cons (FunField(field, br.expr)) restr.fields},
   count (Cons _ rest) -> lowerCoArmFields count rest
 }
 
 def lowerCoApplyBranches : Int32 -> List Expr -> {count: Int32, branches: List FunBranch}
 def lowerCoApplyBranches = {
-  count Nil -> {count = count, branches = Nil},
+  count Nil -> {.count -> count, .branches -> Nil},
   count (Cons (ExCoArm segs body) rest) ->
     let pat = coSegsToFunPat segs;
     let br = lowerExpr count body;
     let restr = lowerCoApplyBranches br.count rest;
-    {count = restr.count, branches = Cons (FunBranch(pat, br.expr)) restr.branches},
+    {.count -> restr.count, .branches -> Cons (FunBranch(pat, br.expr)) restr.branches},
   count (Cons _ rest) -> lowerCoApplyBranches count rest
 }
 
@@ -238,11 +238,11 @@ def coSegsToFunPat = {
 
 def lowerExprFields : Int32 -> List ExprField -> {count: Int32, fields: List FunField}
 def lowerExprFields = {
-  count Nil -> {count = count, fields = Nil},
+  count Nil -> {.count -> count, .fields -> Nil},
   count (Cons (ExprField n e) rest) ->
     let er = lowerExpr count e;
     let restr = lowerExprFields er.count rest;
-    {count = restr.count, fields = Cons (FunField(n, er.expr)) restr.fields}
+    {.count -> restr.count, .fields -> Cons (FunField(n, er.expr)) restr.fields}
 }
 
 -- ── Declaration lowering ──────────────────────────────────────────────────────
@@ -251,48 +251,48 @@ def lowerDecl : Int32 -> Decl -> {count: Int32, defs: List FunDef}
 def lowerDecl = {
   count (DeclDef name expr) ->
     let er = lowerExpr count expr;
-    {count = er.count, defs = Cons (FunDef(name, er.expr)) Nil},
+    {.count -> er.count, .defs -> Cons (FunDef(name, er.expr)) Nil},
   count (DeclData _ _ cons) ->
     lowerConstructors count cons,
   count (DeclForeign name _) ->
-    {count = count, defs = Cons (FunDef(name, FunPrimitive(name, Nil))) Nil},
+    {.count -> count, .defs -> Cons (FunDef(name, FunPrimitive(name, Nil))) Nil},
   count (DeclImport _ _) ->
-    {count = count, defs = Nil},
+    {.count -> count, .defs -> Nil},
   count (DeclTypeSig _ _) ->
-    {count = count, defs = Nil},
+    {.count -> count, .defs -> Nil},
   count (DeclTypeSynonym _ _ _) ->
-    {count = count, defs = Nil},
+    {.count -> count, .defs -> Nil},
   count (DeclInfix _ _ _) ->
-    {count = count, defs = Nil}
+    {.count -> count, .defs -> Nil}
 }
 
 def lowerConstructors : Int32 -> List ConDecl -> {count: Int32, defs: List FunDef}
 def lowerConstructors = {
-  count Nil -> {count = count, defs = Nil},
+  count Nil -> {.count -> count, .defs -> Nil},
   count (Cons (ConDecl name arity) rest) ->
     let dr = makeConstructorDef count name arity;
     let restr = lowerConstructors dr.count rest;
-    {count = restr.count, defs = append dr.defs restr.defs}
+    {.count -> restr.count, .defs -> append dr.defs restr.defs}
 }
 
 def makeConstructorDef : Int32 -> String -> Int32 -> {count: Int32, defs: List FunDef}
 def makeConstructorDef = { count name arity ->
   if (eqInt32 arity 0i32)
-    { {count = count, defs = Cons (FunDef(name, FunConstruct(FunTagCon name, Nil))) Nil} }
+    { {.count -> count, .defs -> Cons (FunDef(name, FunConstruct(FunTagCon name, Nil))) Nil} }
     { let pr = makeNFreshParams count arity "con";
       let params = pr.params;
       let body = FunConstruct(FunTagCon name, mapList { s -> FunVar s } params);
-      {count = pr.count, defs = Cons (FunDef(name, FunLambda(params, body))) Nil}
+      {.count -> pr.count, .defs -> Cons (FunDef(name, FunLambda(params, body))) Nil}
     }
 }
 
 def lowerDecls : Int32 -> List Decl -> {count: Int32, defs: List FunDef}
 def lowerDecls = {
-  count Nil -> {count = count, defs = Nil},
+  count Nil -> {.count -> count, .defs -> Nil},
   count (Cons d rest) ->
     let dr = lowerDecl count d;
     let restr = lowerDecls dr.count rest;
-    {count = restr.count, defs = append dr.defs restr.defs}
+    {.count -> restr.count, .defs -> append dr.defs restr.defs}
 }
 
 -- ── Module lowering ───────────────────────────────────────────────────────────

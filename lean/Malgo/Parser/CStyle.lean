@@ -290,8 +290,9 @@ partial def pRecord : P (Expr .parse) := P.captureRange do
   pure fun range => Expr.record range fields.toList
 
 partial def pRecordField : P (String × Expr .parse) := do
+  P.reservedOperator "."
   let field ← P.ident
-  P.reservedOperator "="
+  P.reservedOperator "->"
   let value ← pExpr
   pure (field, value)
 
@@ -378,7 +379,9 @@ partial def pPat : P (Pat .parse) :=
   P.attempt pConP <|> pAtomPat
 
 partial def pAtomPat : P (Pat .parse) :=
-  P.choice [pVarP, pLiteralP, P.attempt pTupleP, P.attempt pParensTupleP, pRecordP, pListP]
+  P.choice
+    [P.attempt pTaggedRecordP, pVarP, pLiteralP, P.attempt pTupleP, P.attempt pParensTupleP,
+      pRecordP, pListP]
 
 partial def pConP : P (Pat .parse) := P.captureRange do
   let constructor ← P.ident
@@ -405,9 +408,27 @@ partial def pRecordP : P (Pat .parse) := P.captureRange do
   let fields ← P.between (P.symbol "{") (P.symbol "}") (P.sepEndBy1 pRecordPField (P.symbol ","))
   pure fun range => Pat.record range fields.toList
 
+/-- `Ctor { .field -> pat, ... }` as a single compound pattern (#422): a
+bare identifier immediately followed by a record pattern, nothing else
+trailing. `pConP` already parses this shape when reached through `pPat`
+(e.g. inside `(Ctor { .field -> pat })`'s parens), but `pClause`'s bare,
+unparenthesized parameter list calls `pAtomPat` directly and never reaches
+`pConP`; this production covers that position. Tried before `pVarP` in
+`pAtomPat` so the identifier isn't consumed on its own with the record
+pattern left to be picked up as a *separate* clause parameter.
+`Ctor pat1 pat2 ...` (positional, no record) is unaffected — that shape
+still needs explicit parens, e.g. `(Cons x xs)`, since consuming trailing
+atoms unconditionally would make `f x (Cons y ys)` ambiguous with
+`f x Cons y ys` read as four curried parameters. -/
+partial def pTaggedRecordP : P (Pat .parse) := P.captureRange do
+  let constructor ← P.ident
+  let record ← pRecordP
+  pure fun range => Pat.con range constructor [record]
+
 partial def pRecordPField : P (String × Pat .parse) := do
+  P.reservedOperator "."
   let field ← P.ident
-  P.reservedOperator "="
+  P.reservedOperator "->"
   let value ← pPat
   pure (field, value)
 

@@ -1,0 +1,34 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- Chez's `get-string-all` returns the EOF object (not "") when a port
+-- yields zero bytes -- readFile on a 0-byte file, and getContents on
+-- already-exhausted stdin, both hit this on the Scheme backend and need
+-- the same `(if (eof-object? s) "" s)` guard `malgo_get_line` already had.
+--
+-- `call-with-output-file` opens in Chez's default exclusive-create mode,
+-- erroring "file exists" the instant the target already has content --
+-- writeFile on an existing file (a common overwrite pattern) crashed on
+-- the Scheme backend only. Fixed with `(open-output-file path 'replace)`.
+--
+-- Not diffed against the interpreter output line-by-line via this script
+-- (unlike RunProcess.mlg's fixtures): the assertions themselves are the
+-- check, printed as pass/fail markers so a compile-time-only regression
+-- (a syntax error) still shows up as a compile failure, not a silent skip.
+def assertEq : String -> String -> String -> ()
+def assertEq = { caseName expected actual ->
+  if (eqString expected actual)
+    { putStrLn (appendString "ok: " caseName) }
+    { putStrLn (appendString "FAIL: " (appendString caseName (appendString " expected=" (appendString expected (appendString " actual=" actual))))) }
+}
+
+def main = { () ->
+  writeFile "/tmp/malgo-rwfile-empty.txt" "";
+  let empty = readFile "/tmp/malgo-rwfile-empty.txt";
+  assertEq "readFile on 0-byte file" "" empty;
+
+  writeFile "/tmp/malgo-rwfile-overwrite.txt" "first version, long enough to matter";
+  writeFile "/tmp/malgo-rwfile-overwrite.txt" "second";
+  let overwritten = readFile "/tmp/malgo-rwfile-overwrite.txt";
+  assertEq "writeFile overwrites an existing file" "second" overwritten
+}

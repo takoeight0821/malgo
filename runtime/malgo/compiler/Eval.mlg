@@ -303,7 +303,7 @@ def keepScopedValue = { scopedEnv v ->
 def matchCoApply : Env -> List Pat -> List Value -> Either String {env: Env, rest: List Value}
 def matchCoApply = { lEnv pats args ->
   case pats {
-    Nil -> Right {env = lEnv, rest = args},
+    Nil -> Right {.env -> lEnv, .rest -> args},
     (Cons pat patRest) ->
       case args {
         Nil -> Left "mismatch",
@@ -319,13 +319,13 @@ def matchCoPrefix : Env -> List Value -> String -> List CoSeg -> Either String {
 def matchCoPrefix = {
   lEnv args field Nil -> Left "mismatch",
   lEnv args field (Cons (CoApply pats) restSegs) ->
-    bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
+    bindRight (matchCoApply lEnv pats args) { {.env -> lEnv2, .rest -> remainingArgs} ->
       matchCoPrefix lEnv2 remainingArgs field restSegs
     },
   lEnv args field (Cons (CoField name) restSegs) ->
     if (eqString name field)
       { case args {
-          Nil -> Right {env = lEnv, rest = restSegs},
+          Nil -> Right {.env -> lEnv, .rest -> restSegs},
           _ -> Left "mismatch"
         }
       }
@@ -357,7 +357,7 @@ def matchCoApplyOnly = {
       _ -> Left "mismatch"
     },
   lEnv args (Cons (CoApply pats) restSegs) ->
-    bindRight (matchCoApply lEnv pats args) { {env = lEnv2, rest = remainingArgs} ->
+    bindRight (matchCoApply lEnv pats args) { {.env -> lEnv2, .rest -> remainingArgs} ->
       matchCoApplyOnly lEnv2 remainingArgs restSegs
     },
   lEnv args (Cons (CoField _) restSegs) -> Left "mismatch"
@@ -390,7 +390,7 @@ def projectCoArms = { gEnv lEnv acc field arms conts contEnv ->
     (Cons (ExCoArm segs body) restArms) ->
       case (matchCoPrefix lEnv acc field segs) {
         (Left _) -> projectCoArms gEnv lEnv acc field restArms conts contEnv,
-        (Right {env = armEnv, rest = restSegs}) ->
+        (Right {.env -> armEnv, .rest -> restSegs}) ->
           case restSegs {
             Nil -> eval gEnv armEnv body,
             _ -> projectCoArms gEnv lEnv acc field restArms (append conts (Cons (ExCoArm(restSegs, body)) Nil)) (Just armEnv)
@@ -406,7 +406,7 @@ def projectCoArms = { gEnv lEnv acc field arms conts contEnv ->
 -- Only DeclImport uses bindRight since it's the only decl that can fail or update state.
 def evalDecls : Env -> CompilerState -> List Decl -> Either String {state: CompilerState, env: Env}
 def evalDecls = {
-  gEnv state Nil -> Right {state = state, env = gEnv},
+  gEnv state Nil -> Right {.state -> state, .env -> gEnv},
   gEnv state (Cons (DeclDef name expr) rest) ->
     case (envLookup name gEnv) {
       (Just (VBuiltin _ _ _)) -> evalDecls gEnv state rest,
@@ -415,7 +415,7 @@ def evalDecls = {
   gEnv state (Cons (DeclData _ _ cons) rest) ->
     evalDecls (addConstructors gEnv cons) state rest,
   gEnv state (Cons (DeclImport target path) rest) ->
-    bindRight (evalImport gEnv state target path) { {state = state2, env = gEnv2} ->
+    bindRight (evalImport gEnv state target path) { {.state -> state2, .env -> gEnv2} ->
       evalDecls gEnv2 state2 rest
     },
   gEnv state (Cons (DeclForeign fname _) rest) ->
@@ -635,6 +635,17 @@ def joinWithArrow = {
 
 -- ─── Import evaluation with full target enforcement ──────────────────────────
 
+-- `import Builtin.mlg` never actually reads/parses that file below -- it
+-- substitutes `makeBaseEnv`'s synthetic roster (builtinNames/
+-- preludeBuiltinNames + applyBuiltinN's dispatch + foreignArityN) instead.
+-- Any Builtin.mlg name a real program can reference under self-hosting has
+-- to be manually mirrored into all three of those, in sync by hand -- there
+-- is no way for a name to "just work" here by virtue of being a normal
+-- equation in the real file, however ordinary its definition. Two names
+-- (`not`, `neChar`) were missing this way until a nix-config script port
+-- exercised them for the first time; if a future Prelude/Builtin addition
+-- goes "undefined: <name>" only under self-hosting (selfhost-golden.sh),
+-- start here, not in the parser or the real interpreter.
 def isPreloadedImport : String -> Bool
 def isPreloadedImport = { path ->
   eqString path "runtime/malgo/Builtin.mlg"
@@ -645,19 +656,19 @@ def evalImport = { gEnv state target rawPath ->
   let path = normalizeImportPathFrom (stateCurrentDir state) rawPath;
   if (isPreloadedImport path)
     { bindRight (extendFromModuleEnv target gEnv makeBaseEnv) { newEnv ->
-        Right {state = state, env = newEnv}
+        Right {.state -> state, .env -> newEnv}
       }
     }
     { case (cacheLookup path (stateCache state)) {
         (Just Loading) -> Left (formatImportCycle path (stateStack state)),
         (Just (Loaded moduleEnv)) ->
           bindRight (extendFromModuleEnv target gEnv moduleEnv) { newEnv ->
-            Right {state = state, env = newEnv}
+            Right {.state -> state, .env -> newEnv}
           },
         Nothing ->
-          bindRight (loadModule makeBaseEnv state path) { {state = nextState, moduleEnv = moduleEnv} ->
+          bindRight (loadModule makeBaseEnv state path) { {.state -> nextState, .moduleEnv -> moduleEnv} ->
             bindRight (extendFromModuleEnv target gEnv moduleEnv) { newEnv ->
-              Right {state = nextState, env = newEnv}
+              Right {.state -> nextState, .env -> newEnv}
             }
           }
       }
@@ -672,9 +683,9 @@ def loadModule = { baseEnv state path ->
   let src = readFile path;
   bindRight (tokenize src) { toks ->
     bindRight (parseModule toks) { m ->
-      bindRight (evalModuleWithState baseEnv loadingState m) { {state = loadedState, env = moduleEnv} ->
+      bindRight (evalModuleWithState baseEnv loadingState m) { {.state -> loadedState, .env -> moduleEnv} ->
         let cachedState = withLoadedModuleEnv path moduleEnv loadedState;
-        Right {state = restoreModuleContext parentDir parentStack cachedState, moduleEnv = moduleEnv}
+        Right {.state -> restoreModuleContext parentDir parentStack cachedState, .moduleEnv -> moduleEnv}
       }
     }
   }
@@ -860,6 +871,7 @@ def applyBuiltin3 = { gEnv name args ->
     "isUpper"       -> case args { (Cons (VChar c) Nil) -> Right (boolVal (isUpper c)),    _ -> Left "isUpper: type error" },
     "isLower"       -> case args { (Cons (VChar c) Nil) -> Right (boolVal (isLower c)),    _ -> Left "isLower: type error" },
     "isAlphanum"    -> case args { (Cons (VChar c) Nil) -> Right (boolVal (isAlphanum c)), _ -> Left "isAlphanum: type error" },
+    "not"           -> case args { (Cons v Nil) -> Right (boolVal (not (isTrueCon v))), _ -> Left "not: type error" },
     "ordChar"       -> case args { (Cons (VChar c) Nil) -> Right (VInt32 (ordChar c)),     _ -> Left "ordChar: type error" },
     "chrInt32"      -> case args { (Cons (VInt32 n) Nil) -> Right (VChar (chrInt32 n)),    _ -> Left "chrInt32: type error" },
     -- "if": Bool -> thunk -> thunk -> a
@@ -971,6 +983,7 @@ def applyBuiltin8 : Env -> String -> List Value -> Either String Value
 def applyBuiltin8 = { gEnv name args ->
   case name {
     "eqChar" -> case args { (Cons (VChar a) (Cons (VChar b) Nil)) -> Right (boolVal (eqChar a b)), _ -> Left "eqChar: type error" },
+    "neChar" -> case args { (Cons (VChar a) (Cons (VChar b) Nil)) -> Right (boolVal (neChar a b)), _ -> Left "neChar: type error" },
     "geInt32" -> case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (geInt32 a b)), _ -> Left "geInt32: type error" },
     "neInt32" -> case args { (Cons (VInt32 a) (Cons (VInt32 b) Nil)) -> Right (boolVal (neInt32 a b)), _ -> Left "neInt32: type error" },
     "neInt64" -> case args { (Cons (VInt64 a) (Cons (VInt64 b) Nil)) -> Right (boolVal (neInt64 a b)), _ -> Left "neInt64: type error" },
@@ -1005,6 +1018,12 @@ def applyBuiltin9 = { gEnv name args ->
     "malgo_unsafe_cast" -> case args { (Cons x Nil) -> Right x, _ -> Left "malgo_unsafe_cast: type error" },
     "getRawArgs" -> case args { (Cons VUnit Nil) -> Right (VString (dropFirstLine (getRawArgs ()))), _ -> Left "getRawArgs: type error" },
     "readFile" -> case args { (Cons (VString path) Nil) -> Right (VString (readFile path)), _ -> Left "readFile: type error" },
+    -- `hasEnv#`/`getEnvRaw#` are unboxed (String# -> Int32#/String#) in the
+    -- real Builtin.mlg, but this evaluator's Value model boxes String/Int32
+    -- (see `VString`/`VInt32` next to `readFile`/`negInt32` above), so the
+    -- boxed constructor pattern is destructured first and the result reboxed.
+    "hasEnv#" -> case args { (Cons (VString (String# s)) Nil) -> Right (VInt32 (Int32# (malgo_has_env s))), _ -> Left "hasEnv#: type error" },
+    "getEnvRaw#" -> case args { (Cons (VString (String# s)) Nil) -> Right (VString (String# (malgo_get_env s))), _ -> Left "getEnvRaw#: type error" },
     "charToString" -> case args { (Cons (VChar c) Nil) -> Right (VString (consString c "")), _ -> Left "charToString: type error" },
     "modInt64#" -> applyInt64_2 modInt64 "modInt64#" args,
     "malgo_mod_int64_t" -> applyInt64_2 modInt64 "malgo_mod_int64_t" args,
@@ -1044,7 +1063,15 @@ def valueToText = {
   (VScoped _ v) -> valueToText v,
   (VClosure _ _ _) -> "<function>",
   (VCoClosure _ _ _) -> "<codata>",
-  (VRecord fields) -> showValue (VRecord fields),
+  -- Matches Malgo.Sequent.Eval.valueToText (the Lean interpreter, the
+  -- oracle this self-hosted evaluator is checked against): records always
+  -- render as the literal "<record>", never pretty-printed. The previous
+  -- `showValue (VRecord fields)` delegation was wrong on two counts, not
+  -- just format -- `showValue` is the separate, debug-oriented "show any
+  -- Value" function used by error messages (see its "cannot apply: ..."
+  -- call site above), and its own `VThunk` case renders unforced field
+  -- thunks as the literal text "<thunk>" instead of forcing them.
+  (VRecord _) -> "<record>",
   (VBuiltin name _ _) -> appendString "<builtin:" (appendString name ">"),
   (VThunk _ _) -> "<thunk>"
 }
@@ -1096,6 +1123,7 @@ def foreignArity3 = {
   "isAlphanum"    -> 1i32,
   "ordChar"       -> 1i32,
   "chrInt32"      -> 1i32,
+  "not"           -> 1i32,
   "if"            -> 3i32,
   "case"          -> 2i32,
   name -> foreignArity4 name
@@ -1177,6 +1205,7 @@ def foreignArity7 = {
 def foreignArity8 : String -> Int32
 def foreignArity8 = {
   "eqChar" -> 2i32,
+  "neChar" -> 2i32,
   "geInt32" -> 2i32,
   "neInt32" -> 2i32,
   "neInt64" -> 2i32,
@@ -1209,6 +1238,14 @@ def foreignArity9 = {
   "malgo_gt_int64_t" -> 2i32,
   "malgo_ge_int64_t" -> 2i32,
   "malgo_ne_int64_t" -> 2i32,
+  -- Registered explicitly, not relying on the `_ -> 1i32` fallback below:
+  -- both happen to be arity 1 today, but that's a coincidence this table
+  -- shouldn't depend on silently -- a future primitive added the same way
+  -- (in `builtinNames`/`applyBuiltin`'s dispatch, forgotten here) with a
+  -- higher arity would have `VBuiltin` saturate and fire one argument too
+  -- early, a real wrong-arity bug, not just a missing name.
+  "hasEnv#" -> 1i32,
+  "getEnvRaw#" -> 1i32,
   _ -> 1i32
 }
 
@@ -1231,8 +1268,9 @@ def coreBuiltinNames =
   Cons "toStringInt64" (Cons "lengthString" (Cons "atString" (Cons "consString" (
   Cons "substring" (Cons "reverseString" (Cons "isDigit" (Cons "isUpper" (
   Cons "isLower" (Cons "isAlphanum" (Cons "ordChar" (Cons "chrInt32" (
+  Cons "not" (
   Cons "if" (Cons "case" Nil
-  )))))))))))))))))))))))))))
+  ))))))))))))))))))))))))))))
 
 def extraBuiltinNames : List String
 def extraBuiltinNames = append ioBuiltinNames (append int64BuiltinNames (append rawInt32BuiltinNames (append stringConvBuiltinNames (append wrapperBuiltinNames preludeBuiltinNames))))
@@ -1274,14 +1312,14 @@ def preludeBuiltinNames : List String
 def preludeBuiltinNames =
   Cons "max" (Cons "min" (Cons "abs" (Cons "const" (Cons "getContents" (Cons "print" (Cons "malgo_print" (Cons "toStringDouble" (Cons "negInt32" (
   Cons "addDouble#" (Cons "subDouble#" (Cons "mulDouble#" (Cons "goto" (
-  Cons "eqChar" (Cons "geInt32" (Cons "neInt32" (Cons "neInt64" (Cons "geInt64" (Cons "negInt64" (Cons "modInt64" (
+  Cons "eqChar" (Cons "neChar" (Cons "geInt32" (Cons "neInt32" (Cons "neInt64" (Cons "geInt64" (Cons "negInt64" (Cons "modInt64" (
   Cons "exitSuccess" (Cons "malgo_exit_success" (Cons "malgo_panic" (Cons "malgo_unsafe_cast" (
-  Cons "getRawArgs" (Cons "readFile" (Cons "charToString" (Cons "modInt64#" (
+  Cons "getRawArgs" (Cons "readFile" (Cons "charToString" (Cons "hasEnv#" (Cons "getEnvRaw#" (Cons "modInt64#" (
   Cons "malgo_mod_int64_t" (Cons "malgo_neg_int64_t" (Cons "malgo_mod_int32_t" (Cons "malgo_neg_int32_t" (
   Cons "malgo_gt_int32_t" (Cons "malgo_ge_int32_t" (Cons "malgo_ne_int32_t" (
   Cons "malgo_eq_int64_t" (Cons "malgo_lt_int64_t" (Cons "malgo_le_int64_t" (
   Cons "malgo_gt_int64_t" (Cons "malgo_ge_int64_t" (Cons "malgo_ne_int64_t" Nil
-  ))))))))))))))))))))))))))))))))))))))))
+  )))))))))))))))))))))))))))))))))))))))))))
 def makeBaseEnv : Env
 def makeBaseEnv = addBaseConstructors (foldl addBuiltin EnvEmpty builtinNames)
 
@@ -1302,7 +1340,7 @@ def evalModuleWithState = { baseEnv state (Module decls) -> evalDecls baseEnv st
 
 def evalModule : Env -> Module -> Either String Env
 def evalModule = { baseEnv modl ->
-  bindRight (evalModuleWithState baseEnv emptyState modl) { {state = _, env = moduleEnv} ->
+  bindRight (evalModuleWithState baseEnv emptyState modl) { {.state -> _, .env -> moduleEnv} ->
     Right moduleEnv
   }
 }
@@ -1319,7 +1357,7 @@ def evalModuleAt = { baseEnv sourcePath modl ->
           dirname normalizedPath
         )
       };
-  bindRight (evalModuleWithState baseEnv initialState modl) { {state = _, env = moduleEnv} ->
+  bindRight (evalModuleWithState baseEnv initialState modl) { {.state -> _, .env -> moduleEnv} ->
     Right moduleEnv
   }
 }

@@ -42,7 +42,7 @@ ParserPass → RenamePass → [InferPass] → [RefinePass]
     ↓
 ToFunPass → ToCorePass → FlatPass → JoinPass
     ↓
-EvalPass (Interpreter) | ZigPass (--target zig / malgo compile)
+EvalPass (Interpreter) | SchemePass (--target scheme) | ZigPass (--target zig / malgo compile)
 ```
 
 **Note**: InferPass and RefinePass can be skipped for fast evaluation without type checking.
@@ -52,7 +52,43 @@ conversion: it inlines a fully(-or-over-)saturated call of a data constructor
 (`Cons x xs`, or `Cons (f x) (mapList f xs)` — arguments need not be
 immediate) directly into `Fun.Construct`, instead of invoking the
 constructor's own curried closure. This is shared by every backend
-(Eval/Zig) and every direct caller of `toCore`, not Zig-specific.
+(Eval/Scheme/Zig) and every direct caller of `toCore`, not Zig-specific.
+
+### Chez Scheme Backend
+
+`malgo eval --target scheme SOURCE` lowers Join IR directly to Chez Scheme
+source text (`lean/Malgo/Backend/Scheme.lean`, `Driver.compileScheme`) — no
+closure-conversion/RC pass in between, since Scheme has native closures and
+GC. This backend has been added and removed twice before (see `lean/README.md`'s
+M4 entry and the git history around #386/#401/#404) as a disposable
+performance-comparison tool; it is being kept this time because
+[nix-config](https://github.com/takoeight0821/nix-config) is a standing
+consumer, compiling `.mlg` task scripts to `.scm` and running them with
+`chez-scheme` — faster and more stable than the Zig backend for this kind of
+workload (`docs/plans/2026-08-11-chez-scheme-backend-and-nix-config-scripting.md`
+has the full rationale). Unlike its two prior lives, it now has a real
+correctness gate: `bash scripts/scheme-golden.sh` (73/73, mirroring
+`zig-golden.sh`'s structure).
+
+Two bugs found while adding that gate, both in `schemeRuntime`'s
+`malgo-print-value` and `compileStatement`'s `.cut` case (present since the
+Haskell-era original, not introduced by this restoration):
+
+- **Constructor/tuple printing used S-expression syntax** (`(Name arg1 arg2)`)
+  instead of matching `Eval.lean`'s `valueToText` (`Name(arg1, arg2)` for
+  tagged constructors, `{arg1, arg2}` for tuples — tuples and constructors
+  share the same `(list 'tag arg...)` Scheme representation, keyed off the
+  reserved tag string `"tuple"` from `compileTag`, so the printer must special-
+  case it).
+- **`cut (mu a. c) b` compiled backwards.** A `mu`-bound producer (what
+  `label`/`goto` desugar to) compiles to a Scheme closure awaiting its
+  consumer as an argument, but the generic `.cut` case handed that closure
+  *to* the consumer as a value instead of applying it *with* the consumer —
+  the classic mu-reduction (`c[a := b]`) needs direct substitution
+  (`(let ((a b)) c)`), not the generic case's `(b producer)`. This is why
+  `label`/`goto` (and *only* that construct) broke: every other `Producer`
+  variant compiles to a plain first-order value, for which the generic case
+  is correct.
 
 ### Zig Backend (native executables)
 
@@ -138,7 +174,7 @@ All under `lean/Malgo/`.
 - `Malgo.Driver` - Pipeline orchestration
 - `Malgo.Syntax` - Phase-indexed AST
 - `Malgo.Pass` - Compiler pass abstraction
-- `Malgo.Parser.*` - Parsing (Regular and CStyle variants)
+- `Malgo.Parser.*` - Parsing (CStyle grammar; the historical Regular-syntax parser was removed)
 - `Malgo.Rename.*` - Name resolution and desugaring
 - `Malgo.Sequent.Eval` - Interpreter for Join IR
 - `Malgo.Monad` - `MalgoM`, the compiler's monad (`ReaderT Ctx (EIO CompileError)`)

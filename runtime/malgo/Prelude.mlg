@@ -31,6 +31,53 @@ def orElse = {
   Nothing  k -> k ()
 }
 
+-- Chain a `Maybe`-returning step onto another, short-circuiting on
+-- `Nothing` -- the `Maybe` counterpart to Either.mlg's `bindRight`. A
+-- multi-step recursive-descent parser (see runtime/malgo/Json.mlg) is
+-- exactly the kind of thing that needs this at every step, not just once
+-- or twice.
+def bindMaybe : Maybe a -> (a -> Maybe b) -> Maybe b
+def bindMaybe = {
+  Nothing  _ -> Nothing,
+  (Just x) f -> f x
+}
+
+-- Unwrap a `Maybe`, substituting `d` for `Nothing`. Unlike `orElse` above,
+-- `d` is a plain value, not a thunk -- it's always evaluated, even when
+-- the first argument is `Just _` and `d` goes unused. Reasonable for a
+-- cheap default (a literal, an already-computed value); wrap the call
+-- site's own argument in `{...}` and force it explicitly if `d` is itself
+-- an expensive computation that should only run on `Nothing`.
+def fromMaybe : Maybe a -> a -> a
+def fromMaybe = {
+  (Just v) _ -> v,
+  Nothing  d -> d
+}
+
+-- Look up an environment variable (see Builtin.mlg's `malgo_has_env`/
+-- `malgo_get_env` for why this is two primitives, checked separately,
+-- rather than one that treats "" as absent).
+--
+-- Uses `eqInt32` (a boxed, Bool-returning Builtin.mlg function), not the raw
+-- `isTrue#` helper, even though both are equally valid at the type level:
+-- the self-hosted compiler's (runtime/malgo/compiler/) cross-module name
+-- resolution fails on a direct `isTrue#` reference from Prelude.mlg with
+-- "undefined: isTrue#", while every other numeric comparison Prelude.mlg
+-- does goes through a Builtin.mlg wrapper like `leInt32`/`gtInt32` and never
+-- names `isTrue#` directly -- this follows that existing, working pattern.
+def getEnv : String -> Maybe String
+def getEnv = { (String# name) ->
+  if (eqInt32 (Int32# (hasEnv# name)) (Int32# 1#))
+    { Just (String# (getEnvRaw# name)) }
+    { Nothing }
+}
+
+-- The XDG Base Directory Specification's cache directory: `$XDG_CACHE_HOME`
+-- if set, otherwise `$HOME/.cache`. Not specific to any one script -- any
+-- program choosing where to write cache files wants this.
+def xdgCacheHome : String
+def xdgCacheHome = fromMaybe (getEnv "XDG_CACHE_HOME") (appendString (fromMaybe (getEnv "HOME") "") "/.cache")
+
 -- list
 data List a = Nil | Cons a (List a)
 
@@ -59,6 +106,120 @@ def mapList =
   { _ Nil -> Nil,
     f (Cons x xs) -> Cons (f x) (mapList f xs),
   }
+
+-- concatenate two lists (`concatString` does this for `List String -> String`;
+-- nothing did it for `List a -> List a -> List a` before a JSON object-merge
+-- needed to append two association lists)
+def appendList : List a -> List a -> List a
+def appendList =
+  { Nil ys -> ys,
+    (Cons x xs) ys -> Cons x (appendList xs ys),
+  }
+
+-- Whether `s` contains an embedded NUL byte. Nothing else in this codebase
+-- needs this, but `joinWithNul`/`runProcess` do: NUL is the one byte their
+-- wire encoding can't represent inside an element (see `joinWithNul`
+-- below), so a caller passing one through needs a loud failure here, not
+-- a silently mis-split argument list on the decode side.
+def containsNul : String -> Bool
+def containsNul = { s -> containsNulAt s 0i64 (lengthString s) }
+
+def containsNulAt : String -> Int64 -> Int64 -> Bool
+def containsNulAt = { s i len ->
+  if (geInt64 i len)
+    { False }
+    { if (eqChar (atString i s) (Char# '\0'#))
+        { True }
+        { containsNulAt s (addInt64 i 1i64) len }
+    }
+}
+
+-- Print `msg` to stderr and exit 1. `panic` (Builtin.mlg) would be the
+-- obvious choice for an invariant violation like this, but it's only
+-- implemented on the Zig and Scheme backends today -- unimplemented on
+-- the interpreter (`malgo_panic` throws "Primitive malgo_panic is not
+-- implemented"), so a guard meant to fire identically everywhere can't
+-- use it yet. Tracked as malgo#426; not this fix's scope.
+def failLoudly : String -> a
+def failLoudly = { msg -> let _ = printStderr msg; exitWith 1i32 }
+
+-- Encode a list of strings as each element followed by a NUL terminator
+-- (see Builtin.mlg's malgo_run_process for why NUL rather than newline).
+-- A *trailing* terminator per element, not a separator *between* elements,
+-- so the empty list ("") and a one-element list of the empty string ("\0")
+-- encode differently -- joining with a separator can't tell those apart.
+def joinWithNul : List String -> String
+def joinWithNul =
+  { Nil -> "",
+    (Cons s rest) ->
+      if (containsNul s)
+        { failLoudly "runProcess: an argument contains an embedded NUL byte, which the NUL-terminated wire encoding cannot represent" }
+        { appendString s (appendString "\0" (joinWithNul rest)) },
+  }
+
+-- Run `cmd` with `args`, returning (exit code, stdout, stderr). Unboxes
+-- `joinWithNul`'s result through this helper's own parameter pattern
+-- (matching every other boxed-argument wrapper in this file) rather than a
+-- `case`/`let`, since `String` has exactly one constructor and the lint
+-- flags that kind of match as irrefutable.
+def runProcessBoxed# : String# -> String -> (Int32, String, String)
+def runProcessBoxed# = { cmd (String# argsBlob) -> runProcess# cmd argsBlob }
+
+-- A named record instead of a positional tuple, so callers get `.exitCode`/
+-- `.stdout`/`.stderr` dot-access instead of spelling out field order via a
+-- `{code, _, _}`-style pattern at every call site.
+--
+-- Construct and pattern-match this (and any record) as a bare structural
+-- literal/pattern, never tagged with the constructor name (`ProcessResult
+-- { .exitCode -> ... }`): tagged construction/pattern-matching for
+-- record-shaped constructors works correctly and needs no per-module
+-- lookup (#422), but a tagged value's fields are not directly
+-- dot-accessible — `pr.exitCode` on a genuinely `ProcessResult`-tagged
+-- value fails at runtime (`Expecting a record, but got:
+-- ProcessResult(<record>)`), by design: a constructor and the record it
+-- happens to wrap are different things. `isSuccess`'s `r.exitCode` below
+-- requires `r` to be a bare record, which is exactly what `toProcessResult`
+-- returns.
+data ProcessResult = ProcessResult { exitCode: Int32, stdout: String, stderr: String }
+
+-- Unboxed via this helper's own parameter pattern (matching every other
+-- boxed-argument wrapper in this file) rather than a `case`, since a tuple
+-- has exactly one shape and the lint flags that kind of match as irrefutable.
+def toProcessResult : (Int32, String, String) -> ProcessResult
+def toProcessResult = { {code, out, err} -> { .exitCode -> code, .stdout -> out, .stderr -> err } }
+
+def runProcess : String -> List String -> ProcessResult
+def runProcess = { (String# cmd) args ->
+  if (containsNul (String# cmd))
+    { failLoudly "runProcess: cmd contains an embedded NUL byte" }
+    { toProcessResult (runProcessBoxed# cmd (joinWithNul args)) }
+}
+
+-- Whether `r` represents a successful run (exit code 0). The most basic
+-- accessor any script using `runProcess` wants, so it doesn't need to spell
+-- out `eqInt32 r.exitCode 0i32` itself at every call site.
+def isSuccess : ProcessResult -> Bool
+def isSuccess = { r -> eqInt32 r.exitCode 0i32 }
+
+-- Whether every command in `names` is on PATH, checked via `command -v`.
+-- Direct recursion (not built from `all`, defined later in this file, to
+-- avoid a forward reference) -- matches the style `joinWithNul`/
+-- `containsNulAt` above already use for the same reason.
+def commandsExist : List String -> Bool
+def commandsExist =
+  { Nil -> True,
+    (Cons name rest) ->
+      if (isSuccess (runProcess "command" (Cons "-v" (Cons name Nil))))
+        { commandsExist rest }
+        { False },
+  }
+
+-- Print `msg` to stderr (with a trailing newline) and exit with `code`.
+-- For an expected, recoverable condition (a tool is missing, a downstream
+-- step failed) that a script wants to report and gracefully exit from --
+-- distinct from `panic`, which signals a genuine bug.
+def bail : Int32 -> String -> a
+def bail = { code msg -> printStderr (appendString msg "\n"); exitWith code }
 
 -- convert a list of character to a string
 def listToString : List Char -> String
@@ -105,6 +266,15 @@ def dropWhileString = { pred str ->
   }
 }
 
+-- whether every character in `str` satisfies `pred` (vacuously true on "")
+def allString : (Char -> Bool) -> String -> Bool
+def allString = { pred str ->
+  case (headString str) {
+    Nothing -> True,
+    (Just c) -> if (pred c) { allString pred (tailString str) } { False }
+  }
+}
+
 def concatString : List String -> String
 def concatString =
   { Nil -> "",
@@ -132,6 +302,78 @@ infixr 9 (<<)
 def (<<) : (b -> c) -> (a -> b) -> (a -> c)
 def (<<) = {f g -> {x -> f (g x)}}
 
+-- Whether `needle` occurs anywhere in `haystack` (naive O(n*m) scan -- these
+-- strings are short command-output blobs in practice, not something that
+-- needs a real substring-search algorithm). Argument order matches the rest
+-- of this file's predicate-first style (`filter pred xs`, `any pred xs`):
+-- `stringContains needle` alone is a reusable `String -> Bool` predicate.
+def stringContains : String -> String -> Bool
+def stringContains = { needle haystack -> stringContainsFrom needle haystack 0i64 }
+
+def stringContainsFrom : String -> String -> Int64 -> Bool
+def stringContainsFrom = { needle haystack i ->
+  if (gtInt64 (addInt64 i (lengthString needle)) (lengthString haystack))
+    { False }
+    { if (eqString (substring haystack i (addInt64 i (lengthString needle))) needle)
+        { True }
+        { stringContainsFrom needle haystack (addInt64 i 1i64) }
+    }
+}
+
+-- Strip every trailing `\n`, matching bash's `"$(cmd)"` command-substitution
+-- semantics -- `runProcess`'s captured stdout is a raw pipe read and keeps
+-- whatever trailing newlines the child wrote, so callers treating it as one
+-- scalar value (a temp-dir path, a config value, a decrypted token) need
+-- this before using it as one.
+def trimTrailingNewlines : String -> String
+def trimTrailingNewlines = { s ->
+  reverseString (dropWhileString (eqChar (Char# '\n'#)) (reverseString s))
+}
+
+-- Split on runs of whitespace, ignoring leading/trailing whitespace --
+-- matches shell word-splitting and Haskell's `words`, not a naive
+-- single-character split.
+def words : String -> List String
+def words = { s ->
+  let trimmed = dropWhileString isWhiteSpace s;
+  if (eqString trimmed "")
+    { Nil }
+    { Cons (takeWhileString (not << isWhiteSpace) trimmed)
+           (words (dropWhileString (not << isWhiteSpace) trimmed)) }
+}
+
+-- Split on `\n` as a terminator, matching `unlines`'s convention below: a
+-- trailing `\n` ends the last real segment rather than starting an empty
+-- one after it, so `lines "a\nb\n"` is `["a", "b"]`, `lines "a\nb"` (no
+-- trailing terminator) is also `["a", "b"]`, `lines "a\n\nb"` is `["a", "",
+-- "b"]`, and `lines ""` is `Nil` -- zero terminated segments in no content.
+def lines : String -> List String
+def lines = { s ->
+  if (eqString s "")
+    { Nil }
+    { Cons (takeWhileString (neChar (Char# '\n'#)) s)
+           (linesRest (dropWhileString (neChar (Char# '\n'#)) s)) }
+}
+
+def linesRest : String -> List String
+def linesRest = { s ->
+  if (eqString s "")
+    { Nil }
+    { lines (tailString s) }
+}
+
+-- Join with `\n` as a *trailing terminator per element*, not a separator
+-- between elements -- same reasoning as `joinWithNul` above (an empty list
+-- and a one-element list of "" would otherwise encode identically). This
+-- is `lines`'s inverse for the file-content shape scripts actually have:
+-- `unlines (lines s) == s` when `s` is empty or ends in `\n`, which every
+-- real text file being idempotently rewritten does.
+def unlines : List String -> String
+def unlines =
+  { Nil -> "",
+    (Cons x xs) -> appendString x (appendString "\n" (unlines xs))
+  }
+
 infixl 0 (|>)
 def (|>) : a -> (a -> b) -> b
 def (|>) = {x f -> f x}
@@ -146,8 +388,29 @@ def if =
     False _ f -> f (),
   }
 
-def unless : Bool -> a -> {a} -> a
-def unless = { c tValue f -> if c {tValue} f }
+-- Eager, not short-circuiting -- malgo is call-by-value and infix
+-- application doesn't thunk either side (`a && b` evaluates both `a` and
+-- `b` before calling `(&&)`, same as any other function call; there's no
+-- implicit coercion into `{a}`'s `() -> a` desugaring). Safe for
+-- combining independently-safe checks (e.g. `isAlphanum c || eqChar c
+-- (Char# '_'#) || eqChar c (Char# '-'#)`); NOT a substitute for a guard
+-- that must skip an unsafe second check (e.g. a length check before a
+-- `substring` on the same string) -- that still needs `if`/the existing
+-- `|> {True -> ..., False -> ...}` idiom.
+infixr 3 (&&)
+def (&&) : Bool -> Bool -> Bool
+def (&&) = { True b -> b, False _ -> False }
+
+infixr 2 (||)
+def (||) : Bool -> Bool -> Bool
+def (||) = { True _ -> True, False b -> b }
+
+-- Narrowed from `Bool -> a -> {a} -> a`: every real call site passed `()`
+-- for the "condition holds, do nothing" value, since guard clauses don't
+-- usually produce a value worth keeping. `unless cond () { body }` becomes
+-- `unless cond { body }`.
+def unless : Bool -> {()} -> ()
+def unless = { c f -> if c {()} f }
 
 -- multiway if
 def cond : List (Bool, {a}) -> a

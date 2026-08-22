@@ -1,0 +1,1001 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data Marker  = Marker#()
+
+def main =
+  fn {
+    _ ->
+      {
+        print({a = 1, b = 2})
+        print(Marker#)
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data Marker  = Marker#()
+
+def main =
+  fn {
+    _#0 ->
+      {
+        print({a = Int32#(1), b = Int32#(2)})
+        print(Marker#)
+      }
+  }
+
+=== ToFun ===
+def main =
+  \param$1 ->
+    case param$1 of {
+      _#0 ->
+        \tmp$2 ->
+          invoke print(invoke Marker#)( invoke print( { a = invoke Int32#(1)
+        , b = invoke Int32#(2) } ) )
+    }
+
+def Marker# = Marker#()
+
+=== SaturateCtor ===
+def main =
+  \param$1 ->
+    case param$1 of {
+      _#0 ->
+        \tmp$2 -> invoke print(Marker#())( invoke print( { a = invoke Int32#(1)
+        , b = invoke Int32#(2) } ) )
+    }
+
+def Marker# = Marker#()
+
+=== ReuseSpecialize ===
+def main =
+  \param$1 ->
+    case param$1 of {
+      _#0 ->
+        \tmp$2 -> invoke print(Marker#())( invoke print( { a = invoke Int32#(1)
+        , b = invoke Int32#(2) } ) )
+    }
+
+def Marker# = Marker#()
+
+=== ToCore ===
+def main(return$3) =
+  \param$1 return$4 . {
+    param$1 ~ select {
+      _#0 ->
+        \tmp$2 return$8 . {
+          invoke print ~ (Marker#(), return$8)
+        } ~ ( do return$5 . {
+          invoke print ~ ( { a(return$6) = {
+            invoke Int32# ~ (1, return$6)
+          }
+          , b(return$7) = {
+            invoke Int32# ~ (2, return$7)
+          } }
+          , return$5 )
+        }
+        , return$4 )
+    }
+  } ~ return$3
+
+def Marker#(return$9) = Marker#() ~ return$9
+
+=== Flat ===
+def main(return$3) =
+  \param$1 return$4 . {
+    param$1 ~ select {
+      _#0 ->
+        \tmp$2 return$8 . {
+          invoke print ~ (Marker#(), return$8)
+        } ~ then outer$10 -> {
+          join return$5 = then inner$11 -> {
+            outer$10 ~ (inner$11, return$4)
+          }
+          in invoke print ~ ( { a(return$6) = {
+            invoke Int32# ~ (1, return$6)
+          }
+          , b(return$7) = {
+            invoke Int32# ~ (2, return$7)
+          } }
+          , return$5 )
+        }
+    }
+  } ~ return$3
+
+def Marker#(return$9) = Marker#() ~ return$9
+
+=== Join ===
+def main(return$3) =
+  \param$1 return$4 . {
+    join select$18 = select {
+      _#0 ->
+        join then$17 = then outer$10 -> {
+          join return$5 = then inner$11 -> {
+            join apply$16 = (inner$11, return$4)
+            in outer$10 ~ apply$16
+          }
+          in join apply$15 = ( { a(return$6) = {
+            join apply$13 = (1, return$6)
+            in invoke Int32# ~ apply$13
+          }
+          , b(return$7) = {
+            join apply$14 = (2, return$7)
+            in invoke Int32# ~ apply$14
+          } }
+          , return$5 )
+          in invoke print ~ apply$15
+        }
+        in \tmp$2 return$8 . {
+          join apply$12 = (Marker#(), return$8)
+          in invoke print ~ apply$12
+        } ~ then$17
+    }
+    in param$1 ~ select$18
+  } ~ return$3
+
+def Marker#(return$9) = Marker#() ~ return$9
+
+=== ClosureConv ===
+toplevel fn main(return$3) =
+  let closure$48 = closure lambda$20()
+  return return$3(closure$48)
+
+closure fn lambda$20(self$21, param$1, return$4) =
+  if  then {
+    let _#0 = param$1
+    let closure$28 = closure lambda$22()
+    let return$5 = closure join$29(closure$28, return$4)
+    let apply$15 = closure join$32(return$5)
+    return print(apply$15)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$22(self$23, tmp$2, return$8) =
+  let apply$12 = closure join$24(return$8)
+  return print(apply$12)
+
+closure fn join$24(self$25, value$26) =
+  let return$8 = self$25.cap[0]
+  let struct$27 = Marker#()
+  return value$26(struct$27, return$8)
+
+closure fn join$29(self$30, value$31) =
+  let closure$28 = self$30.cap[0]
+  let return$4 = self$30.cap[1]
+  return closure$28(value$31, return$4)
+
+closure fn join$32(self$33, value$34) =
+  let return$5 = self$33.cap[0]
+  let record$47 = record(a = field$35, b = field$41) captures()
+  return value$34(record$47, return$5)
+
+field fn field$35(self$36, return$6) =
+  let apply$13 = closure join$37(return$6)
+  return Int32#(apply$13)
+
+closure fn join$37(self$38, value$39) =
+  let return$6 = self$38.cap[0]
+  let lit$40 = 1
+  return value$39(lit$40, return$6)
+
+field fn field$41(self$42, return$7) =
+  let apply$14 = closure join$43(return$7)
+  return Int32#(apply$14)
+
+closure fn join$43(self$44, value$45) =
+  let return$7 = self$44.cap[0]
+  let lit$46 = 2
+  return value$45(lit$46, return$7)
+
+toplevel fn Marker#(return$9) =
+  let struct$50 = Marker#()
+  return return$9(struct$50)
+
+toplevel fn zig_main$53() =
+  let finish$51 = closure join$55()
+  let after_main$52 = closure join$58(finish$51)
+  return main(after_main$52)
+
+closure fn join$55(self$56, value$57) = return value$57
+
+closure fn join$58(self$59, value$60) =
+  let finish$51 = self$59.cap[0]
+  let struct$61 = Tuple()
+  return value$60(struct$61, finish$51)
+
+entry = zig_main$53
+
+=== Peephole ===
+toplevel fn main(return$3) =
+  let closure$48 = closure lambda$20()
+  return return$3(closure$48)
+
+closure fn lambda$20(self$21, param$1, return$4) =
+  if  then {
+    let closure$28 = closure lambda$22()
+    let return$5 = closure join$29(closure$28, return$4)
+    let apply$15 = closure join$32(return$5)
+    return print(apply$15)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$22(self$23, tmp$2, return$8) =
+  let apply$12 = closure join$24(return$8)
+  return print(apply$12)
+
+closure fn join$24(self$25, value$26) =
+  let return$8 = self$25.cap[0]
+  let struct$27 = Marker#()
+  return value$26(struct$27, return$8)
+
+closure fn join$29(self$30, value$31) =
+  let closure$28 = self$30.cap[0]
+  let return$4 = self$30.cap[1]
+  return closure$28(value$31, return$4)
+
+closure fn join$32(self$33, value$34) =
+  let return$5 = self$33.cap[0]
+  let record$47 = record(a = field$35, b = field$41) captures()
+  return value$34(record$47, return$5)
+
+field fn field$35(self$36, return$6) =
+  let apply$13 = closure join$37(return$6)
+  return Int32#(apply$13)
+
+closure fn join$37(self$38, value$39) =
+  let return$6 = self$38.cap[0]
+  let lit$40 = 1
+  return value$39(lit$40, return$6)
+
+field fn field$41(self$42, return$7) =
+  let apply$14 = closure join$43(return$7)
+  return Int32#(apply$14)
+
+closure fn join$43(self$44, value$45) =
+  let return$7 = self$44.cap[0]
+  let lit$46 = 2
+  return value$45(lit$46, return$7)
+
+toplevel fn Marker#(return$9) =
+  let struct$50 = Marker#()
+  return return$9(struct$50)
+
+toplevel fn zig_main$53() =
+  let finish$51 = closure join$55()
+  let after_main$52 = closure join$58(finish$51)
+  return main(after_main$52)
+
+closure fn join$55(self$56, value$57) = return value$57
+
+closure fn join$58(self$59, value$60) =
+  let finish$51 = self$59.cap[0]
+  let struct$61 = Tuple()
+  return value$60(struct$61, finish$51)
+
+entry = zig_main$53
+
+=== Perceus ===
+toplevel fn main(return$3) =
+  let closure$48 = closure lambda$20()
+  return return$3(closure$48)
+
+closure fn lambda$20(self$21, param$1, return$4) =
+  drop param$1
+  drop self$21
+  if  then {
+    let closure$28 = closure lambda$22()
+    let return$5 = closure join$29(closure$28, return$4)
+    let apply$15 = closure join$32(return$5)
+    return print(apply$15)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$22(self$23, tmp$2, return$8) =
+  drop self$23
+  drop tmp$2
+  let apply$12 = closure join$24(return$8)
+  return print(apply$12)
+
+closure fn join$24(self$25, value$26) =
+  let return$8 = self$25.cap[0]
+  dup return$8
+  drop self$25
+  let struct$27 = Marker#()
+  return value$26(struct$27, return$8)
+
+closure fn join$29(self$30, value$31) =
+  let closure$28 = self$30.cap[0]
+  dup closure$28
+  let return$4 = self$30.cap[1]
+  dup return$4
+  drop self$30
+  return closure$28(value$31, return$4)
+
+closure fn join$32(self$33, value$34) =
+  let return$5 = self$33.cap[0]
+  dup return$5
+  drop self$33
+  let record$47 = record(a = field$35, b = field$41) captures()
+  return value$34(record$47, return$5)
+
+field fn field$35(self$36, return$6) =
+  drop self$36
+  let apply$13 = closure join$37(return$6)
+  return Int32#(apply$13)
+
+closure fn join$37(self$38, value$39) =
+  let return$6 = self$38.cap[0]
+  dup return$6
+  drop self$38
+  let lit$40 = 1
+  return value$39(lit$40, return$6)
+
+field fn field$41(self$42, return$7) =
+  drop self$42
+  let apply$14 = closure join$43(return$7)
+  return Int32#(apply$14)
+
+closure fn join$43(self$44, value$45) =
+  let return$7 = self$44.cap[0]
+  dup return$7
+  drop self$44
+  let lit$46 = 2
+  return value$45(lit$46, return$7)
+
+toplevel fn Marker#(return$9) =
+  let struct$50 = Marker#()
+  return return$9(struct$50)
+
+toplevel fn zig_main$53() =
+  let finish$51 = closure join$55()
+  let after_main$52 = closure join$58(finish$51)
+  return main(after_main$52)
+
+closure fn join$55(self$56, value$57) =
+  drop self$56
+  return value$57
+
+closure fn join$58(self$59, value$60) =
+  let finish$51 = self$59.cap[0]
+  dup finish$51
+  drop self$59
+  let struct$61 = Tuple()
+  return value$60(struct$61, finish$51)
+
+entry = zig_main$53
+
+=== Reuse ===
+toplevel fn main(return$3) =
+  let closure$48 = closure lambda$20()
+  return return$3(closure$48)
+
+closure fn lambda$20(self$21, param$1, return$4) =
+  drop param$1
+  drop self$21
+  if  then {
+    let closure$28 = closure lambda$22()
+    let return$5 = closure join$29(closure$28, return$4)
+    let apply$15 = closure join$32(return$5)
+    return print(apply$15)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$22(self$23, tmp$2, return$8) =
+  let apply$12 = closure join$24(return$8)
+  drop self$23
+  drop tmp$2
+  return print(apply$12)
+
+closure fn join$24(self$25, value$26) =
+  let return$8 = self$25.cap[0]
+  dup return$8
+  dropReuse reuse$62 = self$25 /0
+  let struct$27 = reuse reuse$62 Marker#()
+  return value$26(struct$27, return$8)
+
+closure fn join$29(self$30, value$31) =
+  let closure$28 = self$30.cap[0]
+  dup closure$28
+  let return$4 = self$30.cap[1]
+  dup return$4
+  drop self$30
+  return closure$28(value$31, return$4)
+
+closure fn join$32(self$33, value$34) =
+  let return$5 = self$33.cap[0]
+  dup return$5
+  let record$47 = record(a = field$35, b = field$41) captures()
+  drop self$33
+  return value$34(record$47, return$5)
+
+field fn field$35(self$36, return$6) =
+  let apply$13 = closure join$37(return$6)
+  drop self$36
+  return Int32#(apply$13)
+
+closure fn join$37(self$38, value$39) =
+  let return$6 = self$38.cap[0]
+  dup return$6
+  let lit$40 = 1
+  drop self$38
+  return value$39(lit$40, return$6)
+
+field fn field$41(self$42, return$7) =
+  let apply$14 = closure join$43(return$7)
+  drop self$42
+  return Int32#(apply$14)
+
+closure fn join$43(self$44, value$45) =
+  let return$7 = self$44.cap[0]
+  dup return$7
+  let lit$46 = 2
+  drop self$44
+  return value$45(lit$46, return$7)
+
+toplevel fn Marker#(return$9) =
+  let struct$50 = Marker#()
+  return return$9(struct$50)
+
+toplevel fn zig_main$53() =
+  let finish$51 = closure join$55()
+  let after_main$52 = closure join$58(finish$51)
+  return main(after_main$52)
+
+closure fn join$55(self$56, value$57) =
+  drop self$56
+  return value$57
+
+closure fn join$58(self$59, value$60) =
+  let finish$51 = self$59.cap[0]
+  dup finish$51
+  dropReuse reuse$63 = self$59 /0
+  let struct$61 = reuse reuse$63 Tuple()
+  return value$60(struct$61, finish$51)
+
+entry = zig_main$53
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  data Marker  = Marker#()
+  
+  def main =
+    fn {
+-     _ ->
++     _#0 ->
+        {
+-         print({a = 1, b = 2})
++         print({a = Int32#(1), b = Int32#(2)})
+          print(Marker#)
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- data Marker  = Marker#()
+- 
+  def main =
+-   fn {
++   \param$1 ->
+-     _#0 ->
++     case param$1 of {
+-       {
++       _#0 ->
+-         print({a = Int32#(1), b = Int32#(2)})
++         \tmp$2 ->
+-         print(Marker#)
++           invoke print(invoke Marker#)( invoke print( { a = invoke Int32#(1)
+-       }
++         , b = invoke Int32#(2) } ) )
+-   }
++     }
++ 
++ def Marker# = Marker#()
+
+
+=== ToFun -> SaturateCtor ===
+  def main =
+    \param$1 ->
+      case param$1 of {
+        _#0 ->
+-         \tmp$2 ->
++         \tmp$2 -> invoke print(Marker#())( invoke print( { a = invoke Int32#(1)
+-           invoke print(invoke Marker#)( invoke print( { a = invoke Int32#(1)
+          , b = invoke Int32#(2) } ) )
+      }
+  
+  def Marker# = Marker#()
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def main =
+    \param$1 ->
+      case param$1 of {
+        _#0 ->
+          \tmp$2 -> invoke print(Marker#())( invoke print( { a = invoke Int32#(1)
+          , b = invoke Int32#(2) } ) )
+      }
+  
+  def Marker# = Marker#()
+
+
+=== ReuseSpecialize -> ToCore ===
+- def main =
++ def main(return$3) =
+-   \param$1 ->
++   \param$1 return$4 . {
+-     case param$1 of {
++     param$1 ~ select {
+        _#0 ->
+-         \tmp$2 -> invoke print(Marker#())( invoke print( { a = invoke Int32#(1)
++         \tmp$2 return$8 . {
+-         , b = invoke Int32#(2) } ) )
++           invoke print ~ (Marker#(), return$8)
++         } ~ ( do return$5 . {
++           invoke print ~ ( { a(return$6) = {
++             invoke Int32# ~ (1, return$6)
++           }
++           , b(return$7) = {
++             invoke Int32# ~ (2, return$7)
++           } }
++           , return$5 )
++         }
++         , return$4 )
+      }
++   } ~ return$3
+  
+- def Marker# = Marker#()
++ def Marker#(return$9) = Marker#() ~ return$9
+
+
+=== ToCore -> Flat ===
+  def main(return$3) =
+    \param$1 return$4 . {
+      param$1 ~ select {
+        _#0 ->
+          \tmp$2 return$8 . {
+            invoke print ~ (Marker#(), return$8)
+-         } ~ ( do return$5 . {
++         } ~ then outer$10 -> {
+-           invoke print ~ ( { a(return$6) = {
++           join return$5 = then inner$11 -> {
++             outer$10 ~ (inner$11, return$4)
++           }
++           in invoke print ~ ( { a(return$6) = {
+              invoke Int32# ~ (1, return$6)
+            }
+            , b(return$7) = {
+              invoke Int32# ~ (2, return$7)
+            } }
+            , return$5 )
+          }
+-         , return$4 )
+      }
+    } ~ return$3
+  
+  def Marker#(return$9) = Marker#() ~ return$9
+
+
+=== Flat -> Join ===
+  def main(return$3) =
+    \param$1 return$4 . {
+-     param$1 ~ select {
++     join select$18 = select {
+        _#0 ->
+-         \tmp$2 return$8 . {
++         join then$17 = then outer$10 -> {
+-           invoke print ~ (Marker#(), return$8)
+-         } ~ then outer$10 -> {
+            join return$5 = then inner$11 -> {
+-             outer$10 ~ (inner$11, return$4)
++             join apply$16 = (inner$11, return$4)
++             in outer$10 ~ apply$16
+            }
+-           in invoke print ~ ( { a(return$6) = {
++           in join apply$15 = ( { a(return$6) = {
+-             invoke Int32# ~ (1, return$6)
++             join apply$13 = (1, return$6)
++             in invoke Int32# ~ apply$13
+            }
+            , b(return$7) = {
+-             invoke Int32# ~ (2, return$7)
++             join apply$14 = (2, return$7)
++             in invoke Int32# ~ apply$14
+            } }
+            , return$5 )
++           in invoke print ~ apply$15
+          }
++         in \tmp$2 return$8 . {
++           join apply$12 = (Marker#(), return$8)
++           in invoke print ~ apply$12
++         } ~ then$17
+      }
++     in param$1 ~ select$18
+    } ~ return$3
+  
+  def Marker#(return$9) = Marker#() ~ return$9
+
+
+=== Join -> ClosureConv ===
+- def main(return$3) =
++ toplevel fn main(return$3) =
+-   \param$1 return$4 . {
++   let closure$48 = closure lambda$20()
+-     join select$18 = select {
++   return return$3(closure$48)
+-       _#0 ->
+-         join then$17 = then outer$10 -> {
+-           join return$5 = then inner$11 -> {
+-             join apply$16 = (inner$11, return$4)
+-             in outer$10 ~ apply$16
+-           }
+-           in join apply$15 = ( { a(return$6) = {
+-             join apply$13 = (1, return$6)
+-             in invoke Int32# ~ apply$13
+-           }
+-           , b(return$7) = {
+-             join apply$14 = (2, return$7)
+-             in invoke Int32# ~ apply$14
+-           } }
+-           , return$5 )
+-           in invoke print ~ apply$15
+-         }
+-         in \tmp$2 return$8 . {
+-           join apply$12 = (Marker#(), return$8)
+-           in invoke print ~ apply$12
+-         } ~ then$17
+-     }
+-     in param$1 ~ select$18
+-   } ~ return$3
+  
+- def Marker#(return$9) = Marker#() ~ return$9
++ closure fn lambda$20(self$21, param$1, return$4) =
++   if  then {
++     let _#0 = param$1
++     let closure$28 = closure lambda$22()
++     let return$5 = closure join$29(closure$28, return$4)
++     let apply$15 = closure join$32(return$5)
++     return print(apply$15)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn lambda$22(self$23, tmp$2, return$8) =
++   let apply$12 = closure join$24(return$8)
++   return print(apply$12)
++ 
++ closure fn join$24(self$25, value$26) =
++   let return$8 = self$25.cap[0]
++   let struct$27 = Marker#()
++   return value$26(struct$27, return$8)
++ 
++ closure fn join$29(self$30, value$31) =
++   let closure$28 = self$30.cap[0]
++   let return$4 = self$30.cap[1]
++   return closure$28(value$31, return$4)
++ 
++ closure fn join$32(self$33, value$34) =
++   let return$5 = self$33.cap[0]
++   let record$47 = record(a = field$35, b = field$41) captures()
++   return value$34(record$47, return$5)
++ 
++ field fn field$35(self$36, return$6) =
++   let apply$13 = closure join$37(return$6)
++   return Int32#(apply$13)
++ 
++ closure fn join$37(self$38, value$39) =
++   let return$6 = self$38.cap[0]
++   let lit$40 = 1
++   return value$39(lit$40, return$6)
++ 
++ field fn field$41(self$42, return$7) =
++   let apply$14 = closure join$43(return$7)
++   return Int32#(apply$14)
++ 
++ closure fn join$43(self$44, value$45) =
++   let return$7 = self$44.cap[0]
++   let lit$46 = 2
++   return value$45(lit$46, return$7)
++ 
++ toplevel fn Marker#(return$9) =
++   let struct$50 = Marker#()
++   return return$9(struct$50)
++ 
++ toplevel fn zig_main$53() =
++   let finish$51 = closure join$55()
++   let after_main$52 = closure join$58(finish$51)
++   return main(after_main$52)
++ 
++ closure fn join$55(self$56, value$57) = return value$57
++ 
++ closure fn join$58(self$59, value$60) =
++   let finish$51 = self$59.cap[0]
++   let struct$61 = Tuple()
++   return value$60(struct$61, finish$51)
++ 
++ entry = zig_main$53
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn main(return$3) =
+    let closure$48 = closure lambda$20()
+    return return$3(closure$48)
+  
+  closure fn lambda$20(self$21, param$1, return$4) =
+    if  then {
+-     let _#0 = param$1
+      let closure$28 = closure lambda$22()
+      let return$5 = closure join$29(closure$28, return$4)
+      let apply$15 = closure join$32(return$5)
+      return print(apply$15)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$22(self$23, tmp$2, return$8) =
+    let apply$12 = closure join$24(return$8)
+    return print(apply$12)
+  
+  closure fn join$24(self$25, value$26) =
+    let return$8 = self$25.cap[0]
+    let struct$27 = Marker#()
+    return value$26(struct$27, return$8)
+  
+  closure fn join$29(self$30, value$31) =
+    let closure$28 = self$30.cap[0]
+    let return$4 = self$30.cap[1]
+    return closure$28(value$31, return$4)
+  
+  closure fn join$32(self$33, value$34) =
+    let return$5 = self$33.cap[0]
+    let record$47 = record(a = field$35, b = field$41) captures()
+    return value$34(record$47, return$5)
+  
+  field fn field$35(self$36, return$6) =
+    let apply$13 = closure join$37(return$6)
+    return Int32#(apply$13)
+  
+  closure fn join$37(self$38, value$39) =
+    let return$6 = self$38.cap[0]
+    let lit$40 = 1
+    return value$39(lit$40, return$6)
+  
+  field fn field$41(self$42, return$7) =
+    let apply$14 = closure join$43(return$7)
+    return Int32#(apply$14)
+  
+  closure fn join$43(self$44, value$45) =
+    let return$7 = self$44.cap[0]
+    let lit$46 = 2
+    return value$45(lit$46, return$7)
+  
+  toplevel fn Marker#(return$9) =
+    let struct$50 = Marker#()
+    return return$9(struct$50)
+  
+  toplevel fn zig_main$53() =
+    let finish$51 = closure join$55()
+    let after_main$52 = closure join$58(finish$51)
+    return main(after_main$52)
+  
+  closure fn join$55(self$56, value$57) = return value$57
+  
+  closure fn join$58(self$59, value$60) =
+    let finish$51 = self$59.cap[0]
+    let struct$61 = Tuple()
+    return value$60(struct$61, finish$51)
+  
+  entry = zig_main$53
+
+
+=== Peephole -> Perceus ===
+  toplevel fn main(return$3) =
+    let closure$48 = closure lambda$20()
+    return return$3(closure$48)
+  
+  closure fn lambda$20(self$21, param$1, return$4) =
++   drop param$1
++   drop self$21
+    if  then {
+      let closure$28 = closure lambda$22()
+      let return$5 = closure join$29(closure$28, return$4)
+      let apply$15 = closure join$32(return$5)
+      return print(apply$15)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$22(self$23, tmp$2, return$8) =
++   drop self$23
++   drop tmp$2
+    let apply$12 = closure join$24(return$8)
+    return print(apply$12)
+  
+  closure fn join$24(self$25, value$26) =
+    let return$8 = self$25.cap[0]
++   dup return$8
++   drop self$25
+    let struct$27 = Marker#()
+    return value$26(struct$27, return$8)
+  
+  closure fn join$29(self$30, value$31) =
+    let closure$28 = self$30.cap[0]
++   dup closure$28
+    let return$4 = self$30.cap[1]
++   dup return$4
++   drop self$30
+    return closure$28(value$31, return$4)
+  
+  closure fn join$32(self$33, value$34) =
+    let return$5 = self$33.cap[0]
++   dup return$5
++   drop self$33
+    let record$47 = record(a = field$35, b = field$41) captures()
+    return value$34(record$47, return$5)
+  
+  field fn field$35(self$36, return$6) =
++   drop self$36
+    let apply$13 = closure join$37(return$6)
+    return Int32#(apply$13)
+  
+  closure fn join$37(self$38, value$39) =
+    let return$6 = self$38.cap[0]
++   dup return$6
++   drop self$38
+    let lit$40 = 1
+    return value$39(lit$40, return$6)
+  
+  field fn field$41(self$42, return$7) =
++   drop self$42
+    let apply$14 = closure join$43(return$7)
+    return Int32#(apply$14)
+  
+  closure fn join$43(self$44, value$45) =
+    let return$7 = self$44.cap[0]
++   dup return$7
++   drop self$44
+    let lit$46 = 2
+    return value$45(lit$46, return$7)
+  
+  toplevel fn Marker#(return$9) =
+    let struct$50 = Marker#()
+    return return$9(struct$50)
+  
+  toplevel fn zig_main$53() =
+    let finish$51 = closure join$55()
+    let after_main$52 = closure join$58(finish$51)
+    return main(after_main$52)
+  
+- closure fn join$55(self$56, value$57) = return value$57
++ closure fn join$55(self$56, value$57) =
++   drop self$56
++   return value$57
+  
+  closure fn join$58(self$59, value$60) =
+    let finish$51 = self$59.cap[0]
++   dup finish$51
++   drop self$59
+    let struct$61 = Tuple()
+    return value$60(struct$61, finish$51)
+  
+  entry = zig_main$53
+
+
+=== Perceus -> Reuse ===
+  toplevel fn main(return$3) =
+    let closure$48 = closure lambda$20()
+    return return$3(closure$48)
+  
+  closure fn lambda$20(self$21, param$1, return$4) =
+    drop param$1
+    drop self$21
+    if  then {
+      let closure$28 = closure lambda$22()
+      let return$5 = closure join$29(closure$28, return$4)
+      let apply$15 = closure join$32(return$5)
+      return print(apply$15)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$22(self$23, tmp$2, return$8) =
++   let apply$12 = closure join$24(return$8)
+    drop self$23
+    drop tmp$2
+-   let apply$12 = closure join$24(return$8)
+    return print(apply$12)
+  
+  closure fn join$24(self$25, value$26) =
+    let return$8 = self$25.cap[0]
+    dup return$8
+-   drop self$25
++   dropReuse reuse$62 = self$25 /0
+-   let struct$27 = Marker#()
++   let struct$27 = reuse reuse$62 Marker#()
+    return value$26(struct$27, return$8)
+  
+  closure fn join$29(self$30, value$31) =
+    let closure$28 = self$30.cap[0]
+    dup closure$28
+    let return$4 = self$30.cap[1]
+    dup return$4
+    drop self$30
+    return closure$28(value$31, return$4)
+  
+  closure fn join$32(self$33, value$34) =
+    let return$5 = self$33.cap[0]
+    dup return$5
+-   drop self$33
+    let record$47 = record(a = field$35, b = field$41) captures()
++   drop self$33
+    return value$34(record$47, return$5)
+  
+  field fn field$35(self$36, return$6) =
+-   drop self$36
+    let apply$13 = closure join$37(return$6)
++   drop self$36
+    return Int32#(apply$13)
+  
+  closure fn join$37(self$38, value$39) =
+    let return$6 = self$38.cap[0]
+    dup return$6
+-   drop self$38
+    let lit$40 = 1
++   drop self$38
+    return value$39(lit$40, return$6)
+  
+  field fn field$41(self$42, return$7) =
+-   drop self$42
+    let apply$14 = closure join$43(return$7)
++   drop self$42
+    return Int32#(apply$14)
+  
+  closure fn join$43(self$44, value$45) =
+    let return$7 = self$44.cap[0]
+    dup return$7
+-   drop self$44
+    let lit$46 = 2
++   drop self$44
+    return value$45(lit$46, return$7)
+  
+  toplevel fn Marker#(return$9) =
+    let struct$50 = Marker#()
+    return return$9(struct$50)
+  
+  toplevel fn zig_main$53() =
+    let finish$51 = closure join$55()
+    let after_main$52 = closure join$58(finish$51)
+    return main(after_main$52)
+  
+  closure fn join$55(self$56, value$57) =
+    drop self$56
+    return value$57
+  
+  closure fn join$58(self$59, value$60) =
+    let finish$51 = self$59.cap[0]
+    dup finish$51
+-   drop self$59
++   dropReuse reuse$63 = self$59 /0
+-   let struct$61 = Tuple()
++   let struct$61 = reuse reuse$63 Tuple()
+    return value$60(struct$61, finish$51)
+  
+  entry = zig_main$53

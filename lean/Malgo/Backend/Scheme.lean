@@ -542,12 +542,11 @@ partial def compileStatement : Join.Statement → String
 
 end
 
-def compileDefinition : Range × Name × Name × Join.Statement → String
-  | (_, name, returnName, body) =>
-    let nameStr := mangleId name
-    let returnStr := mangleId returnName
-    let bodyStr := compileStatement body
-    "(define (" ++ nameStr ++ " " ++ returnStr ++ ")\n  " ++ bodyStr ++ ")\n"
+def compileDefinition (d : Join.Definition) : String :=
+  let nameStr := mangleId d.name
+  let returnStr := mangleId d.ret
+  let bodyStr := compileStatement d.body
+  "(define (" ++ nameStr ++ " " ++ returnStr ++ ")\n  " ++ bodyStr ++ ")\n"
 
 /-- Minimal Chez Scheme runtime for Malgo. Ported byte-for-byte from
 `schemeRuntime` in `Scheme.hs` (`T.unlines` = each line followed by a

@@ -1,0 +1,17 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- PATH is present in every execution environment this runs under (bash,
+-- CI, `scheme --script`, a Zig-compiled binary); asserting presence/absence
+-- rather than the raw value keeps the golden output machine-independent.
+def showEnv : Maybe String -> String
+def showEnv = {
+  (Just _) -> "PRESENT",
+  Nothing -> "ABSENT"
+}
+
+def main = { () ->
+  printString (showEnv (getEnv "PATH"));
+  printString "\n";
+  printString (showEnv (getEnv "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"))
+}

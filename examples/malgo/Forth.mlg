@@ -56,21 +56,21 @@ def dictInsert = { name word dict -> DictBind(name, word, dict) }
 
 def withStack : List ForthVal -> ForthState -> ForthState
 def withStack = { s state ->
-  { stack = s
-  , dict = state.dict
-  , compiling = state.compiling
-  , compileName = state.compileName
-  , compileBuffer = state.compileBuffer
+  { .stack -> s
+  , .dict -> state.dict
+  , .compiling -> state.compiling
+  , .compileName -> state.compileName
+  , .compileBuffer -> state.compileBuffer
   }
 }
 
 def enterCompile : String -> ForthState -> ForthState
 def enterCompile = { name state ->
-  { stack = state.stack
-  , dict = state.dict
-  , compiling = True
-  , compileName = name
-  , compileBuffer = Nil
+  { .stack -> state.stack
+  , .dict -> state.dict
+  , .compiling -> True
+  , .compileName -> name
+  , .compileBuffer -> Nil
   }
 }
 
@@ -78,21 +78,21 @@ def exitCompile : ForthState -> ForthState
 def exitCompile = { state ->
   let newWord = UserDef (reverse (state.compileBuffer));
   let newDict = dictInsert (state.compileName) newWord (state.dict);
-  { stack = state.stack
-  , dict = newDict
-  , compiling = False
-  , compileName = ""
-  , compileBuffer = Nil
+  { .stack -> state.stack
+  , .dict -> newDict
+  , .compiling -> False
+  , .compileName -> ""
+  , .compileBuffer -> Nil
   }
 }
 
 def appendToken : String -> ForthState -> ForthState
 def appendToken = { tok state ->
-  { stack = state.stack
-  , dict = state.dict
-  , compiling = state.compiling
-  , compileName = state.compileName
-  , compileBuffer = Cons tok (state.compileBuffer)
+  { .stack -> state.stack
+  , .dict -> state.dict
+  , .compiling -> state.compiling
+  , .compileName -> state.compileName
+  , .compileBuffer -> Cons tok (state.compileBuffer)
   }
 }
 
@@ -141,7 +141,7 @@ def nextToken = { src ->
     { Nothing }
     { let tok  = takeWhileString notWhiteSpace src1;
       let rest = dropWhileString notWhiteSpace src1;
-      Just {val = tok, rest = rest}
+      Just {.val -> tok, .rest -> rest}
     }
 }
 
@@ -149,7 +149,7 @@ def tokenize : String -> List String
 def tokenize = { src ->
   case (nextToken src) {
     Nothing -> Nil,
-    (Just {val = tok, rest = rest}) -> Cons tok (tokenize rest)
+    (Just {.val -> tok, .rest -> rest}) -> Cons tok (tokenize rest)
   }
 }
 
@@ -418,11 +418,11 @@ def execLines = {
 
 def main = {
   let init =
-    { stack = Nil
-    , dict = makeBaseDict ()
-    , compiling = False
-    , compileName = ""
-    , compileBuffer = Nil
+    { .stack -> Nil
+    , .dict -> makeBaseDict ()
+    , .compiling -> False
+    , .compileName -> ""
+    , .compileBuffer -> Nil
     };
   let input = getContents ();
   let lines = splitLines input;

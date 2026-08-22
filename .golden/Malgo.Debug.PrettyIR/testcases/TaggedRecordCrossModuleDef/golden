@@ -1,0 +1,166 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+data Point  = Point({x : Int32, y : Int32})
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+data Point  = Point({x : Int32, y : Int32})
+
+=== ToFun ===
+def Point = \constructor$0 -> Point(constructor$0)
+
+=== SaturateCtor ===
+def Point = \constructor$0 -> Point(constructor$0)
+
+=== ReuseSpecialize ===
+def Point = \constructor$0 -> Point(constructor$0)
+
+=== ToCore ===
+def Point(return$1) =
+  \constructor$0 return$2 . {
+    Point(constructor$0) ~ return$2
+  } ~ return$1
+
+=== Flat ===
+def Point(return$1) =
+  \constructor$0 return$2 . {
+    Point(constructor$0) ~ return$2
+  } ~ return$1
+
+=== Join ===
+def Point(return$1) =
+  \constructor$0 return$2 . {
+    Point(constructor$0) ~ return$2
+  } ~ return$1
+
+=== ClosureConv ===
+toplevel fn Point(return$1) =
+  let closure$7 = closure lambda$4()
+  return return$1(closure$7)
+
+closure fn lambda$4(self$5, constructor$0, return$2) =
+  let struct$6 = Point(constructor$0)
+  return return$2(struct$6)
+
+=== Peephole ===
+toplevel fn Point(return$1) =
+  let closure$7 = closure lambda$4()
+  return return$1(closure$7)
+
+closure fn lambda$4(self$5, constructor$0, return$2) =
+  let struct$6 = Point(constructor$0)
+  return return$2(struct$6)
+
+=== Perceus ===
+toplevel fn Point(return$1) =
+  let closure$7 = closure lambda$4()
+  return return$1(closure$7)
+
+closure fn lambda$4(self$5, constructor$0, return$2) =
+  drop self$5
+  let struct$6 = Point(constructor$0)
+  return return$2(struct$6)
+
+=== Reuse ===
+toplevel fn Point(return$1) =
+  let closure$7 = closure lambda$4()
+  return return$1(closure$7)
+
+closure fn lambda$4(self$5, constructor$0, return$2) =
+  dropReuse reuse$8 = self$5 /1
+  let struct$6 = reuse reuse$8 Point(constructor$0)
+  return return$2(struct$6)
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  data Point  = Point({x : Int32, y : Int32})
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
++ def Point = \constructor$0 -> Point(constructor$0)
+- 
+- data Point  = Point({x : Int32, y : Int32})
+
+
+=== ToFun -> SaturateCtor ===
+  def Point = \constructor$0 -> Point(constructor$0)
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def Point = \constructor$0 -> Point(constructor$0)
+
+
+=== ReuseSpecialize -> ToCore ===
+- def Point = \constructor$0 -> Point(constructor$0)
++ def Point(return$1) =
++   \constructor$0 return$2 . {
++     Point(constructor$0) ~ return$2
++   } ~ return$1
+
+
+=== ToCore -> Flat ===
+  def Point(return$1) =
+    \constructor$0 return$2 . {
+      Point(constructor$0) ~ return$2
+    } ~ return$1
+
+
+=== Flat -> Join ===
+  def Point(return$1) =
+    \constructor$0 return$2 . {
+      Point(constructor$0) ~ return$2
+    } ~ return$1
+
+
+=== Join -> ClosureConv ===
+- def Point(return$1) =
++ toplevel fn Point(return$1) =
+-   \constructor$0 return$2 . {
++   let closure$7 = closure lambda$4()
+-     Point(constructor$0) ~ return$2
++   return return$1(closure$7)
+-   } ~ return$1
++ 
++ closure fn lambda$4(self$5, constructor$0, return$2) =
++   let struct$6 = Point(constructor$0)
++   return return$2(struct$6)
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn Point(return$1) =
+    let closure$7 = closure lambda$4()
+    return return$1(closure$7)
+  
+  closure fn lambda$4(self$5, constructor$0, return$2) =
+    let struct$6 = Point(constructor$0)
+    return return$2(struct$6)
+
+
+=== Peephole -> Perceus ===
+  toplevel fn Point(return$1) =
+    let closure$7 = closure lambda$4()
+    return return$1(closure$7)
+  
+  closure fn lambda$4(self$5, constructor$0, return$2) =
++   drop self$5
+    let struct$6 = Point(constructor$0)
+    return return$2(struct$6)
+
+
+=== Perceus -> Reuse ===
+  toplevel fn Point(return$1) =
+    let closure$7 = closure lambda$4()
+    return return$1(closure$7)
+  
+  closure fn lambda$4(self$5, constructor$0, return$2) =
+-   drop self$5
++   dropReuse reuse$8 = self$5 /1
+-   let struct$6 = Point(constructor$0)
++   let struct$6 = reuse reuse$8 Point(constructor$0)
+    return return$2(struct$6)

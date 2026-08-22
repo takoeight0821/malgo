@@ -20,6 +20,60 @@
          (fn
             ((clause ((con Just (v)) _) (seq (do (apply Just v))))
                (clause (Nothing k) (seq (do (apply k (tuple))))))))
+      (sig
+         bindMaybe
+         (-> (app Maybe (a)) (-> (-> a (app Maybe (b))) (app Maybe (b)))))
+      (def
+         bindMaybe
+         (fn
+            ((clause (Nothing _) (seq (do Nothing)))
+               (clause ((con Just (x)) f) (seq (do (apply f x)))))))
+      (sig fromMaybe (-> (app Maybe (a)) (-> a a)))
+      (def
+         fromMaybe
+         (fn
+            ((clause ((con Just (v)) _) (seq (do v)))
+               (clause (Nothing d) (seq (do d))))))
+      (sig getEnv (-> String (app Maybe (String))))
+      (def
+         getEnv
+         (fn
+            ((clause
+                ((con String# (name)))
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply
+                               if
+                               (apply
+                                  (apply
+                                     eqInt32
+                                     (apply Int32# (apply hasEnv# name)))
+                                  (apply Int32# (int32 1))))
+                            (fn
+                               ((clause
+                                   (_)
+                                   (seq
+                                      (do
+                                         (apply
+                                            Just
+                                            (apply
+                                               String#
+                                               (apply getEnvRaw# name)))))))))
+                         (fn ((clause (_) (seq (do Nothing))))))))))))
+      (sig xdgCacheHome String)
+      (def
+         xdgCacheHome
+         (apply
+            (apply fromMaybe (apply getEnv (string "XDG_CACHE_HOME")))
+            (apply
+               (apply
+                  appendString
+                  (apply
+                     (apply fromMaybe (apply getEnv (string "HOME")))
+                     (string "")))
+               (string "/.cache"))))
       (data List (a) ((Nil ()) (Cons (a (app List (a))))))
       (sig head (-> (app List (a)) a))
       (def
@@ -54,6 +108,201 @@
                         (apply
                            (apply Cons (apply f x))
                            (apply (apply mapList f) xs))))))))
+      (sig appendList (-> (app List (a)) (-> (app List (a)) (app List (a)))))
+      (def
+         appendList
+         (fn
+            ((clause (Nil ys) (seq (do ys)))
+               (clause
+                  ((con Cons (x xs)) ys)
+                  (seq
+                     (do (apply (apply Cons x) (apply (apply appendList xs) ys))))))))
+      (sig containsNul (-> String Bool))
+      (def
+         containsNul
+         (fn
+            ((clause
+                (s)
+                (seq
+                   (do
+                      (apply
+                         (apply (apply containsNulAt s) (int64 0))
+                         (apply lengthString s))))))))
+      (sig containsNulAt (-> String (-> Int64 (-> Int64 Bool))))
+      (def
+         containsNulAt
+         (fn
+            ((clause
+                (s i len)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (apply (apply geInt64 i) len))
+                            (fn ((clause (_) (seq (do False))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply
+                                            (apply
+                                               if
+                                               (apply
+                                                  (apply
+                                                     eqChar
+                                                     (apply (apply atString i) s))
+                                                  (apply Char# (char '\NUL'))))
+                                            (fn ((clause (_) (seq (do True))))))
+                                         (fn
+                                            ((clause
+                                                (_)
+                                                (seq
+                                                   (do
+                                                      (apply
+                                                         (apply
+                                                            (apply
+                                                               containsNulAt
+                                                               s)
+                                                            (apply
+                                                               (apply addInt64 i)
+                                                               (int64 1)))
+                                                         len)))))))))))))))))))
+      (sig failLoudly (-> String a))
+      (def
+         failLoudly
+         (fn
+            ((clause
+                (msg)
+                (seq
+                   (let _ (apply printStderr msg))
+                   (do (apply exitWith (int32 1))))))))
+      (sig joinWithNul (-> (app List (String)) String))
+      (def
+         joinWithNul
+         (fn
+            ((clause (Nil) (seq (do (string ""))))
+               (clause
+                  ((con Cons (s rest)))
+                  (seq
+                     (do
+                        (apply
+                           (apply
+                              (apply if (apply containsNul s))
+                              (fn
+                                 ((clause
+                                     (_)
+                                     (seq
+                                        (do
+                                           (apply
+                                              failLoudly
+                                              (string
+                                                 "runProcess: an argument contains an embedded NUL byte, which the NUL-terminated wire encoding cannot represent"))))))))
+                           (fn
+                              ((clause
+                                  (_)
+                                  (seq
+                                     (do
+                                        (apply
+                                           (apply appendString s)
+                                           (apply
+                                              (apply appendString (string "\NUL"))
+                                              (apply joinWithNul rest)))))))))))))))
+      (sig runProcessBoxed# (-> String# (-> String (tuple Int32 String String))))
+      (def
+         runProcessBoxed#
+         (fn
+            ((clause
+                (cmd (con String# (argsBlob)))
+                (seq (do (apply (apply runProcess# cmd) argsBlob)))))))
+      (data
+         ProcessResult
+         ()
+         ((ProcessResult
+             ((record (exitCode Int32) (stdout String) (stderr String))))))
+      (sig toProcessResult (-> (tuple Int32 String String) ProcessResult))
+      (def
+         toProcessResult
+         (fn
+            ((clause
+                ((tuple code out err))
+                (seq (do (record (exitCode code) (stdout out) (stderr err))))))))
+      (sig runProcess (-> String (-> (app List (String)) ProcessResult)))
+      (def
+         runProcess
+         (fn
+            ((clause
+                ((con String# (cmd)) args)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (apply containsNul (apply String# cmd)))
+                            (fn
+                               ((clause
+                                   (_)
+                                   (seq
+                                      (do
+                                         (apply
+                                            failLoudly
+                                            (string
+                                               "runProcess: cmd contains an embedded NUL byte"))))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         toProcessResult
+                                         (apply
+                                            (apply runProcessBoxed# cmd)
+                                            (apply joinWithNul args)))))))))))))))
+      (sig isSuccess (-> ProcessResult Bool))
+      (def
+         isSuccess
+         (fn
+            ((clause
+                (r)
+                (seq
+                   (do (apply (apply eqInt32 (project r "exitCode")) (int32 0))))))))
+      (sig commandsExist (-> (app List (String)) Bool))
+      (def
+         commandsExist
+         (fn
+            ((clause (Nil) (seq (do True)))
+               (clause
+                  ((con Cons (name rest)))
+                  (seq
+                     (do
+                        (apply
+                           (apply
+                              (apply
+                                 if
+                                 (apply
+                                    isSuccess
+                                    (apply
+                                       (apply runProcess (string "command"))
+                                       (apply
+                                          (apply Cons (string "-v"))
+                                          (apply (apply Cons name) Nil)))))
+                              (fn
+                                 ((clause
+                                     (_)
+                                     (seq (do (apply commandsExist rest)))))))
+                           (fn ((clause (_) (seq (do False))))))))))))
+      (sig bail (-> Int32 (-> String a)))
+      (def
+         bail
+         (fn
+            ((clause
+                (code msg)
+                (seq
+                   (do
+                      (apply
+                         printStderr
+                         (apply (apply appendString msg) (string "\n"))))
+                   (do (apply exitWith code)))))))
       (sig listToString (-> (app List (Char)) String))
       (def
          listToString
@@ -167,6 +416,38 @@
                                                                  tailString
                                                                  str))))))))
                                            (fn ((clause (_) (seq (do str))))))))))))))))))
+      (sig allString (-> (-> Char Bool) (-> String Bool)))
+      (def
+         allString
+         (fn
+            ((clause
+                (pred str)
+                (seq
+                   (do
+                      (apply
+                         (apply case (apply headString str))
+                         (fn
+                            ((clause (Nothing) (seq (do True)))
+                               (clause
+                                  ((con Just (c)))
+                                  (seq
+                                     (do
+                                        (apply
+                                           (apply
+                                              (apply if (apply pred c))
+                                              (fn
+                                                 ((clause
+                                                     (_)
+                                                     (seq
+                                                        (do
+                                                           (apply
+                                                              (apply
+                                                                 allString
+                                                                 pred)
+                                                              (apply
+                                                                 tailString
+                                                                 str))))))))
+                                           (fn ((clause (_) (seq (do False))))))))))))))))))
       (sig concatString (-> (app List (String)) String))
       (def
          concatString
@@ -210,6 +491,192 @@
             ((clause
                 (f g)
                 (seq (do (fn ((clause (x) (seq (do (apply f (apply g x)))))))))))))
+      (sig stringContains (-> String (-> String Bool)))
+      (def
+         stringContains
+         (fn
+            ((clause
+                (needle haystack)
+                (seq
+                   (do
+                      (apply
+                         (apply (apply stringContainsFrom needle) haystack)
+                         (int64 0))))))))
+      (sig stringContainsFrom (-> String (-> String (-> Int64 Bool))))
+      (def
+         stringContainsFrom
+         (fn
+            ((clause
+                (needle haystack i)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply
+                               if
+                               (apply
+                                  (apply
+                                     gtInt64
+                                     (apply
+                                        (apply addInt64 i)
+                                        (apply lengthString needle)))
+                                  (apply lengthString haystack)))
+                            (fn ((clause (_) (seq (do False))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply
+                                            (apply
+                                               if
+                                               (apply
+                                                  (apply
+                                                     eqString
+                                                     (apply
+                                                        (apply
+                                                           (apply
+                                                              substring
+                                                              haystack)
+                                                           i)
+                                                        (apply
+                                                           (apply addInt64 i)
+                                                           (apply
+                                                              lengthString
+                                                              needle))))
+                                                  needle))
+                                            (fn ((clause (_) (seq (do True))))))
+                                         (fn
+                                            ((clause
+                                                (_)
+                                                (seq
+                                                   (do
+                                                      (apply
+                                                         (apply
+                                                            (apply
+                                                               stringContainsFrom
+                                                               needle)
+                                                            haystack)
+                                                         (apply
+                                                            (apply addInt64 i)
+                                                            (int64 1)))))))))))))))))))))
+      (sig trimTrailingNewlines (-> String String))
+      (def
+         trimTrailingNewlines
+         (fn
+            ((clause
+                (s)
+                (seq
+                   (do
+                      (apply
+                         reverseString
+                         (apply
+                            (apply
+                               dropWhileString
+                               (apply eqChar (apply Char# (char '\n'))))
+                            (apply reverseString s)))))))))
+      (sig words (-> String (app List (String))))
+      (def
+         words
+         (fn
+            ((clause
+                (s)
+                (seq
+                   (let trimmed (apply (apply dropWhileString isWhiteSpace) s))
+                   (do
+                      (apply
+                         (apply
+                            (apply
+                               if
+                               (apply (apply eqString trimmed) (string "")))
+                            (fn ((clause (_) (seq (do Nil))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply
+                                            Cons
+                                            (apply
+                                               (apply
+                                                  takeWhileString
+                                                  (opapp << not isWhiteSpace))
+                                               trimmed))
+                                         (apply
+                                            words
+                                            (apply
+                                               (apply
+                                                  dropWhileString
+                                                  (opapp << not isWhiteSpace))
+                                               trimmed)))))))))))))))
+      (sig lines (-> String (app List (String))))
+      (def
+         lines
+         (fn
+            ((clause
+                (s)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (apply (apply eqString s) (string "")))
+                            (fn ((clause (_) (seq (do Nil))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq
+                                   (do
+                                      (apply
+                                         (apply
+                                            Cons
+                                            (apply
+                                               (apply
+                                                  takeWhileString
+                                                  (apply
+                                                     neChar
+                                                     (apply Char# (char '\n'))))
+                                               s))
+                                         (apply
+                                            linesRest
+                                            (apply
+                                               (apply
+                                                  dropWhileString
+                                                  (apply
+                                                     neChar
+                                                     (apply Char# (char '\n'))))
+                                               s)))))))))))))))
+      (sig linesRest (-> String (app List (String))))
+      (def
+         linesRest
+         (fn
+            ((clause
+                (s)
+                (seq
+                   (do
+                      (apply
+                         (apply
+                            (apply if (apply (apply eqString s) (string "")))
+                            (fn ((clause (_) (seq (do Nil))))))
+                         (fn
+                            ((clause
+                                (_)
+                                (seq (do (apply lines (apply tailString s))))))))))))))
+      (sig unlines (-> (app List (String)) String))
+      (def
+         unlines
+         (fn
+            ((clause (Nil) (seq (do (string ""))))
+               (clause
+                  ((con Cons (x xs)))
+                  (seq
+                     (do
+                        (apply
+                           (apply appendString x)
+                           (apply
+                              (apply appendString (string "\n"))
+                              (apply unlines xs)))))))))
       (infix left 0 |>)
       (sig |> (-> a (-> (-> a b) b)))
       (def |> (fn ((clause (x f) (seq (do (apply f x)))))))
@@ -222,18 +689,28 @@
          (fn
             ((clause (True t _) (seq (do (apply t (tuple)))))
                (clause (False _ f) (seq (do (apply f (tuple))))))))
-      (sig unless (-> Bool (-> a (-> (block a) a))))
+      (infix right 3 &&)
+      (sig && (-> Bool (-> Bool Bool)))
+      (def
+         &&
+         (fn ((clause (True b) (seq (do b))) (clause (False _) (seq (do False))))))
+      (infix right 2 ||)
+      (sig || (-> Bool (-> Bool Bool)))
+      (def
+         ||
+         (fn ((clause (True _) (seq (do True))) (clause (False b) (seq (do b))))))
+      (sig unless (-> Bool (-> (block (tuple)) (tuple))))
       (def
          unless
          (fn
             ((clause
-                (c tValue f)
+                (c f)
                 (seq
                    (do
                       (apply
                          (apply
                             (apply if c)
-                            (fn ((clause (_) (seq (do tValue))))))
+                            (fn ((clause (_) (seq (do (tuple)))))))
                          f)))))))
       (sig cond (-> (app List ((tuple Bool (block a)))) a))
       (def

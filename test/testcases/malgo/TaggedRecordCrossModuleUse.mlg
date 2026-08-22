@@ -1,0 +1,16 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "./TaggedRecordCrossModuleDef.mlg"
+
+-- #422 cross-module regression: Point is declared in
+-- TaggedRecordCrossModuleDef.mlg, a different module from this one. Before
+-- `pTaggedRecordP` (the #422 parser fix), sumPoint's tagged pattern here
+-- mis-parsed in bare clause-parameter position exactly as
+-- TaggedRecordConstruct.mlg's single-module case did. This regresses that
+-- same fix across a module boundary, exercising `fromPattern`'s ordinary
+-- structural matching (by field name) with no field-order table involved.
+def sumPoint = { Point { .x -> x, .y -> y } -> addInt32(x, y) }
+
+def main = {
+  printString (toStringInt32 (sumPoint (Point { .x -> 4, .y -> 9 })))
+}

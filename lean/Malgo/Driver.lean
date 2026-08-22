@@ -13,6 +13,7 @@ import Malgo.Sequent.Eval
 import Malgo.Sequent.BigStepEval
 import Malgo.Query
 import Malgo.Query.Engine
+import Malgo.Backend.Scheme
 import Malgo.Backend.Zig
 import Malgo.Backend.Zig.Toolchain
 
@@ -205,8 +206,8 @@ already-parsed module seeded into the engine's `cacheParsedModule` under its
 own resolved name, so `fetchLinkedProgram` starts from a cache hit instead
 of re-deriving the module's identity.
 
-`compileAndEval`/`compileZig`/`compileToNativeExecutable` (all three CLI
-entries below) share this exact parse+link+seed sequence —
+`compileAndEval`/`compileScheme`/`compileZig`/`compileToNativeExecutable`
+(all four CLI entries below) share this exact parse+link+seed sequence —
 `linkForCli` is the one place it lives, so a future fix only has one call
 site to update. -/
 private def linkForCli (ws : Workspace) (path : System.FilePath) :
@@ -236,9 +237,19 @@ def compileAndEval (flag : Flag) (path : System.FilePath) : IO UInt32 := do
     match flag.evalMode with
     | .smallStep => Malgo.Sequent.Eval.evalProgram moduleName handlers linked
     | .bigStep => Malgo.Sequent.BigStepEval.bigStepEvalProgram moduleName handlers linked
+
+/-- CLI entry for `malgo eval --target scheme`: link exactly as
+`compileAndEval` but, instead of interpreting, emit the Scheme source for the
+linked Join program. Mirrors Haskell `Driver.compileFromAST`'s `TargetScheme`
+branch. -/
+def compileScheme (flag : Flag) (path : System.FilePath) : IO UInt32 := do
+  let ws ← Workspace.setup
+  MalgoM.run flag {} do
+    let (moduleName, linked) ← linkForCli ws path
+    MalgoM.io (IO.print (Malgo.Backend.Scheme.compileToScheme moduleName linked))
   return 0
 
-/-- CLI entry for `malgo eval --target zig`: link exactly as `compileAndEval`,
+/-- CLI entry for `malgo eval --target zig`: link exactly as `compileScheme`,
 then run the Zig lowering pipeline (`Malgo.Backend.Zig.compileToZigText`, which
 runs ClosureConv → Peephole → Perceus → Reuse, the linearity check, and Emit)
 and print the generated Zig source. Mirrors Haskell `Driver.compileFromAST`'s

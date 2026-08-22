@@ -1,0 +1,425 @@
+module {..} = import "../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../runtime/malgo/Prelude.mlg"
+
+-- A minimal JSON reader/writer: parse, read-only accessors, a jq-`*`-style
+-- recursive merge, and a serializer -- for scripts that pull fields out of
+-- a config file and, in nix-config's manifest-merge use case, combine two
+-- of them back into one.
+--
+-- `JNumber` keeps the raw numeral text rather than decoding it to a
+-- `Double`: there is no `String -> Double` (or `Int -> Double`)
+-- conversion primitive anywhere in this codebase today, and no known
+-- call site here needs numeric JSON values at all. Keeping the token
+-- losslessly means it round-trips exactly if a future writer needs it,
+-- and a `jsonAsNumber : Json -> Maybe Double` can be added later backed
+-- by a real primitive, not a hand-rolled float parser nobody has checked
+-- against a reference. Parsing still validates the numeral's *shape*
+-- (sign/integer/fraction/exponent), so malformed input still fails.
+data Json
+  = JNull
+  | JBool Bool
+  | JNumber String
+  | JString String
+  | JArray (List Json)
+  | JObject (List (String, Json))
+
+def parseJson : String -> Maybe Json
+def parseJson = { s ->
+  let p0 = jsonSkipWs s 0i64;
+  bindMaybe (jsonParseValue s p0) { {.value -> v, .pos -> p1} ->
+    let p2 = jsonSkipWs s p1;
+    if (eqInt64 p2 (lengthString s))
+      { Just v }
+      { Nothing }
+  }
+}
+
+def jsonField : String -> Json -> Maybe Json
+def jsonField = { key j ->
+  bindMaybe (jsonObjectEntries j) { entries -> jsonLookupEntry key entries }
+}
+
+def jsonLookupEntry : String -> List (String, Json) -> Maybe Json
+def jsonLookupEntry =
+  { _   Nil -> Nothing,
+    key (Cons {k, v} rest) ->
+      if (eqString key k) { Just v } { jsonLookupEntry key rest }
+  }
+
+def jsonObjectEntries : Json -> Maybe (List (String, Json))
+def jsonObjectEntries =
+  { (JObject entries) -> Just entries,
+    _ -> Nothing
+  }
+
+def jsonArrayItems : Json -> Maybe (List Json)
+def jsonArrayItems =
+  { (JArray items) -> Just items,
+    _ -> Nothing
+  }
+
+def jsonAsString : Json -> Maybe String
+def jsonAsString =
+  { (JString str) -> Just str,
+    _ -> Nothing
+  }
+
+-- ─── Merge (jq's `*`) ────────────────────────────────────────────────────
+
+-- Recursive merge matching jq's `*` exactly: when both sides are objects,
+-- merge recursively per shared key (keys unique to either side pass
+-- through); for any other combination (array/array, object/scalar,
+-- scalar/object, etc.) `b` wins outright -- arrays are replaced, not
+-- concatenated. A caller that wants jq's `(.a // []) + (.b // []) | unique`
+-- array-union-dedup for one specific key builds that themselves via
+-- `jsonArrayItems`, same as jq needs it spelled out as a separate `|=`
+-- override rather than folding it into `*` itself.
+def jsonMerge : Json -> Json -> Json
+def jsonMerge =
+  { (JObject aEntries) (JObject bEntries) -> JObject (jsonMergeEntries aEntries bEntries),
+    _ b -> b
+  }
+
+def jsonMergeEntries : List (String, Json) -> List (String, Json) -> List (String, Json)
+def jsonMergeEntries = { aEntries bEntries ->
+  appendList
+    (mapList (jsonMergeOneEntry bEntries) aEntries)
+    (filter (jsonIsNewKey aEntries) bEntries)
+}
+
+def jsonMergeOneEntry : List (String, Json) -> (String, Json) -> (String, Json)
+def jsonMergeOneEntry = { bEntries {k, v} ->
+  case (jsonLookupEntry k bEntries) {
+    Nothing -> (k, v),
+    (Just bVal) -> (k, jsonMerge v bVal)
+  }
+}
+
+def jsonIsNewKey : List (String, Json) -> (String, Json) -> Bool
+def jsonIsNewKey = { aEntries {k, _} ->
+  case (jsonLookupEntry k aEntries) {
+    Nothing -> True,
+    (Just _) -> False
+  }
+}
+
+-- ─── Serialize ───────────────────────────────────────────────────────────
+
+def jsonToString : Json -> String
+def jsonToString =
+  { JNull -> "null",
+    (JBool True) -> "true",
+    (JBool False) -> "false",
+    (JNumber s) -> s,
+    (JString s) -> jsonEncodeString s,
+    (JArray items) -> appendString "[" (appendString (concatString (punctuate "," (mapList jsonToString items))) "]"),
+    (JObject entries) -> appendString "{" (appendString (concatString (punctuate "," (mapList jsonEncodeEntry entries))) "}")
+  }
+
+def jsonEncodeEntry : (String, Json) -> String
+def jsonEncodeEntry = { {k, v} -> appendString (jsonEncodeString k) (appendString ":" (jsonToString v)) }
+
+def jsonEncodeString : String -> String
+def jsonEncodeString = { s -> appendString "\"" (appendString (jsonEscapeChars s) "\"") }
+
+-- Escapes exactly the characters `jsonParseEscapeAt` (above) already
+-- decodes, so parse/serialize stay symmetric -- other control characters
+-- pass through raw, same "add real support if a call site ever needs it"
+-- discipline as this file's `\uXXXX` decoding gap.
+def jsonEscapeChars : String -> String
+def jsonEscapeChars = { s ->
+  case (headString s) {
+    Nothing -> "",
+    (Just c) -> appendString (jsonEscapeChar c) (jsonEscapeChars (tailString s))
+  }
+}
+
+def jsonEscapeChar : Char -> String
+def jsonEscapeChar =
+  { (Char# '"'#)  -> "\\\"",
+    (Char# '\\'#) -> "\\\\",
+    (Char# '\n'#) -> "\\n",
+    (Char# '\t'#) -> "\\t",
+    (Char# '\r'#) -> "\\r",
+    (Char# '\b'#) -> "\\b",
+    (Char# '\f'#) -> "\\f",
+    c -> consString c ""
+  }
+
+-- ─── Whitespace ──────────────────────────────────────────────────────────
+
+def isJsonWs : Char -> Bool
+def isJsonWs =
+  { (Char# ' '#)  -> True,
+    (Char# '\t'#) -> True,
+    (Char# '\n'#) -> True,
+    (Char# '\r'#) -> True,
+    _ -> False
+  }
+
+def jsonSkipWs : String -> Int64 -> Int64
+def jsonSkipWs = { s pos ->
+  if (jsonAtCharPred s pos isJsonWs)
+    { jsonSkipWs s (addInt64 pos 1i64) }
+    { pos }
+}
+
+-- True when the character at `pos` exists and satisfies `pred`.
+def jsonAtCharPred : String -> Int64 -> (Char -> Bool) -> Bool
+def jsonAtCharPred = { s pos pred ->
+  if (geInt64 pos (lengthString s))
+    { False }
+    { pred (atString pos s) }
+}
+
+-- True when the character at `pos` exists and equals `c`.
+def jsonAtChar : String -> Int64 -> Char -> Bool
+def jsonAtChar = { s pos c -> jsonAtCharPred s pos (eqChar c) }
+
+-- ─── Value dispatch ──────────────────────────────────────────────────────
+
+def jsonParseValue : String -> Int64 -> Maybe {value: Json, pos: Int64}
+def jsonParseValue = { s pos ->
+  if (geInt64 pos (lengthString s))
+    { Nothing }
+    { jsonParseValueAt (atString pos s) s pos }
+}
+
+def jsonParseValueAt : Char -> String -> Int64 -> Maybe {value: Json, pos: Int64}
+def jsonParseValueAt =
+  { (Char# '{'#) s pos -> jsonParseObject s pos,
+    (Char# '['#) s pos -> jsonParseArray s pos,
+    (Char# '"'#) s pos -> jsonParseStringValue s pos,
+    (Char# 't'#) s pos -> jsonParseLit s pos "true" (JBool True),
+    (Char# 'f'#) s pos -> jsonParseLit s pos "false" (JBool False),
+    (Char# 'n'#) s pos -> jsonParseLit s pos "null" JNull,
+    c s pos ->
+      if (jsonIsNumberStart c)
+        { jsonParseNumber s pos }
+        { Nothing }
+  }
+
+def jsonIsNumberStart : Char -> Bool
+def jsonIsNumberStart =
+  { (Char# '-'#) -> True,
+    c -> isDigit c
+  }
+
+-- Matches the literal `lit` (one of "true"/"false"/"null") at `pos`.
+def jsonParseLit : String -> Int64 -> String -> Json -> Maybe {value: Json, pos: Int64}
+def jsonParseLit = { s pos lit j ->
+  let endPos = addInt64 pos (lengthString lit);
+  if (gtInt64 endPos (lengthString s))
+    { Nothing }
+    { if (eqString (substring s pos endPos) lit)
+        { Just {.value -> j, .pos -> endPos} }
+        { Nothing }
+    }
+}
+
+-- ─── Strings ─────────────────────────────────────────────────────────────
+
+def jsonParseStringValue : String -> Int64 -> Maybe {value: Json, pos: Int64}
+def jsonParseStringValue = { s pos ->
+  -- `pos` points at the opening quote.
+  bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {.value -> str, .pos -> p} ->
+    Just {.value -> JString str, .pos -> p}
+  }
+}
+
+-- `pos` points just past the opening quote; returns the decoded string
+-- content and the position just past the closing quote.
+def jsonParseRawString : String -> Int64 -> Maybe {value: String, pos: Int64}
+def jsonParseRawString = { s pos ->
+  if (geInt64 pos (lengthString s))
+    { Nothing }
+    { jsonParseRawStringAt (atString pos s) s pos }
+}
+
+def jsonParseRawStringAt : Char -> String -> Int64 -> Maybe {value: String, pos: Int64}
+def jsonParseRawStringAt =
+  { (Char# '"'#)  _ pos -> Just {.value -> "", .pos -> addInt64 pos 1i64},
+    (Char# '\\'#) s pos -> jsonParseEscape s (addInt64 pos 1i64),
+    c s pos ->
+      bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {.value -> rest, .pos -> p} ->
+        Just {.value -> consString c rest, .pos -> p}
+      }
+  }
+
+-- `pos` points at the character right after the backslash.
+def jsonParseEscape : String -> Int64 -> Maybe {value: String, pos: Int64}
+def jsonParseEscape = { s pos ->
+  if (geInt64 pos (lengthString s))
+    { Nothing }
+    { jsonParseEscapeAt (atString pos s) s pos }
+}
+
+def jsonParseEscapeAt : Char -> String -> Int64 -> Maybe {value: String, pos: Int64}
+def jsonParseEscapeAt =
+  { (Char# '"'#)  s pos -> jsonConsEscaped (Char# '"'#)  s pos,
+    (Char# '\\'#) s pos -> jsonConsEscaped (Char# '\\'#) s pos,
+    (Char# '/'#)  s pos -> jsonConsEscaped (Char# '/'#)  s pos,
+    (Char# 'n'#)  s pos -> jsonConsEscaped (Char# '\n'#) s pos,
+    (Char# 't'#)  s pos -> jsonConsEscaped (Char# '\t'#) s pos,
+    (Char# 'r'#)  s pos -> jsonConsEscaped (Char# '\r'#) s pos,
+    (Char# 'b'#)  s pos -> jsonConsEscaped (Char# '\b'#) s pos,
+    (Char# 'f'#)  s pos -> jsonConsEscaped (Char# '\f'#) s pos,
+    -- `\uXXXX` (Unicode escapes, including surrogate-pair combining for
+    -- codepoints beyond U+FFFF) isn't handled -- a file that needs it
+    -- fails to parse cleanly instead of silently decoding the wrong
+    -- character. Add real support if a call site ever needs it.
+    _ _ _ -> Nothing
+  }
+
+def jsonConsEscaped : Char -> String -> Int64 -> Maybe {value: String, pos: Int64}
+def jsonConsEscaped = { c s pos ->
+  bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {.value -> rest, .pos -> p} ->
+    Just {.value -> consString c rest, .pos -> p}
+  }
+}
+
+-- ─── Numbers ─────────────────────────────────────────────────────────────
+
+def jsonParseNumber : String -> Int64 -> Maybe {value: Json, pos: Int64}
+def jsonParseNumber = { s pos ->
+  bindMaybe (jsonScanNumber s pos) { endPos ->
+    Just {.value -> JNumber (substring s pos endPos), .pos -> endPos}
+  }
+}
+
+-- `-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`, returning the position
+-- just past the numeral, or `Nothing` if `pos` isn't a well-formed one.
+def jsonScanNumber : String -> Int64 -> Maybe Int64
+def jsonScanNumber = { s pos ->
+  let p1 = if (jsonAtChar s pos (Char# '-'#)) { addInt64 pos 1i64 } { pos };
+  bindMaybe (jsonScanDigits s p1) { p2 ->
+    bindMaybe (jsonScanFrac s p2) { p3 ->
+      jsonScanExp s p3
+    }
+  }
+}
+
+-- Requires at least one digit; `Nothing` if `pos` isn't a digit.
+def jsonScanDigits : String -> Int64 -> Maybe Int64
+def jsonScanDigits = { s pos ->
+  if (jsonAtCharPred s pos isDigit)
+    { Just (jsonScanDigitsRest s (addInt64 pos 1i64)) }
+    { Nothing }
+}
+
+def jsonScanDigitsRest : String -> Int64 -> Int64
+def jsonScanDigitsRest = { s pos ->
+  if (jsonAtCharPred s pos isDigit)
+    { jsonScanDigitsRest s (addInt64 pos 1i64) }
+    { pos }
+}
+
+-- Optional `.` followed by one or more digits. `.` present without a
+-- following digit is malformed (`Nothing`), not "no fraction part".
+def jsonScanFrac : String -> Int64 -> Maybe Int64
+def jsonScanFrac = { s pos ->
+  if (jsonAtChar s pos (Char# '.'#))
+    { jsonScanDigits s (addInt64 pos 1i64) }
+    { Just pos }
+}
+
+-- Optional `e`/`E`, optional sign, one or more digits -- same
+-- all-or-nothing rule as the fraction part.
+def jsonScanExp : String -> Int64 -> Maybe Int64
+def jsonScanExp = { s pos ->
+  if (jsonAtChar s pos (Char# 'e'#))
+    { jsonScanExpDigits s pos }
+    { if (jsonAtChar s pos (Char# 'E'#))
+        { jsonScanExpDigits s pos }
+        { Just pos }
+    }
+}
+
+def jsonScanExpDigits : String -> Int64 -> Maybe Int64
+def jsonScanExpDigits = { s pos ->
+  let p1 = addInt64 pos 1i64;
+  let p2 =
+    if (jsonAtChar s p1 (Char# '+'#))
+      { addInt64 p1 1i64 }
+      { if (jsonAtChar s p1 (Char# '-'#)) { addInt64 p1 1i64 } { p1 } };
+  jsonScanDigits s p2
+}
+
+-- ─── Arrays ──────────────────────────────────────────────────────────────
+
+def jsonParseArray : String -> Int64 -> Maybe {value: Json, pos: Int64}
+def jsonParseArray = { s pos ->
+  -- `pos` points at '['.
+  let p1 = jsonSkipWs s (addInt64 pos 1i64);
+  if (jsonAtChar s p1 (Char# ']'#))
+    { Just {.value -> JArray Nil, .pos -> addInt64 p1 1i64} }
+    { bindMaybe (jsonParseArrayItems s p1) { {.value -> items, .pos -> p2} ->
+        Just {.value -> JArray items, .pos -> p2}
+      }
+    }
+}
+
+def jsonParseArrayItems : String -> Int64 -> Maybe {value: List Json, pos: Int64}
+def jsonParseArrayItems = { s pos ->
+  bindMaybe (jsonParseValue s pos) { {.value -> v, .pos -> p1} ->
+    let p2 = jsonSkipWs s p1;
+    if (jsonAtChar s p2 (Char# ','#))
+      { let p3 = jsonSkipWs s (addInt64 p2 1i64);
+        bindMaybe (jsonParseArrayItems s p3) { {.value -> rest, .pos -> p4} ->
+          Just {.value -> Cons v rest, .pos -> p4}
+        }
+      }
+      { if (jsonAtChar s p2 (Char# ']'#))
+          { Just {.value -> Cons v Nil, .pos -> addInt64 p2 1i64} }
+          { Nothing }
+      }
+  }
+}
+
+-- ─── Objects ─────────────────────────────────────────────────────────────
+
+def jsonParseObject : String -> Int64 -> Maybe {value: Json, pos: Int64}
+def jsonParseObject = { s pos ->
+  -- `pos` points at '{'.
+  let p1 = jsonSkipWs s (addInt64 pos 1i64);
+  if (jsonAtChar s p1 (Char# '}'#))
+    { Just {.value -> JObject Nil, .pos -> addInt64 p1 1i64} }
+    { bindMaybe (jsonParseObjectEntries s p1) { {.value -> entries, .pos -> p2} ->
+        Just {.value -> JObject entries, .pos -> p2}
+      }
+    }
+}
+
+def jsonParseObjectEntries : String -> Int64 -> Maybe {value: List (String, Json), pos: Int64}
+def jsonParseObjectEntries = { s pos ->
+  bindMaybe (jsonParseObjectEntry s pos) { {.value -> entry, .pos -> p1} ->
+    let p2 = jsonSkipWs s p1;
+    if (jsonAtChar s p2 (Char# ','#))
+      { let p3 = jsonSkipWs s (addInt64 p2 1i64);
+        bindMaybe (jsonParseObjectEntries s p3) { {.value -> rest, .pos -> p4} ->
+          Just {.value -> Cons entry rest, .pos -> p4}
+        }
+      }
+      { if (jsonAtChar s p2 (Char# '}'#))
+          { Just {.value -> Cons entry Nil, .pos -> addInt64 p2 1i64} }
+          { Nothing }
+      }
+  }
+}
+
+def jsonParseObjectEntry : String -> Int64 -> Maybe {value: (String, Json), pos: Int64}
+def jsonParseObjectEntry = { s pos ->
+  if (jsonAtChar s pos (Char# '"'#))
+    { bindMaybe (jsonParseRawString s (addInt64 pos 1i64)) { {.value -> key, .pos -> p1} ->
+        let p2 = jsonSkipWs s p1;
+        if (jsonAtChar s p2 (Char# ':'#))
+          { let p3 = jsonSkipWs s (addInt64 p2 1i64);
+            bindMaybe (jsonParseValue s p3) { {.value -> v, .pos -> p4} ->
+              Just {.value -> (key, v), .pos -> p4}
+            }
+          }
+          { Nothing }
+      }
+    }
+    { Nothing }
+}

@@ -1,0 +1,2458 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+sig showEnv : Maybe(String) -> String
+
+def showEnv =
+  fn {
+    Just(_) ->
+      {
+        "PRESENT"
+      } |
+    Nothing ->
+      {
+        "ABSENT"
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        printString(showEnv(getEnv("PATH")))
+        printString(" ")
+        printString(showEnv(getEnv("MALGO_DEFINITELY_UNSET_ENV_VAR_TEST")))
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+sig showEnv : Maybe(String) -> String
+
+def showEnv =
+  fn {
+    Just(_#0) ->
+      {
+        String#("PRESENT")
+      } |
+    Nothing() ->
+      {
+        String#("ABSENT")
+      }
+  }
+
+def main =
+  fn {
+    _#1 ->
+      {
+        printString(showEnv(getEnv(String#("PATH"))))
+        printString(String#(" "))
+        printString( showEnv( getEnv( String#( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST" ) ) ) )
+      }
+  }
+
+=== ToFun ===
+def showEnv =
+  \param$2 ->
+    case param$2 of {
+      Just(_#0) -> invoke String#("PRESENT")
+      Nothing() -> invoke String#("ABSENT")
+    }
+
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        \tmp$4 ->
+          \tmp$5 ->
+            invoke printString( invoke showEnv( invoke getEnv( invoke String#( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST" ) ) ) )( invoke printString( invoke String#( "
+          " ) ) )( invoke printString( invoke showEnv( invoke getEnv( invoke String#( "PATH" ) ) ) ) )
+    }
+
+=== SaturateCtor ===
+def showEnv =
+  \param$2 ->
+    case param$2 of {
+      Just(_#0) -> invoke String#("PRESENT")
+      Nothing() -> invoke String#("ABSENT")
+    }
+
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        \tmp$4 ->
+          \tmp$5 ->
+            invoke printString( invoke showEnv( invoke getEnv( invoke String#( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST" ) ) ) )( invoke printString( invoke String#( "
+          " ) ) )( invoke printString( invoke showEnv( invoke getEnv( invoke String#( "PATH" ) ) ) ) )
+    }
+
+=== ReuseSpecialize ===
+def showEnv =
+  \param$2 ->
+    case param$2 of {
+      Just(_#0) -> invoke String#("PRESENT")
+      Nothing() -> invoke String#("ABSENT")
+    }
+
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        \tmp$4 ->
+          \tmp$5 ->
+            invoke printString( invoke showEnv( invoke getEnv( invoke String#( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST" ) ) ) )( invoke printString( invoke String#( "
+          " ) ) )( invoke printString( invoke showEnv( invoke getEnv( invoke String#( "PATH" ) ) ) ) )
+    }
+
+=== ToCore ===
+def showEnv(return$6) =
+  \param$2 return$7 . {
+    param$2 ~ select {
+      Just(_#0) -> invoke String# ~ ("PRESENT", return$7)
+      Nothing() -> invoke String# ~ ("ABSENT", return$7)
+    }
+  } ~ return$6
+
+def main(return$8) =
+  \param$3 return$9 . {
+    param$3 ~ select {
+      _#1 ->
+        \tmp$4 return$14 . {
+          \tmp$5 return$17 . {
+            invoke printString ~ ( do return$18 . {
+              invoke showEnv ~ ( do return$19 . {
+                invoke getEnv ~ ( do return$20 . {
+                  invoke String# ~ ( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+                  , return$20 )
+                }
+                , return$19 )
+              }
+              , return$18 )
+            }
+            , return$17 )
+          } ~ ( do return$15 . {
+            invoke printString ~ ( do return$16 . {
+              invoke String# ~ (" ", return$16)
+            }
+            , return$15 )
+          }
+          , return$14 )
+        } ~ ( do return$10 . {
+          invoke printString ~ ( do return$11 . {
+            invoke showEnv ~ ( do return$12 . {
+              invoke getEnv ~ ( do return$13 . {
+                invoke String# ~ ("PATH", return$13)
+              }
+              , return$12 )
+            }
+            , return$11 )
+          }
+          , return$10 )
+        }
+        , return$9 )
+    }
+  } ~ return$8
+
+=== Flat ===
+def showEnv(return$6) =
+  \param$2 return$7 . {
+    param$2 ~ select {
+      Just(_#0) -> invoke String# ~ ("PRESENT", return$7)
+      Nothing() -> invoke String# ~ ("ABSENT", return$7)
+    }
+  } ~ return$6
+
+def main(return$8) =
+  \param$3 return$9 . {
+    param$3 ~ select {
+      _#1 ->
+        \tmp$4 return$14 . {
+          \tmp$5 return$17 . {
+            invoke printString ~ then outer$21 -> {
+              join return$18 = then inner$22 -> {
+                outer$21 ~ (inner$22, return$17)
+              }
+              in invoke showEnv ~ then outer$23 -> {
+                join return$19 = then inner$24 -> {
+                  outer$23 ~ (inner$24, return$18)
+                }
+                in invoke getEnv ~ then outer$25 -> {
+                  join return$20 = then inner$26 -> {
+                    outer$25 ~ (inner$26, return$19)
+                  }
+                  in invoke String# ~ ( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+                  , return$20 )
+                }
+              }
+            }
+          } ~ then outer$27 -> {
+            join return$15 = then inner$28 -> {
+              outer$27 ~ (inner$28, return$14)
+            }
+            in invoke printString ~ then outer$29 -> {
+              join return$16 = then inner$30 -> {
+                outer$29 ~ (inner$30, return$15)
+              }
+              in invoke String# ~ (" ", return$16)
+            }
+          }
+        } ~ then outer$31 -> {
+          join return$10 = then inner$32 -> {
+            outer$31 ~ (inner$32, return$9)
+          }
+          in invoke printString ~ then outer$33 -> {
+            join return$11 = then inner$34 -> {
+              outer$33 ~ (inner$34, return$10)
+            }
+            in invoke showEnv ~ then outer$35 -> {
+              join return$12 = then inner$36 -> {
+                outer$35 ~ (inner$36, return$11)
+              }
+              in invoke getEnv ~ then outer$37 -> {
+                join return$13 = then inner$38 -> {
+                  outer$37 ~ (inner$38, return$12)
+                }
+                in invoke String# ~ ("PATH", return$13)
+              }
+            }
+          }
+        }
+    }
+  } ~ return$8
+
+=== Join ===
+def showEnv(return$6) =
+  \param$2 return$7 . {
+    join select$41 = select {
+      Just(_#0) ->
+        join apply$39 = ("PRESENT", return$7)
+        in invoke String# ~ apply$39
+      Nothing() ->
+        join apply$40 = ("ABSENT", return$7)
+        in invoke String# ~ apply$40
+    }
+    in param$2 ~ select$41
+  } ~ return$6
+
+def main(return$8) =
+  \param$3 return$9 . {
+    join select$63 = select {
+      _#1 ->
+        join then$62 = then outer$31 -> {
+          join return$10 = then inner$32 -> {
+            join apply$61 = (inner$32, return$9)
+            in outer$31 ~ apply$61
+          }
+          in join then$60 = then outer$33 -> {
+            join return$11 = then inner$34 -> {
+              join apply$59 = (inner$34, return$10)
+              in outer$33 ~ apply$59
+            }
+            in join then$58 = then outer$35 -> {
+              join return$12 = then inner$36 -> {
+                join apply$57 = (inner$36, return$11)
+                in outer$35 ~ apply$57
+              }
+              in join then$56 = then outer$37 -> {
+                join return$13 = then inner$38 -> {
+                  join apply$55 = (inner$38, return$12)
+                  in outer$37 ~ apply$55
+                }
+                in join apply$54 = ("PATH", return$13)
+                in invoke String# ~ apply$54
+              }
+              in invoke getEnv ~ then$56
+            }
+            in invoke showEnv ~ then$58
+          }
+          in invoke printString ~ then$60
+        }
+        in \tmp$4 return$14 . {
+          join then$53 = then outer$27 -> {
+            join return$15 = then inner$28 -> {
+              join apply$52 = (inner$28, return$14)
+              in outer$27 ~ apply$52
+            }
+            in join then$51 = then outer$29 -> {
+              join return$16 = then inner$30 -> {
+                join apply$50 = (inner$30, return$15)
+                in outer$29 ~ apply$50
+              }
+              in join apply$49 = (" ", return$16)
+              in invoke String# ~ apply$49
+            }
+            in invoke printString ~ then$51
+          }
+          in \tmp$5 return$17 . {
+            join then$48 = then outer$21 -> {
+              join return$18 = then inner$22 -> {
+                join apply$47 = (inner$22, return$17)
+                in outer$21 ~ apply$47
+              }
+              in join then$46 = then outer$23 -> {
+                join return$19 = then inner$24 -> {
+                  join apply$45 = (inner$24, return$18)
+                  in outer$23 ~ apply$45
+                }
+                in join then$44 = then outer$25 -> {
+                  join return$20 = then inner$26 -> {
+                    join apply$43 = (inner$26, return$19)
+                    in outer$25 ~ apply$43
+                  }
+                  in join apply$42 = ( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+                  , return$20 )
+                  in invoke String# ~ apply$42
+                }
+                in invoke getEnv ~ then$44
+              }
+              in invoke showEnv ~ then$46
+            }
+            in invoke printString ~ then$48
+          } ~ then$53
+        } ~ then$62
+    }
+    in param$3 ~ select$63
+  } ~ return$8
+
+=== ClosureConv ===
+toplevel fn showEnv(return$6) =
+  let closure$75 = closure lambda$65()
+  return return$6(closure$75)
+
+closure fn lambda$65(self$66, param$2, return$7) =
+  if param$2.tag == Just then {
+    let _#0 = param$2.0
+    let apply$39 = closure join$67(return$7)
+    return String#(apply$39)
+  } else {
+    if param$2.tag == Nothing then {
+      let apply$40 = closure join$71(return$7)
+      return String#(apply$40)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$67(self$68, value$69) =
+  let return$7 = self$68.cap[0]
+  let lit$70 = "PRESENT"
+  return value$69(lit$70, return$7)
+
+closure fn join$71(self$72, value$73) =
+  let return$7 = self$72.cap[0]
+  let lit$74 = "ABSENT"
+  return value$73(lit$74, return$7)
+
+toplevel fn main(return$8) =
+  let closure$145 = closure lambda$77()
+  return return$8(closure$145)
+
+closure fn lambda$77(self$78, param$3, return$9) =
+  if  then {
+    let _#1 = param$3
+    let closure$119 = closure lambda$79()
+    let return$10 = closure join$120(closure$119, return$9)
+    let then$60 = closure join$123(return$10)
+    return printString(then$60)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$79(self$80, tmp$4, return$14) =
+  let closure$105 = closure lambda$81()
+  let return$15 = closure join$106(closure$105, return$14)
+  let then$51 = closure join$109(return$15)
+  return printString(then$51)
+
+closure fn lambda$81(self$82, tmp$5, return$17) =
+  let then$48 = closure join$83(return$17)
+  return printString(then$48)
+
+closure fn join$83(self$84, value$85) =
+  let return$17 = self$84.cap[0]
+  let return$18 = closure join$86(return$17, value$85)
+  let then$46 = closure join$89(return$18)
+  return showEnv(then$46)
+
+closure fn join$86(self$87, value$88) =
+  let return$17 = self$87.cap[0]
+  let value$85 = self$87.cap[1]
+  return value$85(value$88, return$17)
+
+closure fn join$89(self$90, value$91) =
+  let return$18 = self$90.cap[0]
+  let return$19 = closure join$92(return$18, value$91)
+  let then$44 = closure join$95(return$19)
+  return getEnv(then$44)
+
+closure fn join$92(self$93, value$94) =
+  let return$18 = self$93.cap[0]
+  let value$91 = self$93.cap[1]
+  return value$91(value$94, return$18)
+
+closure fn join$95(self$96, value$97) =
+  let return$19 = self$96.cap[0]
+  let return$20 = closure join$98(return$19, value$97)
+  let apply$42 = closure join$101(return$20)
+  return String#(apply$42)
+
+closure fn join$98(self$99, value$100) =
+  let return$19 = self$99.cap[0]
+  let value$97 = self$99.cap[1]
+  return value$97(value$100, return$19)
+
+closure fn join$101(self$102, value$103) =
+  let return$20 = self$102.cap[0]
+  let lit$104 = "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+  return value$103(lit$104, return$20)
+
+closure fn join$106(self$107, value$108) =
+  let closure$105 = self$107.cap[0]
+  let return$14 = self$107.cap[1]
+  return closure$105(value$108, return$14)
+
+closure fn join$109(self$110, value$111) =
+  let return$15 = self$110.cap[0]
+  let return$16 = closure join$112(return$15, value$111)
+  let apply$49 = closure join$115(return$16)
+  return String#(apply$49)
+
+closure fn join$112(self$113, value$114) =
+  let return$15 = self$113.cap[0]
+  let value$111 = self$113.cap[1]
+  return value$111(value$114, return$15)
+
+closure fn join$115(self$116, value$117) =
+  let return$16 = self$116.cap[0]
+  let lit$118 = "
+  "
+  return value$117(lit$118, return$16)
+
+closure fn join$120(self$121, value$122) =
+  let closure$119 = self$121.cap[0]
+  let return$9 = self$121.cap[1]
+  return closure$119(value$122, return$9)
+
+closure fn join$123(self$124, value$125) =
+  let return$10 = self$124.cap[0]
+  let return$11 = closure join$126(return$10, value$125)
+  let then$58 = closure join$129(return$11)
+  return showEnv(then$58)
+
+closure fn join$126(self$127, value$128) =
+  let return$10 = self$127.cap[0]
+  let value$125 = self$127.cap[1]
+  return value$125(value$128, return$10)
+
+closure fn join$129(self$130, value$131) =
+  let return$11 = self$130.cap[0]
+  let return$12 = closure join$132(return$11, value$131)
+  let then$56 = closure join$135(return$12)
+  return getEnv(then$56)
+
+closure fn join$132(self$133, value$134) =
+  let return$11 = self$133.cap[0]
+  let value$131 = self$133.cap[1]
+  return value$131(value$134, return$11)
+
+closure fn join$135(self$136, value$137) =
+  let return$12 = self$136.cap[0]
+  let return$13 = closure join$138(return$12, value$137)
+  let apply$54 = closure join$141(return$13)
+  return String#(apply$54)
+
+closure fn join$138(self$139, value$140) =
+  let return$12 = self$139.cap[0]
+  let value$137 = self$139.cap[1]
+  return value$137(value$140, return$12)
+
+closure fn join$141(self$142, value$143) =
+  let return$13 = self$142.cap[0]
+  let lit$144 = "PATH"
+  return value$143(lit$144, return$13)
+
+toplevel fn zig_main$148() =
+  let finish$146 = closure join$150()
+  let after_main$147 = closure join$153(finish$146)
+  return main(after_main$147)
+
+closure fn join$150(self$151, value$152) = return value$152
+
+closure fn join$153(self$154, value$155) =
+  let finish$146 = self$154.cap[0]
+  let struct$156 = Tuple()
+  return value$155(struct$156, finish$146)
+
+entry = zig_main$148
+
+=== Peephole ===
+toplevel fn showEnv(return$6) =
+  let closure$75 = closure lambda$65()
+  return return$6(closure$75)
+
+closure fn lambda$65(self$66, param$2, return$7) =
+  if param$2.tag == Just then {
+    let _#0 = param$2.0
+    let apply$39 = closure join$67(return$7)
+    return String#(apply$39)
+  } else {
+    if param$2.tag == Nothing then {
+      let apply$40 = closure join$71(return$7)
+      return String#(apply$40)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$67(self$68, value$69) =
+  let return$7 = self$68.cap[0]
+  let lit$70 = "PRESENT"
+  return value$69(lit$70, return$7)
+
+closure fn join$71(self$72, value$73) =
+  let return$7 = self$72.cap[0]
+  let lit$74 = "ABSENT"
+  return value$73(lit$74, return$7)
+
+toplevel fn main(return$8) =
+  let closure$145 = closure lambda$77()
+  return return$8(closure$145)
+
+closure fn lambda$77(self$78, param$3, return$9) =
+  if  then {
+    let closure$119 = closure lambda$79()
+    let return$10 = closure join$120(closure$119, return$9)
+    let then$60 = closure join$123(return$10)
+    return printString(then$60)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$79(self$80, tmp$4, return$14) =
+  let closure$105 = closure lambda$81()
+  let return$15 = closure join$106(closure$105, return$14)
+  let then$51 = closure join$109(return$15)
+  return printString(then$51)
+
+closure fn lambda$81(self$82, tmp$5, return$17) =
+  let then$48 = closure join$83(return$17)
+  return printString(then$48)
+
+closure fn join$83(self$84, value$85) =
+  let return$17 = self$84.cap[0]
+  let return$18 = closure join$86(return$17, value$85)
+  let then$46 = closure join$89(return$18)
+  return showEnv(then$46)
+
+closure fn join$86(self$87, value$88) =
+  let return$17 = self$87.cap[0]
+  let value$85 = self$87.cap[1]
+  return value$85(value$88, return$17)
+
+closure fn join$89(self$90, value$91) =
+  let return$18 = self$90.cap[0]
+  let return$19 = closure join$92(return$18, value$91)
+  let then$44 = closure join$95(return$19)
+  return getEnv(then$44)
+
+closure fn join$92(self$93, value$94) =
+  let return$18 = self$93.cap[0]
+  let value$91 = self$93.cap[1]
+  return value$91(value$94, return$18)
+
+closure fn join$95(self$96, value$97) =
+  let return$19 = self$96.cap[0]
+  let return$20 = closure join$98(return$19, value$97)
+  let apply$42 = closure join$101(return$20)
+  return String#(apply$42)
+
+closure fn join$98(self$99, value$100) =
+  let return$19 = self$99.cap[0]
+  let value$97 = self$99.cap[1]
+  return value$97(value$100, return$19)
+
+closure fn join$101(self$102, value$103) =
+  let return$20 = self$102.cap[0]
+  let lit$104 = "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+  return value$103(lit$104, return$20)
+
+closure fn join$106(self$107, value$108) =
+  let closure$105 = self$107.cap[0]
+  let return$14 = self$107.cap[1]
+  return closure$105(value$108, return$14)
+
+closure fn join$109(self$110, value$111) =
+  let return$15 = self$110.cap[0]
+  let return$16 = closure join$112(return$15, value$111)
+  let apply$49 = closure join$115(return$16)
+  return String#(apply$49)
+
+closure fn join$112(self$113, value$114) =
+  let return$15 = self$113.cap[0]
+  let value$111 = self$113.cap[1]
+  return value$111(value$114, return$15)
+
+closure fn join$115(self$116, value$117) =
+  let return$16 = self$116.cap[0]
+  let lit$118 = "
+  "
+  return value$117(lit$118, return$16)
+
+closure fn join$120(self$121, value$122) =
+  let closure$119 = self$121.cap[0]
+  let return$9 = self$121.cap[1]
+  return closure$119(value$122, return$9)
+
+closure fn join$123(self$124, value$125) =
+  let return$10 = self$124.cap[0]
+  let return$11 = closure join$126(return$10, value$125)
+  let then$58 = closure join$129(return$11)
+  return showEnv(then$58)
+
+closure fn join$126(self$127, value$128) =
+  let return$10 = self$127.cap[0]
+  let value$125 = self$127.cap[1]
+  return value$125(value$128, return$10)
+
+closure fn join$129(self$130, value$131) =
+  let return$11 = self$130.cap[0]
+  let return$12 = closure join$132(return$11, value$131)
+  let then$56 = closure join$135(return$12)
+  return getEnv(then$56)
+
+closure fn join$132(self$133, value$134) =
+  let return$11 = self$133.cap[0]
+  let value$131 = self$133.cap[1]
+  return value$131(value$134, return$11)
+
+closure fn join$135(self$136, value$137) =
+  let return$12 = self$136.cap[0]
+  let return$13 = closure join$138(return$12, value$137)
+  let apply$54 = closure join$141(return$13)
+  return String#(apply$54)
+
+closure fn join$138(self$139, value$140) =
+  let return$12 = self$139.cap[0]
+  let value$137 = self$139.cap[1]
+  return value$137(value$140, return$12)
+
+closure fn join$141(self$142, value$143) =
+  let return$13 = self$142.cap[0]
+  let lit$144 = "PATH"
+  return value$143(lit$144, return$13)
+
+toplevel fn zig_main$148() =
+  let finish$146 = closure join$150()
+  let after_main$147 = closure join$153(finish$146)
+  return main(after_main$147)
+
+closure fn join$150(self$151, value$152) = return value$152
+
+closure fn join$153(self$154, value$155) =
+  let finish$146 = self$154.cap[0]
+  let struct$156 = Tuple()
+  return value$155(struct$156, finish$146)
+
+entry = zig_main$148
+
+=== Perceus ===
+toplevel fn showEnv(return$6) =
+  let closure$75 = closure lambda$65()
+  return return$6(closure$75)
+
+closure fn lambda$65(self$66, param$2, return$7) =
+  drop self$66
+  if param$2.tag == Just then {
+    drop param$2
+    let apply$39 = closure join$67(return$7)
+    return String#(apply$39)
+  } else {
+    if param$2.tag == Nothing then {
+      drop param$2
+      let apply$40 = closure join$71(return$7)
+      return String#(apply$40)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$67(self$68, value$69) =
+  let return$7 = self$68.cap[0]
+  dup return$7
+  drop self$68
+  let lit$70 = "PRESENT"
+  return value$69(lit$70, return$7)
+
+closure fn join$71(self$72, value$73) =
+  let return$7 = self$72.cap[0]
+  dup return$7
+  drop self$72
+  let lit$74 = "ABSENT"
+  return value$73(lit$74, return$7)
+
+toplevel fn main(return$8) =
+  let closure$145 = closure lambda$77()
+  return return$8(closure$145)
+
+closure fn lambda$77(self$78, param$3, return$9) =
+  drop param$3
+  drop self$78
+  if  then {
+    let closure$119 = closure lambda$79()
+    let return$10 = closure join$120(closure$119, return$9)
+    let then$60 = closure join$123(return$10)
+    return printString(then$60)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$79(self$80, tmp$4, return$14) =
+  drop self$80
+  drop tmp$4
+  let closure$105 = closure lambda$81()
+  let return$15 = closure join$106(closure$105, return$14)
+  let then$51 = closure join$109(return$15)
+  return printString(then$51)
+
+closure fn lambda$81(self$82, tmp$5, return$17) =
+  drop self$82
+  drop tmp$5
+  let then$48 = closure join$83(return$17)
+  return printString(then$48)
+
+closure fn join$83(self$84, value$85) =
+  let return$17 = self$84.cap[0]
+  dup return$17
+  drop self$84
+  let return$18 = closure join$86(return$17, value$85)
+  let then$46 = closure join$89(return$18)
+  return showEnv(then$46)
+
+closure fn join$86(self$87, value$88) =
+  let return$17 = self$87.cap[0]
+  dup return$17
+  let value$85 = self$87.cap[1]
+  dup value$85
+  drop self$87
+  return value$85(value$88, return$17)
+
+closure fn join$89(self$90, value$91) =
+  let return$18 = self$90.cap[0]
+  dup return$18
+  drop self$90
+  let return$19 = closure join$92(return$18, value$91)
+  let then$44 = closure join$95(return$19)
+  return getEnv(then$44)
+
+closure fn join$92(self$93, value$94) =
+  let return$18 = self$93.cap[0]
+  dup return$18
+  let value$91 = self$93.cap[1]
+  dup value$91
+  drop self$93
+  return value$91(value$94, return$18)
+
+closure fn join$95(self$96, value$97) =
+  let return$19 = self$96.cap[0]
+  dup return$19
+  drop self$96
+  let return$20 = closure join$98(return$19, value$97)
+  let apply$42 = closure join$101(return$20)
+  return String#(apply$42)
+
+closure fn join$98(self$99, value$100) =
+  let return$19 = self$99.cap[0]
+  dup return$19
+  let value$97 = self$99.cap[1]
+  dup value$97
+  drop self$99
+  return value$97(value$100, return$19)
+
+closure fn join$101(self$102, value$103) =
+  let return$20 = self$102.cap[0]
+  dup return$20
+  drop self$102
+  let lit$104 = "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+  return value$103(lit$104, return$20)
+
+closure fn join$106(self$107, value$108) =
+  let closure$105 = self$107.cap[0]
+  dup closure$105
+  let return$14 = self$107.cap[1]
+  dup return$14
+  drop self$107
+  return closure$105(value$108, return$14)
+
+closure fn join$109(self$110, value$111) =
+  let return$15 = self$110.cap[0]
+  dup return$15
+  drop self$110
+  let return$16 = closure join$112(return$15, value$111)
+  let apply$49 = closure join$115(return$16)
+  return String#(apply$49)
+
+closure fn join$112(self$113, value$114) =
+  let return$15 = self$113.cap[0]
+  dup return$15
+  let value$111 = self$113.cap[1]
+  dup value$111
+  drop self$113
+  return value$111(value$114, return$15)
+
+closure fn join$115(self$116, value$117) =
+  let return$16 = self$116.cap[0]
+  dup return$16
+  drop self$116
+  let lit$118 = "
+  "
+  return value$117(lit$118, return$16)
+
+closure fn join$120(self$121, value$122) =
+  let closure$119 = self$121.cap[0]
+  dup closure$119
+  let return$9 = self$121.cap[1]
+  dup return$9
+  drop self$121
+  return closure$119(value$122, return$9)
+
+closure fn join$123(self$124, value$125) =
+  let return$10 = self$124.cap[0]
+  dup return$10
+  drop self$124
+  let return$11 = closure join$126(return$10, value$125)
+  let then$58 = closure join$129(return$11)
+  return showEnv(then$58)
+
+closure fn join$126(self$127, value$128) =
+  let return$10 = self$127.cap[0]
+  dup return$10
+  let value$125 = self$127.cap[1]
+  dup value$125
+  drop self$127
+  return value$125(value$128, return$10)
+
+closure fn join$129(self$130, value$131) =
+  let return$11 = self$130.cap[0]
+  dup return$11
+  drop self$130
+  let return$12 = closure join$132(return$11, value$131)
+  let then$56 = closure join$135(return$12)
+  return getEnv(then$56)
+
+closure fn join$132(self$133, value$134) =
+  let return$11 = self$133.cap[0]
+  dup return$11
+  let value$131 = self$133.cap[1]
+  dup value$131
+  drop self$133
+  return value$131(value$134, return$11)
+
+closure fn join$135(self$136, value$137) =
+  let return$12 = self$136.cap[0]
+  dup return$12
+  drop self$136
+  let return$13 = closure join$138(return$12, value$137)
+  let apply$54 = closure join$141(return$13)
+  return String#(apply$54)
+
+closure fn join$138(self$139, value$140) =
+  let return$12 = self$139.cap[0]
+  dup return$12
+  let value$137 = self$139.cap[1]
+  dup value$137
+  drop self$139
+  return value$137(value$140, return$12)
+
+closure fn join$141(self$142, value$143) =
+  let return$13 = self$142.cap[0]
+  dup return$13
+  drop self$142
+  let lit$144 = "PATH"
+  return value$143(lit$144, return$13)
+
+toplevel fn zig_main$148() =
+  let finish$146 = closure join$150()
+  let after_main$147 = closure join$153(finish$146)
+  return main(after_main$147)
+
+closure fn join$150(self$151, value$152) =
+  drop self$151
+  return value$152
+
+closure fn join$153(self$154, value$155) =
+  let finish$146 = self$154.cap[0]
+  dup finish$146
+  drop self$154
+  let struct$156 = Tuple()
+  return value$155(struct$156, finish$146)
+
+entry = zig_main$148
+
+=== Reuse ===
+toplevel fn showEnv(return$6) =
+  let closure$75 = closure lambda$65()
+  return return$6(closure$75)
+
+closure fn lambda$65(self$66, param$2, return$7) =
+  drop self$66
+  if param$2.tag == Just then {
+    let apply$39 = closure join$67(return$7)
+    drop param$2
+    return String#(apply$39)
+  } else {
+    if param$2.tag == Nothing then {
+      let apply$40 = closure join$71(return$7)
+      drop param$2
+      return String#(apply$40)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$67(self$68, value$69) =
+  let return$7 = self$68.cap[0]
+  dup return$7
+  let lit$70 = "PRESENT"
+  drop self$68
+  return value$69(lit$70, return$7)
+
+closure fn join$71(self$72, value$73) =
+  let return$7 = self$72.cap[0]
+  dup return$7
+  let lit$74 = "ABSENT"
+  drop self$72
+  return value$73(lit$74, return$7)
+
+toplevel fn main(return$8) =
+  let closure$145 = closure lambda$77()
+  return return$8(closure$145)
+
+closure fn lambda$77(self$78, param$3, return$9) =
+  drop param$3
+  drop self$78
+  if  then {
+    let closure$119 = closure lambda$79()
+    let return$10 = closure join$120(closure$119, return$9)
+    let then$60 = closure join$123(return$10)
+    return printString(then$60)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$79(self$80, tmp$4, return$14) =
+  let closure$105 = closure lambda$81()
+  let return$15 = closure join$106(closure$105, return$14)
+  let then$51 = closure join$109(return$15)
+  drop self$80
+  drop tmp$4
+  return printString(then$51)
+
+closure fn lambda$81(self$82, tmp$5, return$17) =
+  let then$48 = closure join$83(return$17)
+  drop self$82
+  drop tmp$5
+  return printString(then$48)
+
+closure fn join$83(self$84, value$85) =
+  let return$17 = self$84.cap[0]
+  dup return$17
+  let return$18 = closure join$86(return$17, value$85)
+  let then$46 = closure join$89(return$18)
+  drop self$84
+  return showEnv(then$46)
+
+closure fn join$86(self$87, value$88) =
+  let return$17 = self$87.cap[0]
+  dup return$17
+  let value$85 = self$87.cap[1]
+  dup value$85
+  drop self$87
+  return value$85(value$88, return$17)
+
+closure fn join$89(self$90, value$91) =
+  let return$18 = self$90.cap[0]
+  dup return$18
+  let return$19 = closure join$92(return$18, value$91)
+  let then$44 = closure join$95(return$19)
+  drop self$90
+  return getEnv(then$44)
+
+closure fn join$92(self$93, value$94) =
+  let return$18 = self$93.cap[0]
+  dup return$18
+  let value$91 = self$93.cap[1]
+  dup value$91
+  drop self$93
+  return value$91(value$94, return$18)
+
+closure fn join$95(self$96, value$97) =
+  let return$19 = self$96.cap[0]
+  dup return$19
+  let return$20 = closure join$98(return$19, value$97)
+  let apply$42 = closure join$101(return$20)
+  drop self$96
+  return String#(apply$42)
+
+closure fn join$98(self$99, value$100) =
+  let return$19 = self$99.cap[0]
+  dup return$19
+  let value$97 = self$99.cap[1]
+  dup value$97
+  drop self$99
+  return value$97(value$100, return$19)
+
+closure fn join$101(self$102, value$103) =
+  let return$20 = self$102.cap[0]
+  dup return$20
+  let lit$104 = "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+  drop self$102
+  return value$103(lit$104, return$20)
+
+closure fn join$106(self$107, value$108) =
+  let closure$105 = self$107.cap[0]
+  dup closure$105
+  let return$14 = self$107.cap[1]
+  dup return$14
+  drop self$107
+  return closure$105(value$108, return$14)
+
+closure fn join$109(self$110, value$111) =
+  let return$15 = self$110.cap[0]
+  dup return$15
+  let return$16 = closure join$112(return$15, value$111)
+  let apply$49 = closure join$115(return$16)
+  drop self$110
+  return String#(apply$49)
+
+closure fn join$112(self$113, value$114) =
+  let return$15 = self$113.cap[0]
+  dup return$15
+  let value$111 = self$113.cap[1]
+  dup value$111
+  drop self$113
+  return value$111(value$114, return$15)
+
+closure fn join$115(self$116, value$117) =
+  let return$16 = self$116.cap[0]
+  dup return$16
+  let lit$118 = "
+  "
+  drop self$116
+  return value$117(lit$118, return$16)
+
+closure fn join$120(self$121, value$122) =
+  let closure$119 = self$121.cap[0]
+  dup closure$119
+  let return$9 = self$121.cap[1]
+  dup return$9
+  drop self$121
+  return closure$119(value$122, return$9)
+
+closure fn join$123(self$124, value$125) =
+  let return$10 = self$124.cap[0]
+  dup return$10
+  let return$11 = closure join$126(return$10, value$125)
+  let then$58 = closure join$129(return$11)
+  drop self$124
+  return showEnv(then$58)
+
+closure fn join$126(self$127, value$128) =
+  let return$10 = self$127.cap[0]
+  dup return$10
+  let value$125 = self$127.cap[1]
+  dup value$125
+  drop self$127
+  return value$125(value$128, return$10)
+
+closure fn join$129(self$130, value$131) =
+  let return$11 = self$130.cap[0]
+  dup return$11
+  let return$12 = closure join$132(return$11, value$131)
+  let then$56 = closure join$135(return$12)
+  drop self$130
+  return getEnv(then$56)
+
+closure fn join$132(self$133, value$134) =
+  let return$11 = self$133.cap[0]
+  dup return$11
+  let value$131 = self$133.cap[1]
+  dup value$131
+  drop self$133
+  return value$131(value$134, return$11)
+
+closure fn join$135(self$136, value$137) =
+  let return$12 = self$136.cap[0]
+  dup return$12
+  let return$13 = closure join$138(return$12, value$137)
+  let apply$54 = closure join$141(return$13)
+  drop self$136
+  return String#(apply$54)
+
+closure fn join$138(self$139, value$140) =
+  let return$12 = self$139.cap[0]
+  dup return$12
+  let value$137 = self$139.cap[1]
+  dup value$137
+  drop self$139
+  return value$137(value$140, return$12)
+
+closure fn join$141(self$142, value$143) =
+  let return$13 = self$142.cap[0]
+  dup return$13
+  let lit$144 = "PATH"
+  drop self$142
+  return value$143(lit$144, return$13)
+
+toplevel fn zig_main$148() =
+  let finish$146 = closure join$150()
+  let after_main$147 = closure join$153(finish$146)
+  return main(after_main$147)
+
+closure fn join$150(self$151, value$152) =
+  drop self$151
+  return value$152
+
+closure fn join$153(self$154, value$155) =
+  let finish$146 = self$154.cap[0]
+  dup finish$146
+  dropReuse reuse$157 = self$154 /0
+  let struct$156 = reuse reuse$157 Tuple()
+  return value$155(struct$156, finish$146)
+
+entry = zig_main$148
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  sig showEnv : Maybe(String) -> String
+  
+  def showEnv =
+    fn {
+-     Just(_) ->
++     Just(_#0) ->
+        {
+-         "PRESENT"
++         String#("PRESENT")
+        } |
+-     Nothing ->
++     Nothing() ->
+        {
+-         "ABSENT"
++         String#("ABSENT")
+        }
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#1 ->
+        {
+-         printString(showEnv(getEnv("PATH")))
++         printString(showEnv(getEnv(String#("PATH"))))
+-         printString(" ")
++         printString(String#(" "))
+-         printString(showEnv(getEnv("MALGO_DEFINITELY_UNSET_ENV_VAR_TEST")))
++         printString( showEnv( getEnv( String#( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST" ) ) ) )
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+- sig showEnv : Maybe(String) -> String
+- 
+  def showEnv =
+-   fn {
++   \param$2 ->
+-     Just(_#0) ->
++     case param$2 of {
+-       {
++       Just(_#0) -> invoke String#("PRESENT")
+-         String#("PRESENT")
++       Nothing() -> invoke String#("ABSENT")
+-       } |
++     }
+-     Nothing() ->
+-       {
+-         String#("ABSENT")
+-       }
+-   }
+  
+  def main =
+-   fn {
++   \param$3 ->
+-     _#1 ->
++     case param$3 of {
+-       {
++       _#1 ->
+-         printString(showEnv(getEnv(String#("PATH"))))
++         \tmp$4 ->
+-         printString(String#(" "))
++           \tmp$5 ->
+-         printString( showEnv( getEnv( String#( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST" ) ) ) )
++             invoke printString( invoke showEnv( invoke getEnv( invoke String#( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST" ) ) ) )( invoke printString( invoke String#( "
+-       }
++           " ) ) )( invoke printString( invoke showEnv( invoke getEnv( invoke String#( "PATH" ) ) ) ) )
+-   }
++     }
+
+
+=== ToFun -> SaturateCtor ===
+  def showEnv =
+    \param$2 ->
+      case param$2 of {
+        Just(_#0) -> invoke String#("PRESENT")
+        Nothing() -> invoke String#("ABSENT")
+      }
+  
+  def main =
+    \param$3 ->
+      case param$3 of {
+        _#1 ->
+          \tmp$4 ->
+            \tmp$5 ->
+              invoke printString( invoke showEnv( invoke getEnv( invoke String#( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST" ) ) ) )( invoke printString( invoke String#( "
+            " ) ) )( invoke printString( invoke showEnv( invoke getEnv( invoke String#( "PATH" ) ) ) ) )
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def showEnv =
+    \param$2 ->
+      case param$2 of {
+        Just(_#0) -> invoke String#("PRESENT")
+        Nothing() -> invoke String#("ABSENT")
+      }
+  
+  def main =
+    \param$3 ->
+      case param$3 of {
+        _#1 ->
+          \tmp$4 ->
+            \tmp$5 ->
+              invoke printString( invoke showEnv( invoke getEnv( invoke String#( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST" ) ) ) )( invoke printString( invoke String#( "
+            " ) ) )( invoke printString( invoke showEnv( invoke getEnv( invoke String#( "PATH" ) ) ) ) )
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def showEnv =
++ def showEnv(return$6) =
+-   \param$2 ->
++   \param$2 return$7 . {
+-     case param$2 of {
++     param$2 ~ select {
+-       Just(_#0) -> invoke String#("PRESENT")
++       Just(_#0) -> invoke String# ~ ("PRESENT", return$7)
+-       Nothing() -> invoke String#("ABSENT")
++       Nothing() -> invoke String# ~ ("ABSENT", return$7)
+      }
++   } ~ return$6
+  
+- def main =
++ def main(return$8) =
+-   \param$3 ->
++   \param$3 return$9 . {
+-     case param$3 of {
++     param$3 ~ select {
+        _#1 ->
+-         \tmp$4 ->
++         \tmp$4 return$14 . {
+-           \tmp$5 ->
++           \tmp$5 return$17 . {
+-             invoke printString( invoke showEnv( invoke getEnv( invoke String#( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST" ) ) ) )( invoke printString( invoke String#( "
++             invoke printString ~ ( do return$18 . {
+-           " ) ) )( invoke printString( invoke showEnv( invoke getEnv( invoke String#( "PATH" ) ) ) ) )
++               invoke showEnv ~ ( do return$19 . {
++                 invoke getEnv ~ ( do return$20 . {
++                   invoke String# ~ ( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
++                   , return$20 )
++                 }
++                 , return$19 )
++               }
++               , return$18 )
++             }
++             , return$17 )
++           } ~ ( do return$15 . {
++             invoke printString ~ ( do return$16 . {
++               invoke String# ~ (" ", return$16)
++             }
++             , return$15 )
++           }
++           , return$14 )
++         } ~ ( do return$10 . {
++           invoke printString ~ ( do return$11 . {
++             invoke showEnv ~ ( do return$12 . {
++               invoke getEnv ~ ( do return$13 . {
++                 invoke String# ~ ("PATH", return$13)
++               }
++               , return$12 )
++             }
++             , return$11 )
++           }
++           , return$10 )
++         }
++         , return$9 )
+      }
++   } ~ return$8
+
+
+=== ToCore -> Flat ===
+  def showEnv(return$6) =
+    \param$2 return$7 . {
+      param$2 ~ select {
+        Just(_#0) -> invoke String# ~ ("PRESENT", return$7)
+        Nothing() -> invoke String# ~ ("ABSENT", return$7)
+      }
+    } ~ return$6
+  
+  def main(return$8) =
+    \param$3 return$9 . {
+      param$3 ~ select {
+        _#1 ->
+          \tmp$4 return$14 . {
+            \tmp$5 return$17 . {
+-             invoke printString ~ ( do return$18 . {
++             invoke printString ~ then outer$21 -> {
+-               invoke showEnv ~ ( do return$19 . {
++               join return$18 = then inner$22 -> {
+-                 invoke getEnv ~ ( do return$20 . {
++                 outer$21 ~ (inner$22, return$17)
+-                   invoke String# ~ ( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
++               }
++               in invoke showEnv ~ then outer$23 -> {
++                 join return$19 = then inner$24 -> {
++                   outer$23 ~ (inner$24, return$18)
++                 }
++                 in invoke getEnv ~ then outer$25 -> {
++                   join return$20 = then inner$26 -> {
++                     outer$25 ~ (inner$26, return$19)
++                   }
++                   in invoke String# ~ ( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+                    , return$20 )
+                  }
+-                 , return$19 )
+                }
+-               , return$18 )
+              }
+-             , return$17 )
++           } ~ then outer$27 -> {
+-           } ~ ( do return$15 . {
++             join return$15 = then inner$28 -> {
+-             invoke printString ~ ( do return$16 . {
++               outer$27 ~ (inner$28, return$14)
+-               invoke String# ~ (" ", return$16)
+              }
+-             , return$15 )
++             in invoke printString ~ then outer$29 -> {
++               join return$16 = then inner$30 -> {
++                 outer$29 ~ (inner$30, return$15)
++               }
++               in invoke String# ~ (" ", return$16)
++             }
+            }
+-           , return$14 )
++         } ~ then outer$31 -> {
+-         } ~ ( do return$10 . {
++           join return$10 = then inner$32 -> {
+-           invoke printString ~ ( do return$11 . {
++             outer$31 ~ (inner$32, return$9)
+-             invoke showEnv ~ ( do return$12 . {
++           }
+-               invoke getEnv ~ ( do return$13 . {
++           in invoke printString ~ then outer$33 -> {
+-                 invoke String# ~ ("PATH", return$13)
++             join return$11 = then inner$34 -> {
++               outer$33 ~ (inner$34, return$10)
++             }
++             in invoke showEnv ~ then outer$35 -> {
++               join return$12 = then inner$36 -> {
++                 outer$35 ~ (inner$36, return$11)
+                }
+-               , return$12 )
++               in invoke getEnv ~ then outer$37 -> {
++                 join return$13 = then inner$38 -> {
++                   outer$37 ~ (inner$38, return$12)
++                 }
++                 in invoke String# ~ ("PATH", return$13)
++               }
+              }
+-             , return$11 )
+            }
+-           , return$10 )
+          }
+-         , return$9 )
+      }
+    } ~ return$8
+
+
+=== Flat -> Join ===
+  def showEnv(return$6) =
+    \param$2 return$7 . {
+-     param$2 ~ select {
++     join select$41 = select {
+-       Just(_#0) -> invoke String# ~ ("PRESENT", return$7)
++       Just(_#0) ->
+-       Nothing() -> invoke String# ~ ("ABSENT", return$7)
++         join apply$39 = ("PRESENT", return$7)
++         in invoke String# ~ apply$39
++       Nothing() ->
++         join apply$40 = ("ABSENT", return$7)
++         in invoke String# ~ apply$40
+      }
++     in param$2 ~ select$41
+    } ~ return$6
+  
+  def main(return$8) =
+    \param$3 return$9 . {
+-     param$3 ~ select {
++     join select$63 = select {
+        _#1 ->
+-         \tmp$4 return$14 . {
++         join then$62 = then outer$31 -> {
+-           \tmp$5 return$17 . {
++           join return$10 = then inner$32 -> {
+-             invoke printString ~ then outer$21 -> {
++             join apply$61 = (inner$32, return$9)
+-               join return$18 = then inner$22 -> {
++             in outer$31 ~ apply$61
+-                 outer$21 ~ (inner$22, return$17)
++           }
++           in join then$60 = then outer$33 -> {
++             join return$11 = then inner$34 -> {
++               join apply$59 = (inner$34, return$10)
++               in outer$33 ~ apply$59
++             }
++             in join then$58 = then outer$35 -> {
++               join return$12 = then inner$36 -> {
++                 join apply$57 = (inner$36, return$11)
++                 in outer$35 ~ apply$57
+                }
+-               in invoke showEnv ~ then outer$23 -> {
++               in join then$56 = then outer$37 -> {
+-                 join return$19 = then inner$24 -> {
++                 join return$13 = then inner$38 -> {
+-                   outer$23 ~ (inner$24, return$18)
++                   join apply$55 = (inner$38, return$12)
+-                 }
++                   in outer$37 ~ apply$55
+-                 in invoke getEnv ~ then outer$25 -> {
+-                   join return$20 = then inner$26 -> {
+-                     outer$25 ~ (inner$26, return$19)
+-                   }
+-                   in invoke String# ~ ( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+-                   , return$20 )
+                  }
++                 in join apply$54 = ("PATH", return$13)
++                 in invoke String# ~ apply$54
+                }
++               in invoke getEnv ~ then$56
+              }
+-           } ~ then outer$27 -> {
++             in invoke showEnv ~ then$58
++           }
++           in invoke printString ~ then$60
++         }
++         in \tmp$4 return$14 . {
++           join then$53 = then outer$27 -> {
+              join return$15 = then inner$28 -> {
+-               outer$27 ~ (inner$28, return$14)
++               join apply$52 = (inner$28, return$14)
++               in outer$27 ~ apply$52
+              }
+-             in invoke printString ~ then outer$29 -> {
++             in join then$51 = then outer$29 -> {
+                join return$16 = then inner$30 -> {
+-                 outer$29 ~ (inner$30, return$15)
++                 join apply$50 = (inner$30, return$15)
++                 in outer$29 ~ apply$50
+                }
+-               in invoke String# ~ (" ", return$16)
++               in join apply$49 = (" ", return$16)
++               in invoke String# ~ apply$49
+              }
+-           }
++             in invoke printString ~ then$51
+-         } ~ then outer$31 -> {
+-           join return$10 = then inner$32 -> {
+-             outer$31 ~ (inner$32, return$9)
+            }
+-           in invoke printString ~ then outer$33 -> {
++           in \tmp$5 return$17 . {
+-             join return$11 = then inner$34 -> {
++             join then$48 = then outer$21 -> {
+-               outer$33 ~ (inner$34, return$10)
++               join return$18 = then inner$22 -> {
+-             }
++                 join apply$47 = (inner$22, return$17)
+-             in invoke showEnv ~ then outer$35 -> {
++                 in outer$21 ~ apply$47
+-               join return$12 = then inner$36 -> {
+-                 outer$35 ~ (inner$36, return$11)
+                }
+-               in invoke getEnv ~ then outer$37 -> {
++               in join then$46 = then outer$23 -> {
+-                 join return$13 = then inner$38 -> {
++                 join return$19 = then inner$24 -> {
+-                   outer$37 ~ (inner$38, return$12)
++                   join apply$45 = (inner$24, return$18)
++                   in outer$23 ~ apply$45
+                  }
+-                 in invoke String# ~ ("PATH", return$13)
++                 in join then$44 = then outer$25 -> {
++                   join return$20 = then inner$26 -> {
++                     join apply$43 = (inner$26, return$19)
++                     in outer$25 ~ apply$43
++                   }
++                   in join apply$42 = ( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
++                   , return$20 )
++                   in invoke String# ~ apply$42
++                 }
++                 in invoke getEnv ~ then$44
+                }
++               in invoke showEnv ~ then$46
+              }
+-           }
++             in invoke printString ~ then$48
+-         }
++           } ~ then$53
++         } ~ then$62
+      }
++     in param$3 ~ select$63
+    } ~ return$8
+
+
+=== Join -> ClosureConv ===
+- def showEnv(return$6) =
++ toplevel fn showEnv(return$6) =
+-   \param$2 return$7 . {
++   let closure$75 = closure lambda$65()
+-     join select$41 = select {
++   return return$6(closure$75)
+-       Just(_#0) ->
+-         join apply$39 = ("PRESENT", return$7)
+-         in invoke String# ~ apply$39
+-       Nothing() ->
+-         join apply$40 = ("ABSENT", return$7)
+-         in invoke String# ~ apply$40
+-     }
+-     in param$2 ~ select$41
+-   } ~ return$6
+  
+- def main(return$8) =
++ closure fn lambda$65(self$66, param$2, return$7) =
+-   \param$3 return$9 . {
++   if param$2.tag == Just then {
+-     join select$63 = select {
++     let _#0 = param$2.0
+-       _#1 ->
++     let apply$39 = closure join$67(return$7)
+-         join then$62 = then outer$31 -> {
++     return String#(apply$39)
+-           join return$10 = then inner$32 -> {
++   } else {
+-             join apply$61 = (inner$32, return$9)
++     if param$2.tag == Nothing then {
+-             in outer$31 ~ apply$61
++       let apply$40 = closure join$71(return$7)
+-           }
++       return String#(apply$40)
+-           in join then$60 = then outer$33 -> {
++     } else {
+-             join return$11 = then inner$34 -> {
++       panic "no matching branch"
+-               join apply$59 = (inner$34, return$10)
+-               in outer$33 ~ apply$59
+-             }
+-             in join then$58 = then outer$35 -> {
+-               join return$12 = then inner$36 -> {
+-                 join apply$57 = (inner$36, return$11)
+-                 in outer$35 ~ apply$57
+-               }
+-               in join then$56 = then outer$37 -> {
+-                 join return$13 = then inner$38 -> {
+-                   join apply$55 = (inner$38, return$12)
+-                   in outer$37 ~ apply$55
+-                 }
+-                 in join apply$54 = ("PATH", return$13)
+-                 in invoke String# ~ apply$54
+-               }
+-               in invoke getEnv ~ then$56
+-             }
+-             in invoke showEnv ~ then$58
+-           }
+-           in invoke printString ~ then$60
+-         }
+-         in \tmp$4 return$14 . {
+-           join then$53 = then outer$27 -> {
+-             join return$15 = then inner$28 -> {
+-               join apply$52 = (inner$28, return$14)
+-               in outer$27 ~ apply$52
+-             }
+-             in join then$51 = then outer$29 -> {
+-               join return$16 = then inner$30 -> {
+-                 join apply$50 = (inner$30, return$15)
+-                 in outer$29 ~ apply$50
+-               }
+-               in join apply$49 = (" ", return$16)
+-               in invoke String# ~ apply$49
+-             }
+-             in invoke printString ~ then$51
+-           }
+-           in \tmp$5 return$17 . {
+-             join then$48 = then outer$21 -> {
+-               join return$18 = then inner$22 -> {
+-                 join apply$47 = (inner$22, return$17)
+-                 in outer$21 ~ apply$47
+-               }
+-               in join then$46 = then outer$23 -> {
+-                 join return$19 = then inner$24 -> {
+-                   join apply$45 = (inner$24, return$18)
+-                   in outer$23 ~ apply$45
+-                 }
+-                 in join then$44 = then outer$25 -> {
+-                   join return$20 = then inner$26 -> {
+-                     join apply$43 = (inner$26, return$19)
+-                     in outer$25 ~ apply$43
+-                   }
+-                   in join apply$42 = ( "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+-                   , return$20 )
+-                   in invoke String# ~ apply$42
+-                 }
+-                 in invoke getEnv ~ then$44
+-               }
+-               in invoke showEnv ~ then$46
+-             }
+-             in invoke printString ~ then$48
+-           } ~ then$53
+-         } ~ then$62
+      }
+-     in param$3 ~ select$63
++   }
+-   } ~ return$8
++ 
++ closure fn join$67(self$68, value$69) =
++   let return$7 = self$68.cap[0]
++   let lit$70 = "PRESENT"
++   return value$69(lit$70, return$7)
++ 
++ closure fn join$71(self$72, value$73) =
++   let return$7 = self$72.cap[0]
++   let lit$74 = "ABSENT"
++   return value$73(lit$74, return$7)
++ 
++ toplevel fn main(return$8) =
++   let closure$145 = closure lambda$77()
++   return return$8(closure$145)
++ 
++ closure fn lambda$77(self$78, param$3, return$9) =
++   if  then {
++     let _#1 = param$3
++     let closure$119 = closure lambda$79()
++     let return$10 = closure join$120(closure$119, return$9)
++     let then$60 = closure join$123(return$10)
++     return printString(then$60)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn lambda$79(self$80, tmp$4, return$14) =
++   let closure$105 = closure lambda$81()
++   let return$15 = closure join$106(closure$105, return$14)
++   let then$51 = closure join$109(return$15)
++   return printString(then$51)
++ 
++ closure fn lambda$81(self$82, tmp$5, return$17) =
++   let then$48 = closure join$83(return$17)
++   return printString(then$48)
++ 
++ closure fn join$83(self$84, value$85) =
++   let return$17 = self$84.cap[0]
++   let return$18 = closure join$86(return$17, value$85)
++   let then$46 = closure join$89(return$18)
++   return showEnv(then$46)
++ 
++ closure fn join$86(self$87, value$88) =
++   let return$17 = self$87.cap[0]
++   let value$85 = self$87.cap[1]
++   return value$85(value$88, return$17)
++ 
++ closure fn join$89(self$90, value$91) =
++   let return$18 = self$90.cap[0]
++   let return$19 = closure join$92(return$18, value$91)
++   let then$44 = closure join$95(return$19)
++   return getEnv(then$44)
++ 
++ closure fn join$92(self$93, value$94) =
++   let return$18 = self$93.cap[0]
++   let value$91 = self$93.cap[1]
++   return value$91(value$94, return$18)
++ 
++ closure fn join$95(self$96, value$97) =
++   let return$19 = self$96.cap[0]
++   let return$20 = closure join$98(return$19, value$97)
++   let apply$42 = closure join$101(return$20)
++   return String#(apply$42)
++ 
++ closure fn join$98(self$99, value$100) =
++   let return$19 = self$99.cap[0]
++   let value$97 = self$99.cap[1]
++   return value$97(value$100, return$19)
++ 
++ closure fn join$101(self$102, value$103) =
++   let return$20 = self$102.cap[0]
++   let lit$104 = "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
++   return value$103(lit$104, return$20)
++ 
++ closure fn join$106(self$107, value$108) =
++   let closure$105 = self$107.cap[0]
++   let return$14 = self$107.cap[1]
++   return closure$105(value$108, return$14)
++ 
++ closure fn join$109(self$110, value$111) =
++   let return$15 = self$110.cap[0]
++   let return$16 = closure join$112(return$15, value$111)
++   let apply$49 = closure join$115(return$16)
++   return String#(apply$49)
++ 
++ closure fn join$112(self$113, value$114) =
++   let return$15 = self$113.cap[0]
++   let value$111 = self$113.cap[1]
++   return value$111(value$114, return$15)
++ 
++ closure fn join$115(self$116, value$117) =
++   let return$16 = self$116.cap[0]
++   let lit$118 = "
++   "
++   return value$117(lit$118, return$16)
++ 
++ closure fn join$120(self$121, value$122) =
++   let closure$119 = self$121.cap[0]
++   let return$9 = self$121.cap[1]
++   return closure$119(value$122, return$9)
++ 
++ closure fn join$123(self$124, value$125) =
++   let return$10 = self$124.cap[0]
++   let return$11 = closure join$126(return$10, value$125)
++   let then$58 = closure join$129(return$11)
++   return showEnv(then$58)
++ 
++ closure fn join$126(self$127, value$128) =
++   let return$10 = self$127.cap[0]
++   let value$125 = self$127.cap[1]
++   return value$125(value$128, return$10)
++ 
++ closure fn join$129(self$130, value$131) =
++   let return$11 = self$130.cap[0]
++   let return$12 = closure join$132(return$11, value$131)
++   let then$56 = closure join$135(return$12)
++   return getEnv(then$56)
++ 
++ closure fn join$132(self$133, value$134) =
++   let return$11 = self$133.cap[0]
++   let value$131 = self$133.cap[1]
++   return value$131(value$134, return$11)
++ 
++ closure fn join$135(self$136, value$137) =
++   let return$12 = self$136.cap[0]
++   let return$13 = closure join$138(return$12, value$137)
++   let apply$54 = closure join$141(return$13)
++   return String#(apply$54)
++ 
++ closure fn join$138(self$139, value$140) =
++   let return$12 = self$139.cap[0]
++   let value$137 = self$139.cap[1]
++   return value$137(value$140, return$12)
++ 
++ closure fn join$141(self$142, value$143) =
++   let return$13 = self$142.cap[0]
++   let lit$144 = "PATH"
++   return value$143(lit$144, return$13)
++ 
++ toplevel fn zig_main$148() =
++   let finish$146 = closure join$150()
++   let after_main$147 = closure join$153(finish$146)
++   return main(after_main$147)
++ 
++ closure fn join$150(self$151, value$152) = return value$152
++ 
++ closure fn join$153(self$154, value$155) =
++   let finish$146 = self$154.cap[0]
++   let struct$156 = Tuple()
++   return value$155(struct$156, finish$146)
++ 
++ entry = zig_main$148
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn showEnv(return$6) =
+    let closure$75 = closure lambda$65()
+    return return$6(closure$75)
+  
+  closure fn lambda$65(self$66, param$2, return$7) =
+    if param$2.tag == Just then {
+      let _#0 = param$2.0
+      let apply$39 = closure join$67(return$7)
+      return String#(apply$39)
+    } else {
+      if param$2.tag == Nothing then {
+        let apply$40 = closure join$71(return$7)
+        return String#(apply$40)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$67(self$68, value$69) =
+    let return$7 = self$68.cap[0]
+    let lit$70 = "PRESENT"
+    return value$69(lit$70, return$7)
+  
+  closure fn join$71(self$72, value$73) =
+    let return$7 = self$72.cap[0]
+    let lit$74 = "ABSENT"
+    return value$73(lit$74, return$7)
+  
+  toplevel fn main(return$8) =
+    let closure$145 = closure lambda$77()
+    return return$8(closure$145)
+  
+  closure fn lambda$77(self$78, param$3, return$9) =
+    if  then {
+-     let _#1 = param$3
+      let closure$119 = closure lambda$79()
+      let return$10 = closure join$120(closure$119, return$9)
+      let then$60 = closure join$123(return$10)
+      return printString(then$60)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$79(self$80, tmp$4, return$14) =
+    let closure$105 = closure lambda$81()
+    let return$15 = closure join$106(closure$105, return$14)
+    let then$51 = closure join$109(return$15)
+    return printString(then$51)
+  
+  closure fn lambda$81(self$82, tmp$5, return$17) =
+    let then$48 = closure join$83(return$17)
+    return printString(then$48)
+  
+  closure fn join$83(self$84, value$85) =
+    let return$17 = self$84.cap[0]
+    let return$18 = closure join$86(return$17, value$85)
+    let then$46 = closure join$89(return$18)
+    return showEnv(then$46)
+  
+  closure fn join$86(self$87, value$88) =
+    let return$17 = self$87.cap[0]
+    let value$85 = self$87.cap[1]
+    return value$85(value$88, return$17)
+  
+  closure fn join$89(self$90, value$91) =
+    let return$18 = self$90.cap[0]
+    let return$19 = closure join$92(return$18, value$91)
+    let then$44 = closure join$95(return$19)
+    return getEnv(then$44)
+  
+  closure fn join$92(self$93, value$94) =
+    let return$18 = self$93.cap[0]
+    let value$91 = self$93.cap[1]
+    return value$91(value$94, return$18)
+  
+  closure fn join$95(self$96, value$97) =
+    let return$19 = self$96.cap[0]
+    let return$20 = closure join$98(return$19, value$97)
+    let apply$42 = closure join$101(return$20)
+    return String#(apply$42)
+  
+  closure fn join$98(self$99, value$100) =
+    let return$19 = self$99.cap[0]
+    let value$97 = self$99.cap[1]
+    return value$97(value$100, return$19)
+  
+  closure fn join$101(self$102, value$103) =
+    let return$20 = self$102.cap[0]
+    let lit$104 = "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+    return value$103(lit$104, return$20)
+  
+  closure fn join$106(self$107, value$108) =
+    let closure$105 = self$107.cap[0]
+    let return$14 = self$107.cap[1]
+    return closure$105(value$108, return$14)
+  
+  closure fn join$109(self$110, value$111) =
+    let return$15 = self$110.cap[0]
+    let return$16 = closure join$112(return$15, value$111)
+    let apply$49 = closure join$115(return$16)
+    return String#(apply$49)
+  
+  closure fn join$112(self$113, value$114) =
+    let return$15 = self$113.cap[0]
+    let value$111 = self$113.cap[1]
+    return value$111(value$114, return$15)
+  
+  closure fn join$115(self$116, value$117) =
+    let return$16 = self$116.cap[0]
+    let lit$118 = "
+    "
+    return value$117(lit$118, return$16)
+  
+  closure fn join$120(self$121, value$122) =
+    let closure$119 = self$121.cap[0]
+    let return$9 = self$121.cap[1]
+    return closure$119(value$122, return$9)
+  
+  closure fn join$123(self$124, value$125) =
+    let return$10 = self$124.cap[0]
+    let return$11 = closure join$126(return$10, value$125)
+    let then$58 = closure join$129(return$11)
+    return showEnv(then$58)
+  
+  closure fn join$126(self$127, value$128) =
+    let return$10 = self$127.cap[0]
+    let value$125 = self$127.cap[1]
+    return value$125(value$128, return$10)
+  
+  closure fn join$129(self$130, value$131) =
+    let return$11 = self$130.cap[0]
+    let return$12 = closure join$132(return$11, value$131)
+    let then$56 = closure join$135(return$12)
+    return getEnv(then$56)
+  
+  closure fn join$132(self$133, value$134) =
+    let return$11 = self$133.cap[0]
+    let value$131 = self$133.cap[1]
+    return value$131(value$134, return$11)
+  
+  closure fn join$135(self$136, value$137) =
+    let return$12 = self$136.cap[0]
+    let return$13 = closure join$138(return$12, value$137)
+    let apply$54 = closure join$141(return$13)
+    return String#(apply$54)
+  
+  closure fn join$138(self$139, value$140) =
+    let return$12 = self$139.cap[0]
+    let value$137 = self$139.cap[1]
+    return value$137(value$140, return$12)
+  
+  closure fn join$141(self$142, value$143) =
+    let return$13 = self$142.cap[0]
+    let lit$144 = "PATH"
+    return value$143(lit$144, return$13)
+  
+  toplevel fn zig_main$148() =
+    let finish$146 = closure join$150()
+    let after_main$147 = closure join$153(finish$146)
+    return main(after_main$147)
+  
+  closure fn join$150(self$151, value$152) = return value$152
+  
+  closure fn join$153(self$154, value$155) =
+    let finish$146 = self$154.cap[0]
+    let struct$156 = Tuple()
+    return value$155(struct$156, finish$146)
+  
+  entry = zig_main$148
+
+
+=== Peephole -> Perceus ===
+  toplevel fn showEnv(return$6) =
+    let closure$75 = closure lambda$65()
+    return return$6(closure$75)
+  
+  closure fn lambda$65(self$66, param$2, return$7) =
++   drop self$66
+    if param$2.tag == Just then {
+-     let _#0 = param$2.0
++     drop param$2
+      let apply$39 = closure join$67(return$7)
+      return String#(apply$39)
+    } else {
+      if param$2.tag == Nothing then {
++       drop param$2
+        let apply$40 = closure join$71(return$7)
+        return String#(apply$40)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$67(self$68, value$69) =
+    let return$7 = self$68.cap[0]
++   dup return$7
++   drop self$68
+    let lit$70 = "PRESENT"
+    return value$69(lit$70, return$7)
+  
+  closure fn join$71(self$72, value$73) =
+    let return$7 = self$72.cap[0]
++   dup return$7
++   drop self$72
+    let lit$74 = "ABSENT"
+    return value$73(lit$74, return$7)
+  
+  toplevel fn main(return$8) =
+    let closure$145 = closure lambda$77()
+    return return$8(closure$145)
+  
+  closure fn lambda$77(self$78, param$3, return$9) =
++   drop param$3
++   drop self$78
+    if  then {
+      let closure$119 = closure lambda$79()
+      let return$10 = closure join$120(closure$119, return$9)
+      let then$60 = closure join$123(return$10)
+      return printString(then$60)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$79(self$80, tmp$4, return$14) =
++   drop self$80
++   drop tmp$4
+    let closure$105 = closure lambda$81()
+    let return$15 = closure join$106(closure$105, return$14)
+    let then$51 = closure join$109(return$15)
+    return printString(then$51)
+  
+  closure fn lambda$81(self$82, tmp$5, return$17) =
++   drop self$82
++   drop tmp$5
+    let then$48 = closure join$83(return$17)
+    return printString(then$48)
+  
+  closure fn join$83(self$84, value$85) =
+    let return$17 = self$84.cap[0]
++   dup return$17
++   drop self$84
+    let return$18 = closure join$86(return$17, value$85)
+    let then$46 = closure join$89(return$18)
+    return showEnv(then$46)
+  
+  closure fn join$86(self$87, value$88) =
+    let return$17 = self$87.cap[0]
++   dup return$17
+    let value$85 = self$87.cap[1]
++   dup value$85
++   drop self$87
+    return value$85(value$88, return$17)
+  
+  closure fn join$89(self$90, value$91) =
+    let return$18 = self$90.cap[0]
++   dup return$18
++   drop self$90
+    let return$19 = closure join$92(return$18, value$91)
+    let then$44 = closure join$95(return$19)
+    return getEnv(then$44)
+  
+  closure fn join$92(self$93, value$94) =
+    let return$18 = self$93.cap[0]
++   dup return$18
+    let value$91 = self$93.cap[1]
++   dup value$91
++   drop self$93
+    return value$91(value$94, return$18)
+  
+  closure fn join$95(self$96, value$97) =
+    let return$19 = self$96.cap[0]
++   dup return$19
++   drop self$96
+    let return$20 = closure join$98(return$19, value$97)
+    let apply$42 = closure join$101(return$20)
+    return String#(apply$42)
+  
+  closure fn join$98(self$99, value$100) =
+    let return$19 = self$99.cap[0]
++   dup return$19
+    let value$97 = self$99.cap[1]
++   dup value$97
++   drop self$99
+    return value$97(value$100, return$19)
+  
+  closure fn join$101(self$102, value$103) =
+    let return$20 = self$102.cap[0]
++   dup return$20
++   drop self$102
+    let lit$104 = "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
+    return value$103(lit$104, return$20)
+  
+  closure fn join$106(self$107, value$108) =
+    let closure$105 = self$107.cap[0]
++   dup closure$105
+    let return$14 = self$107.cap[1]
++   dup return$14
++   drop self$107
+    return closure$105(value$108, return$14)
+  
+  closure fn join$109(self$110, value$111) =
+    let return$15 = self$110.cap[0]
++   dup return$15
++   drop self$110
+    let return$16 = closure join$112(return$15, value$111)
+    let apply$49 = closure join$115(return$16)
+    return String#(apply$49)
+  
+  closure fn join$112(self$113, value$114) =
+    let return$15 = self$113.cap[0]
++   dup return$15
+    let value$111 = self$113.cap[1]
++   dup value$111
++   drop self$113
+    return value$111(value$114, return$15)
+  
+  closure fn join$115(self$116, value$117) =
+    let return$16 = self$116.cap[0]
++   dup return$16
++   drop self$116
+    let lit$118 = "
+    "
+    return value$117(lit$118, return$16)
+  
+  closure fn join$120(self$121, value$122) =
+    let closure$119 = self$121.cap[0]
++   dup closure$119
+    let return$9 = self$121.cap[1]
++   dup return$9
++   drop self$121
+    return closure$119(value$122, return$9)
+  
+  closure fn join$123(self$124, value$125) =
+    let return$10 = self$124.cap[0]
++   dup return$10
++   drop self$124
+    let return$11 = closure join$126(return$10, value$125)
+    let then$58 = closure join$129(return$11)
+    return showEnv(then$58)
+  
+  closure fn join$126(self$127, value$128) =
+    let return$10 = self$127.cap[0]
++   dup return$10
+    let value$125 = self$127.cap[1]
++   dup value$125
++   drop self$127
+    return value$125(value$128, return$10)
+  
+  closure fn join$129(self$130, value$131) =
+    let return$11 = self$130.cap[0]
++   dup return$11
++   drop self$130
+    let return$12 = closure join$132(return$11, value$131)
+    let then$56 = closure join$135(return$12)
+    return getEnv(then$56)
+  
+  closure fn join$132(self$133, value$134) =
+    let return$11 = self$133.cap[0]
++   dup return$11
+    let value$131 = self$133.cap[1]
++   dup value$131
++   drop self$133
+    return value$131(value$134, return$11)
+  
+  closure fn join$135(self$136, value$137) =
+    let return$12 = self$136.cap[0]
++   dup return$12
++   drop self$136
+    let return$13 = closure join$138(return$12, value$137)
+    let apply$54 = closure join$141(return$13)
+    return String#(apply$54)
+  
+  closure fn join$138(self$139, value$140) =
+    let return$12 = self$139.cap[0]
++   dup return$12
+    let value$137 = self$139.cap[1]
++   dup value$137
++   drop self$139
+    return value$137(value$140, return$12)
+  
+  closure fn join$141(self$142, value$143) =
+    let return$13 = self$142.cap[0]
++   dup return$13
++   drop self$142
+    let lit$144 = "PATH"
+    return value$143(lit$144, return$13)
+  
+  toplevel fn zig_main$148() =
+    let finish$146 = closure join$150()
+    let after_main$147 = closure join$153(finish$146)
+    return main(after_main$147)
+  
+- closure fn join$150(self$151, value$152) = return value$152
++ closure fn join$150(self$151, value$152) =
++   drop self$151
++   return value$152
+  
+  closure fn join$153(self$154, value$155) =
+    let finish$146 = self$154.cap[0]
++   dup finish$146
++   drop self$154
+    let struct$156 = Tuple()
+    return value$155(struct$156, finish$146)
+  
+  entry = zig_main$148
+
+
+=== Perceus -> Reuse ===
+  toplevel fn showEnv(return$6) =
+    let closure$75 = closure lambda$65()
+    return return$6(closure$75)
+  
+  closure fn lambda$65(self$66, param$2, return$7) =
+    drop self$66
+    if param$2.tag == Just then {
+-     drop param$2
+      let apply$39 = closure join$67(return$7)
++     drop param$2
+      return String#(apply$39)
+    } else {
+      if param$2.tag == Nothing then {
+-       drop param$2
+        let apply$40 = closure join$71(return$7)
++       drop param$2
+        return String#(apply$40)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$67(self$68, value$69) =
+    let return$7 = self$68.cap[0]
+    dup return$7
+-   drop self$68
+    let lit$70 = "PRESENT"
++   drop self$68
+    return value$69(lit$70, return$7)
+  
+  closure fn join$71(self$72, value$73) =
+    let return$7 = self$72.cap[0]
+    dup return$7
+-   drop self$72
+    let lit$74 = "ABSENT"
++   drop self$72
+    return value$73(lit$74, return$7)
+  
+  toplevel fn main(return$8) =
+    let closure$145 = closure lambda$77()
+    return return$8(closure$145)
+  
+  closure fn lambda$77(self$78, param$3, return$9) =
+    drop param$3
+    drop self$78
+    if  then {
+      let closure$119 = closure lambda$79()
+      let return$10 = closure join$120(closure$119, return$9)
+      let then$60 = closure join$123(return$10)
+      return printString(then$60)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$79(self$80, tmp$4, return$14) =
+-   drop self$80
+-   drop tmp$4
+    let closure$105 = closure lambda$81()
+    let return$15 = closure join$106(closure$105, return$14)
+    let then$51 = closure join$109(return$15)
++   drop self$80
++   drop tmp$4
+    return printString(then$51)
+  
+  closure fn lambda$81(self$82, tmp$5, return$17) =
++   let then$48 = closure join$83(return$17)
+    drop self$82
+    drop tmp$5
+-   let then$48 = closure join$83(return$17)
+    return printString(then$48)
+  
+  closure fn join$83(self$84, value$85) =
+    let return$17 = self$84.cap[0]
+    dup return$17
+-   drop self$84
+    let return$18 = closure join$86(return$17, value$85)
+    let then$46 = closure join$89(return$18)
++   drop self$84
+    return showEnv(then$46)
+  
+  closure fn join$86(self$87, value$88) =
+    let return$17 = self$87.cap[0]
+    dup return$17
+    let value$85 = self$87.cap[1]
+    dup value$85
+    drop self$87
+    return value$85(value$88, return$17)
+  
+  closure fn join$89(self$90, value$91) =
+    let return$18 = self$90.cap[0]
+    dup return$18
+-   drop self$90
+    let return$19 = closure join$92(return$18, value$91)
+    let then$44 = closure join$95(return$19)
++   drop self$90
+    return getEnv(then$44)
+  
+  closure fn join$92(self$93, value$94) =
+    let return$18 = self$93.cap[0]
+    dup return$18
+    let value$91 = self$93.cap[1]
+    dup value$91
+    drop self$93
+    return value$91(value$94, return$18)
+  
+  closure fn join$95(self$96, value$97) =
+    let return$19 = self$96.cap[0]
+    dup return$19
+-   drop self$96
+    let return$20 = closure join$98(return$19, value$97)
+    let apply$42 = closure join$101(return$20)
++   drop self$96
+    return String#(apply$42)
+  
+  closure fn join$98(self$99, value$100) =
+    let return$19 = self$99.cap[0]
+    dup return$19
+    let value$97 = self$99.cap[1]
+    dup value$97
+    drop self$99
+    return value$97(value$100, return$19)
+  
+  closure fn join$101(self$102, value$103) =
+    let return$20 = self$102.cap[0]
+    dup return$20
+-   drop self$102
+    let lit$104 = "MALGO_DEFINITELY_UNSET_ENV_VAR_TEST"
++   drop self$102
+    return value$103(lit$104, return$20)
+  
+  closure fn join$106(self$107, value$108) =
+    let closure$105 = self$107.cap[0]
+    dup closure$105
+    let return$14 = self$107.cap[1]
+    dup return$14
+    drop self$107
+    return closure$105(value$108, return$14)
+  
+  closure fn join$109(self$110, value$111) =
+    let return$15 = self$110.cap[0]
+    dup return$15
+-   drop self$110
+    let return$16 = closure join$112(return$15, value$111)
+    let apply$49 = closure join$115(return$16)
++   drop self$110
+    return String#(apply$49)
+  
+  closure fn join$112(self$113, value$114) =
+    let return$15 = self$113.cap[0]
+    dup return$15
+    let value$111 = self$113.cap[1]
+    dup value$111
+    drop self$113
+    return value$111(value$114, return$15)
+  
+  closure fn join$115(self$116, value$117) =
+    let return$16 = self$116.cap[0]
+    dup return$16
+-   drop self$116
+    let lit$118 = "
+    "
++   drop self$116
+    return value$117(lit$118, return$16)
+  
+  closure fn join$120(self$121, value$122) =
+    let closure$119 = self$121.cap[0]
+    dup closure$119
+    let return$9 = self$121.cap[1]
+    dup return$9
+    drop self$121
+    return closure$119(value$122, return$9)
+  
+  closure fn join$123(self$124, value$125) =
+    let return$10 = self$124.cap[0]
+    dup return$10
+-   drop self$124
+    let return$11 = closure join$126(return$10, value$125)
+    let then$58 = closure join$129(return$11)
++   drop self$124
+    return showEnv(then$58)
+  
+  closure fn join$126(self$127, value$128) =
+    let return$10 = self$127.cap[0]
+    dup return$10
+    let value$125 = self$127.cap[1]
+    dup value$125
+    drop self$127
+    return value$125(value$128, return$10)
+  
+  closure fn join$129(self$130, value$131) =
+    let return$11 = self$130.cap[0]
+    dup return$11
+-   drop self$130
+    let return$12 = closure join$132(return$11, value$131)
+    let then$56 = closure join$135(return$12)
++   drop self$130
+    return getEnv(then$56)
+  
+  closure fn join$132(self$133, value$134) =
+    let return$11 = self$133.cap[0]
+    dup return$11
+    let value$131 = self$133.cap[1]
+    dup value$131
+    drop self$133
+    return value$131(value$134, return$11)
+  
+  closure fn join$135(self$136, value$137) =
+    let return$12 = self$136.cap[0]
+    dup return$12
+-   drop self$136
+    let return$13 = closure join$138(return$12, value$137)
+    let apply$54 = closure join$141(return$13)
++   drop self$136
+    return String#(apply$54)
+  
+  closure fn join$138(self$139, value$140) =
+    let return$12 = self$139.cap[0]
+    dup return$12
+    let value$137 = self$139.cap[1]
+    dup value$137
+    drop self$139
+    return value$137(value$140, return$12)
+  
+  closure fn join$141(self$142, value$143) =
+    let return$13 = self$142.cap[0]
+    dup return$13
+-   drop self$142
+    let lit$144 = "PATH"
++   drop self$142
+    return value$143(lit$144, return$13)
+  
+  toplevel fn zig_main$148() =
+    let finish$146 = closure join$150()
+    let after_main$147 = closure join$153(finish$146)
+    return main(after_main$147)
+  
+  closure fn join$150(self$151, value$152) =
+    drop self$151
+    return value$152
+  
+  closure fn join$153(self$154, value$155) =
+    let finish$146 = self$154.cap[0]
+    dup finish$146
+-   drop self$154
++   dropReuse reuse$157 = self$154 /0
+-   let struct$156 = Tuple()
++   let struct$156 = reuse reuse$157 Tuple()
+    return value$155(struct$156, finish$146)
+  
+  entry = zig_main$148

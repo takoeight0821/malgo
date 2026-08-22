@@ -1,0 +1,104 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "../../../runtime/malgo/Json.mlg"
+
+-- Deliberately NOT a `test/testcases/malgo` case: any fixture there that
+-- imports Builtin.mlg + Prelude.mlg directly *and* imports a third
+-- relative-path-importing runtime module (Json.mlg here) hits a
+-- pre-existing `--infer` bug where the query engine's dependency resolver
+-- sees two different `ModuleName` spellings for the same underlying
+-- Builtin.mlg/Prelude.mlg and treats it as a fatal name collision (see
+-- #429). Not Json.mlg-specific -- the identical crash reproduces with the
+-- pre-existing Either.mlg under the same import shape, which is why no
+-- corpus fixture imports Either.mlg directly either (TestEither.mlg
+-- redeclares it inline instead). `test/testcases/scheme-only/` sidesteps
+-- the corpus sweep entirely, same reasoning as RunProcessEnvScope.mlg and
+-- ReadWriteFileEdgeCases.mlg.
+
+def assertEq : String -> String -> String -> ()
+def assertEq = { caseName expected actual ->
+  if (eqString expected actual)
+    { putStrLn (appendString "ok: " caseName) }
+    { putStrLn (appendString "FAIL: " (appendString caseName (appendString " expected=" (appendString expected (appendString " actual=" actual))))) }
+}
+
+def assertParseFails : String -> String -> ()
+def assertParseFails = { caseName input ->
+  case (parseJson input) {
+    Nothing -> putStrLn (appendString "ok: " caseName),
+    (Just _) -> putStrLn (appendString "FAIL: " (appendString caseName " expected parseJson to fail but it succeeded"))
+  }
+}
+
+-- Replicates a real jq query from nix-config's Copilot permissions-config
+-- migration, verified against real `jq -r` on the identical JSON input:
+--
+--   .locations
+--   | to_entries[]
+--   | select(.value.tool_approvals // []
+--            | any(.kind == "commands"
+--                  and (.commandIdentifiers // [] | index("gh pr", "gh issue")) != null))
+--   | .key
+
+def configJson : String
+def configJson = "{\"locations\":{\"/repo/has-gh-pr\":{\"tool_approvals\":[{\"kind\":\"commands\",\"commandIdentifiers\":[\"ls\",\"gh pr\"]}]},\"/repo/has-gh-issue\":{\"tool_approvals\":[{\"kind\":\"other\",\"commandIdentifiers\":[\"gh pr\"]},{\"kind\":\"commands\",\"commandIdentifiers\":[\"gh issue\"]}]},\"/repo/no-match\":{\"tool_approvals\":[{\"kind\":\"commands\",\"commandIdentifiers\":[\"cat\",\"ls\"]}]},\"/repo/empty-approvals\":{\"tool_approvals\":[]},\"/repo/no-approvals-key\":{}}}"
+
+def jsonAsStringOrEmpty : Json -> String
+def jsonAsStringOrEmpty = { j -> fromMaybe (jsonAsString j) "" }
+
+-- `.kind == "commands" and (.commandIdentifiers // [] | index("gh pr", "gh issue")) != null`
+def approvalMatches : Json -> Bool
+def approvalMatches = { approval ->
+  let kindIsCommands =
+    case (bindMaybe (jsonField "kind" approval) jsonAsString) {
+      Nothing -> False,
+      (Just k) -> eqString k "commands"
+    };
+  if kindIsCommands
+    { let cmdIds = fromMaybe (bindMaybe (jsonField "commandIdentifiers" approval) jsonArrayItems) Nil;
+      let cmdIdStrings = mapList jsonAsStringOrEmpty cmdIds;
+      if (any (eqString "gh pr") cmdIdStrings)
+        { True }
+        { any (eqString "gh issue") cmdIdStrings }
+    }
+    { False }
+}
+
+-- `.value.tool_approvals // [] | any(...)`
+def matchesAnyApproval : Json -> Bool
+def matchesAnyApproval = { value ->
+  let approvals = fromMaybe (bindMaybe (jsonField "tool_approvals" value) jsonArrayItems) Nil;
+  any approvalMatches approvals
+}
+
+-- `to_entries[] | select(...) | .key`
+def matchingKeys : List (String, Json) -> List String
+def matchingKeys =
+  { Nil -> Nil,
+    (Cons {k, v} rest) ->
+      if (matchesAnyApproval v)
+        { Cons k (matchingKeys rest) }
+        { matchingKeys rest }
+  }
+
+def jqReplicaResult : String
+def jqReplicaResult =
+  case (parseJson configJson) {
+    Nothing -> "PARSE FAILED",
+    (Just config) ->
+      case (bindMaybe (jsonField "locations" config) jsonObjectEntries) {
+        Nothing -> "NO LOCATIONS",
+        (Just entries) -> unlines (matchingKeys entries)
+      }
+  }
+
+def main = { () ->
+  assertEq "jq-replica query matches real jq -r output"
+    "/repo/has-gh-pr\n/repo/has-gh-issue\n"
+    jqReplicaResult;
+
+  assertParseFails "bare word is not JSON" "not json";
+  assertParseFails "object with missing value" "{\"a\": }";
+  assertParseFails "array missing closing bracket" "[1, 2";
+  assertParseFails "unicode escape is not supported" "\"\\u0041\""
+}

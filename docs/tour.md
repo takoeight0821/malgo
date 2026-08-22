@@ -78,7 +78,7 @@ def fromMaybe = { default m ->
 
 ```malgo
 type Person = { name: String, age: Int32 }
-def personAge = { { name = _, age = age } -> age }
+def personAge = { { .name -> _, .age -> age } -> age }
 ```
 
 ### Tuples
@@ -157,6 +157,34 @@ def main = {
   printString "A";
   printString "B"
 }
+```
+
+### Common Idioms
+
+**A multi-step `def` doesn't need a lambda wrapper.** A parenthesized `let`-chain is legal directly in a `def name = (...)` position -- no `{ () -> ... } ()` immediately-invoked-thunk needed:
+
+```malgo
+def machineTag : String
+def machineTag = (
+  let whoamiResult = runProcess "hostname" Nil;
+  trimTrailingNewlines whoamiResult.stdout
+)
+```
+
+See `test/testcases/malgo/Seq.mlg` for a tested example of this shape.
+
+**Filtering a list and projecting one field of the surviving elements doesn't need hand-written `Cons`/`Nil` recursion** -- compose `filter`, `mapList`, and `fst`/`snd` (or `(<<)`):
+
+```malgo
+-- Instead of:
+def matchingKeys =
+  { Nil -> Nil,
+    (Cons {k, v} rest) ->
+      if (matchesAnyApproval v) { Cons k (matchingKeys rest) } { matchingKeys rest }
+  }
+
+-- write:
+def matchingKeys = { entries -> mapList fst (filter (matchesAnyApproval << snd) entries) }
 ```
 
 ## 10. Compiler Pipeline

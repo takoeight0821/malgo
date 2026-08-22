@@ -144,6 +144,13 @@ inductive EvalError where
   process (including the golden test runner). `evalProgram` catches this
   and treats it as successful termination. -/
   | exitSuccess
+  /-- Control-flow, not an error: `malgo_exit_with_code`. Same rationale as
+  `exitSuccess` -- calling `IO.Process.exit` directly here would kill the
+  golden test runner's single shared process, not just the Malgo program
+  being interpreted. `evalProgram`/`bigStepEvalProgram` catch this and
+  return the code as their own result, so `Driver.compileAndEval` can pass
+  it through as the CLI's real process exit code. -/
+  | exitWith (code : Int32)
 
 instance : Inhabited Range := ⟨{ start := SourcePos.initial "", stop := SourcePos.initial "" }⟩
 instance : Inhabited Id := ⟨{ name := "", moduleName := .moduleName "", sort := .external }⟩
@@ -168,6 +175,7 @@ def EvalError.render : EvalError → String
       String.intercalate ", " (values.map valueToText)
   | .divideByZero _ => "divide by zero"
   | .exitSuccess => "ExitSuccess"
+  | .exitWith code => s!"ExitWith {code}"
 
 def EvalError.rangeOf : EvalError → Option Range
   | .undefinedVariable r _ => some r
@@ -181,6 +189,7 @@ def EvalError.rangeOf : EvalError → Option Range
   | .invalidArguments r _ _ => some r
   | .divideByZero r => some r
   | .exitSuccess => none
+  | .exitWith _ => none
 
 /-! ## Handlers and the evaluation context -/
 
@@ -408,6 +417,24 @@ def neValue (_range : Range) (a b : Value) : EvalM Value :=
   pure (.immediate (.int32 (if a != b then 1 else 0)))
 
 private def boolI32 (b : Bool) : Value := .immediate (.int32 (if b then 1 else 0))
+
+/-- Undo `Prelude.mlg`'s `joinWithNul`: each element is followed by a NUL
+terminator rather than separated by one, so splitting on NUL and dropping
+the final piece recovers the original list without special-casing the
+empty-blob case -- `"".splitOn "\x00" = [""]`, and `dropLast` on that is
+`[]`, matching zero arguments; `"\x00".splitOn "\x00" = ["", ""]`, and
+`dropLast` on that is `[""]`, matching one empty-string argument. -/
+private def splitNulTerminated (s : String) : List String :=
+  (s.splitOn "\x00").dropLast
+
+/-- Box a raw value as its `Builtin.mlg` ADT (`Int32# n`/`String# s`), the
+runtime representation `(Int32# x)`/`(String# x)` patterns expect. Every
+other foreign import returns the raw, unboxed form and leaves boxing to a
+Malgo-level wrapper (e.g. `readFile = { (String# path) -> String# (readFile# path) }`)
+-- but a tuple's own components have no such unboxed form to defer to, so a
+primitive that returns one directly must box them itself. -/
+private def boxInt32 (n : Int32) : Value := .struct (.tag "Int32#") [.immediate (.int32 n)]
+private def boxString (s : String) : Value := .struct (.tag "String#") [.immediate (.string s)]
 
 def ltValue (range : Range) : Value → Value → EvalM Value
   | .immediate (.int32 a), .immediate (.int32 b) => pure (boolI32 (a.toInt < b.toInt))
@@ -667,10 +694,36 @@ def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM
       pure (.immediate (.string (String.intercalate "\n" h.arguments)))
     | "malgo_exit_success" =>
       throw .exitSuccess
+    | "malgo_exit_with_code" =>
+      match values with
+      | [.immediate (.int32 code)] => throw (.exitWith code)
+      | _ => throw (.invalidArguments range "malgo_exit_with_code" values)
+    | "malgo_has_env" =>
+      match values with
+      | [.immediate (.string name)] => do
+        let value ← IO.getEnv name
+        pure (boolI32 value.isSome)
+      | _ => throw (.invalidArguments range "malgo_has_env" values)
+    | "malgo_get_env" =>
+      match values with
+      | [.immediate (.string name)] => do
+        let value ← IO.getEnv name
+        pure (.immediate (.string (value.getD "")))
+      | _ => throw (.invalidArguments range "malgo_get_env" values)
     | "malgo_stderr_string" =>
       match values with
       | [.immediate (.string text)] => do putTextTo h.stderr text; pure (.struct .tuple [])
       | _ => throw (.invalidArguments range "malgo_stderr_string" values)
+    | "malgo_run_process" =>
+      match values with
+      | [.immediate (.string cmd), .immediate (.string argsBlob)] => do
+        let args := splitNulTerminated argsBlob
+        let result ← IO.Process.output { cmd, args := args.toArray }
+        pure (.struct .tuple
+          [ boxInt32 (Int32.ofNat result.exitCode.toNat),
+            boxString result.stdout,
+            boxString result.stderr ])
+      | _ => throw (.invalidArguments range "malgo_run_process" values)
     | "malgo_string_to_int32" =>
       match values with
       | [.immediate (.string s)] =>
@@ -830,13 +883,18 @@ mints the single `finish` continuation, and runs the interpreter, bridging
 `EvalError` into `CompileError`.
 
 The synthetic entry statement mirrors Haskell exactly:
-`Join finish (Finish) (Join return (Apply [Construct Tuple [] []] [finish]) body)`. -/
+`Join finish (Finish) (Join return (Apply [Construct Tuple [] []] [finish]) body)`.
+
+Returns the process exit code the CLI should use (0 on normal completion or
+`malgo_exit_success`, the given code on `malgo_exit_with_code`) rather than
+`Unit`, so `Driver.compileAndEval` can thread it through as the real exit
+status instead of hardcoding 0. -/
 def evalProgram (moduleName : ModuleName) (handlers : Handlers) (program : JProgram) :
-    MalgoM Unit := do
+    MalgoM UInt32 := do
   let toplevels : Toplevels :=
     program.definitions.foldl (fun m (_, name, ret, stmt) => m.insert name (ret, stmt)) {}
   match toplevels.toList.find? (fun (k, _) => k.name == "main") with
-  | none => pure ()  -- No main function
+  | none => pure 0  -- No main function
   | some (_, (ret, statement)) => do
     let finish ← newTemporalId moduleName "finish"
     let slots ← IO.mkRef (∅ : Std.HashMap Nat Value)
@@ -848,8 +906,9 @@ def evalProgram (moduleName : ModuleName) (handlers : Handlers) (program : JProg
         (.join r ret (.apply r [.construct r .tuple [] []] [finish]) statement)
     let result ← MalgoM.io (((evalStatement emptyEnv entry).run ctx).run)
     match result with
-    | .ok () => pure ()
-    | .error .exitSuccess => pure ()  -- malgo_exit_success: clean termination
+    | .ok () => pure 0
+    | .error .exitSuccess => pure 0  -- malgo_exit_success: clean termination
+    | .error (.exitWith code) => pure code.toUInt32  -- malgo_exit_with_code
     | .error e => throw { passName := "Eval", message := e.render, range? := e.rangeOf }
 
 end Malgo.Sequent.Eval

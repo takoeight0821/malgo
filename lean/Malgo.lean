@@ -17,6 +17,7 @@ import Malgo.Parser.Prim
 import Malgo.Parser.CStyle
 import Malgo.Parser
 import Malgo.Sequent.Fun
+import Malgo.Sequent.Core.Common
 import Malgo.Sequent.Core.Full
 import Malgo.Sequent.Core.Flat
 import Malgo.Sequent.Core.Join

@@ -4,6 +4,7 @@ import Malgo.Monad
 import Malgo.Module
 import Malgo.SExpr
 import Malgo.Sequent.Fun
+import Malgo.Sequent.Core.Common
 import Malgo.Sequent.Core.Flat
 
 /-! Port of `src/Malgo/Sequent/Core/Join.hs`: the Join IR (explicit join
@@ -86,8 +87,6 @@ def Statement.range : Statement → Range
 
 instance : HasRange Statement := ⟨Statement.range⟩
 
-private def sym (s : String) : SExpr := .atom (.symbol s)
-
 mutual
 
 def Producer.toSExpr : Producer → SExpr
@@ -158,16 +157,8 @@ instance : ToSExpr Consumer := ⟨Consumer.toSExpr⟩
 instance : ToSExpr Statement := ⟨Statement.toSExpr⟩
 instance : ToSExpr Branch := ⟨Branch.toSExpr⟩
 
-structure Program where
-  definitions : List (Range × Name × Name × Statement)
-  dependencies : List ModuleName
-
-instance : ToSExpr Program where
-  toSExpr p :=
-    .list <|
-      (p.definitions.map fun (_, name, ret, body) =>
-        .list [Malgo.toSExpr name, Malgo.toSExpr ret, Malgo.toSExpr body])
-      ++ [.list (p.dependencies.map Malgo.toSExpr)]
+abbrev Definition := DefinitionOf Statement
+abbrev Program := ProgramOf Statement
 
 /-- The hoisting accumulator: Haskell's `Writer (Endo Statement)`. The
 state is the accumulated `Endo`, i.e. a `Statement → Statement`. -/
@@ -286,11 +277,9 @@ partial def joinBranch (moduleName : ModuleName) : Flat.Branch → MalgoM Branch
 
 end
 
-def joinDefinition (moduleName : ModuleName) :
-    Range × Name × Name × Flat.Statement → MalgoM (Range × Name × Name × Statement)
-  | (range, name, ret, statement) => do
-    let statement ← runJoin (joinStatement moduleName statement)
-    pure (range, name, ret, statement)
+def joinDefinition (moduleName : ModuleName) (d : Flat.Definition) : MalgoM Definition := do
+  let body ← runJoin (joinStatement moduleName d.body)
+  pure { range := d.range, name := d.name, ret := d.ret, body }
 
 def joinProgram (moduleName : ModuleName) (program : Flat.Program) : MalgoM Program := do
   let definitions ← program.definitions.mapM (joinDefinition moduleName)

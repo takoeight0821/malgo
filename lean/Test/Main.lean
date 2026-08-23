@@ -651,7 +651,7 @@ def run (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR)) (names : List St
   for name in names do
     try
       let ir ← Malgo.Test.getAllIR memo (Malgo.Test.testcasePath name)
-      let bad := ir.flat.definitions.flatMap (fun d => badFlatStmt d.2.2.2)
+      let bad := ir.flat.definitions.flatMap (fun d => badFlatStmt d.body)
       if !bad.isEmpty then
         IO.println s!"FAIL Malgo.Sequent.Core.Flat/{name}: non-value in {bad.length} argument position(s): {bad.take 3}"
         failed := failed + 1

@@ -892,7 +892,7 @@ status instead of hardcoding 0. -/
 def evalProgram (moduleName : ModuleName) (handlers : Handlers) (program : JProgram) :
     MalgoM UInt32 := do
   let toplevels : Toplevels :=
-    program.definitions.foldl (fun m (_, name, ret, stmt) => m.insert name (ret, stmt)) {}
+    program.definitions.foldl (fun m d => m.insert d.name (d.ret, d.body)) {}
   match toplevels.toList.find? (fun (k, _) => k.name == "main") with
   | none => pure 0  -- No main function
   | some (_, (ret, statement)) => do

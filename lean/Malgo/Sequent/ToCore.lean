@@ -33,7 +33,7 @@ export Malgo.Sequent.Fun (Expr Branch Program)
 end F
 
 namespace C
-export Malgo.Sequent.Core.Full (Producer Consumer Statement Branch Program)
+export Malgo.Sequent.Core.Full (Producer Consumer Statement Branch Definition Program)
 end C
 
 /-- Supports `partial def`s returning `MalgoM α` (inhabited via the monad's
@@ -116,11 +116,11 @@ partial def convertBranch (mn : ModuleName) (consumer : C.Consumer) :
 end
 
 def convertDefinition (mn : ModuleName) :
-    Range × Name × F.Expr → MalgoM (Range × Name × Name × C.Statement)
+    Range × Name × F.Expr → MalgoM C.Definition
   | (range, name, body) => do
     let ret ← newTemporalId mn "return"
     let body' ← toStatement mn body (.label range ret)
-    pure (range, name, ret, body')
+    pure { range, name, ret, body := body' }
 
 /-- The CPS half of `toCore`, taking a program already run through
 `saturateProgram` and `specializeProgram`. -/

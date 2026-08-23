@@ -257,13 +257,19 @@ for its own reason:
   and Scheme (`Backend/Scheme.lean`'s `(error 'panic ...)`) backends —
   there is no successful stdout to pin as a golden. `PanicGate.run` below
   exercises both directly instead.
+- `PanicNamedImport` (malgo#452) is `Panic`'s named-import twin (`module
+  {panic} = import ...` instead of `module {..} = import ...`), added to
+  regression-test the self-hosted evaluator's `import Builtin.mlg`
+  substitution (see `scripts/selfhost-golden.sh`'s panic-import gate) --
+  excluded from this harness for the same reason as `Panic`.
 
 Excluding these here keeps `scripts/cli-gate.sh`'s `eval` mode, and
 `scripts/zig-golden.sh`/`scripts/scheme-golden.sh`/`scripts/selfhost-golden.sh`
 (all of which discover their cases by listing `.golden/Malgo.Sequent.Eval/*/`
 rather than scanning `test/testcases/malgo/` directly), from ever seeing
 any of these names — no per-script skip-list needed. -/
-def evalHarnessUnsupported : List String := ["TaggedRecordCrossModuleUse", "Panic", "CondPanic"]
+def evalHarnessUnsupported : List String :=
+  ["TaggedRecordCrossModuleUse", "Panic", "CondPanic", "PanicNamedImport"]
 
 private def evalGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     (name : String) : IO String := do
@@ -309,18 +315,20 @@ def bigStepEvalCases (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     { group := "Malgo.Sequent.BigStepEval", name := s!"golden/{n}", run := bigStepEvalGolden memo n }
 
 /-! ## Panic gate (regression test for malgo#426, not golden — see
-`evalHarnessUnsupported` for why `Panic`/`CondPanic` are excluded from
-`evalCases`/`bigStepEvalCases`).
+`evalHarnessUnsupported` for why `Panic`/`CondPanic`/`PanicNamedImport` are
+excluded from `evalCases`/`bigStepEvalCases`).
 
 Checks both entry points against each linked program: `BigStepEval.lean`
 calls `Eval.fetchPrimitive` directly rather than reimplementing it, so this
 also confirms the big-step evaluator didn't need its own `malgo_panic`
-case. Two scenarios: `Panic` calls `panic(...)` directly; `CondPanic` walks
+case. Three scenarios: `Panic` calls `panic(...)` directly; `CondPanic` walks
 one `Cons (False, _) xs` step of `Prelude.mlg`'s `cond` before hitting its
 `Nil -> panic "no branch"` fallback -- the specific path #426's issue text
-called out as untested. Both stdout and the full rendered error message are
-pinned exactly: `EvalError.rangeOf`'s `.panic` case returns `none` (its
-`range` would be `fetchPrimitive`'s call-site range, i.e. `panic`'s own
+called out as untested; `PanicNamedImport` (malgo#452) is `Panic`'s
+named-import twin, confirming the Lean interpreters -- unlike the
+self-hosted evaluator -- have no trouble with either import form. Both
+stdout and the full rendered error message are pinned exactly:
+`EvalError.rangeOf`'s `.panic` case returns `none` (its
 foreign-import declaration in Builtin.mlg, never the caller's actual
 `panic(...)` site), so the message is just `[<passName>] panic: <msg>` with
 no location prefix to make an exact match brittle -- `<passName>` differs
@@ -339,7 +347,9 @@ private def scenarios : List Scenario :=
   [ { testcase := "Panic", expectedStdout := "before panic\n",
       expectedMessage := "panic: malgo#426 regression check" },
     { testcase := "CondPanic", expectedStdout := "before cond\n",
-      expectedMessage := "panic: no branch" } ]
+      expectedMessage := "panic: no branch" },
+    { testcase := "PanicNamedImport", expectedStdout := "before panic\n",
+      expectedMessage := "panic: malgo#452 named-import regression check" } ]
 
 def run (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR)) : IO Nat := do
   let evaluators :=

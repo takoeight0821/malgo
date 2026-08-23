@@ -1065,6 +1065,19 @@ def applyBuiltin8 = { gEnv name args ->
     "exitSuccess" -> Left "exitSuccess",
     "malgo_exit_success" -> Left "exitSuccess",
     "malgo_panic" -> case args { (Cons (VString s) Nil) -> Left (appendString "panic: " s), (Cons x Nil) -> Left (appendString "panic: " (valueToText x)), _ -> Left "panic" },
+    -- `panic`'s real Builtin.mlg definition is a thin wrapper --
+    -- `{ (String# message) -> malgo_panic message }` -- but `import
+    -- Builtin.mlg` never evaluates that source (see `isPreloadedImport`
+    -- above), so the wrapper needs its own synthetic entry here, exactly
+    -- like `malgo_panic` itself, or it's unresolvable as `undefined:
+    -- panic` after a normal import (malgo#452). Not passthrough, unlike
+    -- `malgo_panic`: `panic`'s argument still carries its literal's
+    -- `String#` box at this point (the wrapper's own pattern match, which
+    -- would normally strip it, never runs), so it must go through the
+    -- default unboxing in `unwrapBuiltinArgs` to reach here as a plain
+    -- `VString`, matching what `malgo_panic` receives when called via a
+    -- real (non-preloaded) `panic` wrapper.
+    "panic" -> case args { (Cons (VString s) Nil) -> Left (appendString "panic: " s), (Cons x Nil) -> Left (appendString "panic: " (valueToText x)), _ -> Left "panic" },
     _ -> applyBuiltin9 gEnv name args
   }
 }
@@ -1287,6 +1300,7 @@ def foreignArity8 = {
   "exitSuccess" -> 1i32,
   "malgo_exit_success" -> 1i32,
   "malgo_panic" -> 1i32,
+  "panic" -> 1i32,
   name -> foreignArity9 name
 }
 
@@ -1385,13 +1399,13 @@ def preludeBuiltinNames =
   Cons "max" (Cons "min" (Cons "abs" (Cons "const" (Cons "getContents" (Cons "print" (Cons "malgo_print" (Cons "toStringDouble" (Cons "negInt32" (
   Cons "addDouble#" (Cons "subDouble#" (Cons "mulDouble#" (Cons "goto" (
   Cons "eqChar" (Cons "neChar" (Cons "geInt32" (Cons "neInt32" (Cons "neInt64" (Cons "geInt64" (Cons "negInt64" (Cons "modInt64" (
-  Cons "exitSuccess" (Cons "malgo_exit_success" (Cons "malgo_panic" (Cons "malgo_unsafe_cast" (
+  Cons "exitSuccess" (Cons "malgo_exit_success" (Cons "malgo_panic" (Cons "panic" (Cons "malgo_unsafe_cast" (
   Cons "getRawArgs" (Cons "readFile" (Cons "charToString" (Cons "hasEnv#" (Cons "getEnvRaw#" (Cons "modInt64#" (
   Cons "malgo_mod_int64_t" (Cons "malgo_neg_int64_t" (Cons "malgo_mod_int32_t" (Cons "malgo_neg_int32_t" (
   Cons "malgo_gt_int32_t" (Cons "malgo_ge_int32_t" (Cons "malgo_ne_int32_t" (
   Cons "malgo_eq_int64_t" (Cons "malgo_lt_int64_t" (Cons "malgo_le_int64_t" (
   Cons "malgo_gt_int64_t" (Cons "malgo_ge_int64_t" (Cons "malgo_ne_int64_t" Nil
-  )))))))))))))))))))))))))))))))))))))))))))
+  ))))))))))))))))))))))))))))))))))))))))))))
 def makeBaseEnv : Env
 def makeBaseEnv = addBaseConstructors (foldl addBuiltin EnvEmpty builtinNames)
 

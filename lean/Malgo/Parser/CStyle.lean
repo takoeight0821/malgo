@@ -223,24 +223,19 @@ partial def pApply : P (Expr .parse) := do
 partial def pApplyPostfix : P (Expr .parse → Expr .parse) :=
   P.choice [
     -- Function application: expr(arg1, ...); () is treated as ({}).
-    -- For an identifier-headed chain, this branch is only reached once
-    -- whitespace has already intervened since the accumulator: an
-    -- *adjacent* `name(args)` is fully consumed by
-    -- `pVariable`/`pTightPostfix` before `pApply`'s postfix loop ever runs
-    -- (so `nats(0).tail` keeps binding `.tail` to the call, matching the
-    -- corpus's existing call-then-project convention). So a single
-    -- parenthesized argument here is a *loose*, space-separated
-    -- application (`f (expr)`) that happens to look like a call; if a
-    -- `.field` chain immediately (no whitespace) follows the closing
-    -- paren, it binds to that argument rather than to the whole
-    -- application — the same tight-binding treatment `pTightPostfix`
-    -- already gives a bare identifier (#424). `f(a, b)`/multi-arg and
-    -- empty-arg calls are untouched. (A tight call on a non-identifier
-    -- atom, e.g. an immediately-invoked lambda `{ ... }(x)`, still reaches
-    -- this branch tightly and isn't intercepted — out of scope here, no
-    -- corpus case has a dot chain immediately after one; the self-hosted
-    -- parser's `canCStyleCall` draws the same identifier/field-only
-    -- boundary for tight calls, for unrelated reasons.)
+    -- This branch is only reached once whitespace has already intervened
+    -- since the accumulator: an *adjacent* `atom(args)` is fully consumed
+    -- by `pAtom`/`pTightPostfix` before `pApply`'s postfix loop ever runs,
+    -- for every atom category (identifier, tuple, record, lambda, ...) —
+    -- not just identifiers (so `nats(0).tail` and `{ x -> x }(5).tail`
+    -- alike keep binding `.tail` to the call, matching the corpus's
+    -- existing call-then-project convention). So a single parenthesized
+    -- argument here is a *loose*, space-separated application (`f (expr)`)
+    -- that happens to look like a call; if a `.field` chain immediately
+    -- (no whitespace) follows the closing paren, it binds to that argument
+    -- rather than to the whole application — the same tight-binding
+    -- treatment `pTightPostfix` already gives a tightly-adjacent atom
+    -- (#424). `f(a, b)`/multi-arg and empty-arg calls are untouched.
     P.captureRange do
       let parenStart ← P.getSourcePos
       P.symbol "("
@@ -276,17 +271,17 @@ partial def pApplyPostfix : P (Expr .parse → Expr .parse) :=
 /-- Accumulate tight (no-whitespace) postfix operations immediately
 following `expr`: `.field` projections and C-style `(args)` calls,
 chained for as long as each starts right where the previous one ended.
-Used by `pVariable` so a bare identifier's dot/call chain binds as
-tightly as the identifier itself, matching the corpus's existing
-call-then-project convention (`nats(0).tail`, `addThree(1)(2)(3).apply`,
-`ifChain(True).then(t).else(e)`). Because this loop already swallows
-every *adjacent* continuation at the atom level, `pApplyPostfix`'s own
-call-args branch is only ever reached once whitespace has intervened, so
-it may safely give a *loose* `f (expr).field` the opposite treatment:
-binding the dot to the parenthesized argument instead of to the call
-(#424). Also reused by that branch once it has decided a trailing dot
-chain binds to the parenthesized argument, so further tight continuations
-(`f (g x).a(y).b`) keep chaining onto it. -/
+Used by `pAtom` so *any* atom's dot/call chain binds as tightly as the
+atom itself, matching the corpus's existing call-then-project convention
+(`nats(0).tail`, `addThree(1)(2)(3).apply`, `ifChain(True).then(t).else(e)`,
+and — since #424's follow-up — `{ x -> x }(5).tail` too). Because this
+loop already swallows every *adjacent* continuation at the atom level,
+`pApplyPostfix`'s own call-args branch is only ever reached once
+whitespace has intervened, so it may safely give a *loose* `f (expr).field`
+the opposite treatment: binding the dot to the parenthesized argument
+instead of to the call (#424). Also reused by that branch once it has
+decided a trailing dot chain binds to the parenthesized argument, so
+further tight continuations (`f (g x).a(y).b`) keep chaining onto it. -/
 partial def pTightPostfix
     (start : SourcePos) (expr : Expr .parse) : P (Expr .parse) := do
   let mField ← P.optional (P.attempt (P.char '.' *> P.rawIdent))
@@ -307,31 +302,52 @@ partial def pTightPostfix
     else
       pure expr
 
-/-- `pVariable`: an identifier, greedily consuming an immediately-adjacent
-(no whitespace) chain of `.field` projections and C-style `(args)` calls
-(#424; see `pTightPostfix`). -/
-partial def pVariable : P (Expr .parse) := do
+/-- `pVariable`: a bare identifier. Any immediately-adjacent (no
+whitespace) `.field`/`(args)` chain is folded on by `pAtom`, uniformly for
+every atom kind — not special-cased here (#424's follow-up). -/
+partial def pVariable : P (Expr .parse) := P.captureRange do
+  let name ← P.ident
+  pure fun range => Expr.var range name
+
+/-- `pAtom`: any atom, greedily extended with an immediately-adjacent (no
+whitespace) chain of `.field` projections and C-style `(args)` calls
+(#424, and — uniformly across every atom kind, not just a bare identifier
+— its follow-up). Every atom variant below ends by calling a
+space-swallowing `lexeme`/`symbol`, which erases the "was there
+whitespace here" signal before this function ever gets to look at it; a
+`.field`/`(` immediately after is indistinguishable, from the current
+parse position alone, from one preceded by real whitespace (or a
+comment). `PState.prevChar` recovers that signal without having to
+teach every atom parser to defer its own trailing `space` call (as the
+original, `pVariable`-only fix for #424 did): a non-whitespace `prevChar`
+means the atom's own closing token was the last thing actually consumed,
+i.e. the trailing `space` call that followed found nothing to swallow.
+(One corner this doesn't get right: a comment with no surrounding
+whitespace at all, e.g. `{x->x}{-c-}(5)`, reports tight because the last
+character `space` actually consumed is the comment's own `-}`, not
+whitespace — untested and arguably fine, since a comment is meant to be
+transparent anyway.) -/
+partial def pAtom : P (Expr .parse) := do
   let startPos ← P.getSourcePos
-  P.notFollowedBy P.anyReserved
-  let name ← P.rawIdent
-  let identEndPos ← P.getSourcePos
-  let hasTight ← P.option false
-    (P.lookAhead (P.char '.' <|> P.char '(') *> pure true)
+  let expr ← P.choice [
+    pLabel, pGoto, pLiteral, pVariable,
+    P.attempt pParenTuple, P.attempt pTuple, P.attempt pRecord,
+    pBrace, pList, pSeq ]
+  let mPrev ← P.prevChar
+  let noGapBefore := match mPrev with
+    | some c => !P.isSpaceChar c
+    | none => false
+  let hasTight ← if noGapBefore then
+      P.option false (P.lookAhead (P.char '.' <|> P.char '(') *> pure true)
+    else
+      pure false
   if hasTight then
-    let result ← pTightPostfix startPos
-      (Expr.var { start := startPos, stop := identEndPos } name)
+    let result ← pTightPostfix startPos expr
     P.space
     pure result
   else
     P.space
-    let endPos ← P.getSourcePos
-    pure (Expr.var { start := startPos, stop := endPos } name)
-
-partial def pAtom : P (Expr .parse) :=
-  P.choice [
-    pLabel, pGoto, pLiteral, pVariable,
-    P.attempt pParenTuple, P.attempt pTuple, P.attempt pRecord,
-    pBrace, pList, pSeq ]
+    pure expr
 
 partial def pLabel : P (Expr .parse) := P.captureRange do
   P.reserved "label"

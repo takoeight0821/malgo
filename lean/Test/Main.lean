@@ -747,7 +747,24 @@ private def cases : List Case :=
   , { name := "binds .field to a parenthesized argument in a non-first position too (#424)"
     , src := "def main = f a (g x).field"
     , expect := some
-        "(apply (apply f a) (project (parens (apply g x)) \"field\"))" } ]
+        "(apply (apply f a) (project (parens (apply g x)) \"field\"))" }
+  , { name := "a tight call's .field binds to the call result for a lambda-headed atom too (#424 follow-up)"
+    , src := "def main = { x -> x }(5).field"
+    , expect := some
+        "(project (apply (fn ((clause (x) (seq (do x))))) (int32 5)) \"field\")" }
+  , { name := "a tight call's .field binds to the call result for a tuple-headed atom too (#424 follow-up)"
+    , src := "def main = (a, b)(5).field"
+    , expect := some "(project (apply (tuple a b) (int32 5)) \"field\")" }
+  , { name := "a tight call's .field binds to the call result for a record-headed atom too (#424 follow-up)"
+    , src := "def main = { .a -> 1, .b -> 2 }(5).field"
+    , expect := some
+        "(project (apply (record (a (int32 1)) (b (int32 2))) (int32 5)) \"field\")" }
+  , { name := "keeps a tight two-argument call's .field bound to the call result: f(a, b).field"
+    , src := "def main = f(a, b).field"
+    , expect := some "(project (apply (apply f a) b) \"field\")" }
+  , { name := "keeps a tight nullary call's .field bound to the call result: f().field"
+    , src := "def main = f().field"
+    , expect := some "(project (apply f (tuple)) \"field\")" } ]
 
 def run : IO Nat := do
   let mut failed := 0

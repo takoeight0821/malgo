@@ -743,7 +743,11 @@ private def cases : List Case :=
     , expect := some "(project (apply nats (int32 0)) \"tail\")" }
   , { name := "a loose call's closing paren may be on its own line before a tight dot (#424)"
     , src := "def main = f (\n  g x\n).field"
-    , expect := some "(apply f (project (parens (apply g x)) \"field\"))" } ]
+    , expect := some "(apply f (project (parens (apply g x)) \"field\"))" }
+  , { name := "binds .field to a parenthesized argument in a non-first position too (#424)"
+    , src := "def main = f a (g x).field"
+    , expect := some
+        "(apply (apply f a) (project (parens (apply g x)) \"field\"))" } ]
 
 def run : IO Nat := do
   let mut failed := 0

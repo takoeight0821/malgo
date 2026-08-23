@@ -163,20 +163,51 @@ Haskell surfaces a two-deps-export-the-same-`Id` collision loudly (plain
 `error`, via `Map.intersectionWith` on the KEYS — it does not special-case
 "same Id, same value", any repeated key is fatal), since a genuine
 cross-module `Id` clash indicates an upstream invariant violation. This is
-deliberately reproduced exactly, not softened: the query engine can key the
-same underlying module under two `ModuleName` aliases (`.moduleName
-"Builtin"` and the artifact-path form path-string imports resolve to), and a
-module reached both ways lists as two distinct dependency-set entries —
-Haskell hits the identical crash in that situation (confirmed empirically:
+still reproduced exactly for a GENUINE collision — two different files that
+each export the same `Id` still throw below, unchanged.
+
+What is no longer reproduced is a *false* collision: `deps` can list the
+same underlying file under two different `ModuleName` *aliases* — e.g.
+`.moduleName "Builtin"` (a bare `import Builtin`) and the `.artifact` form a
+relative-path import resolves to — because `ModuleName`'s derived `BEq`/`Ord`
+treats different constructors as always-unequal even when they name the
+same file on disk (`ArtifactPath`'s own equality is `relPath`-only precisely
+so that traversal-route aliases of one `.artifact` collapse, per its doc
+comment, but that never bridges a `.moduleName` alias to an `.artifact` one).
+Since `Prelude.mlg` re-exports `Builtin.mlg` via its own bare `import
+Builtin`, any program that imports both Builtin and Prelude by two different
+route shapes (confirmed via
 `test/testcases/malgo/error/{ConstructorArity,StringPatIsNotSupported}.mlg`,
-which import Builtin/Prelude via relative path *and* transitively via
-Prelude's own bare-name `import Builtin`, crash under `--infer` on exactly
-this). Silently unioning here would diverge from the oracle on those two
-fixtures and mask a real upstream aliasing defect rather than surfacing it —
-see `test/testcases/malgo/error/README.md`. -/
+which path-import both directly *and* inherit `.moduleName "Builtin"`
+transitively through Prelude) previously hit the collision check on every
+name Builtin exports — not because two DIFFERENT files disagreed, but
+because the identical file was folded in twice under two different keys.
+That is not the upstream aliasing defect the check above exists to catch;
+it is an artifact of keying the fold on `ModuleName` instead of the file
+identity `ModuleName` denotes. So we resolve each dependency to its
+`ArtifactPath` (via `Workspace.getModulePath`, already memoized in
+`ws.moduleMap` by the time renaming has produced `deps`) and dedupe on THAT
+before folding — collapsing alias-of-the-same-file entries into one, while
+two entries that resolve to two different `ArtifactPath`s still both survive
+to the real check and still throw exactly as before. See
+`test/testcases/malgo/error/README.md` for the full story, and #429 for the
+fold-order tie-break this dedup has to make (which alias survives as the
+"representative" `ModuleName` when several name one file) — it doesn't
+affect correctness (every alias of one file resolves to the identical env,
+since `fetchRenamedModule` above keys an `Interface` by the renamed
+module's own name regardless of which alias reached it) but is worth a
+reviewer's second look. -/
 partial def buildDepsEnv (ws : Workspace) (db : QueryDB) (deps : Std.TreeSet ModuleName) :
     MalgoM Malgo.Infer.TyEnv := do
-  deps.toList.foldlM (init := ({} : Malgo.Infer.TyEnv)) fun acc dep => do
+  -- Dedupe `deps` by resolved file identity before folding: keep only the
+  -- first `ModuleName` alias encountered (in `deps`'s `ModuleName`-sorted
+  -- iteration order) for each distinct `ArtifactPath`.
+  let (_, dedupedDeps) ← deps.toList.foldlM
+      (init := (({} : Std.TreeSet ArtifactPath), (#[] : Array ModuleName)))
+      fun (seen, acc) dep => do
+        let path ← ws.getModulePath dep
+        if seen.contains path then pure (seen, acc) else pure (seen.insert path, acc.push dep)
+  dedupedDeps.toList.foldlM (init := ({} : Malgo.Infer.TyEnv)) fun acc dep => do
     let depEnv ← fetchInferredModule ws db dep
     let collisions := depEnv.foldl (fun ks k _ => if acc.contains k then k :: ks else ks) []
     unless collisions.isEmpty do

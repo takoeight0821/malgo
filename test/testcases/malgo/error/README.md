@@ -22,30 +22,50 @@ retirement unchanged: the gate has been green on the Lean binary throughout.
 | `NeedSpaceDot.mlg` | `rename` | yes |
 | `QualifiedImport.mlg` | `rename` | yes |
 | `NonExhaustive.mlg` | `eval` | yes (runtime non-exhaustive match) |
-| `ConstructorArity.mlg` | `type` | no — see the `buildDepsEnv` note below; not actually about constructor arity |
 | `InvalidPattern.mlg` | `type` | no — succeeds (prints `OK`) without `--infer`; the clause-arity mismatch is only caught by `InferPass` |
-| `StringPatIsNotSupported.mlg` | `type` | no — see the `buildDepsEnv` note below; not actually about string patterns |
 
-**`ConstructorArity.mlg`/`StringPatIsNotSupported.mlg`'s real failure mode** is
-`Malgo.Query.Engine.buildDepsEnv`'s duplicate-export `error` call — and it is
-NOT specific to these two files. Any module that directly imports both
-Prelude and Builtin hits it, because Prelude re-exports every Builtin name
-(`module {..} = import Builtin`): the direct Builtin import and Prelude's
-re-exported copy collide in `buildDepsEnv`'s strict accumulation. Confirmed
-empirically that this crashes the CLI (`malgo eval --infer`) on an *ordinary*
-testcase too (`Undefined.mlg`, which has the identical Prelude+Builtin
-diamond) — so it is a genuine, if latent, CLI defect, not something
-particular to the `error/` fixtures.
+**`ConstructorArity.mlg`/`StringPatIsNotSupported.mlg` used to be in this
+table too, with `.expect: type`** — both names are misleading holdovers from
+when they were repurposed to reproduce a `Query.Engine.buildDepsEnv` bug
+(fixed 2026-08-23, #429), not an actual constructor-arity or string-pattern
+error. Kept here for anyone who finds a reference to the old behavior:
 
-It stays latent because the test suite's infer gate does not go through
-`buildDepsEnv`. It computes a testcase's top-level dependency env with a
-separate, lenient left-biased fold (`buildDepsEnvLenient` in
-`lean/Test/Main.lean`) — inherited from the Haskell test suite's
-`InferSpec.runInferCapturing`, which did the same rather than call the
-strict `Query.Engine.buildDepsEnv`. So the infer gate passes on
-`Undefined.mlg` and every other Prelude+Builtin-diamond testcase, while the
-CLI binary crashes on them under `--infer`. That divergence is exactly what
-the `error` mode asserts for these two files.
+`buildDepsEnv` folds each dependency's exported `TyEnv` into an accumulator
+and throws on any name two dependencies both export — a deliberate,
+oracle-matching check for a genuine cross-module `Id` collision (see the
+doc comment on `buildDepsEnv` in `lean/Malgo/Query/Engine.lean`). The bug
+was that its dependency set, a `Std.TreeSet ModuleName`, could list the
+*same file* under two different `ModuleName` aliases — `.moduleName
+"Builtin"` for a bare `import Builtin` and the `.artifact` form a
+relative-path import resolves to — because `ModuleName`'s derived
+`BEq`/`Ord` treats different constructors as always-unequal even when they
+name the identical file on disk. Since `Prelude.mlg` re-exports every
+`Builtin.mlg` name via its own bare `import Builtin`, any program that
+imports both Builtin and Prelude directly (nearly every real program) hit
+this: not a genuine collision between two different files, but the same
+file folded in twice under two different keys, tripping the check on every
+name Builtin exports. It stayed latent because the test suite's own infer
+gate never went through the real `buildDepsEnv` — it uses a separate,
+deliberately lenient left-biased fold (`buildDepsEnvLenient` in
+`lean/Test/Main.lean`, inherited from the Haskell test suite's own
+`InferSpec.runInferCapturing`) — so only the CLI binary's `--infer` path
+ever hit it (confirmed to crash an *ordinary* testcase too, `Undefined.mlg`,
+which has the identical Prelude+Builtin diamond).
+
+The fix resolves each dependency's `ModuleName` to its `ArtifactPath`
+(`Workspace.getModulePath`) and dedupes on that resolved identity before
+folding, collapsing alias-of-the-same-file entries into one while leaving
+the collision check itself unweakened: two entries that resolve to two
+*different* files still both survive to the fold and still throw exactly as
+before. `ConstructorArity.mlg` and `StringPatIsNotSupported.mlg` no longer
+error under `--infer` — their `.expect` sidecars were removed, and they are
+now ordinary `error`-mode-excluded `.mlg` files, like the six below.
+`BuiltinPreludeDiamond.mlg` was added alongside them as a purpose-built
+regression fixture with the same diamond-import shape; it has no `.expect`
+on purpose (it must succeed, not fail). `scripts/cli-gate.sh`'s dedicated
+`infer-ok` mode asserts exit 0 under `malgo eval --infer` for all three
+files, exercising the fix through the real CLI binary rather than the
+lenient Lean-side test gate.
 
 **Six files have NO `.expect` and are excluded from the `error` mode:**
 `ErrorKind.mlg`, `ErrorKind2.mlg`, `ErrorKind3.mlg`, `ErrorPatSynRecon.mlg`,

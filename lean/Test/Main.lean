@@ -237,21 +237,30 @@ Linking mirrors Haskell `compileTestCase`: `builtin <> prelude <> program`
 the ToCore gate validated), stdin is the fixed `"Hello\n"` of
 `setupTestStdin`, and the golden is the captured stdout. -/
 
-/-- Testcases this fixed three-program link can't run correctly, so they're
-excluded from `evalCases`/`bigStepEvalCases` entirely rather than pinned
-with a golden this harness can only ever get wrong. `TaggedRecordCrossModuleUse`
-imports a third module (`TaggedRecordCrossModuleDef.mlg`) beyond
-Builtin/Prelude to regression-test a #422 cross-module fix; `linkPrograms
-[builtin, prelude, ir]` above has no way to see that third module's compiled
-program, so evaluating the linked result always fails with "Undefined
-variable: Point" here regardless of whether the compiler itself is correct.
-The real CLI's `Query.Engine.fetchLinkedProgram` does link the full
-dependency closure and evaluates this case correctly (verified manually) —
-excluding it here keeps `scripts/cli-gate.sh`'s `eval` mode (which runs that
-real CLI against these same `.golden/Malgo.Sequent.Eval` files) from ever
-diffing a correct answer against a golden this harness structurally cannot
-produce. -/
-def evalHarnessUnsupported : List String := ["TaggedRecordCrossModuleUse"]
+/-- Testcases excluded from `evalCases`/`bigStepEvalCases` (and therefore
+from ever getting a `.golden/Malgo.Sequent.Eval/<name>/golden` file), each
+for its own reason:
+
+- `TaggedRecordCrossModuleUse` imports a third module
+  (`TaggedRecordCrossModuleDef.mlg`) beyond Builtin/Prelude to
+  regression-test a #422 cross-module fix; `linkPrograms [builtin, prelude,
+  ir]` above has no way to see that third module's compiled program, so
+  evaluating the linked result always fails with "Undefined variable:
+  Point" here regardless of whether the compiler itself is correct. The
+  real CLI's `Query.Engine.fetchLinkedProgram` does link the full
+  dependency closure and evaluates this case correctly (verified manually).
+- `Panic` (malgo#426) calls `malgo_panic`, which *by design* terminates
+  evaluation nonzero with a message on stderr, matching the Zig
+  (`runtime/zig/runtime.zig`'s `panic`) and Scheme (`Backend/Scheme.lean`'s
+  `(error 'panic ...)`) backends — there is no successful stdout to pin as
+  a golden. `PanicGate.run` below exercises it directly instead.
+
+Excluding both here keeps `scripts/cli-gate.sh`'s `eval` mode, and
+`scripts/zig-golden.sh`/`scripts/scheme-golden.sh`/`scripts/selfhost-golden.sh`
+(all of which discover their cases by listing `.golden/Malgo.Sequent.Eval/*/`
+rather than scanning `test/testcases/malgo/` directly), from ever seeing
+either name — no per-script skip-list needed. -/
+def evalHarnessUnsupported : List String := ["TaggedRecordCrossModuleUse", "Panic"]
 
 private def evalGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     (name : String) : IO String := do
@@ -295,6 +304,54 @@ def bigStepEvalCases (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     (names : List String) : List GoldenCase :=
   names.map fun n =>
     { group := "Malgo.Sequent.BigStepEval", name := s!"golden/{n}", run := bigStepEvalGolden memo n }
+
+/-! ## Panic gate (regression test for malgo#426, not golden — see
+`evalHarnessUnsupported` for why `Panic` is excluded from `evalCases`/
+`bigStepEvalCases`).
+
+Checks both entry points against one linked program: `BigStepEval.lean`
+calls `Eval.fetchPrimitive` directly rather than reimplementing it, so this
+also confirms the big-step evaluator didn't need its own `malgo_panic`
+case. Only the stdout captured before the throw and a substring of the
+error message are pinned — not the full rendered message, which embeds
+`fetchPrimitive`'s call-site range (here, `malgo_panic`'s own foreign-import
+declaration in Builtin.mlg, not `Panic.mlg`'s call site — a pre-existing
+quirk of every wrapped foreign primitive, not specific to panic). -/
+namespace PanicGate
+
+private def expectedStdout : String := "before panic\n"
+private def expectedMessage : String := "panic: malgo#426 regression check"
+
+def run (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR)) : IO Nat := do
+  let builtin ← getAllIR memo (System.FilePath.mk "runtime/malgo/Builtin.mlg")
+  let prel ← getAllIR memo (System.FilePath.mk "runtime/malgo/Prelude.mlg")
+  let ir ← getAllIR memo (testcasePath "Panic")
+  let linked := Malgo.Driver.linkPrograms [builtin.join, prel.join, ir.join]
+  let evaluators :=
+    [ ("Malgo.Sequent.Eval", Malgo.Sequent.Eval.evalProgram),
+      ("Malgo.Sequent.BigStepEval", Malgo.Sequent.BigStepEval.bigStepEvalProgram) ]
+  let mut failed := 0
+  for (label, runProgram) in evaluators do
+    let (handlers, outRef) ← Malgo.Sequent.Eval.Handlers.buffered "Hello\n"
+    try
+      let _ ← MalgoM.run flag {} (runProgram ir.moduleName handlers linked)
+      IO.println s!"FAIL {label}/Panic: malgo_panic did not terminate evaluation"
+      failed := failed + 1
+    catch e =>
+      let out ← outRef.get
+      let msg := toString e
+      if out != expectedStdout then
+        IO.println s!"FAIL {label}/Panic: stdout was {out}, expected {expectedStdout}"
+        failed := failed + 1
+      else if (msg.splitOn expectedMessage).length <= 1 then
+        IO.println s!"FAIL {label}/Panic: message did not contain \"{expectedMessage}\": {msg}"
+        failed := failed + 1
+      else
+        IO.println s!"ok {label}/Panic"
+  IO.println s!"=== panic-gate {2 - failed}/2 passed ==="
+  return failed
+
+end PanicGate
 
 /-! ## Forth gate (captured stdout, per `ForthSpec`)
 
@@ -1212,7 +1269,8 @@ def main (args : List String) : IO UInt32 := do
     let irFailures ← Malgo.Test.IrInvariants.run memo names
     let specFailures ← Malgo.Test.ReuseSpec.run
     let parserFailures ← Malgo.Test.ParserSurface.run
+    let panicFailures ← Malgo.Test.PanicGate.run memo
     return (if goldenCode == 0 && inferCode == 0 && metPageFailures == 0
         && reuseFailures == 0 && corpusFailures == 0 && irFailures == 0
-        && specFailures == 0 && parserFailures == 0
+        && specFailures == 0 && parserFailures == 0 && panicFailures == 0
       then 0 else 1)

@@ -137,6 +137,14 @@ inductive EvalError where
   | noMatch (range : Range) (value : Value)
   | primitiveNotImplemented (range : Range) (name : String) (values : List Value)
   | invalidArguments (range : Range) (name : String) (values : List Value)
+  /-- `malgo_panic`: a fatal, uncatchable error carrying a user-supplied
+  message (Builtin.mlg's `panic : String -> a`). Not control-flow like
+  `exitSuccess`/`exitWith` below -- unlike those, the Zig/Scheme backends
+  both treat this as an error (Zig: `panic(msg)` to stderr + `exit(1)`;
+  Scheme: `(error 'panic msg)`), so it belongs with the other `EvalError`
+  cases and terminates via the same throw-and-render path as `noMatch`
+  rather than a bespoke mechanism. -/
+  | panic (range : Range) (message : String)
   /-- Haskell `div`/`mod` throw a divide-by-zero `ArithException`;
   `Int.fdiv/fmod` would silently yield 0/`a`. -/
   | divideByZero (range : Range)
@@ -175,6 +183,7 @@ def EvalError.render : EvalError → String
     s!"Invalid arguments for {name}: " ++
       String.intercalate ", " (values.map valueToText)
   | .divideByZero _ => "divide by zero"
+  | .panic _ message => s!"panic: {message}"
   | .exitSuccess => "ExitSuccess"
   | .exitWith code => s!"ExitWith {code}"
 
@@ -189,6 +198,7 @@ def EvalError.rangeOf : EvalError → Option Range
   | .primitiveNotImplemented r _ _ => some r
   | .invalidArguments r _ _ => some r
   | .divideByZero r => some r
+  | .panic r _ => some r
   | .exitSuccess => none
   | .exitWith _ => none
 
@@ -693,6 +703,10 @@ def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM
     | "malgo_get_args" =>
       unaryPrim range name (fun _ _ =>
         pure (.immediate (.string (String.intercalate "\n" h.arguments)))) values
+    | "malgo_panic" =>
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string message) => throw (.panic range message)
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_exit_success" =>
       unaryPrim range name (fun _ _ => throw .exitSuccess) values
     | "malgo_exit_with_code" =>

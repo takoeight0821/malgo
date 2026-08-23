@@ -27,16 +27,37 @@ structure ArtifactPath where
 
 namespace ArtifactPath
 
-/-- Equality/ordering on `relPath` only, so paths reached via different
-traversal routes compare equal (mirrors the Haskell instances). -/
-instance : BEq ArtifactPath := ⟨fun a b => a.relPath == b.relPath⟩
+/-- Equality/ordering on `originPath` (the realPath-canonicalized file
+identity -- see `parseArtifactPathFromPwd`/`parseArtifactPath`), so paths
+reached via different traversal routes still compare equal (mirrors the
+Haskell instances' intent), but two artifacts that merely share a
+`relPath` string no longer collide. `relPath` alone used to be the key,
+which is injective only as long as every resolved path stays inside the
+project directory; #454 flagged that #440's external search roots would
+break that assumption. Switching to `originPath` is a semantic no-op
+today (`relPath` is already a deterministic function of `originPath` for
+every in-project file), and becomes load-bearing once #440 lands. -/
+instance : BEq ArtifactPath := ⟨fun a b => a.originPath == b.originPath⟩
 
-instance : Ord ArtifactPath := ⟨fun a b => compare a.relPath b.relPath⟩
+instance : Ord ArtifactPath := ⟨fun a b => compare a.originPath b.originPath⟩
 
 /-- Same "compare via a projection" trick as `Path`'s `Std.TransOrd`
-instance: `ArtifactPath`'s `Ord` is exactly `compareOn relPath`. -/
+instance: `ArtifactPath`'s `Ord` is exactly `compareOn originPath`. -/
 instance : Std.TransOrd ArtifactPath :=
-  inferInstanceAs (Std.TransCmp (compareOn ArtifactPath.relPath))
+  inferInstanceAs (Std.TransCmp (compareOn ArtifactPath.originPath))
+
+-- Regression for #454: two artifacts that happen to share an in-project
+-- `relPath` but resolve to different `originPath`s (as could arise once an
+-- external search root exists, see #440) must never compare equal --
+-- `relPath` alone is not an injective identity once paths can come from
+-- outside the project. Before this fix, `BEq`/`Ord` keyed on `relPath` alone
+-- made these two distinct files indistinguishable.
+#guard
+  let mkArtifactPath (origin rel : String) : ArtifactPath :=
+    { rawPath := rel, originPath := ⟨origin⟩, relPath := ⟨rel⟩, targetPath := ⟨origin⟩ }
+  let inProject := mkArtifactPath "/project/Foo.mlg" "Foo.mlg"
+  let external := mkArtifactPath "/external/lib/Foo.mlg" "Foo.mlg"
+  inProject != external && compare inProject external != .eq
 
 end ArtifactPath
 
@@ -232,10 +253,10 @@ distinct file. Multiple `ModuleName`s can denote the same file --
 a relative-path import resolves to both name the identical module -- but
 `ModuleName`'s derived `BEq`/`Ord` treats different constructors as
 always-unequal even when they resolve to the same file (`ArtifactPath`'s
-own equality is `relPath`-only precisely so that traversal-route aliases
-of one `.artifact` collapse, per its doc comment, but that never bridges a
-`.moduleName` alias to an `.artifact` one). `Query.Engine.buildDepsEnv` and
-`Query.Engine.linkDeps` both fold/load once per entry in a dependency set
+own equality is `originPath`-only precisely so that traversal-route
+aliases of one `.artifact` collapse, per its doc comment, but that never
+bridges a `.moduleName` alias to an `.artifact` one). `Query.Engine.buildDepsEnv`
+and `Query.Engine.linkDeps` both fold/load once per entry in a dependency set
 reached this way, so both call this to collapse alias-of-the-same-file
 entries into one before doing that work -- see #429. -/
 def dedupeByArtifactPath (ws : Workspace) (deps : Std.TreeSet ModuleName) :

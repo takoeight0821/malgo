@@ -1,0 +1,1449 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+def main =
+  fn {
+    _ ->
+      {
+        let _ = putStrLn("before cond")
+        cond( [ ( False
+        , fn {
+          _ ->
+            {
+              ()
+            }
+        } ) ] )
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+def main =
+  fn {
+    _#0 ->
+      {
+        let _#1 = putStrLn(String#("before cond"))
+        cond( Cons( ( False
+        , fn {
+          _#2 ->
+            {
+              ()
+            }
+        } ) )(Nil) )
+      }
+  }
+
+=== ToFun ===
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#0 ->
+        let _#1 =
+          invoke putStrLn(invoke String#("before cond"))
+        in
+          invoke cond( invoke Cons( Tuple( invoke False
+          , \param$4 ->
+            case param$4 of {
+              _#2 -> Tuple()
+            } ) )(invoke Nil) )
+    }
+
+=== SaturateCtor ===
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#0 ->
+        let _#1 =
+          invoke putStrLn(invoke String#("before cond"))
+        in
+          invoke cond( invoke Cons( Tuple( invoke False
+          , \param$4 ->
+            case param$4 of {
+              _#2 -> Tuple()
+            } ) )(invoke Nil) )
+    }
+
+=== ReuseSpecialize ===
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#0 ->
+        let _#1 =
+          invoke putStrLn(invoke String#("before cond"))
+        in
+          invoke cond( invoke Cons( Tuple( invoke False
+          , \param$4 ->
+            case param$4 of {
+              _#2 -> Tuple()
+            } ) )(invoke Nil) )
+    }
+
+=== ToCore ===
+def main(return$5) =
+  \param$3 return$6 . {
+    param$3 ~ select {
+      _#0 ->
+        invoke putStrLn ~ ( do return$11 . {
+          invoke String# ~ ("before cond", return$11)
+        }
+        , then _#1 -> {
+          invoke cond ~ ( do return$7 . {
+            invoke Cons ~ ( Tuple( do return$9 . {
+              invoke False ~ return$9
+            }
+            , \param$4 return$10 . {
+              param$4 ~ select {
+                _#2 -> Tuple() ~ return$10
+              }
+            } )
+            , ( do return$8 . {
+              invoke Nil ~ return$8
+            }
+            , return$7 ) )
+          }
+          , return$6 )
+        } )
+    }
+  } ~ return$5
+
+=== Flat ===
+def main(return$5) =
+  \param$3 return$6 . {
+    param$3 ~ select {
+      _#0 ->
+        invoke putStrLn ~ then outer$12 -> {
+          join return$11 = then inner$13 -> {
+            outer$12 ~ ( inner$13
+            , then _#1 -> {
+              invoke cond ~ then outer$14 -> {
+                join return$7 = then inner$15 -> {
+                  outer$14 ~ (inner$15, return$6)
+                }
+                in invoke Cons ~ then outer$16 -> {
+                  join label$20 = then inner$17 -> {
+                    outer$16 ~ ( inner$17
+                    , then outer$18 -> {
+                      join return$8 = then inner$19 -> {
+                        outer$18 ~ (inner$19, return$7)
+                      }
+                      in invoke Nil ~ return$8
+                    } )
+                  }
+                  in join return$9 = then var$21 -> {
+                    Tuple( var$21
+                    , \param$4 return$10 . {
+                      param$4 ~ select {
+                        _#2 -> Tuple() ~ return$10
+                      }
+                    } ) ~ label$20
+                  }
+                  in invoke False ~ return$9
+                }
+              }
+            } )
+          }
+          in invoke String# ~ ("before cond", return$11)
+        }
+    }
+  } ~ return$5
+
+=== Join ===
+def main(return$5) =
+  \param$3 return$6 . {
+    join select$33 = select {
+      _#0 ->
+        join then$32 = then outer$12 -> {
+          join return$11 = then inner$13 -> {
+            join then$30 = then _#1 -> {
+              join then$29 = then outer$14 -> {
+                join return$7 = then inner$15 -> {
+                  join apply$28 = (inner$15, return$6)
+                  in outer$14 ~ apply$28
+                }
+                in join then$27 = then outer$16 -> {
+                  join label$20 = then inner$17 -> {
+                    join then$25 = then outer$18 -> {
+                      join return$8 = then inner$19 -> {
+                        join apply$24 = (inner$19, return$7)
+                        in outer$18 ~ apply$24
+                      }
+                      in invoke Nil ~ return$8
+                    }
+                    in join apply$26 = (inner$17, then$25)
+                    in outer$16 ~ apply$26
+                  }
+                  in join return$9 = then var$21 -> {
+                    Tuple( var$21
+                    , \param$4 return$10 . {
+                      join select$23 = select {
+                        _#2 -> Tuple() ~ return$10
+                      }
+                      in param$4 ~ select$23
+                    } ) ~ label$20
+                  }
+                  in invoke False ~ return$9
+                }
+                in invoke Cons ~ then$27
+              }
+              in invoke cond ~ then$29
+            }
+            in join apply$31 = (inner$13, then$30)
+            in outer$12 ~ apply$31
+          }
+          in join apply$22 = ("before cond", return$11)
+          in invoke String# ~ apply$22
+        }
+        in invoke putStrLn ~ then$32
+    }
+    in param$3 ~ select$33
+  } ~ return$5
+
+=== ClosureConv ===
+toplevel fn main(return$5) =
+  let closure$76 = closure lambda$35()
+  return return$5(closure$76)
+
+closure fn lambda$35(self$36, param$3, return$6) =
+  if  then {
+    let _#0 = param$3
+    let then$32 = closure join$37(return$6)
+    return putStrLn(then$32)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$37(self$38, value$39) =
+  let return$6 = self$38.cap[0]
+  let return$11 = closure join$40(return$6, value$39)
+  let apply$22 = closure join$72(return$11)
+  return String#(apply$22)
+
+closure fn join$40(self$41, value$42) =
+  let return$6 = self$41.cap[0]
+  let value$39 = self$41.cap[1]
+  let then$30 = closure join$43(return$6)
+  return value$39(value$42, then$30)
+
+closure fn join$43(self$44, value$45) =
+  let return$6 = self$44.cap[0]
+  let then$29 = closure join$46(return$6)
+  return cond(then$29)
+
+closure fn join$46(self$47, value$48) =
+  let return$6 = self$47.cap[0]
+  let return$7 = closure join$49(return$6, value$48)
+  let then$27 = closure join$52(return$7)
+  return Cons(then$27)
+
+closure fn join$49(self$50, value$51) =
+  let return$6 = self$50.cap[0]
+  let value$48 = self$50.cap[1]
+  return value$48(value$51, return$6)
+
+closure fn join$52(self$53, value$54) =
+  let return$7 = self$53.cap[0]
+  let label$20 = closure join$55(return$7, value$54)
+  let return$9 = closure join$64(label$20)
+  return False(return$9)
+
+closure fn join$55(self$56, value$57) =
+  let return$7 = self$56.cap[0]
+  let value$54 = self$56.cap[1]
+  let then$25 = closure join$58(return$7)
+  return value$54(value$57, then$25)
+
+closure fn join$58(self$59, value$60) =
+  let return$7 = self$59.cap[0]
+  let return$8 = closure join$61(return$7, value$60)
+  return Nil(return$8)
+
+closure fn join$61(self$62, value$63) =
+  let return$7 = self$62.cap[0]
+  let value$60 = self$62.cap[1]
+  return value$60(value$63, return$7)
+
+closure fn join$64(self$65, value$66) =
+  let label$20 = self$65.cap[0]
+  let closure$70 = closure lambda$67()
+  let struct$71 = Tuple(value$66, closure$70)
+  return label$20(struct$71)
+
+closure fn lambda$67(self$68, param$4, return$10) =
+  if  then {
+    let _#2 = param$4
+    let struct$69 = Tuple()
+    return return$10(struct$69)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$72(self$73, value$74) =
+  let return$11 = self$73.cap[0]
+  let lit$75 = "before cond"
+  return value$74(lit$75, return$11)
+
+toplevel fn zig_main$79() =
+  let finish$77 = closure join$81()
+  let after_main$78 = closure join$84(finish$77)
+  return main(after_main$78)
+
+closure fn join$81(self$82, value$83) = return value$83
+
+closure fn join$84(self$85, value$86) =
+  let finish$77 = self$85.cap[0]
+  let struct$87 = Tuple()
+  return value$86(struct$87, finish$77)
+
+entry = zig_main$79
+
+=== Peephole ===
+toplevel fn main(return$5) =
+  let closure$76 = closure lambda$35()
+  return return$5(closure$76)
+
+closure fn lambda$35(self$36, param$3, return$6) =
+  if  then {
+    let then$32 = closure join$37(return$6)
+    return putStrLn(then$32)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$37(self$38, value$39) =
+  let return$6 = self$38.cap[0]
+  let return$11 = closure join$40(return$6, value$39)
+  let apply$22 = closure join$72(return$11)
+  return String#(apply$22)
+
+closure fn join$40(self$41, value$42) =
+  let return$6 = self$41.cap[0]
+  let value$39 = self$41.cap[1]
+  let then$30 = closure join$43(return$6)
+  return value$39(value$42, then$30)
+
+closure fn join$43(self$44, value$45) =
+  let return$6 = self$44.cap[0]
+  let then$29 = closure join$46(return$6)
+  return cond(then$29)
+
+closure fn join$46(self$47, value$48) =
+  let return$6 = self$47.cap[0]
+  let return$7 = closure join$49(return$6, value$48)
+  let then$27 = closure join$52(return$7)
+  return Cons(then$27)
+
+closure fn join$49(self$50, value$51) =
+  let return$6 = self$50.cap[0]
+  let value$48 = self$50.cap[1]
+  return value$48(value$51, return$6)
+
+closure fn join$52(self$53, value$54) =
+  let return$7 = self$53.cap[0]
+  let label$20 = closure join$55(return$7, value$54)
+  let return$9 = closure join$64(label$20)
+  return False(return$9)
+
+closure fn join$55(self$56, value$57) =
+  let return$7 = self$56.cap[0]
+  let value$54 = self$56.cap[1]
+  let then$25 = closure join$58(return$7)
+  return value$54(value$57, then$25)
+
+closure fn join$58(self$59, value$60) =
+  let return$7 = self$59.cap[0]
+  let return$8 = closure join$61(return$7, value$60)
+  return Nil(return$8)
+
+closure fn join$61(self$62, value$63) =
+  let return$7 = self$62.cap[0]
+  let value$60 = self$62.cap[1]
+  return value$60(value$63, return$7)
+
+closure fn join$64(self$65, value$66) =
+  let label$20 = self$65.cap[0]
+  let closure$70 = closure lambda$67()
+  let struct$71 = Tuple(value$66, closure$70)
+  return label$20(struct$71)
+
+closure fn lambda$67(self$68, param$4, return$10) =
+  if  then {
+    let struct$69 = Tuple()
+    return return$10(struct$69)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$72(self$73, value$74) =
+  let return$11 = self$73.cap[0]
+  let lit$75 = "before cond"
+  return value$74(lit$75, return$11)
+
+toplevel fn zig_main$79() =
+  let finish$77 = closure join$81()
+  let after_main$78 = closure join$84(finish$77)
+  return main(after_main$78)
+
+closure fn join$81(self$82, value$83) = return value$83
+
+closure fn join$84(self$85, value$86) =
+  let finish$77 = self$85.cap[0]
+  let struct$87 = Tuple()
+  return value$86(struct$87, finish$77)
+
+entry = zig_main$79
+
+=== Perceus ===
+toplevel fn main(return$5) =
+  let closure$76 = closure lambda$35()
+  return return$5(closure$76)
+
+closure fn lambda$35(self$36, param$3, return$6) =
+  drop param$3
+  drop self$36
+  if  then {
+    let then$32 = closure join$37(return$6)
+    return putStrLn(then$32)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$37(self$38, value$39) =
+  let return$6 = self$38.cap[0]
+  dup return$6
+  drop self$38
+  let return$11 = closure join$40(return$6, value$39)
+  let apply$22 = closure join$72(return$11)
+  return String#(apply$22)
+
+closure fn join$40(self$41, value$42) =
+  let return$6 = self$41.cap[0]
+  dup return$6
+  let value$39 = self$41.cap[1]
+  dup value$39
+  drop self$41
+  let then$30 = closure join$43(return$6)
+  return value$39(value$42, then$30)
+
+closure fn join$43(self$44, value$45) =
+  drop value$45
+  let return$6 = self$44.cap[0]
+  dup return$6
+  drop self$44
+  let then$29 = closure join$46(return$6)
+  return cond(then$29)
+
+closure fn join$46(self$47, value$48) =
+  let return$6 = self$47.cap[0]
+  dup return$6
+  drop self$47
+  let return$7 = closure join$49(return$6, value$48)
+  let then$27 = closure join$52(return$7)
+  return Cons(then$27)
+
+closure fn join$49(self$50, value$51) =
+  let return$6 = self$50.cap[0]
+  dup return$6
+  let value$48 = self$50.cap[1]
+  dup value$48
+  drop self$50
+  return value$48(value$51, return$6)
+
+closure fn join$52(self$53, value$54) =
+  let return$7 = self$53.cap[0]
+  dup return$7
+  drop self$53
+  let label$20 = closure join$55(return$7, value$54)
+  let return$9 = closure join$64(label$20)
+  return False(return$9)
+
+closure fn join$55(self$56, value$57) =
+  let return$7 = self$56.cap[0]
+  dup return$7
+  let value$54 = self$56.cap[1]
+  dup value$54
+  drop self$56
+  let then$25 = closure join$58(return$7)
+  return value$54(value$57, then$25)
+
+closure fn join$58(self$59, value$60) =
+  let return$7 = self$59.cap[0]
+  dup return$7
+  drop self$59
+  let return$8 = closure join$61(return$7, value$60)
+  return Nil(return$8)
+
+closure fn join$61(self$62, value$63) =
+  let return$7 = self$62.cap[0]
+  dup return$7
+  let value$60 = self$62.cap[1]
+  dup value$60
+  drop self$62
+  return value$60(value$63, return$7)
+
+closure fn join$64(self$65, value$66) =
+  let label$20 = self$65.cap[0]
+  dup label$20
+  drop self$65
+  let closure$70 = closure lambda$67()
+  let struct$71 = Tuple(value$66, closure$70)
+  return label$20(struct$71)
+
+closure fn lambda$67(self$68, param$4, return$10) =
+  drop param$4
+  drop self$68
+  if  then {
+    let struct$69 = Tuple()
+    return return$10(struct$69)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$72(self$73, value$74) =
+  let return$11 = self$73.cap[0]
+  dup return$11
+  drop self$73
+  let lit$75 = "before cond"
+  return value$74(lit$75, return$11)
+
+toplevel fn zig_main$79() =
+  let finish$77 = closure join$81()
+  let after_main$78 = closure join$84(finish$77)
+  return main(after_main$78)
+
+closure fn join$81(self$82, value$83) =
+  drop self$82
+  return value$83
+
+closure fn join$84(self$85, value$86) =
+  let finish$77 = self$85.cap[0]
+  dup finish$77
+  drop self$85
+  let struct$87 = Tuple()
+  return value$86(struct$87, finish$77)
+
+entry = zig_main$79
+
+=== Reuse ===
+toplevel fn main(return$5) =
+  let closure$76 = closure lambda$35()
+  return return$5(closure$76)
+
+closure fn lambda$35(self$36, param$3, return$6) =
+  drop param$3
+  drop self$36
+  if  then {
+    let then$32 = closure join$37(return$6)
+    return putStrLn(then$32)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$37(self$38, value$39) =
+  let return$6 = self$38.cap[0]
+  dup return$6
+  let return$11 = closure join$40(return$6, value$39)
+  let apply$22 = closure join$72(return$11)
+  drop self$38
+  return String#(apply$22)
+
+closure fn join$40(self$41, value$42) =
+  let return$6 = self$41.cap[0]
+  dup return$6
+  let value$39 = self$41.cap[1]
+  dup value$39
+  let then$30 = closure join$43(return$6)
+  drop self$41
+  return value$39(value$42, then$30)
+
+closure fn join$43(self$44, value$45) =
+  let return$6 = self$44.cap[0]
+  dup return$6
+  let then$29 = closure join$46(return$6)
+  drop value$45
+  drop self$44
+  return cond(then$29)
+
+closure fn join$46(self$47, value$48) =
+  let return$6 = self$47.cap[0]
+  dup return$6
+  let return$7 = closure join$49(return$6, value$48)
+  let then$27 = closure join$52(return$7)
+  drop self$47
+  return Cons(then$27)
+
+closure fn join$49(self$50, value$51) =
+  let return$6 = self$50.cap[0]
+  dup return$6
+  let value$48 = self$50.cap[1]
+  dup value$48
+  drop self$50
+  return value$48(value$51, return$6)
+
+closure fn join$52(self$53, value$54) =
+  let return$7 = self$53.cap[0]
+  dup return$7
+  let label$20 = closure join$55(return$7, value$54)
+  let return$9 = closure join$64(label$20)
+  drop self$53
+  return False(return$9)
+
+closure fn join$55(self$56, value$57) =
+  let return$7 = self$56.cap[0]
+  dup return$7
+  let value$54 = self$56.cap[1]
+  dup value$54
+  let then$25 = closure join$58(return$7)
+  drop self$56
+  return value$54(value$57, then$25)
+
+closure fn join$58(self$59, value$60) =
+  let return$7 = self$59.cap[0]
+  dup return$7
+  let return$8 = closure join$61(return$7, value$60)
+  drop self$59
+  return Nil(return$8)
+
+closure fn join$61(self$62, value$63) =
+  let return$7 = self$62.cap[0]
+  dup return$7
+  let value$60 = self$62.cap[1]
+  dup value$60
+  drop self$62
+  return value$60(value$63, return$7)
+
+closure fn join$64(self$65, value$66) =
+  let label$20 = self$65.cap[0]
+  dup label$20
+  let closure$70 = closure lambda$67()
+  dropReuse reuse$88 = self$65 /2
+  let struct$71 = reuse reuse$88 Tuple(value$66, closure$70)
+  return label$20(struct$71)
+
+closure fn lambda$67(self$68, param$4, return$10) =
+  if  then {
+    drop param$4
+    dropReuse reuse$89 = self$68 /0
+    let struct$69 = reuse reuse$89 Tuple()
+    return return$10(struct$69)
+  } else {
+    drop param$4
+    drop self$68
+    panic "no matching branch"
+  }
+
+closure fn join$72(self$73, value$74) =
+  let return$11 = self$73.cap[0]
+  dup return$11
+  let lit$75 = "before cond"
+  drop self$73
+  return value$74(lit$75, return$11)
+
+toplevel fn zig_main$79() =
+  let finish$77 = closure join$81()
+  let after_main$78 = closure join$84(finish$77)
+  return main(after_main$78)
+
+closure fn join$81(self$82, value$83) =
+  drop self$82
+  return value$83
+
+closure fn join$84(self$85, value$86) =
+  let finish$77 = self$85.cap[0]
+  dup finish$77
+  dropReuse reuse$90 = self$85 /0
+  let struct$87 = reuse reuse$90 Tuple()
+  return value$86(struct$87, finish$77)
+
+entry = zig_main$79
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  def main =
+    fn {
+-     _ ->
++     _#0 ->
+        {
+-         let _ = putStrLn("before cond")
++         let _#1 = putStrLn(String#("before cond"))
+-         cond( [ ( False
++         cond( Cons( ( False
+          , fn {
+-           _ ->
++           _#2 ->
+              {
+                ()
+              }
+-         } ) ] )
++         } ) )(Nil) )
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+  def main =
+-   fn {
++   \param$3 ->
+-     _#0 ->
++     case param$3 of {
+-       {
++       _#0 ->
+-         let _#1 = putStrLn(String#("before cond"))
++         let _#1 =
+-         cond( Cons( ( False
++           invoke putStrLn(invoke String#("before cond"))
+-         , fn {
++         in
+-           _#2 ->
++           invoke cond( invoke Cons( Tuple( invoke False
+-             {
++           , \param$4 ->
+-               ()
++             case param$4 of {
+-             }
++               _#2 -> Tuple()
+-         } ) )(Nil) )
++             } ) )(invoke Nil) )
+-       }
++     }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def main =
+    \param$3 ->
+      case param$3 of {
+        _#0 ->
+          let _#1 =
+            invoke putStrLn(invoke String#("before cond"))
+          in
+            invoke cond( invoke Cons( Tuple( invoke False
+            , \param$4 ->
+              case param$4 of {
+                _#2 -> Tuple()
+              } ) )(invoke Nil) )
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def main =
+    \param$3 ->
+      case param$3 of {
+        _#0 ->
+          let _#1 =
+            invoke putStrLn(invoke String#("before cond"))
+          in
+            invoke cond( invoke Cons( Tuple( invoke False
+            , \param$4 ->
+              case param$4 of {
+                _#2 -> Tuple()
+              } ) )(invoke Nil) )
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def main =
++ def main(return$5) =
+-   \param$3 ->
++   \param$3 return$6 . {
+-     case param$3 of {
++     param$3 ~ select {
+        _#0 ->
+-         let _#1 =
++         invoke putStrLn ~ ( do return$11 . {
+-           invoke putStrLn(invoke String#("before cond"))
++           invoke String# ~ ("before cond", return$11)
+-         in
++         }
+-           invoke cond( invoke Cons( Tuple( invoke False
++         , then _#1 -> {
+-           , \param$4 ->
++           invoke cond ~ ( do return$7 . {
+-             case param$4 of {
++             invoke Cons ~ ( Tuple( do return$9 . {
+-               _#2 -> Tuple()
++               invoke False ~ return$9
+-             } ) )(invoke Nil) )
++             }
++             , \param$4 return$10 . {
++               param$4 ~ select {
++                 _#2 -> Tuple() ~ return$10
++               }
++             } )
++             , ( do return$8 . {
++               invoke Nil ~ return$8
++             }
++             , return$7 ) )
++           }
++           , return$6 )
++         } )
+      }
++   } ~ return$5
+
+
+=== ToCore -> Flat ===
+  def main(return$5) =
+    \param$3 return$6 . {
+      param$3 ~ select {
+        _#0 ->
+-         invoke putStrLn ~ ( do return$11 . {
++         invoke putStrLn ~ then outer$12 -> {
+-           invoke String# ~ ("before cond", return$11)
++           join return$11 = then inner$13 -> {
+-         }
++             outer$12 ~ ( inner$13
+-         , then _#1 -> {
++             , then _#1 -> {
+-           invoke cond ~ ( do return$7 . {
++               invoke cond ~ then outer$14 -> {
+-             invoke Cons ~ ( Tuple( do return$9 . {
++                 join return$7 = then inner$15 -> {
+-               invoke False ~ return$9
++                   outer$14 ~ (inner$15, return$6)
+-             }
++                 }
+-             , \param$4 return$10 . {
++                 in invoke Cons ~ then outer$16 -> {
+-               param$4 ~ select {
++                   join label$20 = then inner$17 -> {
+-                 _#2 -> Tuple() ~ return$10
++                     outer$16 ~ ( inner$17
++                     , then outer$18 -> {
++                       join return$8 = then inner$19 -> {
++                         outer$18 ~ (inner$19, return$7)
++                       }
++                       in invoke Nil ~ return$8
++                     } )
++                   }
++                   in join return$9 = then var$21 -> {
++                     Tuple( var$21
++                     , \param$4 return$10 . {
++                       param$4 ~ select {
++                         _#2 -> Tuple() ~ return$10
++                       }
++                     } ) ~ label$20
++                   }
++                   in invoke False ~ return$9
++                 }
+                }
+              } )
+-             , ( do return$8 . {
+-               invoke Nil ~ return$8
+-             }
+-             , return$7 ) )
+            }
+-           , return$6 )
++           in invoke String# ~ ("before cond", return$11)
+-         } )
++         }
+      }
+    } ~ return$5
+
+
+=== Flat -> Join ===
+  def main(return$5) =
+    \param$3 return$6 . {
+-     param$3 ~ select {
++     join select$33 = select {
+        _#0 ->
+-         invoke putStrLn ~ then outer$12 -> {
++         join then$32 = then outer$12 -> {
+            join return$11 = then inner$13 -> {
+-             outer$12 ~ ( inner$13
++             join then$30 = then _#1 -> {
+-             , then _#1 -> {
++               join then$29 = then outer$14 -> {
+-               invoke cond ~ then outer$14 -> {
+                  join return$7 = then inner$15 -> {
+-                   outer$14 ~ (inner$15, return$6)
++                   join apply$28 = (inner$15, return$6)
++                   in outer$14 ~ apply$28
+                  }
+-                 in invoke Cons ~ then outer$16 -> {
++                 in join then$27 = then outer$16 -> {
+                    join label$20 = then inner$17 -> {
+-                     outer$16 ~ ( inner$17
++                     join then$25 = then outer$18 -> {
+-                     , then outer$18 -> {
+                        join return$8 = then inner$19 -> {
+-                         outer$18 ~ (inner$19, return$7)
++                         join apply$24 = (inner$19, return$7)
++                         in outer$18 ~ apply$24
+                        }
+                        in invoke Nil ~ return$8
+-                     } )
++                     }
++                     in join apply$26 = (inner$17, then$25)
++                     in outer$16 ~ apply$26
+                    }
+                    in join return$9 = then var$21 -> {
+                      Tuple( var$21
+                      , \param$4 return$10 . {
+-                       param$4 ~ select {
++                       join select$23 = select {
+                          _#2 -> Tuple() ~ return$10
+                        }
++                       in param$4 ~ select$23
+                      } ) ~ label$20
+                    }
+                    in invoke False ~ return$9
+                  }
++                 in invoke Cons ~ then$27
+                }
+-             } )
++               in invoke cond ~ then$29
++             }
++             in join apply$31 = (inner$13, then$30)
++             in outer$12 ~ apply$31
+            }
+-           in invoke String# ~ ("before cond", return$11)
++           in join apply$22 = ("before cond", return$11)
++           in invoke String# ~ apply$22
+          }
++         in invoke putStrLn ~ then$32
+      }
++     in param$3 ~ select$33
+    } ~ return$5
+
+
+=== Join -> ClosureConv ===
+- def main(return$5) =
++ toplevel fn main(return$5) =
+-   \param$3 return$6 . {
++   let closure$76 = closure lambda$35()
+-     join select$33 = select {
++   return return$5(closure$76)
+-       _#0 ->
++ 
+-         join then$32 = then outer$12 -> {
++ closure fn lambda$35(self$36, param$3, return$6) =
+-           join return$11 = then inner$13 -> {
++   if  then {
+-             join then$30 = then _#1 -> {
++     let _#0 = param$3
+-               join then$29 = then outer$14 -> {
++     let then$32 = closure join$37(return$6)
+-                 join return$7 = then inner$15 -> {
++     return putStrLn(then$32)
+-                   join apply$28 = (inner$15, return$6)
++   } else {
+-                   in outer$14 ~ apply$28
++     panic "no matching branch"
+-                 }
++   }
+-                 in join then$27 = then outer$16 -> {
++ 
+-                   join label$20 = then inner$17 -> {
++ closure fn join$37(self$38, value$39) =
+-                     join then$25 = then outer$18 -> {
++   let return$6 = self$38.cap[0]
+-                       join return$8 = then inner$19 -> {
++   let return$11 = closure join$40(return$6, value$39)
+-                         join apply$24 = (inner$19, return$7)
++   let apply$22 = closure join$72(return$11)
+-                         in outer$18 ~ apply$24
++   return String#(apply$22)
+-                       }
++ 
+-                       in invoke Nil ~ return$8
++ closure fn join$40(self$41, value$42) =
+-                     }
++   let return$6 = self$41.cap[0]
+-                     in join apply$26 = (inner$17, then$25)
++   let value$39 = self$41.cap[1]
+-                     in outer$16 ~ apply$26
++   let then$30 = closure join$43(return$6)
+-                   }
++   return value$39(value$42, then$30)
+-                   in join return$9 = then var$21 -> {
++ 
+-                     Tuple( var$21
++ closure fn join$43(self$44, value$45) =
+-                     , \param$4 return$10 . {
++   let return$6 = self$44.cap[0]
+-                       join select$23 = select {
++   let then$29 = closure join$46(return$6)
+-                         _#2 -> Tuple() ~ return$10
++   return cond(then$29)
+-                       }
++ 
+-                       in param$4 ~ select$23
++ closure fn join$46(self$47, value$48) =
+-                     } ) ~ label$20
++   let return$6 = self$47.cap[0]
+-                   }
++   let return$7 = closure join$49(return$6, value$48)
+-                   in invoke False ~ return$9
++   let then$27 = closure join$52(return$7)
+-                 }
++   return Cons(then$27)
+-                 in invoke Cons ~ then$27
++ 
+-               }
++ closure fn join$49(self$50, value$51) =
+-               in invoke cond ~ then$29
++   let return$6 = self$50.cap[0]
+-             }
++   let value$48 = self$50.cap[1]
+-             in join apply$31 = (inner$13, then$30)
++   return value$48(value$51, return$6)
+-             in outer$12 ~ apply$31
++ 
+-           }
++ closure fn join$52(self$53, value$54) =
+-           in join apply$22 = ("before cond", return$11)
++   let return$7 = self$53.cap[0]
+-           in invoke String# ~ apply$22
++   let label$20 = closure join$55(return$7, value$54)
+-         }
++   let return$9 = closure join$64(label$20)
+-         in invoke putStrLn ~ then$32
++   return False(return$9)
+-     }
++ 
+-     in param$3 ~ select$33
++ closure fn join$55(self$56, value$57) =
+-   } ~ return$5
++   let return$7 = self$56.cap[0]
++   let value$54 = self$56.cap[1]
++   let then$25 = closure join$58(return$7)
++   return value$54(value$57, then$25)
++ 
++ closure fn join$58(self$59, value$60) =
++   let return$7 = self$59.cap[0]
++   let return$8 = closure join$61(return$7, value$60)
++   return Nil(return$8)
++ 
++ closure fn join$61(self$62, value$63) =
++   let return$7 = self$62.cap[0]
++   let value$60 = self$62.cap[1]
++   return value$60(value$63, return$7)
++ 
++ closure fn join$64(self$65, value$66) =
++   let label$20 = self$65.cap[0]
++   let closure$70 = closure lambda$67()
++   let struct$71 = Tuple(value$66, closure$70)
++   return label$20(struct$71)
++ 
++ closure fn lambda$67(self$68, param$4, return$10) =
++   if  then {
++     let _#2 = param$4
++     let struct$69 = Tuple()
++     return return$10(struct$69)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn join$72(self$73, value$74) =
++   let return$11 = self$73.cap[0]
++   let lit$75 = "before cond"
++   return value$74(lit$75, return$11)
++ 
++ toplevel fn zig_main$79() =
++   let finish$77 = closure join$81()
++   let after_main$78 = closure join$84(finish$77)
++   return main(after_main$78)
++ 
++ closure fn join$81(self$82, value$83) = return value$83
++ 
++ closure fn join$84(self$85, value$86) =
++   let finish$77 = self$85.cap[0]
++   let struct$87 = Tuple()
++   return value$86(struct$87, finish$77)
++ 
++ entry = zig_main$79
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn main(return$5) =
+    let closure$76 = closure lambda$35()
+    return return$5(closure$76)
+  
+  closure fn lambda$35(self$36, param$3, return$6) =
+    if  then {
+-     let _#0 = param$3
+      let then$32 = closure join$37(return$6)
+      return putStrLn(then$32)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$37(self$38, value$39) =
+    let return$6 = self$38.cap[0]
+    let return$11 = closure join$40(return$6, value$39)
+    let apply$22 = closure join$72(return$11)
+    return String#(apply$22)
+  
+  closure fn join$40(self$41, value$42) =
+    let return$6 = self$41.cap[0]
+    let value$39 = self$41.cap[1]
+    let then$30 = closure join$43(return$6)
+    return value$39(value$42, then$30)
+  
+  closure fn join$43(self$44, value$45) =
+    let return$6 = self$44.cap[0]
+    let then$29 = closure join$46(return$6)
+    return cond(then$29)
+  
+  closure fn join$46(self$47, value$48) =
+    let return$6 = self$47.cap[0]
+    let return$7 = closure join$49(return$6, value$48)
+    let then$27 = closure join$52(return$7)
+    return Cons(then$27)
+  
+  closure fn join$49(self$50, value$51) =
+    let return$6 = self$50.cap[0]
+    let value$48 = self$50.cap[1]
+    return value$48(value$51, return$6)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$7 = self$53.cap[0]
+    let label$20 = closure join$55(return$7, value$54)
+    let return$9 = closure join$64(label$20)
+    return False(return$9)
+  
+  closure fn join$55(self$56, value$57) =
+    let return$7 = self$56.cap[0]
+    let value$54 = self$56.cap[1]
+    let then$25 = closure join$58(return$7)
+    return value$54(value$57, then$25)
+  
+  closure fn join$58(self$59, value$60) =
+    let return$7 = self$59.cap[0]
+    let return$8 = closure join$61(return$7, value$60)
+    return Nil(return$8)
+  
+  closure fn join$61(self$62, value$63) =
+    let return$7 = self$62.cap[0]
+    let value$60 = self$62.cap[1]
+    return value$60(value$63, return$7)
+  
+  closure fn join$64(self$65, value$66) =
+    let label$20 = self$65.cap[0]
+    let closure$70 = closure lambda$67()
+    let struct$71 = Tuple(value$66, closure$70)
+    return label$20(struct$71)
+  
+  closure fn lambda$67(self$68, param$4, return$10) =
+    if  then {
+-     let _#2 = param$4
+      let struct$69 = Tuple()
+      return return$10(struct$69)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$72(self$73, value$74) =
+    let return$11 = self$73.cap[0]
+    let lit$75 = "before cond"
+    return value$74(lit$75, return$11)
+  
+  toplevel fn zig_main$79() =
+    let finish$77 = closure join$81()
+    let after_main$78 = closure join$84(finish$77)
+    return main(after_main$78)
+  
+  closure fn join$81(self$82, value$83) = return value$83
+  
+  closure fn join$84(self$85, value$86) =
+    let finish$77 = self$85.cap[0]
+    let struct$87 = Tuple()
+    return value$86(struct$87, finish$77)
+  
+  entry = zig_main$79
+
+
+=== Peephole -> Perceus ===
+  toplevel fn main(return$5) =
+    let closure$76 = closure lambda$35()
+    return return$5(closure$76)
+  
+  closure fn lambda$35(self$36, param$3, return$6) =
++   drop param$3
++   drop self$36
+    if  then {
+      let then$32 = closure join$37(return$6)
+      return putStrLn(then$32)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$37(self$38, value$39) =
+    let return$6 = self$38.cap[0]
++   dup return$6
++   drop self$38
+    let return$11 = closure join$40(return$6, value$39)
+    let apply$22 = closure join$72(return$11)
+    return String#(apply$22)
+  
+  closure fn join$40(self$41, value$42) =
+    let return$6 = self$41.cap[0]
++   dup return$6
+    let value$39 = self$41.cap[1]
++   dup value$39
++   drop self$41
+    let then$30 = closure join$43(return$6)
+    return value$39(value$42, then$30)
+  
+  closure fn join$43(self$44, value$45) =
++   drop value$45
+    let return$6 = self$44.cap[0]
++   dup return$6
++   drop self$44
+    let then$29 = closure join$46(return$6)
+    return cond(then$29)
+  
+  closure fn join$46(self$47, value$48) =
+    let return$6 = self$47.cap[0]
++   dup return$6
++   drop self$47
+    let return$7 = closure join$49(return$6, value$48)
+    let then$27 = closure join$52(return$7)
+    return Cons(then$27)
+  
+  closure fn join$49(self$50, value$51) =
+    let return$6 = self$50.cap[0]
++   dup return$6
+    let value$48 = self$50.cap[1]
++   dup value$48
++   drop self$50
+    return value$48(value$51, return$6)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$7 = self$53.cap[0]
++   dup return$7
++   drop self$53
+    let label$20 = closure join$55(return$7, value$54)
+    let return$9 = closure join$64(label$20)
+    return False(return$9)
+  
+  closure fn join$55(self$56, value$57) =
+    let return$7 = self$56.cap[0]
++   dup return$7
+    let value$54 = self$56.cap[1]
++   dup value$54
++   drop self$56
+    let then$25 = closure join$58(return$7)
+    return value$54(value$57, then$25)
+  
+  closure fn join$58(self$59, value$60) =
+    let return$7 = self$59.cap[0]
++   dup return$7
++   drop self$59
+    let return$8 = closure join$61(return$7, value$60)
+    return Nil(return$8)
+  
+  closure fn join$61(self$62, value$63) =
+    let return$7 = self$62.cap[0]
++   dup return$7
+    let value$60 = self$62.cap[1]
++   dup value$60
++   drop self$62
+    return value$60(value$63, return$7)
+  
+  closure fn join$64(self$65, value$66) =
+    let label$20 = self$65.cap[0]
++   dup label$20
++   drop self$65
+    let closure$70 = closure lambda$67()
+    let struct$71 = Tuple(value$66, closure$70)
+    return label$20(struct$71)
+  
+  closure fn lambda$67(self$68, param$4, return$10) =
++   drop param$4
++   drop self$68
+    if  then {
+      let struct$69 = Tuple()
+      return return$10(struct$69)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$72(self$73, value$74) =
+    let return$11 = self$73.cap[0]
++   dup return$11
++   drop self$73
+    let lit$75 = "before cond"
+    return value$74(lit$75, return$11)
+  
+  toplevel fn zig_main$79() =
+    let finish$77 = closure join$81()
+    let after_main$78 = closure join$84(finish$77)
+    return main(after_main$78)
+  
+- closure fn join$81(self$82, value$83) = return value$83
++ closure fn join$81(self$82, value$83) =
++   drop self$82
++   return value$83
+  
+  closure fn join$84(self$85, value$86) =
+    let finish$77 = self$85.cap[0]
++   dup finish$77
++   drop self$85
+    let struct$87 = Tuple()
+    return value$86(struct$87, finish$77)
+  
+  entry = zig_main$79
+
+
+=== Perceus -> Reuse ===
+  toplevel fn main(return$5) =
+    let closure$76 = closure lambda$35()
+    return return$5(closure$76)
+  
+  closure fn lambda$35(self$36, param$3, return$6) =
+    drop param$3
+    drop self$36
+    if  then {
+      let then$32 = closure join$37(return$6)
+      return putStrLn(then$32)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$37(self$38, value$39) =
+    let return$6 = self$38.cap[0]
+    dup return$6
+-   drop self$38
+    let return$11 = closure join$40(return$6, value$39)
+    let apply$22 = closure join$72(return$11)
++   drop self$38
+    return String#(apply$22)
+  
+  closure fn join$40(self$41, value$42) =
+    let return$6 = self$41.cap[0]
+    dup return$6
+    let value$39 = self$41.cap[1]
+    dup value$39
+-   drop self$41
+    let then$30 = closure join$43(return$6)
++   drop self$41
+    return value$39(value$42, then$30)
+  
+  closure fn join$43(self$44, value$45) =
+-   drop value$45
+    let return$6 = self$44.cap[0]
+    dup return$6
+-   drop self$44
+    let then$29 = closure join$46(return$6)
++   drop value$45
++   drop self$44
+    return cond(then$29)
+  
+  closure fn join$46(self$47, value$48) =
+    let return$6 = self$47.cap[0]
+    dup return$6
+-   drop self$47
+    let return$7 = closure join$49(return$6, value$48)
+    let then$27 = closure join$52(return$7)
++   drop self$47
+    return Cons(then$27)
+  
+  closure fn join$49(self$50, value$51) =
+    let return$6 = self$50.cap[0]
+    dup return$6
+    let value$48 = self$50.cap[1]
+    dup value$48
+    drop self$50
+    return value$48(value$51, return$6)
+  
+  closure fn join$52(self$53, value$54) =
+    let return$7 = self$53.cap[0]
+    dup return$7
+-   drop self$53
+    let label$20 = closure join$55(return$7, value$54)
+    let return$9 = closure join$64(label$20)
++   drop self$53
+    return False(return$9)
+  
+  closure fn join$55(self$56, value$57) =
+    let return$7 = self$56.cap[0]
+    dup return$7
+    let value$54 = self$56.cap[1]
+    dup value$54
+-   drop self$56
+    let then$25 = closure join$58(return$7)
++   drop self$56
+    return value$54(value$57, then$25)
+  
+  closure fn join$58(self$59, value$60) =
+    let return$7 = self$59.cap[0]
+    dup return$7
+-   drop self$59
+    let return$8 = closure join$61(return$7, value$60)
++   drop self$59
+    return Nil(return$8)
+  
+  closure fn join$61(self$62, value$63) =
+    let return$7 = self$62.cap[0]
+    dup return$7
+    let value$60 = self$62.cap[1]
+    dup value$60
+    drop self$62
+    return value$60(value$63, return$7)
+  
+  closure fn join$64(self$65, value$66) =
+    let label$20 = self$65.cap[0]
+    dup label$20
+-   drop self$65
+    let closure$70 = closure lambda$67()
+-   let struct$71 = Tuple(value$66, closure$70)
++   dropReuse reuse$88 = self$65 /2
++   let struct$71 = reuse reuse$88 Tuple(value$66, closure$70)
+    return label$20(struct$71)
+  
+  closure fn lambda$67(self$68, param$4, return$10) =
+-   drop param$4
+-   drop self$68
+    if  then {
+-     let struct$69 = Tuple()
++     drop param$4
++     dropReuse reuse$89 = self$68 /0
++     let struct$69 = reuse reuse$89 Tuple()
+      return return$10(struct$69)
+    } else {
++     drop param$4
++     drop self$68
+      panic "no matching branch"
+    }
+  
+  closure fn join$72(self$73, value$74) =
+    let return$11 = self$73.cap[0]
+    dup return$11
+-   drop self$73
+    let lit$75 = "before cond"
++   drop self$73
+    return value$74(lit$75, return$11)
+  
+  toplevel fn zig_main$79() =
+    let finish$77 = closure join$81()
+    let after_main$78 = closure join$84(finish$77)
+    return main(after_main$78)
+  
+  closure fn join$81(self$82, value$83) =
+    drop self$82
+    return value$83
+  
+  closure fn join$84(self$85, value$86) =
+    let finish$77 = self$85.cap[0]
+    dup finish$77
+-   drop self$85
++   dropReuse reuse$90 = self$85 /0
+-   let struct$87 = Tuple()
++   let struct$87 = reuse reuse$90 Tuple()
+    return value$86(struct$87, finish$77)
+  
+  entry = zig_main$79

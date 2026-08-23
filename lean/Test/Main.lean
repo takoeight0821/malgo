@@ -249,18 +249,21 @@ for its own reason:
   Point" here regardless of whether the compiler itself is correct. The
   real CLI's `Query.Engine.fetchLinkedProgram` does link the full
   dependency closure and evaluates this case correctly (verified manually).
-- `Panic` (malgo#426) calls `malgo_panic`, which *by design* terminates
-  evaluation nonzero with a message on stderr, matching the Zig
-  (`runtime/zig/runtime.zig`'s `panic`) and Scheme (`Backend/Scheme.lean`'s
-  `(error 'panic ...)`) backends — there is no successful stdout to pin as
-  a golden. `PanicGate.run` below exercises it directly instead.
+- `Panic` and `CondPanic` (both malgo#426) call `malgo_panic` -- the former
+  directly, the latter via `Prelude.mlg`'s `cond`'s `Nil -> panic "no
+  branch"` fallback (the specific path #426's own issue text called out as
+  untested) -- which *by design* terminates evaluation nonzero with a
+  message on stderr, matching the Zig (`runtime/zig/runtime.zig`'s `panic`)
+  and Scheme (`Backend/Scheme.lean`'s `(error 'panic ...)`) backends —
+  there is no successful stdout to pin as a golden. `PanicGate.run` below
+  exercises both directly instead.
 
-Excluding both here keeps `scripts/cli-gate.sh`'s `eval` mode, and
+Excluding these here keeps `scripts/cli-gate.sh`'s `eval` mode, and
 `scripts/zig-golden.sh`/`scripts/scheme-golden.sh`/`scripts/selfhost-golden.sh`
 (all of which discover their cases by listing `.golden/Malgo.Sequent.Eval/*/`
 rather than scanning `test/testcases/malgo/` directly), from ever seeing
-either name — no per-script skip-list needed. -/
-def evalHarnessUnsupported : List String := ["TaggedRecordCrossModuleUse", "Panic"]
+any of these names — no per-script skip-list needed. -/
+def evalHarnessUnsupported : List String := ["TaggedRecordCrossModuleUse", "Panic", "CondPanic"]
 
 private def evalGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     (name : String) : IO String := do
@@ -306,49 +309,71 @@ def bigStepEvalCases (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     { group := "Malgo.Sequent.BigStepEval", name := s!"golden/{n}", run := bigStepEvalGolden memo n }
 
 /-! ## Panic gate (regression test for malgo#426, not golden — see
-`evalHarnessUnsupported` for why `Panic` is excluded from `evalCases`/
-`bigStepEvalCases`).
+`evalHarnessUnsupported` for why `Panic`/`CondPanic` are excluded from
+`evalCases`/`bigStepEvalCases`).
 
-Checks both entry points against one linked program: `BigStepEval.lean`
+Checks both entry points against each linked program: `BigStepEval.lean`
 calls `Eval.fetchPrimitive` directly rather than reimplementing it, so this
 also confirms the big-step evaluator didn't need its own `malgo_panic`
-case. Only the stdout captured before the throw and a substring of the
-error message are pinned — not the full rendered message, which embeds
-`fetchPrimitive`'s call-site range (here, `malgo_panic`'s own foreign-import
-declaration in Builtin.mlg, not `Panic.mlg`'s call site — a pre-existing
-quirk of every wrapped foreign primitive, not specific to panic). -/
+case. Two scenarios: `Panic` calls `panic(...)` directly; `CondPanic` walks
+one `Cons (False, _) xs` step of `Prelude.mlg`'s `cond` before hitting its
+`Nil -> panic "no branch"` fallback -- the specific path #426's issue text
+called out as untested. Both stdout and the full rendered error message are
+pinned exactly: `EvalError.rangeOf`'s `.panic` case returns `none` (its
+`range` would be `fetchPrimitive`'s call-site range, i.e. `panic`'s own
+foreign-import declaration in Builtin.mlg, never the caller's actual
+`panic(...)` site), so the message is just `[<passName>] panic: <msg>` with
+no location prefix to make an exact match brittle -- `<passName>` differs
+per evaluator (`Eval.lean`/`BigStepEval.lean` each `throw`s their own
+`CompileError` with their own module name as `passName`), so it's supplied
+per evaluator below rather than baked into `Scenario.expectedMessage`. -/
 namespace PanicGate
 
-private def expectedStdout : String := "before panic\n"
-private def expectedMessage : String := "panic: malgo#426 regression check"
+private structure Scenario where
+  testcase : String
+  expectedStdout : String
+  /-- Suffix after `[<passName>] `, e.g. `"panic: no branch"`. -/
+  expectedMessage : String
+
+private def scenarios : List Scenario :=
+  [ { testcase := "Panic", expectedStdout := "before panic\n",
+      expectedMessage := "panic: malgo#426 regression check" },
+    { testcase := "CondPanic", expectedStdout := "before cond\n",
+      expectedMessage := "panic: no branch" } ]
 
 def run (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR)) : IO Nat := do
-  let builtin ← getAllIR memo (System.FilePath.mk "runtime/malgo/Builtin.mlg")
-  let prel ← getAllIR memo (System.FilePath.mk "runtime/malgo/Prelude.mlg")
-  let ir ← getAllIR memo (testcasePath "Panic")
-  let linked := Malgo.Driver.linkPrograms [builtin.join, prel.join, ir.join]
   let evaluators :=
-    [ ("Malgo.Sequent.Eval", Malgo.Sequent.Eval.evalProgram),
-      ("Malgo.Sequent.BigStepEval", Malgo.Sequent.BigStepEval.bigStepEvalProgram) ]
+    [ ("Malgo.Sequent.Eval", "Eval", Malgo.Sequent.Eval.evalProgram),
+      ("Malgo.Sequent.BigStepEval", "BigStepEval", Malgo.Sequent.BigStepEval.bigStepEvalProgram) ]
   let mut failed := 0
-  for (label, runProgram) in evaluators do
-    let (handlers, outRef) ← Malgo.Sequent.Eval.Handlers.buffered "Hello\n"
-    try
-      let _ ← MalgoM.run flag {} (runProgram ir.moduleName handlers linked)
-      IO.println s!"FAIL {label}/Panic: malgo_panic did not terminate evaluation"
-      failed := failed + 1
-    catch e =>
-      let out ← outRef.get
-      let msg := toString e
-      if out != expectedStdout then
-        IO.println s!"FAIL {label}/Panic: stdout was {out}, expected {expectedStdout}"
+  let mut total := 0
+  for scenario in scenarios do
+    let builtin ← getAllIR memo (System.FilePath.mk "runtime/malgo/Builtin.mlg")
+    let prel ← getAllIR memo (System.FilePath.mk "runtime/malgo/Prelude.mlg")
+    let ir ← getAllIR memo (testcasePath scenario.testcase)
+    let linked := Malgo.Driver.linkPrograms [builtin.join, prel.join, ir.join]
+    for (label, passName, runProgram) in evaluators do
+      total := total + 1
+      let expectedMessage := s!"[{passName}] {scenario.expectedMessage}"
+      let (handlers, outRef) ← Malgo.Sequent.Eval.Handlers.buffered "Hello\n"
+      try
+        let _ ← MalgoM.run flag {} (runProgram ir.moduleName handlers linked)
+        IO.println s!"FAIL {label}/{scenario.testcase}: malgo_panic did not terminate evaluation"
         failed := failed + 1
-      else if (msg.splitOn expectedMessage).length <= 1 then
-        IO.println s!"FAIL {label}/Panic: message did not contain \"{expectedMessage}\": {msg}"
-        failed := failed + 1
-      else
-        IO.println s!"ok {label}/Panic"
-  IO.println s!"=== panic-gate {2 - failed}/2 passed ==="
+      catch e =>
+        let out ← outRef.get
+        let msg := toString e
+        if out != scenario.expectedStdout then
+          IO.println
+            s!"FAIL {label}/{scenario.testcase}: stdout was {out}, expected {scenario.expectedStdout}"
+          failed := failed + 1
+        else if msg != expectedMessage then
+          IO.println
+            s!"FAIL {label}/{scenario.testcase}: message was \"{msg}\", expected \"{expectedMessage}\""
+          failed := failed + 1
+        else
+          IO.println s!"ok {label}/{scenario.testcase}"
+  IO.println s!"=== panic-gate {total - failed}/{total} passed ==="
   return failed
 
 end PanicGate

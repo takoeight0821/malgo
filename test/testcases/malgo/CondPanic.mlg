@@ -1,0 +1,17 @@
+#c-style-apply
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- Regression test for malgo#426's own "untested territory": the issue text
+-- specifically calls out `cond`'s empty/no-match fallback (Prelude.mlg's
+-- `Nil -> panic "no branch"`) as a path that hadn't been exercised through
+-- `malgo_panic` -- `Panic.mlg` only covers a direct `panic(...)` call. The
+-- one `False` guard below makes this walk the real `Cons (False, _) xs`
+-- recursion before falling through to `Nil`, not just the degenerate
+-- empty-list literal. Not a `.golden/Malgo.Sequent.Eval` golden case --
+-- see `evalHarnessUnsupported` and `Malgo.Test.PanicGate.run` in
+-- lean/Test/Main.lean for why.
+def main = { (_) ->
+  let _ = putStrLn("before cond");
+  cond [(False, { () })]
+}

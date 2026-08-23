@@ -143,10 +143,19 @@ dependency's definition would win such a collision, matching Haskell
 exactly (an edge case with no legal source today, since External `Id`s are
 qualified by module — but the concatenation order must still match the
 oracle byte-for-byte in case it ever becomes observable). `dependencies` is
-transitive, so this covers the whole closure with no duplication. -/
+transitive, so this covers the whole closure — but, like `buildDepsEnv`
+below, it can list the identical file under two different `ModuleName`
+aliases (see that function's doc comment for why), so without deduping
+first this loads and links the aliased dependency's `.sqt` twice, folding
+its whole definition list into `program.definitions` twice. That isn't
+fatal the way `buildDepsEnv`'s collision check is — nothing throws — but it
+is the same root defect, silently duplicating load/link work (and bloating
+the output) on every diamond-import edge. Resolved via the shared
+`Workspace.dedupeByArtifactPath` helper, exactly as `buildDepsEnv` does. -/
 def linkDeps (ws : Workspace) (dependencies : Std.TreeSet ModuleName)
     (program : Sequent.Core.Join.Program) : MalgoM Sequent.Core.Join.Program := do
-  let deps ← dependencies.toList.mapM fun dep => do
+  let dedupedDeps ← ws.dedupeByArtifactPath dependencies
+  let deps ← dedupedDeps.mapM fun dep => do
     let path ← ws.getModulePath dep
     (Resource.load path ".sqt" : IO Sequent.Core.Join.Program)
   pure {
@@ -185,9 +194,10 @@ because the identical file was folded in twice under two different keys.
 That is not the upstream aliasing defect the check above exists to catch;
 it is an artifact of keying the fold on `ModuleName` instead of the file
 identity `ModuleName` denotes. So we resolve each dependency to its
-`ArtifactPath` (via `Workspace.getModulePath`, already memoized in
-`ws.moduleMap` by the time renaming has produced `deps`) and dedupe on THAT
-before folding — collapsing alias-of-the-same-file entries into one, while
+`ArtifactPath` and dedupe on THAT before folding, via the shared
+`Workspace.dedupeByArtifactPath` helper (also used by `linkDeps` below,
+which has the identical fold-over-aliased-`ModuleName`-set shape) —
+collapsing alias-of-the-same-file entries into one, while
 two entries that resolve to two different `ArtifactPath`s still both survive
 to the real check and still throw exactly as before. See
 `test/testcases/malgo/error/README.md` for the full story, and #429 for the
@@ -199,15 +209,8 @@ module's own name regardless of which alias reached it) but is worth a
 reviewer's second look. -/
 partial def buildDepsEnv (ws : Workspace) (db : QueryDB) (deps : Std.TreeSet ModuleName) :
     MalgoM Malgo.Infer.TyEnv := do
-  -- Dedupe `deps` by resolved file identity before folding: keep only the
-  -- first `ModuleName` alias encountered (in `deps`'s `ModuleName`-sorted
-  -- iteration order) for each distinct `ArtifactPath`.
-  let (_, dedupedDeps) ← deps.toList.foldlM
-      (init := (({} : Std.TreeSet ArtifactPath), (#[] : Array ModuleName)))
-      fun (seen, acc) dep => do
-        let path ← ws.getModulePath dep
-        if seen.contains path then pure (seen, acc) else pure (seen.insert path, acc.push dep)
-  dedupedDeps.toList.foldlM (init := ({} : Malgo.Infer.TyEnv)) fun acc dep => do
+  let dedupedDeps ← ws.dedupeByArtifactPath deps
+  dedupedDeps.foldlM (init := ({} : Malgo.Infer.TyEnv)) fun acc dep => do
     let depEnv ← fetchInferredModule ws db dep
     let collisions := depEnv.foldl (fun ks k _ => if acc.contains k then k :: ks else ks) []
     unless collisions.isEmpty do

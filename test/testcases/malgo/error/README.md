@@ -58,7 +58,18 @@ folding, collapsing alias-of-the-same-file entries into one while leaving
 the collision check itself unweakened: two entries that resolve to two
 *different* files still both survive to the fold and still throw exactly as
 before. `ConstructorArity.mlg` and `StringPatIsNotSupported.mlg` no longer
-error under `--infer` — their `.expect` sidecars were removed, and they are
+error under `--infer`
+
+**`linkDeps`, 25 lines away in the same file, had the identical
+alias-fold defect and was fixed alongside `buildDepsEnv` (#448).** It
+folds each dependency's `.sqt` into the linked program rather than into a
+`TyEnv`, so the same alias duplication was never fatal there -- no
+collision check to trip -- but it silently loaded and concatenated the
+aliased dependency's definitions twice per diamond edge. Both functions
+now dedupe through one shared helper, `Workspace.dedupeByArtifactPath`
+(`lean/Malgo/Module.lean`), so a future third caller with the same
+fold-over-`ModuleName`-set shape has one place to reuse rather than a
+third copy to write from scratch. — their `.expect` sidecars were removed, and they are
 now ordinary `error`-mode-excluded `.mlg` files, like the six below.
 `BuiltinPreludeDiamond.mlg` was added alongside them as a purpose-built
 regression fixture with the same diamond-import shape; it has no `.expect`

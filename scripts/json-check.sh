@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # JSON parser/merge/serializer regression gate (runtime/malgo/Json.mlg).
 #
-# Deliberately NOT `test/testcases/malgo` cases, same reasoning as
-# scheme-process-check.sh/scheme-file-io-check.sh: any corpus fixture that
+# Historically NOT `test/testcases/malgo` cases: a corpus fixture that
 # imports Builtin.mlg + Prelude.mlg directly *and* a third relative-path-
-# importing runtime module (Json.mlg) hits a pre-existing `--infer`
-# module-diamond bug in the query engine's dependency resolver. See the
-# comment at the top of each fixture for details.
+# importing runtime module (Json.mlg) used to hit a `--infer`
+# module-diamond bug in the query engine's dependency resolver (#429, now
+# fixed -- see the comment at the top of each fixture for details). Left
+# here rather than moved into the corpus, since moving them is unrelated to
+# that fix.
 #
 # Each fixture prints its own "ok"/"FAIL" assertions, so a mismatch shows
 # up as a FAIL line on stdout, not just a diff. This script runs each one

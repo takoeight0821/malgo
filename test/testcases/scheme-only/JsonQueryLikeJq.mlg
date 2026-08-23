@@ -2,18 +2,19 @@ module {..} = import "../../../runtime/malgo/Builtin.mlg"
 module {..} = import "../../../runtime/malgo/Prelude.mlg"
 module {..} = import "../../../runtime/malgo/Json.mlg"
 
--- Deliberately NOT a `test/testcases/malgo` case: any fixture there that
+-- Historically NOT a `test/testcases/malgo` case: a fixture there that
 -- imports Builtin.mlg + Prelude.mlg directly *and* imports a third
--- relative-path-importing runtime module (Json.mlg here) hits a
--- pre-existing `--infer` bug where the query engine's dependency resolver
--- sees two different `ModuleName` spellings for the same underlying
--- Builtin.mlg/Prelude.mlg and treats it as a fatal name collision (see
--- #429). Not Json.mlg-specific -- the identical crash reproduces with the
--- pre-existing Either.mlg under the same import shape, which is why no
--- corpus fixture imports Either.mlg directly either (TestEither.mlg
--- redeclares it inline instead). `test/testcases/scheme-only/` sidesteps
--- the corpus sweep entirely, same reasoning as RunProcessEnvScope.mlg and
--- ReadWriteFileEdgeCases.mlg.
+-- relative-path-importing runtime module (Json.mlg here) used to hit an
+-- `--infer` bug where the query engine's dependency resolver saw two
+-- different `ModuleName` spellings for the same underlying
+-- Builtin.mlg/Prelude.mlg and treated it as a fatal name collision (see
+-- #429). Not Json.mlg-specific -- the identical crash used to reproduce
+-- with the pre-existing Either.mlg under the same import shape. #429's fix
+-- (dedupe by resolved `ArtifactPath`, in `Query.Engine.buildDepsEnv` and
+-- `linkDeps`) covers this shape now -- verified manually for both Json.mlg
+-- and Either.mlg -- but the file is left in `test/testcases/scheme-only/`
+-- rather than moved, since it needs no scheme-only primitive and moving it
+-- is unrelated to the fix itself.
 
 def assertEq : String -> String -> String -> ()
 def assertEq = { caseName expected actual ->

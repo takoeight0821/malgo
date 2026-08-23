@@ -1,4 +1,5 @@
 import Std.Data.TreeMap
+import Std.Data.TreeSet
 import Malgo.Prelude
 import Malgo.Path
 import Malgo.SExpr
@@ -222,6 +223,29 @@ def getModulePath (ws : Workspace) (name : ModuleName) : IO ArtifactPath := do
   match (← ws.moduleMap.get).get? name with
   | some path => return path
   | none => ws.searchAndRegister name
+
+/-- Resolve every `ModuleName` in `deps` to its `ArtifactPath` (via
+`getModulePath`) and dedupe on THAT, keeping only the first alias
+encountered (in `deps`'s `ModuleName`-sorted iteration order) for each
+distinct file. Multiple `ModuleName`s can denote the same file --
+`.moduleName "Builtin"` (a bare `import Builtin`) and the `.artifact` form
+a relative-path import resolves to both name the identical module -- but
+`ModuleName`'s derived `BEq`/`Ord` treats different constructors as
+always-unequal even when they resolve to the same file (`ArtifactPath`'s
+own equality is `relPath`-only precisely so that traversal-route aliases
+of one `.artifact` collapse, per its doc comment, but that never bridges a
+`.moduleName` alias to an `.artifact` one). `Query.Engine.buildDepsEnv` and
+`Query.Engine.linkDeps` both fold/load once per entry in a dependency set
+reached this way, so both call this to collapse alias-of-the-same-file
+entries into one before doing that work -- see #429. -/
+def dedupeByArtifactPath (ws : Workspace) (deps : Std.TreeSet ModuleName) :
+    IO (List ModuleName) := do
+  let (_, acc) ← deps.toList.foldlM
+      (init := (({} : Std.TreeSet ArtifactPath), (#[] : Array ModuleName)))
+      fun (seen, acc) dep => do
+        let path ← ws.getModulePath dep
+        if seen.contains path then pure (seen, acc) else pure (seen.insert path, acc.push dep)
+  return acc.toList
 
 end Workspace
 

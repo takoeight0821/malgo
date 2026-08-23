@@ -38,6 +38,7 @@ import Malgo.Query
 import Malgo.Query.Engine
 import Malgo.Backend.Scheme
 import Malgo.Backend.Zig.Ir
+import Malgo.Backend.Zig.Stage
 import Malgo.Backend.Zig.Normalize
 import Malgo.Backend.Zig.ClosureConv
 import Malgo.Backend.Zig.Peephole

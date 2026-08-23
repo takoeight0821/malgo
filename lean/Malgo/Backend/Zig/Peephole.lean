@@ -1,4 +1,5 @@
 import Malgo.Backend.Zig.Ir
+import Malgo.Backend.Zig.Stage
 import Malgo.Prelude
 import Malgo.Sequent.Fun
 
@@ -204,8 +205,9 @@ partial def peepholeFunc (fn : Func) : Func :=
   if body' == fn.body then fn
   else peepholeFunc { fn with body := body' }
 
-def peepholeProgram (program : Program) : Program :=
-  { program with funcs := program.funcs.map peepholeFunc }
+def peepholeProgram (staged : Staged .closureConv) : Staged .peephole :=
+  let program := staged.program
+  ⟨{ program with funcs := program.funcs.map peepholeFunc }⟩
 
 private def nm (s : String) : Name := { name := s, moduleName := .moduleName "t", sort := .external }
 private def r0 : Range := { start := SourcePos.initial "", stop := SourcePos.initial "" }

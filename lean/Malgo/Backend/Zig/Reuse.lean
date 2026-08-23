@@ -1,4 +1,5 @@
 import Malgo.Backend.Zig.Ir
+import Malgo.Backend.Zig.Stage
 import Malgo.Prelude
 import Malgo.Sequent.Fun
 import Malgo.Monad
@@ -160,8 +161,9 @@ def reuseFunc (mn : ModuleName) (fn : Func) : MalgoM Func := do
   let body ← reuseBlock mn fn.body
   pure { fn with body }
 
-def reuseProgram (mn : ModuleName) (program : Program) : MalgoM Program := do
+def reuseProgram (mn : ModuleName) (staged : Staged .perceus) : MalgoM (Staged .reuse) := do
+  let program := staged.program
   let funcs ← program.funcs.mapM (reuseFunc mn)
-  pure { program with funcs }
+  pure ⟨{ program with funcs }⟩
 
 end Malgo.Backend.Zig.Reuse

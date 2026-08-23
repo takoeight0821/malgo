@@ -46,14 +46,14 @@ as of each milestone, not current.
 Conventions:
 - module paths mirror the Haskell `src/Malgo/*.hs` 1:1 (`Sequent/ToFun.hs` → `Malgo/Sequent/ToFun.lean`);
 - `Std.TreeMap`/`TreeSet` wherever Haskell used `Data.Map`/`Set` and iteration
-  order reaches output; `Malgo.IntMap` (a from-scratch Patricia trie, since
-  `Std.HashMap`/`TreeMap` bundle well-formedness proofs rejected in
-  nested-inductive positions) inside `Value`'s `Env`; `Std.HashMap` only for
-  order-invisible caches;
+  order reaches output; `Std.TreeMap.Raw` (the unbundled variant, safe to
+  nest inside an inductive, unlike the bundled `Std.TreeMap`/`HashMap`)
+  inside `Value`'s `Env`; `Std.HashMap` only for order-invisible caches;
 - incremental proofs: `partial def` where recursion is not structural
   (unchanged); a small number of hand-picked modules additionally carry
-  real `theorem`s beyond `#guard` spot-checks — see `Data/IntMap.lean`
-  (`lookup_insert`, a `WF` well-formedness invariant) for the current
-  example; opt-in per module, not a blanket requirement;
+  real `theorem`s beyond `#guard` spot-checks — see `Prelude.lean`
+  (`sizeOf_snd_lt_of_mem` and friends, used by every IR's `termination_by`
+  proof) for the current example; opt-in per module, not a blanket
+  requirement;
 - known naming deviation: `Meta.meta` (Haskell) → `Meta.info` (`meta` is a
   Lean keyword).

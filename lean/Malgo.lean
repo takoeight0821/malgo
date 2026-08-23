@@ -8,7 +8,6 @@ import Malgo.Monad
 import Malgo.Pass
 import Malgo.Id
 import Malgo.Interface
-import Malgo.Data.IntMap
 import Malgo.Data.Graph
 import Malgo.Data.ShowFloat
 import Malgo.Syntax.Extension

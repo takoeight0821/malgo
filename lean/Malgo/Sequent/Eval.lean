@@ -1,11 +1,11 @@
 import Std.Data.HashMap
 import Std.Data.TreeMap
+import Std.Data.TreeMap.Raw
 import Malgo.Prelude
 import Malgo.Id
 import Malgo.Module
 import Malgo.Monad
 import Malgo.Pass
-import Malgo.Data.IntMap
 import Malgo.SExpr
 import Malgo.Sequent.Fun
 import Malgo.Sequent.Core.Join
@@ -76,15 +76,16 @@ inductive ConsumerK where
 
 /-- Haskell `Env {localBindings :: IntMap Value, externalBindings :: Map
 Name Value}`. `localBindings` keys are Internal/Temporal uniqs (the fast
-path); externals are an ascending assoc list (`Std.TreeMap` cannot nest in
-an inductive). -/
+path); externals are an ascending assoc list (the bundled `Std.TreeMap`
+cannot nest in an inductive, but its unbundled `.Raw` variant can, so it
+takes `localBindings`' place instead of a hand-rolled structure). -/
 inductive Env where
-  | mk (localBindings : Malgo.IntMap Value) (externalBindings : List (Id × Value))
+  | mk (localBindings : Std.TreeMap.Raw Nat Value) (externalBindings : List (Id × Value))
 
 end
 
 instance : Inhabited Value := ⟨.struct .tuple []⟩
-instance : Inhabited Env := ⟨.mk .nil []⟩
+instance : Inhabited Env := ⟨.mk {} []⟩
 
 /-! ## Value equality, zero test, text rendering -/
 
@@ -270,13 +271,13 @@ def nameToIntKey (n : Name) : Option Nat :=
   | .temporal u => some u
   | .external => none
 
-def Env.localBindings : Env → Malgo.IntMap Value
+def Env.localBindings : Env → Std.TreeMap.Raw Nat Value
   | .mk l _ => l
 
 def Env.externalBindings : Env → List (Id × Value)
   | .mk _ e => e
 
-def emptyEnv : Env := .mk .nil []
+def emptyEnv : Env := .mk {} []
 
 /-- Insert into an ascending assoc list keyed by `Id`, overwriting an
 existing key (mirrors `Map.insert`). -/
@@ -301,7 +302,7 @@ def extendEnv' (pairs : List (Name × Value)) (env : Env) : Env :=
 def lookupEnv (env : Env) (range : Range) (name : Name) : EvalM Value :=
   match nameToIntKey name with
   | some key =>
-    match env.localBindings.lookup? key with
+    match env.localBindings.get? key with
     | some v => pure v
     | none => throw (.undefinedVariable range name)
   | none =>

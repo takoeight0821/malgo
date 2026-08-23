@@ -715,7 +715,56 @@ private def cases : List Case :=
     , src := "def main = f state.dict.head"
     , expect := some "(apply f (project (project state \"dict\") \"head\"))" }
   , { name := "ignores unknown pragmas alongside known ones"
-    , src := "#experimental-feature\n#c-style-apply\ndef main = f(x, y)" } ]
+    , src := "#experimental-feature\n#c-style-apply\ndef main = f(x, y)" }
+  , { name := "binds .field to a parenthesized call argument when no space precedes the dot (#424)"
+    , src := "def main = f (g x).field"
+    , expect := some "(apply f (project (parens (apply g x)) \"field\"))" }
+  , { name := "chains adjacent .field projections onto a parenthesized call argument (#424)"
+    , src := "def main = f (g x).a.b"
+    , expect := some
+        "(apply f (project (project (parens (apply g x)) \"a\") \"b\"))" }
+  , { name := "treats .field as a postfix on the whole call when a space precedes it after a parenthesized argument"
+    , src := "def main = f (g x) .field"
+    , expect := some "(project (apply f (apply g x)) \"field\")" }
+  , { name := "does not disturb a two-argument call written tight: f(a, b)"
+    , src := "def main = f(a, b)"
+    , expect := some "(apply (apply f a) b)" }
+  , { name := "does not disturb a two-argument call written with a space: f (a, b)"
+    , src := "def main = f (a, b)"
+    , expect := some "(apply (apply f a) b)" }
+  , { name := "keeps a tight C-style call's .field bound to the call result, not the argument (#424)"
+    , src := "def main = nats(0).tail"
+    , expect := some "(project (apply nats (int32 0)) \"tail\")" }
+  , { name := "keeps a tight call's .field bound to the call result even with a compound argument (#424)"
+    , src := "def main = f(g x).field"
+    , expect := some "(project (apply f (apply g x)) \"field\")" }
+  , { name := "a tight call's closing paren may be on its own line before a tight dot (#424)"
+    , src := "def main = nats(\n  0\n).tail"
+    , expect := some "(project (apply nats (int32 0)) \"tail\")" }
+  , { name := "a loose call's closing paren may be on its own line before a tight dot (#424)"
+    , src := "def main = f (\n  g x\n).field"
+    , expect := some "(apply f (project (parens (apply g x)) \"field\"))" }
+  , { name := "binds .field to a parenthesized argument in a non-first position too (#424)"
+    , src := "def main = f a (g x).field"
+    , expect := some
+        "(apply (apply f a) (project (parens (apply g x)) \"field\"))" }
+  , { name := "a tight call's .field binds to the call result for a lambda-headed atom too (#424 follow-up)"
+    , src := "def main = { x -> x }(5).field"
+    , expect := some
+        "(project (apply (fn ((clause (x) (seq (do x))))) (int32 5)) \"field\")" }
+  , { name := "a tight call's .field binds to the call result for a tuple-headed atom too (#424 follow-up)"
+    , src := "def main = (a, b)(5).field"
+    , expect := some "(project (apply (tuple a b) (int32 5)) \"field\")" }
+  , { name := "a tight call's .field binds to the call result for a record-headed atom too (#424 follow-up)"
+    , src := "def main = { .a -> 1, .b -> 2 }(5).field"
+    , expect := some
+        "(project (apply (record (a (int32 1)) (b (int32 2))) (int32 5)) \"field\")" }
+  , { name := "keeps a tight two-argument call's .field bound to the call result: f(a, b).field"
+    , src := "def main = f(a, b).field"
+    , expect := some "(project (apply (apply f a) b) \"field\")" }
+  , { name := "keeps a tight nullary call's .field bound to the call result: f().field"
+    , src := "def main = f().field"
+    , expect := some "(project (apply f (tuple)) \"field\")" } ]
 
 def run : IO Nat := do
   let mut failed := 0

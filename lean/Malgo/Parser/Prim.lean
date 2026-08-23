@@ -61,9 +61,16 @@ structure PState where
   offset : Nat
   line : Nat
   col : Nat
+  /-- The last character actually consumed, if any. Every primitive that
+  consumes input funnels through `advance`, which keeps this current; it
+  lets a caller recover "was there whitespace right here" *after* a
+  space-swallowing `lexeme`/`symbol` has already run past it, without
+  threading a deferred-space variant through every token parser (see
+  `pAtom` in `CStyle.lean`, #424's follow-up). -/
+  prevChar : Option Char
 
 def PState.ofInput (sourceName : String) (input : String) : PState :=
-  { sourceName, rest := input.toList, offset := 0, line := 1, col := 1 }
+  { sourceName, rest := input.toList, offset := 0, line := 1, col := 1, prevChar := none }
 
 def PState.sourcePos (s : PState) : SourcePos :=
   { sourceName := s.sourceName, line := s.line, column := s.col }
@@ -80,7 +87,7 @@ def PState.advance (s : PState) (c : Char) (rest : List Char) : PState :=
     if c == '\n' then (s.line + 1, 1)
     else if c == '\t' then (s.line, s.col + 8 - ((s.col - 1) % 8))
     else (s.line, s.col + 1)
-  { s with rest, offset := s.offset + 1, line, col }
+  { s with rest, offset := s.offset + 1, line, col, prevChar := some c }
 
 inductive Reply (α : Type) where
   | ok (a : α) (s : PState) (consumed : Bool)
@@ -149,6 +156,10 @@ def notFollowedBy (p : P α) : P Unit := fun s =>
   | .err _ _ => .ok () s false
 
 def getSourcePos : P SourcePos := fun s => .ok s.sourcePos s false
+
+/-- The last character consumed by any prior primitive, if any. See
+`PState.prevChar`. -/
+def prevChar : P (Option Char) := fun s => .ok s.prevChar s false
 
 def eof : P Unit := fun s =>
   match s.rest with
@@ -297,7 +308,10 @@ def digitChar : P Char := satisfy Char.isDigit [.label "digit"]
 
 /-! ## Lexer layer (port of `Malgo.Parser.Core`) -/
 
-private def isSpaceChar (c : Char) : Bool :=
+/-- Not `private`: `CStyle.lean`'s `pAtom` reuses this to interpret
+`prevChar` (a whitespace `prevChar` means a `lexeme`'s trailing `space`
+call actually swallowed something, not just an adjacent closing token). -/
+def isSpaceChar (c : Char) : Bool :=
   c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\x0b' || c == '\x0c'
 
 private def space1 : P Unit := do

@@ -1,0 +1,3644 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data WrapInt32  = WrapInt32#(Int32)
+
+data WrapInt64  = WrapInt64#(Int64)
+
+data WrapChar  = WrapChar#(Char)
+
+data WrapString  = WrapString#(String)
+
+def describeInt32 =
+  fn {
+    WrapInt32#(5) ->
+      {
+        "matched five"
+      } |
+    _ ->
+      {
+        "no match"
+      }
+  }
+
+def main =
+  fn {
+    _ ->
+      {
+        print(WrapInt32#(5))
+        print(WrapInt64#(7L))
+        print(WrapChar#('x'))
+        print(WrapString#("hi"))
+        print(describeInt32(WrapInt32#(5)))
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import runtime/malgo/Prelude.mlg 
+
+data WrapInt32  = WrapInt32#(Int32)
+
+data WrapInt64  = WrapInt64#(Int64)
+
+data WrapChar  = WrapChar#(Char)
+
+data WrapString  = WrapString#(String)
+
+def describeInt32 =
+  fn {
+    WrapInt32#(Int32#(5)) ->
+      {
+        String#("matched five")
+      } |
+    _#0 ->
+      {
+        String#("no match")
+      }
+  }
+
+def main =
+  fn {
+    _#1 ->
+      {
+        print(WrapInt32#(Int32#(5)))
+        print(WrapInt64#(Int64#(7L)))
+        print(WrapChar#(Char#('x')))
+        print(WrapString#(String#("hi")))
+        print(describeInt32(WrapInt32#(Int32#(5))))
+      }
+  }
+
+=== ToFun ===
+def describeInt32 =
+  \param$2 ->
+    case param$2 of {
+      WrapInt32#(Int32#(5)) -> invoke String#("matched five")
+      _#0 -> invoke String#("no match")
+    }
+
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        \tmp$4 ->
+          \tmp$5 ->
+            \tmp$6 ->
+              \tmp$7 ->
+                invoke print( invoke describeInt32( invoke WrapInt32#( invoke Int32#( 5 ) ) ) )( invoke print( invoke WrapString#( invoke String#( "hi" ) ) ) )( invoke print( invoke WrapChar#( invoke Char#( 'x' ) ) ) )( invoke print( invoke WrapInt64#( invoke Int64#( 7L ) ) ) )( invoke print( invoke WrapInt32#( invoke Int32#( 5 ) ) ) )
+    }
+
+def WrapInt32# = \constructor$8 -> WrapInt32#(constructor$8)
+
+def WrapInt64# = \constructor$9 -> WrapInt64#(constructor$9)
+
+def WrapChar# = \constructor$10 -> WrapChar#(constructor$10)
+
+def WrapString# = \constructor$11 -> WrapString#(constructor$11)
+
+=== SaturateCtor ===
+def describeInt32 =
+  \param$2 ->
+    case param$2 of {
+      WrapInt32#(Int32#(5)) -> invoke String#("matched five")
+      _#0 -> invoke String#("no match")
+    }
+
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        \tmp$4 ->
+          \tmp$5 ->
+            \tmp$6 ->
+              \tmp$7 ->
+                invoke print( invoke describeInt32( WrapInt32#( invoke Int32#( 5 ) ) ) )( invoke print( WrapString#( invoke String#( "hi" ) ) ) )( invoke print( WrapChar#( invoke Char#( 'x' ) ) ) )( invoke print( WrapInt64#( invoke Int64#( 7L ) ) ) )( invoke print( WrapInt32#( invoke Int32#( 5 ) ) ) )
+    }
+
+def WrapInt32# = \constructor$8 -> WrapInt32#(constructor$8)
+
+def WrapInt64# = \constructor$9 -> WrapInt64#(constructor$9)
+
+def WrapChar# = \constructor$10 -> WrapChar#(constructor$10)
+
+def WrapString# = \constructor$11 -> WrapString#(constructor$11)
+
+=== ReuseSpecialize ===
+def describeInt32 =
+  \param$2 ->
+    case param$2 of {
+      WrapInt32#(Int32#(5)) -> invoke String#("matched five")
+      _#0 -> invoke String#("no match")
+    }
+
+def main =
+  \param$3 ->
+    case param$3 of {
+      _#1 ->
+        \tmp$4 ->
+          \tmp$5 ->
+            \tmp$6 ->
+              \tmp$7 ->
+                invoke print( invoke describeInt32( WrapInt32#( invoke Int32#( 5 ) ) ) )( invoke print( WrapString#( invoke String#( "hi" ) ) ) )( invoke print( WrapChar#( invoke Char#( 'x' ) ) ) )( invoke print( WrapInt64#( invoke Int64#( 7L ) ) ) )( invoke print( WrapInt32#( invoke Int32#( 5 ) ) ) )
+    }
+
+def WrapInt32# = \constructor$8 -> WrapInt32#(constructor$8)
+
+def WrapInt64# = \constructor$9 -> WrapInt64#(constructor$9)
+
+def WrapChar# = \constructor$10 -> WrapChar#(constructor$10)
+
+def WrapString# = \constructor$11 -> WrapString#(constructor$11)
+
+=== ToCore ===
+def describeInt32(return$12) =
+  \param$2 return$13 . {
+    param$2 ~ select {
+      WrapInt32#(Int32#(5)) -> invoke String# ~ ("matched five", return$13)
+      _#0 -> invoke String# ~ ("no match", return$13)
+    }
+  } ~ return$12
+
+def main(return$14) =
+  \param$3 return$15 . {
+    param$3 ~ select {
+      _#1 ->
+        \tmp$4 return$18 . {
+          \tmp$5 return$21 . {
+            \tmp$6 return$24 . {
+              \tmp$7 return$27 . {
+                invoke print ~ ( do return$28 . {
+                  invoke describeInt32 ~ ( WrapInt32#( do return$29 . {
+                    invoke Int32# ~ (5, return$29)
+                  } )
+                  , return$28 )
+                }
+                , return$27 )
+              } ~ ( do return$25 . {
+                invoke print ~ ( WrapString#( do return$26 . {
+                  invoke String# ~ ("hi", return$26)
+                } )
+                , return$25 )
+              }
+              , return$24 )
+            } ~ ( do return$22 . {
+              invoke print ~ ( WrapChar#( do return$23 . {
+                invoke Char# ~ ('x', return$23)
+              } )
+              , return$22 )
+            }
+            , return$21 )
+          } ~ ( do return$19 . {
+            invoke print ~ ( WrapInt64#( do return$20 . {
+              invoke Int64# ~ (7L, return$20)
+            } )
+            , return$19 )
+          }
+          , return$18 )
+        } ~ ( do return$16 . {
+          invoke print ~ ( WrapInt32#( do return$17 . {
+            invoke Int32# ~ (5, return$17)
+          } )
+          , return$16 )
+        }
+        , return$15 )
+    }
+  } ~ return$14
+
+def WrapInt32#(return$30) =
+  \constructor$8 return$31 . {
+    WrapInt32#(constructor$8) ~ return$31
+  } ~ return$30
+
+def WrapInt64#(return$32) =
+  \constructor$9 return$33 . {
+    WrapInt64#(constructor$9) ~ return$33
+  } ~ return$32
+
+def WrapChar#(return$34) =
+  \constructor$10 return$35 . {
+    WrapChar#(constructor$10) ~ return$35
+  } ~ return$34
+
+def WrapString#(return$36) =
+  \constructor$11 return$37 . {
+    WrapString#(constructor$11) ~ return$37
+  } ~ return$36
+
+=== Flat ===
+def describeInt32(return$12) =
+  \param$2 return$13 . {
+    param$2 ~ select {
+      WrapInt32#(Int32#(5)) -> invoke String# ~ ("matched five", return$13)
+      _#0 -> invoke String# ~ ("no match", return$13)
+    }
+  } ~ return$12
+
+def main(return$14) =
+  \param$3 return$15 . {
+    param$3 ~ select {
+      _#1 ->
+        \tmp$4 return$18 . {
+          \tmp$5 return$21 . {
+            \tmp$6 return$24 . {
+              \tmp$7 return$27 . {
+                invoke print ~ then outer$38 -> {
+                  join return$28 = then inner$39 -> {
+                    outer$38 ~ (inner$39, return$27)
+                  }
+                  in invoke describeInt32 ~ then outer$40 -> {
+                    join label$42 = then inner$41 -> {
+                      outer$40 ~ (inner$41, return$28)
+                    }
+                    in join return$29 = then var$43 -> {
+                      WrapInt32#(var$43) ~ label$42
+                    }
+                    in invoke Int32# ~ (5, return$29)
+                  }
+                }
+              } ~ then outer$44 -> {
+                join return$25 = then inner$45 -> {
+                  outer$44 ~ (inner$45, return$24)
+                }
+                in invoke print ~ then outer$46 -> {
+                  join label$48 = then inner$47 -> {
+                    outer$46 ~ (inner$47, return$25)
+                  }
+                  in join return$26 = then var$49 -> {
+                    WrapString#(var$49) ~ label$48
+                  }
+                  in invoke String# ~ ("hi", return$26)
+                }
+              }
+            } ~ then outer$50 -> {
+              join return$22 = then inner$51 -> {
+                outer$50 ~ (inner$51, return$21)
+              }
+              in invoke print ~ then outer$52 -> {
+                join label$54 = then inner$53 -> {
+                  outer$52 ~ (inner$53, return$22)
+                }
+                in join return$23 = then var$55 -> {
+                  WrapChar#(var$55) ~ label$54
+                }
+                in invoke Char# ~ ('x', return$23)
+              }
+            }
+          } ~ then outer$56 -> {
+            join return$19 = then inner$57 -> {
+              outer$56 ~ (inner$57, return$18)
+            }
+            in invoke print ~ then outer$58 -> {
+              join label$60 = then inner$59 -> {
+                outer$58 ~ (inner$59, return$19)
+              }
+              in join return$20 = then var$61 -> {
+                WrapInt64#(var$61) ~ label$60
+              }
+              in invoke Int64# ~ (7L, return$20)
+            }
+          }
+        } ~ then outer$62 -> {
+          join return$16 = then inner$63 -> {
+            outer$62 ~ (inner$63, return$15)
+          }
+          in invoke print ~ then outer$64 -> {
+            join label$66 = then inner$65 -> {
+              outer$64 ~ (inner$65, return$16)
+            }
+            in join return$17 = then var$67 -> {
+              WrapInt32#(var$67) ~ label$66
+            }
+            in invoke Int32# ~ (5, return$17)
+          }
+        }
+    }
+  } ~ return$14
+
+def WrapInt32#(return$30) =
+  \constructor$8 return$31 . {
+    WrapInt32#(constructor$8) ~ return$31
+  } ~ return$30
+
+def WrapInt64#(return$32) =
+  \constructor$9 return$33 . {
+    WrapInt64#(constructor$9) ~ return$33
+  } ~ return$32
+
+def WrapChar#(return$34) =
+  \constructor$10 return$35 . {
+    WrapChar#(constructor$10) ~ return$35
+  } ~ return$34
+
+def WrapString#(return$36) =
+  \constructor$11 return$37 . {
+    WrapString#(constructor$11) ~ return$37
+  } ~ return$36
+
+=== Join ===
+def describeInt32(return$12) =
+  \param$2 return$13 . {
+    join select$70 = select {
+      WrapInt32#(Int32#(5)) ->
+        join apply$68 = ("matched five", return$13)
+        in invoke String# ~ apply$68
+      _#0 ->
+        join apply$69 = ("no match", return$13)
+        in invoke String# ~ apply$69
+    }
+    in param$2 ~ select$70
+  } ~ return$12
+
+def main(return$14) =
+  \param$3 return$15 . {
+    join select$96 = select {
+      _#1 ->
+        join then$95 = then outer$62 -> {
+          join return$16 = then inner$63 -> {
+            join apply$94 = (inner$63, return$15)
+            in outer$62 ~ apply$94
+          }
+          in join then$93 = then outer$64 -> {
+            join label$66 = then inner$65 -> {
+              join apply$92 = (inner$65, return$16)
+              in outer$64 ~ apply$92
+            }
+            in join return$17 = then var$67 -> {
+              WrapInt32#(var$67) ~ label$66
+            }
+            in join apply$91 = (5, return$17)
+            in invoke Int32# ~ apply$91
+          }
+          in invoke print ~ then$93
+        }
+        in \tmp$4 return$18 . {
+          join then$90 = then outer$56 -> {
+            join return$19 = then inner$57 -> {
+              join apply$89 = (inner$57, return$18)
+              in outer$56 ~ apply$89
+            }
+            in join then$88 = then outer$58 -> {
+              join label$60 = then inner$59 -> {
+                join apply$87 = (inner$59, return$19)
+                in outer$58 ~ apply$87
+              }
+              in join return$20 = then var$61 -> {
+                WrapInt64#(var$61) ~ label$60
+              }
+              in join apply$86 = (7L, return$20)
+              in invoke Int64# ~ apply$86
+            }
+            in invoke print ~ then$88
+          }
+          in \tmp$5 return$21 . {
+            join then$85 = then outer$50 -> {
+              join return$22 = then inner$51 -> {
+                join apply$84 = (inner$51, return$21)
+                in outer$50 ~ apply$84
+              }
+              in join then$83 = then outer$52 -> {
+                join label$54 = then inner$53 -> {
+                  join apply$82 = (inner$53, return$22)
+                  in outer$52 ~ apply$82
+                }
+                in join return$23 = then var$55 -> {
+                  WrapChar#(var$55) ~ label$54
+                }
+                in join apply$81 = ('x', return$23)
+                in invoke Char# ~ apply$81
+              }
+              in invoke print ~ then$83
+            }
+            in \tmp$6 return$24 . {
+              join then$80 = then outer$44 -> {
+                join return$25 = then inner$45 -> {
+                  join apply$79 = (inner$45, return$24)
+                  in outer$44 ~ apply$79
+                }
+                in join then$78 = then outer$46 -> {
+                  join label$48 = then inner$47 -> {
+                    join apply$77 = (inner$47, return$25)
+                    in outer$46 ~ apply$77
+                  }
+                  in join return$26 = then var$49 -> {
+                    WrapString#(var$49) ~ label$48
+                  }
+                  in join apply$76 = ("hi", return$26)
+                  in invoke String# ~ apply$76
+                }
+                in invoke print ~ then$78
+              }
+              in \tmp$7 return$27 . {
+                join then$75 = then outer$38 -> {
+                  join return$28 = then inner$39 -> {
+                    join apply$74 = (inner$39, return$27)
+                    in outer$38 ~ apply$74
+                  }
+                  in join then$73 = then outer$40 -> {
+                    join label$42 = then inner$41 -> {
+                      join apply$72 = (inner$41, return$28)
+                      in outer$40 ~ apply$72
+                    }
+                    in join return$29 = then var$43 -> {
+                      WrapInt32#(var$43) ~ label$42
+                    }
+                    in join apply$71 = (5, return$29)
+                    in invoke Int32# ~ apply$71
+                  }
+                  in invoke describeInt32 ~ then$73
+                }
+                in invoke print ~ then$75
+              } ~ then$80
+            } ~ then$85
+          } ~ then$90
+        } ~ then$95
+    }
+    in param$3 ~ select$96
+  } ~ return$14
+
+def WrapInt32#(return$30) =
+  \constructor$8 return$31 . {
+    WrapInt32#(constructor$8) ~ return$31
+  } ~ return$30
+
+def WrapInt64#(return$32) =
+  \constructor$9 return$33 . {
+    WrapInt64#(constructor$9) ~ return$33
+  } ~ return$32
+
+def WrapChar#(return$34) =
+  \constructor$10 return$35 . {
+    WrapChar#(constructor$10) ~ return$35
+  } ~ return$34
+
+def WrapString#(return$36) =
+  \constructor$11 return$37 . {
+    WrapString#(constructor$11) ~ return$37
+  } ~ return$36
+
+=== ClosureConv ===
+toplevel fn describeInt32(return$12) =
+  let closure$108 = closure lambda$98()
+  return return$12(closure$108)
+
+closure fn lambda$98(self$99, param$2, return$13) =
+  if param$2.tag == WrapInt32# &&
+  param$2.0.tag == Int32# &&
+  param$2.0.0 == 5 then {
+    let apply$68 = closure join$100(return$13)
+    return String#(apply$68)
+  } else {
+    if  then {
+      let _#0 = param$2
+      let apply$69 = closure join$104(return$13)
+      return String#(apply$69)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$100(self$101, value$102) =
+  let return$13 = self$101.cap[0]
+  let lit$103 = "matched five"
+  return value$102(lit$103, return$13)
+
+closure fn join$104(self$105, value$106) =
+  let return$13 = self$105.cap[0]
+  let lit$107 = "no match"
+  return value$106(lit$107, return$13)
+
+toplevel fn main(return$14) =
+  let closure$212 = closure lambda$110()
+  return return$14(closure$212)
+
+closure fn lambda$110(self$111, param$3, return$15) =
+  if  then {
+    let _#1 = param$3
+    let closure$194 = closure lambda$112()
+    let return$16 = closure join$195(closure$194, return$15)
+    let then$93 = closure join$198(return$16)
+    return print(then$93)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$112(self$113, tmp$4, return$18) =
+  let closure$176 = closure lambda$114()
+  let return$19 = closure join$177(closure$176, return$18)
+  let then$88 = closure join$180(return$19)
+  return print(then$88)
+
+closure fn lambda$114(self$115, tmp$5, return$21) =
+  let closure$158 = closure lambda$116()
+  let return$22 = closure join$159(closure$158, return$21)
+  let then$83 = closure join$162(return$22)
+  return print(then$83)
+
+closure fn lambda$116(self$117, tmp$6, return$24) =
+  let closure$140 = closure lambda$118()
+  let return$25 = closure join$141(closure$140, return$24)
+  let then$78 = closure join$144(return$25)
+  return print(then$78)
+
+closure fn lambda$118(self$119, tmp$7, return$27) =
+  let then$75 = closure join$120(return$27)
+  return print(then$75)
+
+closure fn join$120(self$121, value$122) =
+  let return$27 = self$121.cap[0]
+  let return$28 = closure join$123(return$27, value$122)
+  let then$73 = closure join$126(return$28)
+  return describeInt32(then$73)
+
+closure fn join$123(self$124, value$125) =
+  let return$27 = self$124.cap[0]
+  let value$122 = self$124.cap[1]
+  return value$122(value$125, return$27)
+
+closure fn join$126(self$127, value$128) =
+  let return$28 = self$127.cap[0]
+  let label$42 = closure join$129(return$28, value$128)
+  let return$29 = closure join$132(label$42)
+  let apply$71 = closure join$136(return$29)
+  return Int32#(apply$71)
+
+closure fn join$129(self$130, value$131) =
+  let return$28 = self$130.cap[0]
+  let value$128 = self$130.cap[1]
+  return value$128(value$131, return$28)
+
+closure fn join$132(self$133, value$134) =
+  let label$42 = self$133.cap[0]
+  let struct$135 = WrapInt32#(value$134)
+  return label$42(struct$135)
+
+closure fn join$136(self$137, value$138) =
+  let return$29 = self$137.cap[0]
+  let lit$139 = 5
+  return value$138(lit$139, return$29)
+
+closure fn join$141(self$142, value$143) =
+  let closure$140 = self$142.cap[0]
+  let return$24 = self$142.cap[1]
+  return closure$140(value$143, return$24)
+
+closure fn join$144(self$145, value$146) =
+  let return$25 = self$145.cap[0]
+  let label$48 = closure join$147(return$25, value$146)
+  let return$26 = closure join$150(label$48)
+  let apply$76 = closure join$154(return$26)
+  return String#(apply$76)
+
+closure fn join$147(self$148, value$149) =
+  let return$25 = self$148.cap[0]
+  let value$146 = self$148.cap[1]
+  return value$146(value$149, return$25)
+
+closure fn join$150(self$151, value$152) =
+  let label$48 = self$151.cap[0]
+  let struct$153 = WrapString#(value$152)
+  return label$48(struct$153)
+
+closure fn join$154(self$155, value$156) =
+  let return$26 = self$155.cap[0]
+  let lit$157 = "hi"
+  return value$156(lit$157, return$26)
+
+closure fn join$159(self$160, value$161) =
+  let closure$158 = self$160.cap[0]
+  let return$21 = self$160.cap[1]
+  return closure$158(value$161, return$21)
+
+closure fn join$162(self$163, value$164) =
+  let return$22 = self$163.cap[0]
+  let label$54 = closure join$165(return$22, value$164)
+  let return$23 = closure join$168(label$54)
+  let apply$81 = closure join$172(return$23)
+  return Char#(apply$81)
+
+closure fn join$165(self$166, value$167) =
+  let return$22 = self$166.cap[0]
+  let value$164 = self$166.cap[1]
+  return value$164(value$167, return$22)
+
+closure fn join$168(self$169, value$170) =
+  let label$54 = self$169.cap[0]
+  let struct$171 = WrapChar#(value$170)
+  return label$54(struct$171)
+
+closure fn join$172(self$173, value$174) =
+  let return$23 = self$173.cap[0]
+  let lit$175 = 'x'
+  return value$174(lit$175, return$23)
+
+closure fn join$177(self$178, value$179) =
+  let closure$176 = self$178.cap[0]
+  let return$18 = self$178.cap[1]
+  return closure$176(value$179, return$18)
+
+closure fn join$180(self$181, value$182) =
+  let return$19 = self$181.cap[0]
+  let label$60 = closure join$183(return$19, value$182)
+  let return$20 = closure join$186(label$60)
+  let apply$86 = closure join$190(return$20)
+  return Int64#(apply$86)
+
+closure fn join$183(self$184, value$185) =
+  let return$19 = self$184.cap[0]
+  let value$182 = self$184.cap[1]
+  return value$182(value$185, return$19)
+
+closure fn join$186(self$187, value$188) =
+  let label$60 = self$187.cap[0]
+  let struct$189 = WrapInt64#(value$188)
+  return label$60(struct$189)
+
+closure fn join$190(self$191, value$192) =
+  let return$20 = self$191.cap[0]
+  let lit$193 = 7L
+  return value$192(lit$193, return$20)
+
+closure fn join$195(self$196, value$197) =
+  let closure$194 = self$196.cap[0]
+  let return$15 = self$196.cap[1]
+  return closure$194(value$197, return$15)
+
+closure fn join$198(self$199, value$200) =
+  let return$16 = self$199.cap[0]
+  let label$66 = closure join$201(return$16, value$200)
+  let return$17 = closure join$204(label$66)
+  let apply$91 = closure join$208(return$17)
+  return Int32#(apply$91)
+
+closure fn join$201(self$202, value$203) =
+  let return$16 = self$202.cap[0]
+  let value$200 = self$202.cap[1]
+  return value$200(value$203, return$16)
+
+closure fn join$204(self$205, value$206) =
+  let label$66 = self$205.cap[0]
+  let struct$207 = WrapInt32#(value$206)
+  return label$66(struct$207)
+
+closure fn join$208(self$209, value$210) =
+  let return$17 = self$209.cap[0]
+  let lit$211 = 5
+  return value$210(lit$211, return$17)
+
+toplevel fn WrapInt32#(return$30) =
+  let closure$217 = closure lambda$214()
+  return return$30(closure$217)
+
+closure fn lambda$214(self$215, constructor$8, return$31) =
+  let struct$216 = WrapInt32#(constructor$8)
+  return return$31(struct$216)
+
+toplevel fn WrapInt64#(return$32) =
+  let closure$222 = closure lambda$219()
+  return return$32(closure$222)
+
+closure fn lambda$219(self$220, constructor$9, return$33) =
+  let struct$221 = WrapInt64#(constructor$9)
+  return return$33(struct$221)
+
+toplevel fn WrapChar#(return$34) =
+  let closure$227 = closure lambda$224()
+  return return$34(closure$227)
+
+closure fn lambda$224(self$225, constructor$10, return$35) =
+  let struct$226 = WrapChar#(constructor$10)
+  return return$35(struct$226)
+
+toplevel fn WrapString#(return$36) =
+  let closure$232 = closure lambda$229()
+  return return$36(closure$232)
+
+closure fn lambda$229(self$230, constructor$11, return$37) =
+  let struct$231 = WrapString#(constructor$11)
+  return return$37(struct$231)
+
+toplevel fn zig_main$235() =
+  let finish$233 = closure join$237()
+  let after_main$234 = closure join$240(finish$233)
+  return main(after_main$234)
+
+closure fn join$237(self$238, value$239) = return value$239
+
+closure fn join$240(self$241, value$242) =
+  let finish$233 = self$241.cap[0]
+  let struct$243 = Tuple()
+  return value$242(struct$243, finish$233)
+
+entry = zig_main$235
+
+=== Peephole ===
+toplevel fn describeInt32(return$12) =
+  let closure$108 = closure lambda$98()
+  return return$12(closure$108)
+
+closure fn lambda$98(self$99, param$2, return$13) =
+  if param$2.tag == WrapInt32# &&
+  param$2.0.tag == Int32# &&
+  param$2.0.0 == 5 then {
+    let apply$68 = closure join$100(return$13)
+    return String#(apply$68)
+  } else {
+    if  then {
+      let apply$69 = closure join$104(return$13)
+      return String#(apply$69)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$100(self$101, value$102) =
+  let return$13 = self$101.cap[0]
+  let lit$103 = "matched five"
+  return value$102(lit$103, return$13)
+
+closure fn join$104(self$105, value$106) =
+  let return$13 = self$105.cap[0]
+  let lit$107 = "no match"
+  return value$106(lit$107, return$13)
+
+toplevel fn main(return$14) =
+  let closure$212 = closure lambda$110()
+  return return$14(closure$212)
+
+closure fn lambda$110(self$111, param$3, return$15) =
+  if  then {
+    let closure$194 = closure lambda$112()
+    let return$16 = closure join$195(closure$194, return$15)
+    let then$93 = closure join$198(return$16)
+    return print(then$93)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$112(self$113, tmp$4, return$18) =
+  let closure$176 = closure lambda$114()
+  let return$19 = closure join$177(closure$176, return$18)
+  let then$88 = closure join$180(return$19)
+  return print(then$88)
+
+closure fn lambda$114(self$115, tmp$5, return$21) =
+  let closure$158 = closure lambda$116()
+  let return$22 = closure join$159(closure$158, return$21)
+  let then$83 = closure join$162(return$22)
+  return print(then$83)
+
+closure fn lambda$116(self$117, tmp$6, return$24) =
+  let closure$140 = closure lambda$118()
+  let return$25 = closure join$141(closure$140, return$24)
+  let then$78 = closure join$144(return$25)
+  return print(then$78)
+
+closure fn lambda$118(self$119, tmp$7, return$27) =
+  let then$75 = closure join$120(return$27)
+  return print(then$75)
+
+closure fn join$120(self$121, value$122) =
+  let return$27 = self$121.cap[0]
+  let return$28 = closure join$123(return$27, value$122)
+  let then$73 = closure join$126(return$28)
+  return describeInt32(then$73)
+
+closure fn join$123(self$124, value$125) =
+  let return$27 = self$124.cap[0]
+  let value$122 = self$124.cap[1]
+  return value$122(value$125, return$27)
+
+closure fn join$126(self$127, value$128) =
+  let return$28 = self$127.cap[0]
+  let label$42 = closure join$129(return$28, value$128)
+  let return$29 = closure join$132(label$42)
+  let apply$71 = closure join$136(return$29)
+  return Int32#(apply$71)
+
+closure fn join$129(self$130, value$131) =
+  let return$28 = self$130.cap[0]
+  let value$128 = self$130.cap[1]
+  return value$128(value$131, return$28)
+
+closure fn join$132(self$133, value$134) =
+  let label$42 = self$133.cap[0]
+  let struct$135 = WrapInt32#(value$134)
+  return label$42(struct$135)
+
+closure fn join$136(self$137, value$138) =
+  let return$29 = self$137.cap[0]
+  let lit$139 = 5
+  return value$138(lit$139, return$29)
+
+closure fn join$141(self$142, value$143) =
+  let closure$140 = self$142.cap[0]
+  let return$24 = self$142.cap[1]
+  return closure$140(value$143, return$24)
+
+closure fn join$144(self$145, value$146) =
+  let return$25 = self$145.cap[0]
+  let label$48 = closure join$147(return$25, value$146)
+  let return$26 = closure join$150(label$48)
+  let apply$76 = closure join$154(return$26)
+  return String#(apply$76)
+
+closure fn join$147(self$148, value$149) =
+  let return$25 = self$148.cap[0]
+  let value$146 = self$148.cap[1]
+  return value$146(value$149, return$25)
+
+closure fn join$150(self$151, value$152) =
+  let label$48 = self$151.cap[0]
+  let struct$153 = WrapString#(value$152)
+  return label$48(struct$153)
+
+closure fn join$154(self$155, value$156) =
+  let return$26 = self$155.cap[0]
+  let lit$157 = "hi"
+  return value$156(lit$157, return$26)
+
+closure fn join$159(self$160, value$161) =
+  let closure$158 = self$160.cap[0]
+  let return$21 = self$160.cap[1]
+  return closure$158(value$161, return$21)
+
+closure fn join$162(self$163, value$164) =
+  let return$22 = self$163.cap[0]
+  let label$54 = closure join$165(return$22, value$164)
+  let return$23 = closure join$168(label$54)
+  let apply$81 = closure join$172(return$23)
+  return Char#(apply$81)
+
+closure fn join$165(self$166, value$167) =
+  let return$22 = self$166.cap[0]
+  let value$164 = self$166.cap[1]
+  return value$164(value$167, return$22)
+
+closure fn join$168(self$169, value$170) =
+  let label$54 = self$169.cap[0]
+  let struct$171 = WrapChar#(value$170)
+  return label$54(struct$171)
+
+closure fn join$172(self$173, value$174) =
+  let return$23 = self$173.cap[0]
+  let lit$175 = 'x'
+  return value$174(lit$175, return$23)
+
+closure fn join$177(self$178, value$179) =
+  let closure$176 = self$178.cap[0]
+  let return$18 = self$178.cap[1]
+  return closure$176(value$179, return$18)
+
+closure fn join$180(self$181, value$182) =
+  let return$19 = self$181.cap[0]
+  let label$60 = closure join$183(return$19, value$182)
+  let return$20 = closure join$186(label$60)
+  let apply$86 = closure join$190(return$20)
+  return Int64#(apply$86)
+
+closure fn join$183(self$184, value$185) =
+  let return$19 = self$184.cap[0]
+  let value$182 = self$184.cap[1]
+  return value$182(value$185, return$19)
+
+closure fn join$186(self$187, value$188) =
+  let label$60 = self$187.cap[0]
+  let struct$189 = WrapInt64#(value$188)
+  return label$60(struct$189)
+
+closure fn join$190(self$191, value$192) =
+  let return$20 = self$191.cap[0]
+  let lit$193 = 7L
+  return value$192(lit$193, return$20)
+
+closure fn join$195(self$196, value$197) =
+  let closure$194 = self$196.cap[0]
+  let return$15 = self$196.cap[1]
+  return closure$194(value$197, return$15)
+
+closure fn join$198(self$199, value$200) =
+  let return$16 = self$199.cap[0]
+  let label$66 = closure join$201(return$16, value$200)
+  let return$17 = closure join$204(label$66)
+  let apply$91 = closure join$208(return$17)
+  return Int32#(apply$91)
+
+closure fn join$201(self$202, value$203) =
+  let return$16 = self$202.cap[0]
+  let value$200 = self$202.cap[1]
+  return value$200(value$203, return$16)
+
+closure fn join$204(self$205, value$206) =
+  let label$66 = self$205.cap[0]
+  let struct$207 = WrapInt32#(value$206)
+  return label$66(struct$207)
+
+closure fn join$208(self$209, value$210) =
+  let return$17 = self$209.cap[0]
+  let lit$211 = 5
+  return value$210(lit$211, return$17)
+
+toplevel fn WrapInt32#(return$30) =
+  let closure$217 = closure lambda$214()
+  return return$30(closure$217)
+
+closure fn lambda$214(self$215, constructor$8, return$31) =
+  let struct$216 = WrapInt32#(constructor$8)
+  return return$31(struct$216)
+
+toplevel fn WrapInt64#(return$32) =
+  let closure$222 = closure lambda$219()
+  return return$32(closure$222)
+
+closure fn lambda$219(self$220, constructor$9, return$33) =
+  let struct$221 = WrapInt64#(constructor$9)
+  return return$33(struct$221)
+
+toplevel fn WrapChar#(return$34) =
+  let closure$227 = closure lambda$224()
+  return return$34(closure$227)
+
+closure fn lambda$224(self$225, constructor$10, return$35) =
+  let struct$226 = WrapChar#(constructor$10)
+  return return$35(struct$226)
+
+toplevel fn WrapString#(return$36) =
+  let closure$232 = closure lambda$229()
+  return return$36(closure$232)
+
+closure fn lambda$229(self$230, constructor$11, return$37) =
+  let struct$231 = WrapString#(constructor$11)
+  return return$37(struct$231)
+
+toplevel fn zig_main$235() =
+  let finish$233 = closure join$237()
+  let after_main$234 = closure join$240(finish$233)
+  return main(after_main$234)
+
+closure fn join$237(self$238, value$239) = return value$239
+
+closure fn join$240(self$241, value$242) =
+  let finish$233 = self$241.cap[0]
+  let struct$243 = Tuple()
+  return value$242(struct$243, finish$233)
+
+entry = zig_main$235
+
+=== Perceus ===
+toplevel fn describeInt32(return$12) =
+  let closure$108 = closure lambda$98()
+  return return$12(closure$108)
+
+closure fn lambda$98(self$99, param$2, return$13) =
+  drop self$99
+  if param$2.tag == WrapInt32# &&
+  param$2.0.tag == Int32# &&
+  param$2.0.0 == 5 then {
+    drop param$2
+    let apply$68 = closure join$100(return$13)
+    return String#(apply$68)
+  } else {
+    drop param$2
+    if  then {
+      let apply$69 = closure join$104(return$13)
+      return String#(apply$69)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$100(self$101, value$102) =
+  let return$13 = self$101.cap[0]
+  dup return$13
+  drop self$101
+  let lit$103 = "matched five"
+  return value$102(lit$103, return$13)
+
+closure fn join$104(self$105, value$106) =
+  let return$13 = self$105.cap[0]
+  dup return$13
+  drop self$105
+  let lit$107 = "no match"
+  return value$106(lit$107, return$13)
+
+toplevel fn main(return$14) =
+  let closure$212 = closure lambda$110()
+  return return$14(closure$212)
+
+closure fn lambda$110(self$111, param$3, return$15) =
+  drop param$3
+  drop self$111
+  if  then {
+    let closure$194 = closure lambda$112()
+    let return$16 = closure join$195(closure$194, return$15)
+    let then$93 = closure join$198(return$16)
+    return print(then$93)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$112(self$113, tmp$4, return$18) =
+  drop self$113
+  drop tmp$4
+  let closure$176 = closure lambda$114()
+  let return$19 = closure join$177(closure$176, return$18)
+  let then$88 = closure join$180(return$19)
+  return print(then$88)
+
+closure fn lambda$114(self$115, tmp$5, return$21) =
+  drop self$115
+  drop tmp$5
+  let closure$158 = closure lambda$116()
+  let return$22 = closure join$159(closure$158, return$21)
+  let then$83 = closure join$162(return$22)
+  return print(then$83)
+
+closure fn lambda$116(self$117, tmp$6, return$24) =
+  drop self$117
+  drop tmp$6
+  let closure$140 = closure lambda$118()
+  let return$25 = closure join$141(closure$140, return$24)
+  let then$78 = closure join$144(return$25)
+  return print(then$78)
+
+closure fn lambda$118(self$119, tmp$7, return$27) =
+  drop self$119
+  drop tmp$7
+  let then$75 = closure join$120(return$27)
+  return print(then$75)
+
+closure fn join$120(self$121, value$122) =
+  let return$27 = self$121.cap[0]
+  dup return$27
+  drop self$121
+  let return$28 = closure join$123(return$27, value$122)
+  let then$73 = closure join$126(return$28)
+  return describeInt32(then$73)
+
+closure fn join$123(self$124, value$125) =
+  let return$27 = self$124.cap[0]
+  dup return$27
+  let value$122 = self$124.cap[1]
+  dup value$122
+  drop self$124
+  return value$122(value$125, return$27)
+
+closure fn join$126(self$127, value$128) =
+  let return$28 = self$127.cap[0]
+  dup return$28
+  drop self$127
+  let label$42 = closure join$129(return$28, value$128)
+  let return$29 = closure join$132(label$42)
+  let apply$71 = closure join$136(return$29)
+  return Int32#(apply$71)
+
+closure fn join$129(self$130, value$131) =
+  let return$28 = self$130.cap[0]
+  dup return$28
+  let value$128 = self$130.cap[1]
+  dup value$128
+  drop self$130
+  return value$128(value$131, return$28)
+
+closure fn join$132(self$133, value$134) =
+  let label$42 = self$133.cap[0]
+  dup label$42
+  drop self$133
+  let struct$135 = WrapInt32#(value$134)
+  return label$42(struct$135)
+
+closure fn join$136(self$137, value$138) =
+  let return$29 = self$137.cap[0]
+  dup return$29
+  drop self$137
+  let lit$139 = 5
+  return value$138(lit$139, return$29)
+
+closure fn join$141(self$142, value$143) =
+  let closure$140 = self$142.cap[0]
+  dup closure$140
+  let return$24 = self$142.cap[1]
+  dup return$24
+  drop self$142
+  return closure$140(value$143, return$24)
+
+closure fn join$144(self$145, value$146) =
+  let return$25 = self$145.cap[0]
+  dup return$25
+  drop self$145
+  let label$48 = closure join$147(return$25, value$146)
+  let return$26 = closure join$150(label$48)
+  let apply$76 = closure join$154(return$26)
+  return String#(apply$76)
+
+closure fn join$147(self$148, value$149) =
+  let return$25 = self$148.cap[0]
+  dup return$25
+  let value$146 = self$148.cap[1]
+  dup value$146
+  drop self$148
+  return value$146(value$149, return$25)
+
+closure fn join$150(self$151, value$152) =
+  let label$48 = self$151.cap[0]
+  dup label$48
+  drop self$151
+  let struct$153 = WrapString#(value$152)
+  return label$48(struct$153)
+
+closure fn join$154(self$155, value$156) =
+  let return$26 = self$155.cap[0]
+  dup return$26
+  drop self$155
+  let lit$157 = "hi"
+  return value$156(lit$157, return$26)
+
+closure fn join$159(self$160, value$161) =
+  let closure$158 = self$160.cap[0]
+  dup closure$158
+  let return$21 = self$160.cap[1]
+  dup return$21
+  drop self$160
+  return closure$158(value$161, return$21)
+
+closure fn join$162(self$163, value$164) =
+  let return$22 = self$163.cap[0]
+  dup return$22
+  drop self$163
+  let label$54 = closure join$165(return$22, value$164)
+  let return$23 = closure join$168(label$54)
+  let apply$81 = closure join$172(return$23)
+  return Char#(apply$81)
+
+closure fn join$165(self$166, value$167) =
+  let return$22 = self$166.cap[0]
+  dup return$22
+  let value$164 = self$166.cap[1]
+  dup value$164
+  drop self$166
+  return value$164(value$167, return$22)
+
+closure fn join$168(self$169, value$170) =
+  let label$54 = self$169.cap[0]
+  dup label$54
+  drop self$169
+  let struct$171 = WrapChar#(value$170)
+  return label$54(struct$171)
+
+closure fn join$172(self$173, value$174) =
+  let return$23 = self$173.cap[0]
+  dup return$23
+  drop self$173
+  let lit$175 = 'x'
+  return value$174(lit$175, return$23)
+
+closure fn join$177(self$178, value$179) =
+  let closure$176 = self$178.cap[0]
+  dup closure$176
+  let return$18 = self$178.cap[1]
+  dup return$18
+  drop self$178
+  return closure$176(value$179, return$18)
+
+closure fn join$180(self$181, value$182) =
+  let return$19 = self$181.cap[0]
+  dup return$19
+  drop self$181
+  let label$60 = closure join$183(return$19, value$182)
+  let return$20 = closure join$186(label$60)
+  let apply$86 = closure join$190(return$20)
+  return Int64#(apply$86)
+
+closure fn join$183(self$184, value$185) =
+  let return$19 = self$184.cap[0]
+  dup return$19
+  let value$182 = self$184.cap[1]
+  dup value$182
+  drop self$184
+  return value$182(value$185, return$19)
+
+closure fn join$186(self$187, value$188) =
+  let label$60 = self$187.cap[0]
+  dup label$60
+  drop self$187
+  let struct$189 = WrapInt64#(value$188)
+  return label$60(struct$189)
+
+closure fn join$190(self$191, value$192) =
+  let return$20 = self$191.cap[0]
+  dup return$20
+  drop self$191
+  let lit$193 = 7L
+  return value$192(lit$193, return$20)
+
+closure fn join$195(self$196, value$197) =
+  let closure$194 = self$196.cap[0]
+  dup closure$194
+  let return$15 = self$196.cap[1]
+  dup return$15
+  drop self$196
+  return closure$194(value$197, return$15)
+
+closure fn join$198(self$199, value$200) =
+  let return$16 = self$199.cap[0]
+  dup return$16
+  drop self$199
+  let label$66 = closure join$201(return$16, value$200)
+  let return$17 = closure join$204(label$66)
+  let apply$91 = closure join$208(return$17)
+  return Int32#(apply$91)
+
+closure fn join$201(self$202, value$203) =
+  let return$16 = self$202.cap[0]
+  dup return$16
+  let value$200 = self$202.cap[1]
+  dup value$200
+  drop self$202
+  return value$200(value$203, return$16)
+
+closure fn join$204(self$205, value$206) =
+  let label$66 = self$205.cap[0]
+  dup label$66
+  drop self$205
+  let struct$207 = WrapInt32#(value$206)
+  return label$66(struct$207)
+
+closure fn join$208(self$209, value$210) =
+  let return$17 = self$209.cap[0]
+  dup return$17
+  drop self$209
+  let lit$211 = 5
+  return value$210(lit$211, return$17)
+
+toplevel fn WrapInt32#(return$30) =
+  let closure$217 = closure lambda$214()
+  return return$30(closure$217)
+
+closure fn lambda$214(self$215, constructor$8, return$31) =
+  drop self$215
+  let struct$216 = WrapInt32#(constructor$8)
+  return return$31(struct$216)
+
+toplevel fn WrapInt64#(return$32) =
+  let closure$222 = closure lambda$219()
+  return return$32(closure$222)
+
+closure fn lambda$219(self$220, constructor$9, return$33) =
+  drop self$220
+  let struct$221 = WrapInt64#(constructor$9)
+  return return$33(struct$221)
+
+toplevel fn WrapChar#(return$34) =
+  let closure$227 = closure lambda$224()
+  return return$34(closure$227)
+
+closure fn lambda$224(self$225, constructor$10, return$35) =
+  drop self$225
+  let struct$226 = WrapChar#(constructor$10)
+  return return$35(struct$226)
+
+toplevel fn WrapString#(return$36) =
+  let closure$232 = closure lambda$229()
+  return return$36(closure$232)
+
+closure fn lambda$229(self$230, constructor$11, return$37) =
+  drop self$230
+  let struct$231 = WrapString#(constructor$11)
+  return return$37(struct$231)
+
+toplevel fn zig_main$235() =
+  let finish$233 = closure join$237()
+  let after_main$234 = closure join$240(finish$233)
+  return main(after_main$234)
+
+closure fn join$237(self$238, value$239) =
+  drop self$238
+  return value$239
+
+closure fn join$240(self$241, value$242) =
+  let finish$233 = self$241.cap[0]
+  dup finish$233
+  drop self$241
+  let struct$243 = Tuple()
+  return value$242(struct$243, finish$233)
+
+entry = zig_main$235
+
+=== Reuse ===
+toplevel fn describeInt32(return$12) =
+  let closure$108 = closure lambda$98()
+  return return$12(closure$108)
+
+closure fn lambda$98(self$99, param$2, return$13) =
+  drop self$99
+  if param$2.tag == WrapInt32# &&
+  param$2.0.tag == Int32# &&
+  param$2.0.0 == 5 then {
+    let apply$68 = closure join$100(return$13)
+    drop param$2
+    return String#(apply$68)
+  } else {
+    drop param$2
+    if  then {
+      let apply$69 = closure join$104(return$13)
+      return String#(apply$69)
+    } else {
+      panic "no matching branch"
+    }
+  }
+
+closure fn join$100(self$101, value$102) =
+  let return$13 = self$101.cap[0]
+  dup return$13
+  let lit$103 = "matched five"
+  drop self$101
+  return value$102(lit$103, return$13)
+
+closure fn join$104(self$105, value$106) =
+  let return$13 = self$105.cap[0]
+  dup return$13
+  let lit$107 = "no match"
+  drop self$105
+  return value$106(lit$107, return$13)
+
+toplevel fn main(return$14) =
+  let closure$212 = closure lambda$110()
+  return return$14(closure$212)
+
+closure fn lambda$110(self$111, param$3, return$15) =
+  drop param$3
+  drop self$111
+  if  then {
+    let closure$194 = closure lambda$112()
+    let return$16 = closure join$195(closure$194, return$15)
+    let then$93 = closure join$198(return$16)
+    return print(then$93)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn lambda$112(self$113, tmp$4, return$18) =
+  let closure$176 = closure lambda$114()
+  let return$19 = closure join$177(closure$176, return$18)
+  let then$88 = closure join$180(return$19)
+  drop self$113
+  drop tmp$4
+  return print(then$88)
+
+closure fn lambda$114(self$115, tmp$5, return$21) =
+  let closure$158 = closure lambda$116()
+  let return$22 = closure join$159(closure$158, return$21)
+  let then$83 = closure join$162(return$22)
+  drop self$115
+  drop tmp$5
+  return print(then$83)
+
+closure fn lambda$116(self$117, tmp$6, return$24) =
+  let closure$140 = closure lambda$118()
+  let return$25 = closure join$141(closure$140, return$24)
+  let then$78 = closure join$144(return$25)
+  drop self$117
+  drop tmp$6
+  return print(then$78)
+
+closure fn lambda$118(self$119, tmp$7, return$27) =
+  let then$75 = closure join$120(return$27)
+  drop self$119
+  drop tmp$7
+  return print(then$75)
+
+closure fn join$120(self$121, value$122) =
+  let return$27 = self$121.cap[0]
+  dup return$27
+  let return$28 = closure join$123(return$27, value$122)
+  let then$73 = closure join$126(return$28)
+  drop self$121
+  return describeInt32(then$73)
+
+closure fn join$123(self$124, value$125) =
+  let return$27 = self$124.cap[0]
+  dup return$27
+  let value$122 = self$124.cap[1]
+  dup value$122
+  drop self$124
+  return value$122(value$125, return$27)
+
+closure fn join$126(self$127, value$128) =
+  let return$28 = self$127.cap[0]
+  dup return$28
+  let label$42 = closure join$129(return$28, value$128)
+  let return$29 = closure join$132(label$42)
+  let apply$71 = closure join$136(return$29)
+  drop self$127
+  return Int32#(apply$71)
+
+closure fn join$129(self$130, value$131) =
+  let return$28 = self$130.cap[0]
+  dup return$28
+  let value$128 = self$130.cap[1]
+  dup value$128
+  drop self$130
+  return value$128(value$131, return$28)
+
+closure fn join$132(self$133, value$134) =
+  let label$42 = self$133.cap[0]
+  dup label$42
+  dropReuse reuse$244 = self$133 /1
+  let struct$135 = reuse reuse$244 WrapInt32#(value$134)
+  return label$42(struct$135)
+
+closure fn join$136(self$137, value$138) =
+  let return$29 = self$137.cap[0]
+  dup return$29
+  let lit$139 = 5
+  drop self$137
+  return value$138(lit$139, return$29)
+
+closure fn join$141(self$142, value$143) =
+  let closure$140 = self$142.cap[0]
+  dup closure$140
+  let return$24 = self$142.cap[1]
+  dup return$24
+  drop self$142
+  return closure$140(value$143, return$24)
+
+closure fn join$144(self$145, value$146) =
+  let return$25 = self$145.cap[0]
+  dup return$25
+  let label$48 = closure join$147(return$25, value$146)
+  let return$26 = closure join$150(label$48)
+  let apply$76 = closure join$154(return$26)
+  drop self$145
+  return String#(apply$76)
+
+closure fn join$147(self$148, value$149) =
+  let return$25 = self$148.cap[0]
+  dup return$25
+  let value$146 = self$148.cap[1]
+  dup value$146
+  drop self$148
+  return value$146(value$149, return$25)
+
+closure fn join$150(self$151, value$152) =
+  let label$48 = self$151.cap[0]
+  dup label$48
+  dropReuse reuse$245 = self$151 /1
+  let struct$153 = reuse reuse$245 WrapString#(value$152)
+  return label$48(struct$153)
+
+closure fn join$154(self$155, value$156) =
+  let return$26 = self$155.cap[0]
+  dup return$26
+  let lit$157 = "hi"
+  drop self$155
+  return value$156(lit$157, return$26)
+
+closure fn join$159(self$160, value$161) =
+  let closure$158 = self$160.cap[0]
+  dup closure$158
+  let return$21 = self$160.cap[1]
+  dup return$21
+  drop self$160
+  return closure$158(value$161, return$21)
+
+closure fn join$162(self$163, value$164) =
+  let return$22 = self$163.cap[0]
+  dup return$22
+  let label$54 = closure join$165(return$22, value$164)
+  let return$23 = closure join$168(label$54)
+  let apply$81 = closure join$172(return$23)
+  drop self$163
+  return Char#(apply$81)
+
+closure fn join$165(self$166, value$167) =
+  let return$22 = self$166.cap[0]
+  dup return$22
+  let value$164 = self$166.cap[1]
+  dup value$164
+  drop self$166
+  return value$164(value$167, return$22)
+
+closure fn join$168(self$169, value$170) =
+  let label$54 = self$169.cap[0]
+  dup label$54
+  dropReuse reuse$246 = self$169 /1
+  let struct$171 = reuse reuse$246 WrapChar#(value$170)
+  return label$54(struct$171)
+
+closure fn join$172(self$173, value$174) =
+  let return$23 = self$173.cap[0]
+  dup return$23
+  let lit$175 = 'x'
+  drop self$173
+  return value$174(lit$175, return$23)
+
+closure fn join$177(self$178, value$179) =
+  let closure$176 = self$178.cap[0]
+  dup closure$176
+  let return$18 = self$178.cap[1]
+  dup return$18
+  drop self$178
+  return closure$176(value$179, return$18)
+
+closure fn join$180(self$181, value$182) =
+  let return$19 = self$181.cap[0]
+  dup return$19
+  let label$60 = closure join$183(return$19, value$182)
+  let return$20 = closure join$186(label$60)
+  let apply$86 = closure join$190(return$20)
+  drop self$181
+  return Int64#(apply$86)
+
+closure fn join$183(self$184, value$185) =
+  let return$19 = self$184.cap[0]
+  dup return$19
+  let value$182 = self$184.cap[1]
+  dup value$182
+  drop self$184
+  return value$182(value$185, return$19)
+
+closure fn join$186(self$187, value$188) =
+  let label$60 = self$187.cap[0]
+  dup label$60
+  dropReuse reuse$247 = self$187 /1
+  let struct$189 = reuse reuse$247 WrapInt64#(value$188)
+  return label$60(struct$189)
+
+closure fn join$190(self$191, value$192) =
+  let return$20 = self$191.cap[0]
+  dup return$20
+  let lit$193 = 7L
+  drop self$191
+  return value$192(lit$193, return$20)
+
+closure fn join$195(self$196, value$197) =
+  let closure$194 = self$196.cap[0]
+  dup closure$194
+  let return$15 = self$196.cap[1]
+  dup return$15
+  drop self$196
+  return closure$194(value$197, return$15)
+
+closure fn join$198(self$199, value$200) =
+  let return$16 = self$199.cap[0]
+  dup return$16
+  let label$66 = closure join$201(return$16, value$200)
+  let return$17 = closure join$204(label$66)
+  let apply$91 = closure join$208(return$17)
+  drop self$199
+  return Int32#(apply$91)
+
+closure fn join$201(self$202, value$203) =
+  let return$16 = self$202.cap[0]
+  dup return$16
+  let value$200 = self$202.cap[1]
+  dup value$200
+  drop self$202
+  return value$200(value$203, return$16)
+
+closure fn join$204(self$205, value$206) =
+  let label$66 = self$205.cap[0]
+  dup label$66
+  dropReuse reuse$248 = self$205 /1
+  let struct$207 = reuse reuse$248 WrapInt32#(value$206)
+  return label$66(struct$207)
+
+closure fn join$208(self$209, value$210) =
+  let return$17 = self$209.cap[0]
+  dup return$17
+  let lit$211 = 5
+  drop self$209
+  return value$210(lit$211, return$17)
+
+toplevel fn WrapInt32#(return$30) =
+  let closure$217 = closure lambda$214()
+  return return$30(closure$217)
+
+closure fn lambda$214(self$215, constructor$8, return$31) =
+  dropReuse reuse$249 = self$215 /1
+  let struct$216 = reuse reuse$249 WrapInt32#(constructor$8)
+  return return$31(struct$216)
+
+toplevel fn WrapInt64#(return$32) =
+  let closure$222 = closure lambda$219()
+  return return$32(closure$222)
+
+closure fn lambda$219(self$220, constructor$9, return$33) =
+  dropReuse reuse$250 = self$220 /1
+  let struct$221 = reuse reuse$250 WrapInt64#(constructor$9)
+  return return$33(struct$221)
+
+toplevel fn WrapChar#(return$34) =
+  let closure$227 = closure lambda$224()
+  return return$34(closure$227)
+
+closure fn lambda$224(self$225, constructor$10, return$35) =
+  dropReuse reuse$251 = self$225 /1
+  let struct$226 = reuse reuse$251 WrapChar#(constructor$10)
+  return return$35(struct$226)
+
+toplevel fn WrapString#(return$36) =
+  let closure$232 = closure lambda$229()
+  return return$36(closure$232)
+
+closure fn lambda$229(self$230, constructor$11, return$37) =
+  dropReuse reuse$252 = self$230 /1
+  let struct$231 = reuse reuse$252 WrapString#(constructor$11)
+  return return$37(struct$231)
+
+toplevel fn zig_main$235() =
+  let finish$233 = closure join$237()
+  let after_main$234 = closure join$240(finish$233)
+  return main(after_main$234)
+
+closure fn join$237(self$238, value$239) =
+  drop self$238
+  return value$239
+
+closure fn join$240(self$241, value$242) =
+  let finish$233 = self$241.cap[0]
+  dup finish$233
+  dropReuse reuse$253 = self$241 /0
+  let struct$243 = reuse reuse$253 Tuple()
+  return value$242(struct$243, finish$233)
+
+entry = zig_main$235
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  data WrapInt32  = WrapInt32#(Int32)
+  
+  data WrapInt64  = WrapInt64#(Int64)
+  
+  data WrapChar  = WrapChar#(Char)
+  
+  data WrapString  = WrapString#(String)
+  
+  def describeInt32 =
+    fn {
+-     WrapInt32#(5) ->
++     WrapInt32#(Int32#(5)) ->
+        {
+-         "matched five"
++         String#("matched five")
+        } |
+-     _ ->
++     _#0 ->
+        {
+-         "no match"
++         String#("no match")
+        }
+    }
+  
+  def main =
+    fn {
+-     _ ->
++     _#1 ->
+        {
+-         print(WrapInt32#(5))
++         print(WrapInt32#(Int32#(5)))
+-         print(WrapInt64#(7L))
++         print(WrapInt64#(Int64#(7L)))
+-         print(WrapChar#('x'))
++         print(WrapChar#(Char#('x')))
+-         print(WrapString#("hi"))
++         print(WrapString#(String#("hi")))
+-         print(describeInt32(WrapInt32#(5)))
++         print(describeInt32(WrapInt32#(Int32#(5))))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
++ def describeInt32 =
+- 
++   \param$2 ->
+- import runtime/malgo/Prelude.mlg 
++     case param$2 of {
+- 
++       WrapInt32#(Int32#(5)) -> invoke String#("matched five")
+- data WrapInt32  = WrapInt32#(Int32)
++       _#0 -> invoke String#("no match")
++     }
+  
+- data WrapInt64  = WrapInt64#(Int64)
++ def main =
++   \param$3 ->
++     case param$3 of {
++       _#1 ->
++         \tmp$4 ->
++           \tmp$5 ->
++             \tmp$6 ->
++               \tmp$7 ->
++                 invoke print( invoke describeInt32( invoke WrapInt32#( invoke Int32#( 5 ) ) ) )( invoke print( invoke WrapString#( invoke String#( "hi" ) ) ) )( invoke print( invoke WrapChar#( invoke Char#( 'x' ) ) ) )( invoke print( invoke WrapInt64#( invoke Int64#( 7L ) ) ) )( invoke print( invoke WrapInt32#( invoke Int32#( 5 ) ) ) )
++     }
+  
+- data WrapChar  = WrapChar#(Char)
++ def WrapInt32# = \constructor$8 -> WrapInt32#(constructor$8)
+  
+- data WrapString  = WrapString#(String)
++ def WrapInt64# = \constructor$9 -> WrapInt64#(constructor$9)
+  
+- def describeInt32 =
++ def WrapChar# = \constructor$10 -> WrapChar#(constructor$10)
+-   fn {
+-     WrapInt32#(Int32#(5)) ->
+-       {
+-         String#("matched five")
+-       } |
+-     _#0 ->
+-       {
+-         String#("no match")
+-       }
+-   }
+  
+- def main =
++ def WrapString# = \constructor$11 -> WrapString#(constructor$11)
+-   fn {
+-     _#1 ->
+-       {
+-         print(WrapInt32#(Int32#(5)))
+-         print(WrapInt64#(Int64#(7L)))
+-         print(WrapChar#(Char#('x')))
+-         print(WrapString#(String#("hi")))
+-         print(describeInt32(WrapInt32#(Int32#(5))))
+-       }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def describeInt32 =
+    \param$2 ->
+      case param$2 of {
+        WrapInt32#(Int32#(5)) -> invoke String#("matched five")
+        _#0 -> invoke String#("no match")
+      }
+  
+  def main =
+    \param$3 ->
+      case param$3 of {
+        _#1 ->
+          \tmp$4 ->
+            \tmp$5 ->
+              \tmp$6 ->
+                \tmp$7 ->
+-                 invoke print( invoke describeInt32( invoke WrapInt32#( invoke Int32#( 5 ) ) ) )( invoke print( invoke WrapString#( invoke String#( "hi" ) ) ) )( invoke print( invoke WrapChar#( invoke Char#( 'x' ) ) ) )( invoke print( invoke WrapInt64#( invoke Int64#( 7L ) ) ) )( invoke print( invoke WrapInt32#( invoke Int32#( 5 ) ) ) )
++                 invoke print( invoke describeInt32( WrapInt32#( invoke Int32#( 5 ) ) ) )( invoke print( WrapString#( invoke String#( "hi" ) ) ) )( invoke print( WrapChar#( invoke Char#( 'x' ) ) ) )( invoke print( WrapInt64#( invoke Int64#( 7L ) ) ) )( invoke print( WrapInt32#( invoke Int32#( 5 ) ) ) )
+      }
+  
+  def WrapInt32# = \constructor$8 -> WrapInt32#(constructor$8)
+  
+  def WrapInt64# = \constructor$9 -> WrapInt64#(constructor$9)
+  
+  def WrapChar# = \constructor$10 -> WrapChar#(constructor$10)
+  
+  def WrapString# = \constructor$11 -> WrapString#(constructor$11)
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def describeInt32 =
+    \param$2 ->
+      case param$2 of {
+        WrapInt32#(Int32#(5)) -> invoke String#("matched five")
+        _#0 -> invoke String#("no match")
+      }
+  
+  def main =
+    \param$3 ->
+      case param$3 of {
+        _#1 ->
+          \tmp$4 ->
+            \tmp$5 ->
+              \tmp$6 ->
+                \tmp$7 ->
+                  invoke print( invoke describeInt32( WrapInt32#( invoke Int32#( 5 ) ) ) )( invoke print( WrapString#( invoke String#( "hi" ) ) ) )( invoke print( WrapChar#( invoke Char#( 'x' ) ) ) )( invoke print( WrapInt64#( invoke Int64#( 7L ) ) ) )( invoke print( WrapInt32#( invoke Int32#( 5 ) ) ) )
+      }
+  
+  def WrapInt32# = \constructor$8 -> WrapInt32#(constructor$8)
+  
+  def WrapInt64# = \constructor$9 -> WrapInt64#(constructor$9)
+  
+  def WrapChar# = \constructor$10 -> WrapChar#(constructor$10)
+  
+  def WrapString# = \constructor$11 -> WrapString#(constructor$11)
+
+
+=== ReuseSpecialize -> ToCore ===
+- def describeInt32 =
++ def describeInt32(return$12) =
+-   \param$2 ->
++   \param$2 return$13 . {
+-     case param$2 of {
++     param$2 ~ select {
+-       WrapInt32#(Int32#(5)) -> invoke String#("matched five")
++       WrapInt32#(Int32#(5)) -> invoke String# ~ ("matched five", return$13)
+-       _#0 -> invoke String#("no match")
++       _#0 -> invoke String# ~ ("no match", return$13)
+      }
++   } ~ return$12
+  
+- def main =
++ def main(return$14) =
+-   \param$3 ->
++   \param$3 return$15 . {
+-     case param$3 of {
++     param$3 ~ select {
+        _#1 ->
+-         \tmp$4 ->
++         \tmp$4 return$18 . {
+-           \tmp$5 ->
++           \tmp$5 return$21 . {
+-             \tmp$6 ->
++             \tmp$6 return$24 . {
+-               \tmp$7 ->
++               \tmp$7 return$27 . {
+-                 invoke print( invoke describeInt32( WrapInt32#( invoke Int32#( 5 ) ) ) )( invoke print( WrapString#( invoke String#( "hi" ) ) ) )( invoke print( WrapChar#( invoke Char#( 'x' ) ) ) )( invoke print( WrapInt64#( invoke Int64#( 7L ) ) ) )( invoke print( WrapInt32#( invoke Int32#( 5 ) ) ) )
++                 invoke print ~ ( do return$28 . {
++                   invoke describeInt32 ~ ( WrapInt32#( do return$29 . {
++                     invoke Int32# ~ (5, return$29)
++                   } )
++                   , return$28 )
++                 }
++                 , return$27 )
++               } ~ ( do return$25 . {
++                 invoke print ~ ( WrapString#( do return$26 . {
++                   invoke String# ~ ("hi", return$26)
++                 } )
++                 , return$25 )
++               }
++               , return$24 )
++             } ~ ( do return$22 . {
++               invoke print ~ ( WrapChar#( do return$23 . {
++                 invoke Char# ~ ('x', return$23)
++               } )
++               , return$22 )
++             }
++             , return$21 )
++           } ~ ( do return$19 . {
++             invoke print ~ ( WrapInt64#( do return$20 . {
++               invoke Int64# ~ (7L, return$20)
++             } )
++             , return$19 )
++           }
++           , return$18 )
++         } ~ ( do return$16 . {
++           invoke print ~ ( WrapInt32#( do return$17 . {
++             invoke Int32# ~ (5, return$17)
++           } )
++           , return$16 )
++         }
++         , return$15 )
+      }
++   } ~ return$14
+  
+- def WrapInt32# = \constructor$8 -> WrapInt32#(constructor$8)
++ def WrapInt32#(return$30) =
++   \constructor$8 return$31 . {
++     WrapInt32#(constructor$8) ~ return$31
++   } ~ return$30
+  
+- def WrapInt64# = \constructor$9 -> WrapInt64#(constructor$9)
++ def WrapInt64#(return$32) =
++   \constructor$9 return$33 . {
++     WrapInt64#(constructor$9) ~ return$33
++   } ~ return$32
+  
+- def WrapChar# = \constructor$10 -> WrapChar#(constructor$10)
++ def WrapChar#(return$34) =
++   \constructor$10 return$35 . {
++     WrapChar#(constructor$10) ~ return$35
++   } ~ return$34
+  
+- def WrapString# = \constructor$11 -> WrapString#(constructor$11)
++ def WrapString#(return$36) =
++   \constructor$11 return$37 . {
++     WrapString#(constructor$11) ~ return$37
++   } ~ return$36
+
+
+=== ToCore -> Flat ===
+  def describeInt32(return$12) =
+    \param$2 return$13 . {
+      param$2 ~ select {
+        WrapInt32#(Int32#(5)) -> invoke String# ~ ("matched five", return$13)
+        _#0 -> invoke String# ~ ("no match", return$13)
+      }
+    } ~ return$12
+  
+  def main(return$14) =
+    \param$3 return$15 . {
+      param$3 ~ select {
+        _#1 ->
+          \tmp$4 return$18 . {
+            \tmp$5 return$21 . {
+              \tmp$6 return$24 . {
+                \tmp$7 return$27 . {
+-                 invoke print ~ ( do return$28 . {
++                 invoke print ~ then outer$38 -> {
+-                   invoke describeInt32 ~ ( WrapInt32#( do return$29 . {
++                   join return$28 = then inner$39 -> {
+-                     invoke Int32# ~ (5, return$29)
++                     outer$38 ~ (inner$39, return$27)
+-                   } )
++                   }
+-                   , return$28 )
++                   in invoke describeInt32 ~ then outer$40 -> {
++                     join label$42 = then inner$41 -> {
++                       outer$40 ~ (inner$41, return$28)
++                     }
++                     in join return$29 = then var$43 -> {
++                       WrapInt32#(var$43) ~ label$42
++                     }
++                     in invoke Int32# ~ (5, return$29)
++                   }
+                  }
+-                 , return$27 )
++               } ~ then outer$44 -> {
+-               } ~ ( do return$25 . {
++                 join return$25 = then inner$45 -> {
+-                 invoke print ~ ( WrapString#( do return$26 . {
++                   outer$44 ~ (inner$45, return$24)
+-                   invoke String# ~ ("hi", return$26)
++                 }
+-                 } )
++                 in invoke print ~ then outer$46 -> {
+-                 , return$25 )
++                   join label$48 = then inner$47 -> {
++                     outer$46 ~ (inner$47, return$25)
++                   }
++                   in join return$26 = then var$49 -> {
++                     WrapString#(var$49) ~ label$48
++                   }
++                   in invoke String# ~ ("hi", return$26)
++                 }
+                }
+-               , return$24 )
++             } ~ then outer$50 -> {
+-             } ~ ( do return$22 . {
++               join return$22 = then inner$51 -> {
+-               invoke print ~ ( WrapChar#( do return$23 . {
++                 outer$50 ~ (inner$51, return$21)
+-                 invoke Char# ~ ('x', return$23)
++               }
+-               } )
++               in invoke print ~ then outer$52 -> {
+-               , return$22 )
++                 join label$54 = then inner$53 -> {
++                   outer$52 ~ (inner$53, return$22)
++                 }
++                 in join return$23 = then var$55 -> {
++                   WrapChar#(var$55) ~ label$54
++                 }
++                 in invoke Char# ~ ('x', return$23)
++               }
+              }
+-             , return$21 )
++           } ~ then outer$56 -> {
+-           } ~ ( do return$19 . {
++             join return$19 = then inner$57 -> {
+-             invoke print ~ ( WrapInt64#( do return$20 . {
++               outer$56 ~ (inner$57, return$18)
+-               invoke Int64# ~ (7L, return$20)
++             }
+-             } )
++             in invoke print ~ then outer$58 -> {
+-             , return$19 )
++               join label$60 = then inner$59 -> {
++                 outer$58 ~ (inner$59, return$19)
++               }
++               in join return$20 = then var$61 -> {
++                 WrapInt64#(var$61) ~ label$60
++               }
++               in invoke Int64# ~ (7L, return$20)
++             }
+            }
+-           , return$18 )
++         } ~ then outer$62 -> {
+-         } ~ ( do return$16 . {
++           join return$16 = then inner$63 -> {
+-           invoke print ~ ( WrapInt32#( do return$17 . {
++             outer$62 ~ (inner$63, return$15)
+-             invoke Int32# ~ (5, return$17)
++           }
+-           } )
++           in invoke print ~ then outer$64 -> {
+-           , return$16 )
++             join label$66 = then inner$65 -> {
++               outer$64 ~ (inner$65, return$16)
++             }
++             in join return$17 = then var$67 -> {
++               WrapInt32#(var$67) ~ label$66
++             }
++             in invoke Int32# ~ (5, return$17)
++           }
+          }
+-         , return$15 )
+      }
+    } ~ return$14
+  
+  def WrapInt32#(return$30) =
+    \constructor$8 return$31 . {
+      WrapInt32#(constructor$8) ~ return$31
+    } ~ return$30
+  
+  def WrapInt64#(return$32) =
+    \constructor$9 return$33 . {
+      WrapInt64#(constructor$9) ~ return$33
+    } ~ return$32
+  
+  def WrapChar#(return$34) =
+    \constructor$10 return$35 . {
+      WrapChar#(constructor$10) ~ return$35
+    } ~ return$34
+  
+  def WrapString#(return$36) =
+    \constructor$11 return$37 . {
+      WrapString#(constructor$11) ~ return$37
+    } ~ return$36
+
+
+=== Flat -> Join ===
+  def describeInt32(return$12) =
+    \param$2 return$13 . {
+-     param$2 ~ select {
++     join select$70 = select {
+-       WrapInt32#(Int32#(5)) -> invoke String# ~ ("matched five", return$13)
++       WrapInt32#(Int32#(5)) ->
+-       _#0 -> invoke String# ~ ("no match", return$13)
++         join apply$68 = ("matched five", return$13)
++         in invoke String# ~ apply$68
++       _#0 ->
++         join apply$69 = ("no match", return$13)
++         in invoke String# ~ apply$69
+      }
++     in param$2 ~ select$70
+    } ~ return$12
+  
+  def main(return$14) =
+    \param$3 return$15 . {
+-     param$3 ~ select {
++     join select$96 = select {
+        _#1 ->
+-         \tmp$4 return$18 . {
++         join then$95 = then outer$62 -> {
+-           \tmp$5 return$21 . {
++           join return$16 = then inner$63 -> {
+-             \tmp$6 return$24 . {
++             join apply$94 = (inner$63, return$15)
+-               \tmp$7 return$27 . {
++             in outer$62 ~ apply$94
+-                 invoke print ~ then outer$38 -> {
++           }
+-                   join return$28 = then inner$39 -> {
++           in join then$93 = then outer$64 -> {
+-                     outer$38 ~ (inner$39, return$27)
++             join label$66 = then inner$65 -> {
+-                   }
++               join apply$92 = (inner$65, return$16)
+-                   in invoke describeInt32 ~ then outer$40 -> {
++               in outer$64 ~ apply$92
+-                     join label$42 = then inner$41 -> {
+-                       outer$40 ~ (inner$41, return$28)
+-                     }
+-                     in join return$29 = then var$43 -> {
+-                       WrapInt32#(var$43) ~ label$42
+-                     }
+-                     in invoke Int32# ~ (5, return$29)
+-                   }
+-                 }
+-               } ~ then outer$44 -> {
+-                 join return$25 = then inner$45 -> {
+-                   outer$44 ~ (inner$45, return$24)
+-                 }
+-                 in invoke print ~ then outer$46 -> {
+-                   join label$48 = then inner$47 -> {
+-                     outer$46 ~ (inner$47, return$25)
+-                   }
+-                   in join return$26 = then var$49 -> {
+-                     WrapString#(var$49) ~ label$48
+-                   }
+-                   in invoke String# ~ ("hi", return$26)
+-                 }
+-               }
+-             } ~ then outer$50 -> {
+-               join return$22 = then inner$51 -> {
+-                 outer$50 ~ (inner$51, return$21)
+-               }
+-               in invoke print ~ then outer$52 -> {
+-                 join label$54 = then inner$53 -> {
+-                   outer$52 ~ (inner$53, return$22)
+-                 }
+-                 in join return$23 = then var$55 -> {
+-                   WrapChar#(var$55) ~ label$54
+-                 }
+-                 in invoke Char# ~ ('x', return$23)
+-               }
+              }
+-           } ~ then outer$56 -> {
++             in join return$17 = then var$67 -> {
++               WrapInt32#(var$67) ~ label$66
++             }
++             in join apply$91 = (5, return$17)
++             in invoke Int32# ~ apply$91
++           }
++           in invoke print ~ then$93
++         }
++         in \tmp$4 return$18 . {
++           join then$90 = then outer$56 -> {
+              join return$19 = then inner$57 -> {
+-               outer$56 ~ (inner$57, return$18)
++               join apply$89 = (inner$57, return$18)
++               in outer$56 ~ apply$89
+              }
+-             in invoke print ~ then outer$58 -> {
++             in join then$88 = then outer$58 -> {
+                join label$60 = then inner$59 -> {
+-                 outer$58 ~ (inner$59, return$19)
++                 join apply$87 = (inner$59, return$19)
++                 in outer$58 ~ apply$87
+                }
+                in join return$20 = then var$61 -> {
+                  WrapInt64#(var$61) ~ label$60
+                }
+-               in invoke Int64# ~ (7L, return$20)
++               in join apply$86 = (7L, return$20)
++               in invoke Int64# ~ apply$86
+              }
+-           }
++             in invoke print ~ then$88
+-         } ~ then outer$62 -> {
+-           join return$16 = then inner$63 -> {
+-             outer$62 ~ (inner$63, return$15)
+            }
+-           in invoke print ~ then outer$64 -> {
++           in \tmp$5 return$21 . {
+-             join label$66 = then inner$65 -> {
++             join then$85 = then outer$50 -> {
+-               outer$64 ~ (inner$65, return$16)
++               join return$22 = then inner$51 -> {
+-             }
++                 join apply$84 = (inner$51, return$21)
+-             in join return$17 = then var$67 -> {
++                 in outer$50 ~ apply$84
+-               WrapInt32#(var$67) ~ label$66
++               }
++               in join then$83 = then outer$52 -> {
++                 join label$54 = then inner$53 -> {
++                   join apply$82 = (inner$53, return$22)
++                   in outer$52 ~ apply$82
++                 }
++                 in join return$23 = then var$55 -> {
++                   WrapChar#(var$55) ~ label$54
++                 }
++                 in join apply$81 = ('x', return$23)
++                 in invoke Char# ~ apply$81
++               }
++               in invoke print ~ then$83
+              }
+-             in invoke Int32# ~ (5, return$17)
++             in \tmp$6 return$24 . {
+-           }
++               join then$80 = then outer$44 -> {
+-         }
++                 join return$25 = then inner$45 -> {
++                   join apply$79 = (inner$45, return$24)
++                   in outer$44 ~ apply$79
++                 }
++                 in join then$78 = then outer$46 -> {
++                   join label$48 = then inner$47 -> {
++                     join apply$77 = (inner$47, return$25)
++                     in outer$46 ~ apply$77
++                   }
++                   in join return$26 = then var$49 -> {
++                     WrapString#(var$49) ~ label$48
++                   }
++                   in join apply$76 = ("hi", return$26)
++                   in invoke String# ~ apply$76
++                 }
++                 in invoke print ~ then$78
++               }
++               in \tmp$7 return$27 . {
++                 join then$75 = then outer$38 -> {
++                   join return$28 = then inner$39 -> {
++                     join apply$74 = (inner$39, return$27)
++                     in outer$38 ~ apply$74
++                   }
++                   in join then$73 = then outer$40 -> {
++                     join label$42 = then inner$41 -> {
++                       join apply$72 = (inner$41, return$28)
++                       in outer$40 ~ apply$72
++                     }
++                     in join return$29 = then var$43 -> {
++                       WrapInt32#(var$43) ~ label$42
++                     }
++                     in join apply$71 = (5, return$29)
++                     in invoke Int32# ~ apply$71
++                   }
++                   in invoke describeInt32 ~ then$73
++                 }
++                 in invoke print ~ then$75
++               } ~ then$80
++             } ~ then$85
++           } ~ then$90
++         } ~ then$95
+      }
++     in param$3 ~ select$96
+    } ~ return$14
+  
+  def WrapInt32#(return$30) =
+    \constructor$8 return$31 . {
+      WrapInt32#(constructor$8) ~ return$31
+    } ~ return$30
+  
+  def WrapInt64#(return$32) =
+    \constructor$9 return$33 . {
+      WrapInt64#(constructor$9) ~ return$33
+    } ~ return$32
+  
+  def WrapChar#(return$34) =
+    \constructor$10 return$35 . {
+      WrapChar#(constructor$10) ~ return$35
+    } ~ return$34
+  
+  def WrapString#(return$36) =
+    \constructor$11 return$37 . {
+      WrapString#(constructor$11) ~ return$37
+    } ~ return$36
+
+
+=== Join -> ClosureConv ===
+- def describeInt32(return$12) =
++ toplevel fn describeInt32(return$12) =
+-   \param$2 return$13 . {
++   let closure$108 = closure lambda$98()
+-     join select$70 = select {
++   return return$12(closure$108)
+-       WrapInt32#(Int32#(5)) ->
+-         join apply$68 = ("matched five", return$13)
+-         in invoke String# ~ apply$68
+-       _#0 ->
+-         join apply$69 = ("no match", return$13)
+-         in invoke String# ~ apply$69
+-     }
+-     in param$2 ~ select$70
+-   } ~ return$12
+  
+- def main(return$14) =
++ closure fn lambda$98(self$99, param$2, return$13) =
+-   \param$3 return$15 . {
++   if param$2.tag == WrapInt32# &&
+-     join select$96 = select {
++   param$2.0.tag == Int32# &&
+-       _#1 ->
++   param$2.0.0 == 5 then {
+-         join then$95 = then outer$62 -> {
++     let apply$68 = closure join$100(return$13)
+-           join return$16 = then inner$63 -> {
++     return String#(apply$68)
+-             join apply$94 = (inner$63, return$15)
++   } else {
+-             in outer$62 ~ apply$94
++     if  then {
+-           }
++       let _#0 = param$2
+-           in join then$93 = then outer$64 -> {
++       let apply$69 = closure join$104(return$13)
+-             join label$66 = then inner$65 -> {
++       return String#(apply$69)
+-               join apply$92 = (inner$65, return$16)
++     } else {
+-               in outer$64 ~ apply$92
++       panic "no matching branch"
+-             }
+-             in join return$17 = then var$67 -> {
+-               WrapInt32#(var$67) ~ label$66
+-             }
+-             in join apply$91 = (5, return$17)
+-             in invoke Int32# ~ apply$91
+-           }
+-           in invoke print ~ then$93
+-         }
+-         in \tmp$4 return$18 . {
+-           join then$90 = then outer$56 -> {
+-             join return$19 = then inner$57 -> {
+-               join apply$89 = (inner$57, return$18)
+-               in outer$56 ~ apply$89
+-             }
+-             in join then$88 = then outer$58 -> {
+-               join label$60 = then inner$59 -> {
+-                 join apply$87 = (inner$59, return$19)
+-                 in outer$58 ~ apply$87
+-               }
+-               in join return$20 = then var$61 -> {
+-                 WrapInt64#(var$61) ~ label$60
+-               }
+-               in join apply$86 = (7L, return$20)
+-               in invoke Int64# ~ apply$86
+-             }
+-             in invoke print ~ then$88
+-           }
+-           in \tmp$5 return$21 . {
+-             join then$85 = then outer$50 -> {
+-               join return$22 = then inner$51 -> {
+-                 join apply$84 = (inner$51, return$21)
+-                 in outer$50 ~ apply$84
+-               }
+-               in join then$83 = then outer$52 -> {
+-                 join label$54 = then inner$53 -> {
+-                   join apply$82 = (inner$53, return$22)
+-                   in outer$52 ~ apply$82
+-                 }
+-                 in join return$23 = then var$55 -> {
+-                   WrapChar#(var$55) ~ label$54
+-                 }
+-                 in join apply$81 = ('x', return$23)
+-                 in invoke Char# ~ apply$81
+-               }
+-               in invoke print ~ then$83
+-             }
+-             in \tmp$6 return$24 . {
+-               join then$80 = then outer$44 -> {
+-                 join return$25 = then inner$45 -> {
+-                   join apply$79 = (inner$45, return$24)
+-                   in outer$44 ~ apply$79
+-                 }
+-                 in join then$78 = then outer$46 -> {
+-                   join label$48 = then inner$47 -> {
+-                     join apply$77 = (inner$47, return$25)
+-                     in outer$46 ~ apply$77
+-                   }
+-                   in join return$26 = then var$49 -> {
+-                     WrapString#(var$49) ~ label$48
+-                   }
+-                   in join apply$76 = ("hi", return$26)
+-                   in invoke String# ~ apply$76
+-                 }
+-                 in invoke print ~ then$78
+-               }
+-               in \tmp$7 return$27 . {
+-                 join then$75 = then outer$38 -> {
+-                   join return$28 = then inner$39 -> {
+-                     join apply$74 = (inner$39, return$27)
+-                     in outer$38 ~ apply$74
+-                   }
+-                   in join then$73 = then outer$40 -> {
+-                     join label$42 = then inner$41 -> {
+-                       join apply$72 = (inner$41, return$28)
+-                       in outer$40 ~ apply$72
+-                     }
+-                     in join return$29 = then var$43 -> {
+-                       WrapInt32#(var$43) ~ label$42
+-                     }
+-                     in join apply$71 = (5, return$29)
+-                     in invoke Int32# ~ apply$71
+-                   }
+-                   in invoke describeInt32 ~ then$73
+-                 }
+-                 in invoke print ~ then$75
+-               } ~ then$80
+-             } ~ then$85
+-           } ~ then$90
+-         } ~ then$95
+      }
+-     in param$3 ~ select$96
++   }
+-   } ~ return$14
+  
+- def WrapInt32#(return$30) =
++ closure fn join$100(self$101, value$102) =
+-   \constructor$8 return$31 . {
++   let return$13 = self$101.cap[0]
+-     WrapInt32#(constructor$8) ~ return$31
++   let lit$103 = "matched five"
+-   } ~ return$30
++   return value$102(lit$103, return$13)
+  
+- def WrapInt64#(return$32) =
++ closure fn join$104(self$105, value$106) =
+-   \constructor$9 return$33 . {
++   let return$13 = self$105.cap[0]
+-     WrapInt64#(constructor$9) ~ return$33
++   let lit$107 = "no match"
+-   } ~ return$32
++   return value$106(lit$107, return$13)
+  
+- def WrapChar#(return$34) =
++ toplevel fn main(return$14) =
+-   \constructor$10 return$35 . {
++   let closure$212 = closure lambda$110()
+-     WrapChar#(constructor$10) ~ return$35
++   return return$14(closure$212)
+-   } ~ return$34
+  
+- def WrapString#(return$36) =
++ closure fn lambda$110(self$111, param$3, return$15) =
+-   \constructor$11 return$37 . {
++   if  then {
+-     WrapString#(constructor$11) ~ return$37
++     let _#1 = param$3
+-   } ~ return$36
++     let closure$194 = closure lambda$112()
++     let return$16 = closure join$195(closure$194, return$15)
++     let then$93 = closure join$198(return$16)
++     return print(then$93)
++   } else {
++     panic "no matching branch"
++   }
++ 
++ closure fn lambda$112(self$113, tmp$4, return$18) =
++   let closure$176 = closure lambda$114()
++   let return$19 = closure join$177(closure$176, return$18)
++   let then$88 = closure join$180(return$19)
++   return print(then$88)
++ 
++ closure fn lambda$114(self$115, tmp$5, return$21) =
++   let closure$158 = closure lambda$116()
++   let return$22 = closure join$159(closure$158, return$21)
++   let then$83 = closure join$162(return$22)
++   return print(then$83)
++ 
++ closure fn lambda$116(self$117, tmp$6, return$24) =
++   let closure$140 = closure lambda$118()
++   let return$25 = closure join$141(closure$140, return$24)
++   let then$78 = closure join$144(return$25)
++   return print(then$78)
++ 
++ closure fn lambda$118(self$119, tmp$7, return$27) =
++   let then$75 = closure join$120(return$27)
++   return print(then$75)
++ 
++ closure fn join$120(self$121, value$122) =
++   let return$27 = self$121.cap[0]
++   let return$28 = closure join$123(return$27, value$122)
++   let then$73 = closure join$126(return$28)
++   return describeInt32(then$73)
++ 
++ closure fn join$123(self$124, value$125) =
++   let return$27 = self$124.cap[0]
++   let value$122 = self$124.cap[1]
++   return value$122(value$125, return$27)
++ 
++ closure fn join$126(self$127, value$128) =
++   let return$28 = self$127.cap[0]
++   let label$42 = closure join$129(return$28, value$128)
++   let return$29 = closure join$132(label$42)
++   let apply$71 = closure join$136(return$29)
++   return Int32#(apply$71)
++ 
++ closure fn join$129(self$130, value$131) =
++   let return$28 = self$130.cap[0]
++   let value$128 = self$130.cap[1]
++   return value$128(value$131, return$28)
++ 
++ closure fn join$132(self$133, value$134) =
++   let label$42 = self$133.cap[0]
++   let struct$135 = WrapInt32#(value$134)
++   return label$42(struct$135)
++ 
++ closure fn join$136(self$137, value$138) =
++   let return$29 = self$137.cap[0]
++   let lit$139 = 5
++   return value$138(lit$139, return$29)
++ 
++ closure fn join$141(self$142, value$143) =
++   let closure$140 = self$142.cap[0]
++   let return$24 = self$142.cap[1]
++   return closure$140(value$143, return$24)
++ 
++ closure fn join$144(self$145, value$146) =
++   let return$25 = self$145.cap[0]
++   let label$48 = closure join$147(return$25, value$146)
++   let return$26 = closure join$150(label$48)
++   let apply$76 = closure join$154(return$26)
++   return String#(apply$76)
++ 
++ closure fn join$147(self$148, value$149) =
++   let return$25 = self$148.cap[0]
++   let value$146 = self$148.cap[1]
++   return value$146(value$149, return$25)
++ 
++ closure fn join$150(self$151, value$152) =
++   let label$48 = self$151.cap[0]
++   let struct$153 = WrapString#(value$152)
++   return label$48(struct$153)
++ 
++ closure fn join$154(self$155, value$156) =
++   let return$26 = self$155.cap[0]
++   let lit$157 = "hi"
++   return value$156(lit$157, return$26)
++ 
++ closure fn join$159(self$160, value$161) =
++   let closure$158 = self$160.cap[0]
++   let return$21 = self$160.cap[1]
++   return closure$158(value$161, return$21)
++ 
++ closure fn join$162(self$163, value$164) =
++   let return$22 = self$163.cap[0]
++   let label$54 = closure join$165(return$22, value$164)
++   let return$23 = closure join$168(label$54)
++   let apply$81 = closure join$172(return$23)
++   return Char#(apply$81)
++ 
++ closure fn join$165(self$166, value$167) =
++   let return$22 = self$166.cap[0]
++   let value$164 = self$166.cap[1]
++   return value$164(value$167, return$22)
++ 
++ closure fn join$168(self$169, value$170) =
++   let label$54 = self$169.cap[0]
++   let struct$171 = WrapChar#(value$170)
++   return label$54(struct$171)
++ 
++ closure fn join$172(self$173, value$174) =
++   let return$23 = self$173.cap[0]
++   let lit$175 = 'x'
++   return value$174(lit$175, return$23)
++ 
++ closure fn join$177(self$178, value$179) =
++   let closure$176 = self$178.cap[0]
++   let return$18 = self$178.cap[1]
++   return closure$176(value$179, return$18)
++ 
++ closure fn join$180(self$181, value$182) =
++   let return$19 = self$181.cap[0]
++   let label$60 = closure join$183(return$19, value$182)
++   let return$20 = closure join$186(label$60)
++   let apply$86 = closure join$190(return$20)
++   return Int64#(apply$86)
++ 
++ closure fn join$183(self$184, value$185) =
++   let return$19 = self$184.cap[0]
++   let value$182 = self$184.cap[1]
++   return value$182(value$185, return$19)
++ 
++ closure fn join$186(self$187, value$188) =
++   let label$60 = self$187.cap[0]
++   let struct$189 = WrapInt64#(value$188)
++   return label$60(struct$189)
++ 
++ closure fn join$190(self$191, value$192) =
++   let return$20 = self$191.cap[0]
++   let lit$193 = 7L
++   return value$192(lit$193, return$20)
++ 
++ closure fn join$195(self$196, value$197) =
++   let closure$194 = self$196.cap[0]
++   let return$15 = self$196.cap[1]
++   return closure$194(value$197, return$15)
++ 
++ closure fn join$198(self$199, value$200) =
++   let return$16 = self$199.cap[0]
++   let label$66 = closure join$201(return$16, value$200)
++   let return$17 = closure join$204(label$66)
++   let apply$91 = closure join$208(return$17)
++   return Int32#(apply$91)
++ 
++ closure fn join$201(self$202, value$203) =
++   let return$16 = self$202.cap[0]
++   let value$200 = self$202.cap[1]
++   return value$200(value$203, return$16)
++ 
++ closure fn join$204(self$205, value$206) =
++   let label$66 = self$205.cap[0]
++   let struct$207 = WrapInt32#(value$206)
++   return label$66(struct$207)
++ 
++ closure fn join$208(self$209, value$210) =
++   let return$17 = self$209.cap[0]
++   let lit$211 = 5
++   return value$210(lit$211, return$17)
++ 
++ toplevel fn WrapInt32#(return$30) =
++   let closure$217 = closure lambda$214()
++   return return$30(closure$217)
++ 
++ closure fn lambda$214(self$215, constructor$8, return$31) =
++   let struct$216 = WrapInt32#(constructor$8)
++   return return$31(struct$216)
++ 
++ toplevel fn WrapInt64#(return$32) =
++   let closure$222 = closure lambda$219()
++   return return$32(closure$222)
++ 
++ closure fn lambda$219(self$220, constructor$9, return$33) =
++   let struct$221 = WrapInt64#(constructor$9)
++   return return$33(struct$221)
++ 
++ toplevel fn WrapChar#(return$34) =
++   let closure$227 = closure lambda$224()
++   return return$34(closure$227)
++ 
++ closure fn lambda$224(self$225, constructor$10, return$35) =
++   let struct$226 = WrapChar#(constructor$10)
++   return return$35(struct$226)
++ 
++ toplevel fn WrapString#(return$36) =
++   let closure$232 = closure lambda$229()
++   return return$36(closure$232)
++ 
++ closure fn lambda$229(self$230, constructor$11, return$37) =
++   let struct$231 = WrapString#(constructor$11)
++   return return$37(struct$231)
++ 
++ toplevel fn zig_main$235() =
++   let finish$233 = closure join$237()
++   let after_main$234 = closure join$240(finish$233)
++   return main(after_main$234)
++ 
++ closure fn join$237(self$238, value$239) = return value$239
++ 
++ closure fn join$240(self$241, value$242) =
++   let finish$233 = self$241.cap[0]
++   let struct$243 = Tuple()
++   return value$242(struct$243, finish$233)
++ 
++ entry = zig_main$235
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn describeInt32(return$12) =
+    let closure$108 = closure lambda$98()
+    return return$12(closure$108)
+  
+  closure fn lambda$98(self$99, param$2, return$13) =
+    if param$2.tag == WrapInt32# &&
+    param$2.0.tag == Int32# &&
+    param$2.0.0 == 5 then {
+      let apply$68 = closure join$100(return$13)
+      return String#(apply$68)
+    } else {
+      if  then {
+-       let _#0 = param$2
+        let apply$69 = closure join$104(return$13)
+        return String#(apply$69)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$100(self$101, value$102) =
+    let return$13 = self$101.cap[0]
+    let lit$103 = "matched five"
+    return value$102(lit$103, return$13)
+  
+  closure fn join$104(self$105, value$106) =
+    let return$13 = self$105.cap[0]
+    let lit$107 = "no match"
+    return value$106(lit$107, return$13)
+  
+  toplevel fn main(return$14) =
+    let closure$212 = closure lambda$110()
+    return return$14(closure$212)
+  
+  closure fn lambda$110(self$111, param$3, return$15) =
+    if  then {
+-     let _#1 = param$3
+      let closure$194 = closure lambda$112()
+      let return$16 = closure join$195(closure$194, return$15)
+      let then$93 = closure join$198(return$16)
+      return print(then$93)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$112(self$113, tmp$4, return$18) =
+    let closure$176 = closure lambda$114()
+    let return$19 = closure join$177(closure$176, return$18)
+    let then$88 = closure join$180(return$19)
+    return print(then$88)
+  
+  closure fn lambda$114(self$115, tmp$5, return$21) =
+    let closure$158 = closure lambda$116()
+    let return$22 = closure join$159(closure$158, return$21)
+    let then$83 = closure join$162(return$22)
+    return print(then$83)
+  
+  closure fn lambda$116(self$117, tmp$6, return$24) =
+    let closure$140 = closure lambda$118()
+    let return$25 = closure join$141(closure$140, return$24)
+    let then$78 = closure join$144(return$25)
+    return print(then$78)
+  
+  closure fn lambda$118(self$119, tmp$7, return$27) =
+    let then$75 = closure join$120(return$27)
+    return print(then$75)
+  
+  closure fn join$120(self$121, value$122) =
+    let return$27 = self$121.cap[0]
+    let return$28 = closure join$123(return$27, value$122)
+    let then$73 = closure join$126(return$28)
+    return describeInt32(then$73)
+  
+  closure fn join$123(self$124, value$125) =
+    let return$27 = self$124.cap[0]
+    let value$122 = self$124.cap[1]
+    return value$122(value$125, return$27)
+  
+  closure fn join$126(self$127, value$128) =
+    let return$28 = self$127.cap[0]
+    let label$42 = closure join$129(return$28, value$128)
+    let return$29 = closure join$132(label$42)
+    let apply$71 = closure join$136(return$29)
+    return Int32#(apply$71)
+  
+  closure fn join$129(self$130, value$131) =
+    let return$28 = self$130.cap[0]
+    let value$128 = self$130.cap[1]
+    return value$128(value$131, return$28)
+  
+  closure fn join$132(self$133, value$134) =
+    let label$42 = self$133.cap[0]
+    let struct$135 = WrapInt32#(value$134)
+    return label$42(struct$135)
+  
+  closure fn join$136(self$137, value$138) =
+    let return$29 = self$137.cap[0]
+    let lit$139 = 5
+    return value$138(lit$139, return$29)
+  
+  closure fn join$141(self$142, value$143) =
+    let closure$140 = self$142.cap[0]
+    let return$24 = self$142.cap[1]
+    return closure$140(value$143, return$24)
+  
+  closure fn join$144(self$145, value$146) =
+    let return$25 = self$145.cap[0]
+    let label$48 = closure join$147(return$25, value$146)
+    let return$26 = closure join$150(label$48)
+    let apply$76 = closure join$154(return$26)
+    return String#(apply$76)
+  
+  closure fn join$147(self$148, value$149) =
+    let return$25 = self$148.cap[0]
+    let value$146 = self$148.cap[1]
+    return value$146(value$149, return$25)
+  
+  closure fn join$150(self$151, value$152) =
+    let label$48 = self$151.cap[0]
+    let struct$153 = WrapString#(value$152)
+    return label$48(struct$153)
+  
+  closure fn join$154(self$155, value$156) =
+    let return$26 = self$155.cap[0]
+    let lit$157 = "hi"
+    return value$156(lit$157, return$26)
+  
+  closure fn join$159(self$160, value$161) =
+    let closure$158 = self$160.cap[0]
+    let return$21 = self$160.cap[1]
+    return closure$158(value$161, return$21)
+  
+  closure fn join$162(self$163, value$164) =
+    let return$22 = self$163.cap[0]
+    let label$54 = closure join$165(return$22, value$164)
+    let return$23 = closure join$168(label$54)
+    let apply$81 = closure join$172(return$23)
+    return Char#(apply$81)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$22 = self$166.cap[0]
+    let value$164 = self$166.cap[1]
+    return value$164(value$167, return$22)
+  
+  closure fn join$168(self$169, value$170) =
+    let label$54 = self$169.cap[0]
+    let struct$171 = WrapChar#(value$170)
+    return label$54(struct$171)
+  
+  closure fn join$172(self$173, value$174) =
+    let return$23 = self$173.cap[0]
+    let lit$175 = 'x'
+    return value$174(lit$175, return$23)
+  
+  closure fn join$177(self$178, value$179) =
+    let closure$176 = self$178.cap[0]
+    let return$18 = self$178.cap[1]
+    return closure$176(value$179, return$18)
+  
+  closure fn join$180(self$181, value$182) =
+    let return$19 = self$181.cap[0]
+    let label$60 = closure join$183(return$19, value$182)
+    let return$20 = closure join$186(label$60)
+    let apply$86 = closure join$190(return$20)
+    return Int64#(apply$86)
+  
+  closure fn join$183(self$184, value$185) =
+    let return$19 = self$184.cap[0]
+    let value$182 = self$184.cap[1]
+    return value$182(value$185, return$19)
+  
+  closure fn join$186(self$187, value$188) =
+    let label$60 = self$187.cap[0]
+    let struct$189 = WrapInt64#(value$188)
+    return label$60(struct$189)
+  
+  closure fn join$190(self$191, value$192) =
+    let return$20 = self$191.cap[0]
+    let lit$193 = 7L
+    return value$192(lit$193, return$20)
+  
+  closure fn join$195(self$196, value$197) =
+    let closure$194 = self$196.cap[0]
+    let return$15 = self$196.cap[1]
+    return closure$194(value$197, return$15)
+  
+  closure fn join$198(self$199, value$200) =
+    let return$16 = self$199.cap[0]
+    let label$66 = closure join$201(return$16, value$200)
+    let return$17 = closure join$204(label$66)
+    let apply$91 = closure join$208(return$17)
+    return Int32#(apply$91)
+  
+  closure fn join$201(self$202, value$203) =
+    let return$16 = self$202.cap[0]
+    let value$200 = self$202.cap[1]
+    return value$200(value$203, return$16)
+  
+  closure fn join$204(self$205, value$206) =
+    let label$66 = self$205.cap[0]
+    let struct$207 = WrapInt32#(value$206)
+    return label$66(struct$207)
+  
+  closure fn join$208(self$209, value$210) =
+    let return$17 = self$209.cap[0]
+    let lit$211 = 5
+    return value$210(lit$211, return$17)
+  
+  toplevel fn WrapInt32#(return$30) =
+    let closure$217 = closure lambda$214()
+    return return$30(closure$217)
+  
+  closure fn lambda$214(self$215, constructor$8, return$31) =
+    let struct$216 = WrapInt32#(constructor$8)
+    return return$31(struct$216)
+  
+  toplevel fn WrapInt64#(return$32) =
+    let closure$222 = closure lambda$219()
+    return return$32(closure$222)
+  
+  closure fn lambda$219(self$220, constructor$9, return$33) =
+    let struct$221 = WrapInt64#(constructor$9)
+    return return$33(struct$221)
+  
+  toplevel fn WrapChar#(return$34) =
+    let closure$227 = closure lambda$224()
+    return return$34(closure$227)
+  
+  closure fn lambda$224(self$225, constructor$10, return$35) =
+    let struct$226 = WrapChar#(constructor$10)
+    return return$35(struct$226)
+  
+  toplevel fn WrapString#(return$36) =
+    let closure$232 = closure lambda$229()
+    return return$36(closure$232)
+  
+  closure fn lambda$229(self$230, constructor$11, return$37) =
+    let struct$231 = WrapString#(constructor$11)
+    return return$37(struct$231)
+  
+  toplevel fn zig_main$235() =
+    let finish$233 = closure join$237()
+    let after_main$234 = closure join$240(finish$233)
+    return main(after_main$234)
+  
+  closure fn join$237(self$238, value$239) = return value$239
+  
+  closure fn join$240(self$241, value$242) =
+    let finish$233 = self$241.cap[0]
+    let struct$243 = Tuple()
+    return value$242(struct$243, finish$233)
+  
+  entry = zig_main$235
+
+
+=== Peephole -> Perceus ===
+  toplevel fn describeInt32(return$12) =
+    let closure$108 = closure lambda$98()
+    return return$12(closure$108)
+  
+  closure fn lambda$98(self$99, param$2, return$13) =
++   drop self$99
+    if param$2.tag == WrapInt32# &&
+    param$2.0.tag == Int32# &&
+    param$2.0.0 == 5 then {
++     drop param$2
+      let apply$68 = closure join$100(return$13)
+      return String#(apply$68)
+    } else {
++     drop param$2
+      if  then {
+        let apply$69 = closure join$104(return$13)
+        return String#(apply$69)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$100(self$101, value$102) =
+    let return$13 = self$101.cap[0]
++   dup return$13
++   drop self$101
+    let lit$103 = "matched five"
+    return value$102(lit$103, return$13)
+  
+  closure fn join$104(self$105, value$106) =
+    let return$13 = self$105.cap[0]
++   dup return$13
++   drop self$105
+    let lit$107 = "no match"
+    return value$106(lit$107, return$13)
+  
+  toplevel fn main(return$14) =
+    let closure$212 = closure lambda$110()
+    return return$14(closure$212)
+  
+  closure fn lambda$110(self$111, param$3, return$15) =
++   drop param$3
++   drop self$111
+    if  then {
+      let closure$194 = closure lambda$112()
+      let return$16 = closure join$195(closure$194, return$15)
+      let then$93 = closure join$198(return$16)
+      return print(then$93)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$112(self$113, tmp$4, return$18) =
++   drop self$113
++   drop tmp$4
+    let closure$176 = closure lambda$114()
+    let return$19 = closure join$177(closure$176, return$18)
+    let then$88 = closure join$180(return$19)
+    return print(then$88)
+  
+  closure fn lambda$114(self$115, tmp$5, return$21) =
++   drop self$115
++   drop tmp$5
+    let closure$158 = closure lambda$116()
+    let return$22 = closure join$159(closure$158, return$21)
+    let then$83 = closure join$162(return$22)
+    return print(then$83)
+  
+  closure fn lambda$116(self$117, tmp$6, return$24) =
++   drop self$117
++   drop tmp$6
+    let closure$140 = closure lambda$118()
+    let return$25 = closure join$141(closure$140, return$24)
+    let then$78 = closure join$144(return$25)
+    return print(then$78)
+  
+  closure fn lambda$118(self$119, tmp$7, return$27) =
++   drop self$119
++   drop tmp$7
+    let then$75 = closure join$120(return$27)
+    return print(then$75)
+  
+  closure fn join$120(self$121, value$122) =
+    let return$27 = self$121.cap[0]
++   dup return$27
++   drop self$121
+    let return$28 = closure join$123(return$27, value$122)
+    let then$73 = closure join$126(return$28)
+    return describeInt32(then$73)
+  
+  closure fn join$123(self$124, value$125) =
+    let return$27 = self$124.cap[0]
++   dup return$27
+    let value$122 = self$124.cap[1]
++   dup value$122
++   drop self$124
+    return value$122(value$125, return$27)
+  
+  closure fn join$126(self$127, value$128) =
+    let return$28 = self$127.cap[0]
++   dup return$28
++   drop self$127
+    let label$42 = closure join$129(return$28, value$128)
+    let return$29 = closure join$132(label$42)
+    let apply$71 = closure join$136(return$29)
+    return Int32#(apply$71)
+  
+  closure fn join$129(self$130, value$131) =
+    let return$28 = self$130.cap[0]
++   dup return$28
+    let value$128 = self$130.cap[1]
++   dup value$128
++   drop self$130
+    return value$128(value$131, return$28)
+  
+  closure fn join$132(self$133, value$134) =
+    let label$42 = self$133.cap[0]
++   dup label$42
++   drop self$133
+    let struct$135 = WrapInt32#(value$134)
+    return label$42(struct$135)
+  
+  closure fn join$136(self$137, value$138) =
+    let return$29 = self$137.cap[0]
++   dup return$29
++   drop self$137
+    let lit$139 = 5
+    return value$138(lit$139, return$29)
+  
+  closure fn join$141(self$142, value$143) =
+    let closure$140 = self$142.cap[0]
++   dup closure$140
+    let return$24 = self$142.cap[1]
++   dup return$24
++   drop self$142
+    return closure$140(value$143, return$24)
+  
+  closure fn join$144(self$145, value$146) =
+    let return$25 = self$145.cap[0]
++   dup return$25
++   drop self$145
+    let label$48 = closure join$147(return$25, value$146)
+    let return$26 = closure join$150(label$48)
+    let apply$76 = closure join$154(return$26)
+    return String#(apply$76)
+  
+  closure fn join$147(self$148, value$149) =
+    let return$25 = self$148.cap[0]
++   dup return$25
+    let value$146 = self$148.cap[1]
++   dup value$146
++   drop self$148
+    return value$146(value$149, return$25)
+  
+  closure fn join$150(self$151, value$152) =
+    let label$48 = self$151.cap[0]
++   dup label$48
++   drop self$151
+    let struct$153 = WrapString#(value$152)
+    return label$48(struct$153)
+  
+  closure fn join$154(self$155, value$156) =
+    let return$26 = self$155.cap[0]
++   dup return$26
++   drop self$155
+    let lit$157 = "hi"
+    return value$156(lit$157, return$26)
+  
+  closure fn join$159(self$160, value$161) =
+    let closure$158 = self$160.cap[0]
++   dup closure$158
+    let return$21 = self$160.cap[1]
++   dup return$21
++   drop self$160
+    return closure$158(value$161, return$21)
+  
+  closure fn join$162(self$163, value$164) =
+    let return$22 = self$163.cap[0]
++   dup return$22
++   drop self$163
+    let label$54 = closure join$165(return$22, value$164)
+    let return$23 = closure join$168(label$54)
+    let apply$81 = closure join$172(return$23)
+    return Char#(apply$81)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$22 = self$166.cap[0]
++   dup return$22
+    let value$164 = self$166.cap[1]
++   dup value$164
++   drop self$166
+    return value$164(value$167, return$22)
+  
+  closure fn join$168(self$169, value$170) =
+    let label$54 = self$169.cap[0]
++   dup label$54
++   drop self$169
+    let struct$171 = WrapChar#(value$170)
+    return label$54(struct$171)
+  
+  closure fn join$172(self$173, value$174) =
+    let return$23 = self$173.cap[0]
++   dup return$23
++   drop self$173
+    let lit$175 = 'x'
+    return value$174(lit$175, return$23)
+  
+  closure fn join$177(self$178, value$179) =
+    let closure$176 = self$178.cap[0]
++   dup closure$176
+    let return$18 = self$178.cap[1]
++   dup return$18
++   drop self$178
+    return closure$176(value$179, return$18)
+  
+  closure fn join$180(self$181, value$182) =
+    let return$19 = self$181.cap[0]
++   dup return$19
++   drop self$181
+    let label$60 = closure join$183(return$19, value$182)
+    let return$20 = closure join$186(label$60)
+    let apply$86 = closure join$190(return$20)
+    return Int64#(apply$86)
+  
+  closure fn join$183(self$184, value$185) =
+    let return$19 = self$184.cap[0]
++   dup return$19
+    let value$182 = self$184.cap[1]
++   dup value$182
++   drop self$184
+    return value$182(value$185, return$19)
+  
+  closure fn join$186(self$187, value$188) =
+    let label$60 = self$187.cap[0]
++   dup label$60
++   drop self$187
+    let struct$189 = WrapInt64#(value$188)
+    return label$60(struct$189)
+  
+  closure fn join$190(self$191, value$192) =
+    let return$20 = self$191.cap[0]
++   dup return$20
++   drop self$191
+    let lit$193 = 7L
+    return value$192(lit$193, return$20)
+  
+  closure fn join$195(self$196, value$197) =
+    let closure$194 = self$196.cap[0]
++   dup closure$194
+    let return$15 = self$196.cap[1]
++   dup return$15
++   drop self$196
+    return closure$194(value$197, return$15)
+  
+  closure fn join$198(self$199, value$200) =
+    let return$16 = self$199.cap[0]
++   dup return$16
++   drop self$199
+    let label$66 = closure join$201(return$16, value$200)
+    let return$17 = closure join$204(label$66)
+    let apply$91 = closure join$208(return$17)
+    return Int32#(apply$91)
+  
+  closure fn join$201(self$202, value$203) =
+    let return$16 = self$202.cap[0]
++   dup return$16
+    let value$200 = self$202.cap[1]
++   dup value$200
++   drop self$202
+    return value$200(value$203, return$16)
+  
+  closure fn join$204(self$205, value$206) =
+    let label$66 = self$205.cap[0]
++   dup label$66
++   drop self$205
+    let struct$207 = WrapInt32#(value$206)
+    return label$66(struct$207)
+  
+  closure fn join$208(self$209, value$210) =
+    let return$17 = self$209.cap[0]
++   dup return$17
++   drop self$209
+    let lit$211 = 5
+    return value$210(lit$211, return$17)
+  
+  toplevel fn WrapInt32#(return$30) =
+    let closure$217 = closure lambda$214()
+    return return$30(closure$217)
+  
+  closure fn lambda$214(self$215, constructor$8, return$31) =
++   drop self$215
+    let struct$216 = WrapInt32#(constructor$8)
+    return return$31(struct$216)
+  
+  toplevel fn WrapInt64#(return$32) =
+    let closure$222 = closure lambda$219()
+    return return$32(closure$222)
+  
+  closure fn lambda$219(self$220, constructor$9, return$33) =
++   drop self$220
+    let struct$221 = WrapInt64#(constructor$9)
+    return return$33(struct$221)
+  
+  toplevel fn WrapChar#(return$34) =
+    let closure$227 = closure lambda$224()
+    return return$34(closure$227)
+  
+  closure fn lambda$224(self$225, constructor$10, return$35) =
++   drop self$225
+    let struct$226 = WrapChar#(constructor$10)
+    return return$35(struct$226)
+  
+  toplevel fn WrapString#(return$36) =
+    let closure$232 = closure lambda$229()
+    return return$36(closure$232)
+  
+  closure fn lambda$229(self$230, constructor$11, return$37) =
++   drop self$230
+    let struct$231 = WrapString#(constructor$11)
+    return return$37(struct$231)
+  
+  toplevel fn zig_main$235() =
+    let finish$233 = closure join$237()
+    let after_main$234 = closure join$240(finish$233)
+    return main(after_main$234)
+  
+- closure fn join$237(self$238, value$239) = return value$239
++ closure fn join$237(self$238, value$239) =
++   drop self$238
++   return value$239
+  
+  closure fn join$240(self$241, value$242) =
+    let finish$233 = self$241.cap[0]
++   dup finish$233
++   drop self$241
+    let struct$243 = Tuple()
+    return value$242(struct$243, finish$233)
+  
+  entry = zig_main$235
+
+
+=== Perceus -> Reuse ===
+  toplevel fn describeInt32(return$12) =
+    let closure$108 = closure lambda$98()
+    return return$12(closure$108)
+  
+  closure fn lambda$98(self$99, param$2, return$13) =
+    drop self$99
+    if param$2.tag == WrapInt32# &&
+    param$2.0.tag == Int32# &&
+    param$2.0.0 == 5 then {
+-     drop param$2
+      let apply$68 = closure join$100(return$13)
++     drop param$2
+      return String#(apply$68)
+    } else {
+      drop param$2
+      if  then {
+        let apply$69 = closure join$104(return$13)
+        return String#(apply$69)
+      } else {
+        panic "no matching branch"
+      }
+    }
+  
+  closure fn join$100(self$101, value$102) =
+    let return$13 = self$101.cap[0]
+    dup return$13
+-   drop self$101
+    let lit$103 = "matched five"
++   drop self$101
+    return value$102(lit$103, return$13)
+  
+  closure fn join$104(self$105, value$106) =
+    let return$13 = self$105.cap[0]
+    dup return$13
+-   drop self$105
+    let lit$107 = "no match"
++   drop self$105
+    return value$106(lit$107, return$13)
+  
+  toplevel fn main(return$14) =
+    let closure$212 = closure lambda$110()
+    return return$14(closure$212)
+  
+  closure fn lambda$110(self$111, param$3, return$15) =
+    drop param$3
+    drop self$111
+    if  then {
+      let closure$194 = closure lambda$112()
+      let return$16 = closure join$195(closure$194, return$15)
+      let then$93 = closure join$198(return$16)
+      return print(then$93)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn lambda$112(self$113, tmp$4, return$18) =
+-   drop self$113
+-   drop tmp$4
+    let closure$176 = closure lambda$114()
+    let return$19 = closure join$177(closure$176, return$18)
+    let then$88 = closure join$180(return$19)
++   drop self$113
++   drop tmp$4
+    return print(then$88)
+  
+  closure fn lambda$114(self$115, tmp$5, return$21) =
+-   drop self$115
+-   drop tmp$5
+    let closure$158 = closure lambda$116()
+    let return$22 = closure join$159(closure$158, return$21)
+    let then$83 = closure join$162(return$22)
++   drop self$115
++   drop tmp$5
+    return print(then$83)
+  
+  closure fn lambda$116(self$117, tmp$6, return$24) =
+-   drop self$117
+-   drop tmp$6
+    let closure$140 = closure lambda$118()
+    let return$25 = closure join$141(closure$140, return$24)
+    let then$78 = closure join$144(return$25)
++   drop self$117
++   drop tmp$6
+    return print(then$78)
+  
+  closure fn lambda$118(self$119, tmp$7, return$27) =
++   let then$75 = closure join$120(return$27)
+    drop self$119
+    drop tmp$7
+-   let then$75 = closure join$120(return$27)
+    return print(then$75)
+  
+  closure fn join$120(self$121, value$122) =
+    let return$27 = self$121.cap[0]
+    dup return$27
+-   drop self$121
+    let return$28 = closure join$123(return$27, value$122)
+    let then$73 = closure join$126(return$28)
++   drop self$121
+    return describeInt32(then$73)
+  
+  closure fn join$123(self$124, value$125) =
+    let return$27 = self$124.cap[0]
+    dup return$27
+    let value$122 = self$124.cap[1]
+    dup value$122
+    drop self$124
+    return value$122(value$125, return$27)
+  
+  closure fn join$126(self$127, value$128) =
+    let return$28 = self$127.cap[0]
+    dup return$28
+-   drop self$127
+    let label$42 = closure join$129(return$28, value$128)
+    let return$29 = closure join$132(label$42)
+    let apply$71 = closure join$136(return$29)
++   drop self$127
+    return Int32#(apply$71)
+  
+  closure fn join$129(self$130, value$131) =
+    let return$28 = self$130.cap[0]
+    dup return$28
+    let value$128 = self$130.cap[1]
+    dup value$128
+    drop self$130
+    return value$128(value$131, return$28)
+  
+  closure fn join$132(self$133, value$134) =
+    let label$42 = self$133.cap[0]
+    dup label$42
+-   drop self$133
++   dropReuse reuse$244 = self$133 /1
+-   let struct$135 = WrapInt32#(value$134)
++   let struct$135 = reuse reuse$244 WrapInt32#(value$134)
+    return label$42(struct$135)
+  
+  closure fn join$136(self$137, value$138) =
+    let return$29 = self$137.cap[0]
+    dup return$29
+-   drop self$137
+    let lit$139 = 5
++   drop self$137
+    return value$138(lit$139, return$29)
+  
+  closure fn join$141(self$142, value$143) =
+    let closure$140 = self$142.cap[0]
+    dup closure$140
+    let return$24 = self$142.cap[1]
+    dup return$24
+    drop self$142
+    return closure$140(value$143, return$24)
+  
+  closure fn join$144(self$145, value$146) =
+    let return$25 = self$145.cap[0]
+    dup return$25
+-   drop self$145
+    let label$48 = closure join$147(return$25, value$146)
+    let return$26 = closure join$150(label$48)
+    let apply$76 = closure join$154(return$26)
++   drop self$145
+    return String#(apply$76)
+  
+  closure fn join$147(self$148, value$149) =
+    let return$25 = self$148.cap[0]
+    dup return$25
+    let value$146 = self$148.cap[1]
+    dup value$146
+    drop self$148
+    return value$146(value$149, return$25)
+  
+  closure fn join$150(self$151, value$152) =
+    let label$48 = self$151.cap[0]
+    dup label$48
+-   drop self$151
++   dropReuse reuse$245 = self$151 /1
+-   let struct$153 = WrapString#(value$152)
++   let struct$153 = reuse reuse$245 WrapString#(value$152)
+    return label$48(struct$153)
+  
+  closure fn join$154(self$155, value$156) =
+    let return$26 = self$155.cap[0]
+    dup return$26
+-   drop self$155
+    let lit$157 = "hi"
++   drop self$155
+    return value$156(lit$157, return$26)
+  
+  closure fn join$159(self$160, value$161) =
+    let closure$158 = self$160.cap[0]
+    dup closure$158
+    let return$21 = self$160.cap[1]
+    dup return$21
+    drop self$160
+    return closure$158(value$161, return$21)
+  
+  closure fn join$162(self$163, value$164) =
+    let return$22 = self$163.cap[0]
+    dup return$22
+-   drop self$163
+    let label$54 = closure join$165(return$22, value$164)
+    let return$23 = closure join$168(label$54)
+    let apply$81 = closure join$172(return$23)
++   drop self$163
+    return Char#(apply$81)
+  
+  closure fn join$165(self$166, value$167) =
+    let return$22 = self$166.cap[0]
+    dup return$22
+    let value$164 = self$166.cap[1]
+    dup value$164
+    drop self$166
+    return value$164(value$167, return$22)
+  
+  closure fn join$168(self$169, value$170) =
+    let label$54 = self$169.cap[0]
+    dup label$54
+-   drop self$169
++   dropReuse reuse$246 = self$169 /1
+-   let struct$171 = WrapChar#(value$170)
++   let struct$171 = reuse reuse$246 WrapChar#(value$170)
+    return label$54(struct$171)
+  
+  closure fn join$172(self$173, value$174) =
+    let return$23 = self$173.cap[0]
+    dup return$23
+-   drop self$173
+    let lit$175 = 'x'
++   drop self$173
+    return value$174(lit$175, return$23)
+  
+  closure fn join$177(self$178, value$179) =
+    let closure$176 = self$178.cap[0]
+    dup closure$176
+    let return$18 = self$178.cap[1]
+    dup return$18
+    drop self$178
+    return closure$176(value$179, return$18)
+  
+  closure fn join$180(self$181, value$182) =
+    let return$19 = self$181.cap[0]
+    dup return$19
+-   drop self$181
+    let label$60 = closure join$183(return$19, value$182)
+    let return$20 = closure join$186(label$60)
+    let apply$86 = closure join$190(return$20)
++   drop self$181
+    return Int64#(apply$86)
+  
+  closure fn join$183(self$184, value$185) =
+    let return$19 = self$184.cap[0]
+    dup return$19
+    let value$182 = self$184.cap[1]
+    dup value$182
+    drop self$184
+    return value$182(value$185, return$19)
+  
+  closure fn join$186(self$187, value$188) =
+    let label$60 = self$187.cap[0]
+    dup label$60
+-   drop self$187
++   dropReuse reuse$247 = self$187 /1
+-   let struct$189 = WrapInt64#(value$188)
++   let struct$189 = reuse reuse$247 WrapInt64#(value$188)
+    return label$60(struct$189)
+  
+  closure fn join$190(self$191, value$192) =
+    let return$20 = self$191.cap[0]
+    dup return$20
+-   drop self$191
+    let lit$193 = 7L
++   drop self$191
+    return value$192(lit$193, return$20)
+  
+  closure fn join$195(self$196, value$197) =
+    let closure$194 = self$196.cap[0]
+    dup closure$194
+    let return$15 = self$196.cap[1]
+    dup return$15
+    drop self$196
+    return closure$194(value$197, return$15)
+  
+  closure fn join$198(self$199, value$200) =
+    let return$16 = self$199.cap[0]
+    dup return$16
+-   drop self$199
+    let label$66 = closure join$201(return$16, value$200)
+    let return$17 = closure join$204(label$66)
+    let apply$91 = closure join$208(return$17)
++   drop self$199
+    return Int32#(apply$91)
+  
+  closure fn join$201(self$202, value$203) =
+    let return$16 = self$202.cap[0]
+    dup return$16
+    let value$200 = self$202.cap[1]
+    dup value$200
+    drop self$202
+    return value$200(value$203, return$16)
+  
+  closure fn join$204(self$205, value$206) =
+    let label$66 = self$205.cap[0]
+    dup label$66
+-   drop self$205
++   dropReuse reuse$248 = self$205 /1
+-   let struct$207 = WrapInt32#(value$206)
++   let struct$207 = reuse reuse$248 WrapInt32#(value$206)
+    return label$66(struct$207)
+  
+  closure fn join$208(self$209, value$210) =
+    let return$17 = self$209.cap[0]
+    dup return$17
+-   drop self$209
+    let lit$211 = 5
++   drop self$209
+    return value$210(lit$211, return$17)
+  
+  toplevel fn WrapInt32#(return$30) =
+    let closure$217 = closure lambda$214()
+    return return$30(closure$217)
+  
+  closure fn lambda$214(self$215, constructor$8, return$31) =
+-   drop self$215
++   dropReuse reuse$249 = self$215 /1
+-   let struct$216 = WrapInt32#(constructor$8)
++   let struct$216 = reuse reuse$249 WrapInt32#(constructor$8)
+    return return$31(struct$216)
+  
+  toplevel fn WrapInt64#(return$32) =
+    let closure$222 = closure lambda$219()
+    return return$32(closure$222)
+  
+  closure fn lambda$219(self$220, constructor$9, return$33) =
+-   drop self$220
++   dropReuse reuse$250 = self$220 /1
+-   let struct$221 = WrapInt64#(constructor$9)
++   let struct$221 = reuse reuse$250 WrapInt64#(constructor$9)
+    return return$33(struct$221)
+  
+  toplevel fn WrapChar#(return$34) =
+    let closure$227 = closure lambda$224()
+    return return$34(closure$227)
+  
+  closure fn lambda$224(self$225, constructor$10, return$35) =
+-   drop self$225
++   dropReuse reuse$251 = self$225 /1
+-   let struct$226 = WrapChar#(constructor$10)
++   let struct$226 = reuse reuse$251 WrapChar#(constructor$10)
+    return return$35(struct$226)
+  
+  toplevel fn WrapString#(return$36) =
+    let closure$232 = closure lambda$229()
+    return return$36(closure$232)
+  
+  closure fn lambda$229(self$230, constructor$11, return$37) =
+-   drop self$230
++   dropReuse reuse$252 = self$230 /1
+-   let struct$231 = WrapString#(constructor$11)
++   let struct$231 = reuse reuse$252 WrapString#(constructor$11)
+    return return$37(struct$231)
+  
+  toplevel fn zig_main$235() =
+    let finish$233 = closure join$237()
+    let after_main$234 = closure join$240(finish$233)
+    return main(after_main$234)
+  
+  closure fn join$237(self$238, value$239) =
+    drop self$238
+    return value$239
+  
+  closure fn join$240(self$241, value$242) =
+    let finish$233 = self$241.cap[0]
+    dup finish$233
+-   drop self$241
++   dropReuse reuse$253 = self$241 /0
+-   let struct$243 = Tuple()
++   let struct$243 = reuse reuse$253 Tuple()
+    return value$242(struct$243, finish$233)
+  
+  entry = zig_main$235

@@ -167,15 +167,17 @@ def unwrapBoxed = { v ->
 -- Builtins that must see arguments exactly as evaluated, never unwrapped:
 -- each one either forwards a value opaquely to another function (`|>`,
 -- `<|`, `goto`, `const`, `case`, `if`, `malgo_unsafe_cast`) or recurses
--- into a value's own structure to render it (`print`/`malgo_print`, via
--- `valueToText`). Unwrapping their argument would strip a literal's box
--- before it's supposed to be visible -- e.g. `print(5)` must render
--- `Int32#(5)` (matching the interpreter, which desugars `5` to that
--- application before evaluating), not `5`.
+-- into a value's own structure to render it (`print`/`malgo_print`, and
+-- `malgo_panic`'s non-string fallback arm, via `valueToText`). Unwrapping
+-- their argument would strip a literal's box before it's supposed to be
+-- visible -- e.g. `print(5)` must render `Int32#(5)` (matching the
+-- interpreter, which desugars `5` to that application before evaluating),
+-- not `5`.
 def isPassthroughBuiltin : String -> Bool
 def isPassthroughBuiltin = {
   "print" -> True,
   "malgo_print" -> True,
+  "malgo_panic" -> True,
   "|>" -> True,
   "<|" -> True,
   "goto" -> True,

@@ -69,9 +69,6 @@ def hasFeature (f : Feature) : MalgoM Bool := do
 def addFeatures (flags : FeatureFlags) : MalgoM Unit := do
   (← read).featuresRef.modify (·.union flags)
 
-def isMalgo2025Enabled : MalgoM Bool :=
-  hasFeature .malgo2025
-
 def insertPragmas (name : ModuleName) (values : List String) : MalgoM Unit := do
   (← read).pragmaRef.modify (Pragma.insert name values)
 

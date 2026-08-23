@@ -39,12 +39,6 @@ instance [ToSExpr α] : ToSExpr (Qualified α) where
     | { visibility := .implicit, value } => toSExpr value
     | { visibility := .explicit m, value } => .list [toSExpr m, toSExpr value]
 
-/-- Type-annotated field. -/
-structure Field (α : Type u) where
-  typeAnn : Option String
-  field : α
-  deriving BEq, Ord, Repr
-
 inductive Assoc where
   | leftA
   | rightA
@@ -79,11 +73,8 @@ instance : ToSExpr ImportList where
 reduce even at an abstract phase; only the genuinely phase-varying slots
 match on `Phase`. -/
 
-abbrev SimpleX (_ : Phase) : Type := Range
-
 -- Expr slots
 abbrev XVar (_ : Phase) : Type := Range
-abbrev XCon (_ : Phase) : Type := Range
 abbrev XUnboxed (_ : Phase) : Type := Range
 abbrev XBoxed : Phase → Type
   | .parse => Range
@@ -99,7 +90,6 @@ abbrev XRecord (_ : Phase) : Type := Range
 abbrev XList : Phase → Type
   | .parse => Range
   | .rename => Empty
-abbrev XRecordAccess (_ : Phase) : Type := Range
 abbrev XAnn (_ : Phase) : Type := Range
 abbrev XSeq (_ : Phase) : Type := Range
 abbrev XParens (_ : Phase) : Type := Range

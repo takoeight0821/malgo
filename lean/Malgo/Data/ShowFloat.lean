@@ -12,10 +12,10 @@ then search precisions 1..17 for the shortest half-even rounding whose
 
 namespace Malgo
 
-private def natDigits (n : Nat) : Nat :=
+private def digitCount (n : Nat) : Nat :=
   (toString n).length
 
-/-- Round `d` down to `keep = natDigits d - drop` significant digits,
+/-- Round `d` down to `keep = digitCount d - drop` significant digits,
 half-even. Returns the rounded digits (possibly `keep + 1` digits after a
 `999 → 1000` carry). -/
 private def roundHalfEven (d : Nat) (drop : Nat) : Nat :=
@@ -46,13 +46,13 @@ private def shortestDigits (f : Float) : Nat × Int := Id.run do
   let (d0, exp0) : Nat × Int :=
     if e2 ≥ 0 then (m53 * 2 ^ e2.toNat, 0)
     else (m53 * 5 ^ (-e2).toNat, e2)
-  let nd := natDigits d0
+  let nd := digitCount d0
   for p in [1 : min nd 17 + 1] do
     let drop := nd - p
     let mut cand := roundHalfEven d0 drop
     let mut candExp := exp0 + drop
     -- Renormalize a rounding carry (e.g. 999 → 1000).
-    if natDigits cand > p then
+    if digitCount cand > p then
       cand := cand / 10
       candExp := candExp + 1
     if parseBack cand candExp == f then
@@ -141,13 +141,13 @@ private def shortestDigits32 (f : Float32) : Nat × Int := Id.run do
   let (d0, exp0) : Nat × Int :=
     if e2 ≥ 0 then (m24 * 2 ^ e2.toNat, 0)
     else (m24 * 5 ^ (-e2).toNat, e2)
-  let nd := natDigits d0
+  let nd := digitCount d0
   for p in [1 : min nd 9 + 1] do
     let drop := nd - p
     let mut cand := roundHalfEven d0 drop
     let mut candExp := exp0 + drop
     -- Renormalize a rounding carry (e.g. 999 → 1000).
-    if natDigits cand > p then
+    if digitCount cand > p then
       cand := cand / 10
       candExp := candExp + 1
     if parseBack32 cand candExp == f then

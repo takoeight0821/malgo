@@ -36,8 +36,9 @@ oracle):
   transitive dependency once (memoized), saving its single-module `.sqt`
   before linking, then `linkDeps` loads those `.sqt` back and concatenates —
   exercising the Join codec end-to-end.
-- **No `buildDepsEnv`/inferred cache.** Type inference is M3; `useInfer`
-  is `false`, so `LinkedProgram` never elaborates or infers. -/
+- **Inference is gated behind `useInfer`.** `fetchLinkedProgram` only calls
+  `buildDepsEnv`/`Malgo.Infer.pass` when `(← getFlag).useInfer` is set;
+  `fetchInferredModule` populates `cacheInferredModule` on that path. -/
 
 namespace Malgo.Query.Engine
 
@@ -409,37 +410,7 @@ def invalidateModule (db : QueryDB) (modName : ModuleName) : IO Unit := do
     db.cacheLinkedProgram.modify (·.erase m)
     db.cacheInferredModule.modify (·.erase m)
 
-/-! ## `reverseDepClosure` unit checks (port of `Malgo.Query.EngineSpec`) -/
-
-section Guards
-private def a : ModuleName := .moduleName "A"
-private def b : ModuleName := .moduleName "B"
-private def c : ModuleName := .moduleName "C"
-private def d : ModuleName := .moduleName "D"
-private def e : ModuleName := .moduleName "E"
-
-private def mkDeps (xs : List (ModuleName × List ModuleName)) :
-    Std.TreeMap ModuleName (Std.TreeSet ModuleName) :=
-  xs.foldl (init := {}) fun acc (m, ds) =>
-    acc.insert m (ds.foldl (fun s x => s.insert x) {})
-
-private def closureList (xs : List (ModuleName × List ModuleName)) (target : ModuleName) :
-    List ModuleName :=
-  (reverseDepClosure (mkDeps xs) target).toList
-
--- empty when nothing depends on the target
-#guard closureList [(a, []), (b, [])] a == []
--- direct importers
-#guard closureList [(a, []), (b, [a])] a == [b]
--- transitive importers (C → B → A)
-#guard closureList [(a, []), (b, [a]), (c, [b])] a == [b, c]
--- excludes the target itself
-#guard closureList [(a, [b]), (b, [])] b == [a]
--- ignores siblings that do not depend on the target
-#guard closureList [(a, []), (b, [a]), (d, []), (e, [d])] a == [b]
--- terminates on cyclic graphs
-#guard closureList [(a, [b]), (b, [a])] a == [b]
-end Guards
+/-! ## `reverseDepClosure` unit checks -/
 
 namespace RdepGuards
 

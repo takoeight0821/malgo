@@ -191,6 +191,6 @@ def bigStepEvalProgram (moduleName : ModuleName) (handlers : Handlers)
     | .ok _ => pure 0
     | .error .exitSuccess => pure 0
     | .error (.exitWith code) => pure code.toUInt32
-    | .error e => throw { passName := "BigStepEval", message := e.render, range? := e.range? }
+    | .error e => throw { passName := "BigStepEval", message := e.render, range? := e.rangeOf }
 
 end Malgo.Sequent.BigStepEval

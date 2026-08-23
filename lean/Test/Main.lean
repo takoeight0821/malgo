@@ -869,6 +869,180 @@ def run : IO Nat := do
 
 end ParserSurface
 
+/-! ## Primitive coverage gate (#453)
+
+`Builtin.mlg` declares primitives via `foreign import`; `fetchPrimitive`
+(`Malgo.Sequent.Eval`) handles a subset of them via literal-match arms and
+prefix/suffix family rules (`malgo_add_*`, `*to_string`, etc.). The two
+lists can silently diverge in either direction:
+
+- a declared primitive with no `fetchPrimitive` case fails at eval time with
+  `Primitive ... is not implemented` (`malgo_exit_failure` is the repro
+  #453 opened with);
+- a handled name with no `foreign import` declaration is dead code no
+  `.mlg` source can ever reach (8 legacy `malgo_str_*`/`malgo_rune_*`/
+  `malgo_int_to_*` arms, confirmed unreferenced under `runtime/`).
+
+This gate parses `Builtin.mlg`'s declared names, mirrors `fetchPrimitive`'s
+dispatch as data, and fails on any name present in exactly one side unless
+it is named in `knownMissing`/`knownUndeclared` below. The allowlist
+documents currently-acknowledged gaps — it is not a way to silence the gate
+permanently, so each entry is also checked for staleness (still actually a
+gap) on every run; closing a gap for real means deleting its entry. -/
+namespace PrimitiveCoverage
+
+/-- Names `fetchPrimitive` matches literally, i.e. neither a prefix nor a
+suffix family. Mirrors every `if name == ...` / `| "..." =>` arm in
+`Malgo.Sequent.Eval.fetchPrimitive` by hand (Lean has no reflection over
+`match` arms) — keep this in sync whenever that function gains or loses a
+literal case. -/
+def handledLiteralNames : List String :=
+  [ "reuseHint", "malgo_unsafe_cast"
+  , "malgo_print_string", "malgo_newline", "malgo_print_char", "malgo_get_contents"
+  , "malgo_string_append", "malgo_string_length", "malgo_string_at", "malgo_string_cons"
+  , "malgo_substring", "malgo_string_reverse", "malgo_print"
+  , "malgo_str_len", "malgo_str_at", "malgo_str_sub", "malgo_str_to_int"
+  , "malgo_int_to_str", "malgo_rune_to_str", "malgo_int_to_rune", "malgo_rune_to_int"
+  , "malgo_is_digit", "malgo_is_lower", "malgo_is_upper", "malgo_is_alphanum"
+  , "malgo_char_ord", "malgo_int32_t_to_char", "malgo_read_file", "malgo_write_file"
+  , "malgo_get_line", "malgo_get_args", "malgo_panic", "malgo_exit_success"
+  , "malgo_exit_with_code", "malgo_has_env", "malgo_get_env", "malgo_stderr_string"
+  , "malgo_run_process", "malgo_string_to_int32", "malgo_string_to_int64" ]
+
+/-- Prefixes `fetchPrimitive` dispatches on via `String.startsWith`. Keep in
+sync with the `else if name.startsWith "..."` chain there. -/
+def handledPrimitivePrefixes : List String :=
+  [ "malgo_add_", "malgo_sub_", "malgo_mul_", "malgo_div_", "malgo_mod_", "malgo_neg_"
+  , "malgo_eq_", "malgo_ne_", "malgo_lt_", "malgo_le_", "malgo_gt_", "malgo_ge_" ]
+
+/-- Does `fetchPrimitive` have a case that would dispatch on `name`? Prefix
+and suffix families make this a superset of any finite name list, which is
+why the reverse (handled-but-undeclared) direction below only walks
+`handledLiteralNames`: a prefix family has no single concrete name to check
+for a matching declaration. -/
+def isHandled (name : String) : Bool :=
+  handledLiteralNames.contains name
+  || handledPrimitivePrefixes.any (fun p => name.startsWith p)
+  || (name.startsWith "malgo_" && name.endsWith "to_string")
+
+/-- One entry in the allowlist: a primitive name plus why the gap is
+currently acknowledged rather than a regression. -/
+structure KnownGap where
+  name : String
+  reason : String
+
+/-- Declared via `foreign import` in `Builtin.mlg` but `fetchPrimitive` has
+no case for them (yet). Implementing these is explicitly out of scope for
+#453. -/
+def knownMissing : List KnownGap :=
+  [ { name := "malgo_exit_failure"
+    , reason := "eval fails at runtime with \"not implemented\" (#453's original repro)" }
+  , { name := "malgo_flush", reason := "declared, never wired into fetchPrimitive" }
+  , { name := "malgo_get_char", reason := "declared, never wired into fetchPrimitive" }
+  , { name := "sqrt", reason := "declared, never wired into fetchPrimitive" }
+  , { name := "sqrtf", reason := "declared, never wired into fetchPrimitive" } ]
+
+/-- Handled by `fetchPrimitive` but no `foreign import` declares them: dead
+legacy arms with zero references anywhere under `runtime/`. Removing these
+arms is explicitly out of scope for #453. -/
+def knownUndeclared : List KnownGap :=
+  [ { name := "malgo_str_len", reason := "dead legacy arm, zero references under runtime/" }
+  , { name := "malgo_str_at", reason := "dead legacy arm, zero references under runtime/" }
+  , { name := "malgo_str_sub", reason := "dead legacy arm, zero references under runtime/" }
+  , { name := "malgo_str_to_int", reason := "dead legacy arm, zero references under runtime/" }
+  , { name := "malgo_int_to_str", reason := "dead legacy arm, zero references under runtime/" }
+  , { name := "malgo_rune_to_str", reason := "dead legacy arm, zero references under runtime/" }
+  , { name := "malgo_int_to_rune", reason := "dead legacy arm, zero references under runtime/" }
+  , { name := "malgo_rune_to_int", reason := "dead legacy arm, zero references under runtime/" } ]
+
+/-- Handled by `fetchPrimitive`, undeclared by design rather than by
+oversight: primitives the compiler inserts internally that no `.mlg` source
+ever spells, so they can never carry a `foreign import`. Unlike
+`knownMissing`/`knownUndeclared`, these are not gaps to close, so they are
+checked in the reverse direction but excluded from the staleness pass
+below. -/
+def internalPrimitives : List String :=
+  [ "reuseHint" ]
+
+/-- Primitive names declared via `foreign import` in `Builtin.mlg`'s text,
+in the style of `Malgo.Parser.extractPragmas`. -/
+def declaredPrimitives (text : String) : List String :=
+  (text.splitOn "\n").filterMap fun line =>
+    if line.startsWith "foreign import " then
+      some (toString ((line.drop "foreign import ".length).takeWhile (fun c => c != ' ' && c != ':')))
+    else none
+
+def run : IO Nat := do
+  let text ← IO.FS.readFile (System.FilePath.mk "runtime/malgo/Builtin.mlg")
+  let declared := declaredPrimitives text
+  let mut failed := 0
+  let mut total := 0
+
+  -- Sanity floor: if the parse above ever regresses to empty (or near-empty
+  -- — `Builtin.mlg` moved, the `foreign import ` marker changed, cwd is
+  -- wrong), every check below would vacuously pass. Guard against that
+  -- silent no-op explicitly, pinned comfortably under the current count of
+  -- 99 declared primitives.
+  if declared.length < 90 then
+    failed := failed + 1
+    IO.println
+      s!"FAIL Malgo.PrimitiveCoverage/declaredPrimitives: parsed only {declared.length} foreign imports from Builtin.mlg — the parse or the path is broken"
+
+  -- Forward: every declared primitive must be handled, unless it is a
+  -- known-missing gap.
+  for name in declared do
+    total := total + 1
+    if isHandled name then
+      IO.println s!"ok Malgo.PrimitiveCoverage/declared/{name}"
+    else if knownMissing.any (·.name == name) then
+      IO.println s!"ok Malgo.PrimitiveCoverage/declared/{name} (known-missing)"
+    else
+      failed := failed + 1
+      IO.println
+        s!"FAIL Malgo.PrimitiveCoverage/declared/{name}: no fetchPrimitive case, and not in knownMissing"
+
+  -- Reverse: every literally-handled name must be declared, unless it is a
+  -- known-undeclared gap or an internal (undeclarable-by-design) primitive.
+  for name in handledLiteralNames do
+    total := total + 1
+    if declared.contains name then
+      IO.println s!"ok Malgo.PrimitiveCoverage/handled/{name}"
+    else if knownUndeclared.any (·.name == name) then
+      IO.println s!"ok Malgo.PrimitiveCoverage/handled/{name} (known-undeclared)"
+    else if internalPrimitives.contains name then
+      IO.println s!"ok Malgo.PrimitiveCoverage/handled/{name} (internal)"
+    else
+      failed := failed + 1
+      IO.println
+        s!"FAIL Malgo.PrimitiveCoverage/handled/{name}: no foreign import in Builtin.mlg, and not in knownUndeclared"
+
+  -- Allowlist staleness: a known-missing name must still be
+  -- declared-but-unhandled, and a known-undeclared name must still be
+  -- handled-but-undeclared, or the entry has rotted and must be deleted.
+  -- `internalPrimitives` is exempt: it is undeclarable by design, not a gap
+  -- that could close.
+  for gap in knownMissing do
+    total := total + 1
+    if declared.contains gap.name && !isHandled gap.name then
+      IO.println s!"ok Malgo.PrimitiveCoverage/knownMissing/{gap.name}"
+    else
+      failed := failed + 1
+      IO.println
+        s!"FAIL Malgo.PrimitiveCoverage/knownMissing/{gap.name}: allowlist entry is stale (no longer both declared and unhandled) — delete it"
+  for gap in knownUndeclared do
+    total := total + 1
+    if isHandled gap.name && !declared.contains gap.name then
+      IO.println s!"ok Malgo.PrimitiveCoverage/knownUndeclared/{gap.name}"
+    else
+      failed := failed + 1
+      IO.println
+        s!"FAIL Malgo.PrimitiveCoverage/knownUndeclared/{gap.name}: allowlist entry is stale (no longer both handled and undeclared) — delete it"
+
+  IO.println s!"=== primitive-coverage {total - failed}/{total} passed ==="
+  return failed
+
+end PrimitiveCoverage
+
 namespace ZigCorpus
 
 open Malgo.Backend.Zig.Ir
@@ -1295,7 +1469,9 @@ def main (args : List String) : IO UInt32 := do
     let specFailures ← Malgo.Test.ReuseSpec.run
     let parserFailures ← Malgo.Test.ParserSurface.run
     let panicFailures ← Malgo.Test.PanicGate.run memo
+    let primitiveCoverageFailures ← Malgo.Test.PrimitiveCoverage.run
     return (if goldenCode == 0 && inferCode == 0 && metPageFailures == 0
         && reuseFailures == 0 && corpusFailures == 0 && irFailures == 0
         && specFailures == 0 && parserFailures == 0 && panicFailures == 0
+        && primitiveCoverageFailures == 0
       then 0 else 1)

@@ -25,7 +25,7 @@ The compiler lands at `lean/.lake/build/bin/malgo`.
 - `lean/Main.lean` - CLI entry point (`malgo eval ...`)
 - `lean/Test/Main.lean` - the whole test suite: golden cases plus the
   non-golden gates (infer, zig-reuse, zig-corpus, ir-invariants,
-  reuse-specialize, parser-surface)
+  reuse-specialize, parser-surface, panic-gate, primitive-coverage)
 - `runtime/malgo/` - Malgo runtime/stdlib (`Builtin.mlg`, `Prelude.mlg`)
 - `runtime/zig/runtime.zig` - the Zig backend's runtime
 - `examples/malgo/` - Sample `.mlg` programs

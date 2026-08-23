@@ -737,7 +737,13 @@ private def cases : List Case :=
     , expect := some "(project (apply nats (int32 0)) \"tail\")" }
   , { name := "keeps a tight call's .field bound to the call result even with a compound argument (#424)"
     , src := "def main = f(g x).field"
-    , expect := some "(project (apply f (apply g x)) \"field\")" } ]
+    , expect := some "(project (apply f (apply g x)) \"field\")" }
+  , { name := "a tight call's closing paren may be on its own line before a tight dot (#424)"
+    , src := "def main = nats(\n  0\n).tail"
+    , expect := some "(project (apply nats (int32 0)) \"tail\")" }
+  , { name := "a loose call's closing paren may be on its own line before a tight dot (#424)"
+    , src := "def main = f (\n  g x\n).field"
+    , expect := some "(apply f (project (parens (apply g x)) \"field\"))" } ]
 
 def run : IO Nat := do
   let mut failed := 0

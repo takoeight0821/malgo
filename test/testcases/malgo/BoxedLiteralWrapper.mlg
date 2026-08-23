@@ -1,0 +1,32 @@
+#c-style-apply
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- Regression coverage for malgo#425: the interpreter (and every backend fed
+-- by its Rename pass) desugars every source literal into an explicit
+-- application of its boxing constructor upstream of evaluation (`5` ->
+-- `Int32#(5)`, `"hi"` -> `String#("hi")`, ...), so a primitive literal
+-- wrapped in a user-defined single-field constructor prints/matches as
+-- boxed all the way down. The self-hosted evaluator (`Eval.mlg`) has no
+-- equivalent desugaring pass and used to evaluate literals unboxed,
+-- diverging from the interpreter's output for exactly this shape. Covers
+-- all four boxable literal types the self-hosted `Lit` AST has (Int32,
+-- Int64, Char, String -- Unit has no boxing wrapper in Builtin.mlg), for
+-- both printing and pattern-matching.
+data WrapInt32  = WrapInt32# Int32
+data WrapInt64  = WrapInt64# Int64
+data WrapChar   = WrapChar# Char
+data WrapString = WrapString# String
+
+def describeInt32 = {
+  (WrapInt32# 5) -> "matched five",
+  _ -> "no match"
+}
+
+def main = { () ->
+  print(WrapInt32#(5));
+  print(WrapInt64#(7i64));
+  print(WrapChar#('x'));
+  print(WrapString#("hi"));
+  print(describeInt32(WrapInt32#(5)))
+}

@@ -145,14 +145,74 @@ def matchWrappedPat = { lEnv cname cpats val ->
     { Left "mismatch" }
 }
 
+-- Unwrap a one-arg boxed-literal wrapper (`Int32#`/`Int64#`/`Char#`/
+-- `String#`/`Float#`/`Double#`) back to its raw payload. A no-op for
+-- anything else (a genuinely-unboxed value from a foreign call, a
+-- user-defined constructor, etc.), so it's safe to apply speculatively.
+-- This is the single generic counterpart to `matchWrappedPat` above: that
+-- function tolerates a *pattern* like `Int32# x` matching a raw value;
+-- this tolerates a *value* like a boxed literal reaching code that wants
+-- the raw payload.
+def unwrapBoxed : Value -> Value
+def unwrapBoxed = { v ->
+  case v {
+    (VCon name arity (Cons x Nil)) ->
+      if (eqInt32 arity 1i32)
+        { if (isWrapperName name) { x } { v } }
+        { v },
+    _ -> v
+  }
+}
+
+-- Builtins that must see arguments exactly as evaluated, never unwrapped:
+-- each one either forwards a value opaquely to another function (`|>`,
+-- `<|`, `goto`, `const`, `case`, `if`, `malgo_unsafe_cast`) or recurses
+-- into a value's own structure to render it (`print`/`malgo_print`, and
+-- `malgo_panic`'s non-string fallback arm, via `valueToText`). Unwrapping
+-- their argument would strip a literal's box before it's supposed to be
+-- visible -- e.g. `print(5)` must render `Int32#(5)` (matching the
+-- interpreter, which desugars `5` to that application before evaluating),
+-- not `5`.
+def isPassthroughBuiltin : String -> Bool
+def isPassthroughBuiltin = {
+  "print" -> True,
+  "malgo_print" -> True,
+  "malgo_panic" -> True,
+  "|>" -> True,
+  "<|" -> True,
+  "goto" -> True,
+  "const" -> True,
+  "malgo_unsafe_cast" -> True,
+  "case" -> True,
+  "if" -> True,
+  _ -> False
+}
+
+-- The single boundary where boxed literal values (and anything else
+-- carrying a one-arg boxing wrapper) get unwrapped back to raw payloads
+-- before `applyBuiltin`'s ~90 native-shortcut arms run. Those arms
+-- pattern-match directly on `VInt32`/`VString`/etc (mirroring what the
+-- real Malgo-level Builtin.mlg definitions would do after destructuring
+-- their own boxed-constructor argument patterns), so without this they'd
+-- see a `VCon("Int32#", ...)` instead and fail with a type error.
+def unwrapBuiltinArgs : String -> List Value -> List Value
+def unwrapBuiltinArgs = { name args ->
+  if (isPassthroughBuiltin name) { args } { mapList unwrapBoxed args }
+}
+
 def matchLit : Env -> Lit -> Value -> Either String Env
 def matchLit = { lEnv lit val ->
+  -- Reverse direction from `matchWrappedPat`: a bare literal pattern like
+  -- `5` must also match a boxed scrutinee (e.g. destructuring a boxed
+  -- Int32 field one level up already leaves a raw value here, but the
+  -- scrutinee can just as well still be the boxed literal itself).
+  let uval = unwrapBoxed val;
   case lit {
-    (LitInt32 n)  -> case val { (VInt32 m)  -> if (eqInt32 n m)  { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
-    (LitInt64 n)  -> case val { (VInt64 m)  -> if (eqInt64 n m)  { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
-    (LitChar c)   -> case val { (VChar d)   -> if (eqChar c d)   { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
-    (LitString s) -> case val { (VString t) -> if (eqString s t) { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
-    LitUnit       -> case val { VUnit -> Right lEnv, _ -> Left "mismatch" }
+    (LitInt32 n)  -> case uval { (VInt32 m)  -> if (eqInt32 n m)  { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    (LitInt64 n)  -> case uval { (VInt64 m)  -> if (eqInt64 n m)  { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    (LitChar c)   -> case uval { (VChar d)   -> if (eqChar c d)   { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    (LitString s) -> case uval { (VString t) -> if (eqString s t) { Right lEnv } { Left "mismatch" }, _ -> Left "mismatch" },
+    LitUnit       -> case uval { VUnit -> Right lEnv, _ -> Left "mismatch" }
   }
 }
 
@@ -203,10 +263,21 @@ def eval = {
           { Right (VBuiltin(implicitBuiltinRuntimeName name, 2i32, Nil)) }
           { Left (appendString "undefined: " name) }
     },
-  gEnv lEnv (ExLit (LitInt32 n))  -> Right (VInt32 n),
-  gEnv lEnv (ExLit (LitInt64 n))  -> Right (VInt64 n),
-  gEnv lEnv (ExLit (LitChar c))   -> Right (VChar c),
-  gEnv lEnv (ExLit (LitString s)) -> Right (VString s),
+  -- Literals are boxed here to match Malgo.Rename.Pass.lookupBox, which
+  -- desugars every source literal upstream of all backends into an
+  -- explicit application of its boxing constructor (`5` -> `Int32#(5)`,
+  -- `"s"` -> `String#("s")`, ...). This evaluator has no separate
+  -- desugaring pass (Rename.mlg here is diagnostics-only, never rewrites
+  -- the AST -- see its module docs), so the boxing has to happen at the
+  -- point of literal evaluation itself. `applyBuiltin`'s dispatch (below)
+  -- unwraps these back to raw payloads before running its native-shortcut
+  -- arms; `matchLit` unwraps a boxed scrutinee for the reverse direction
+  -- (a bare literal pattern like `5` against a boxed value). LitUnit is
+  -- excluded: Unit has no boxing wrapper in Builtin.mlg.
+  gEnv lEnv (ExLit (LitInt32 n))  -> Right (VCon("Int32#",  1i32, Cons (VInt32 n) Nil)),
+  gEnv lEnv (ExLit (LitInt64 n))  -> Right (VCon("Int64#",  1i32, Cons (VInt64 n) Nil)),
+  gEnv lEnv (ExLit (LitChar c))   -> Right (VCon("Char#",   1i32, Cons (VChar c) Nil)),
+  gEnv lEnv (ExLit (LitString s)) -> Right (VCon("String#", 1i32, Cons (VString s) Nil)),
   gEnv lEnv (ExLit LitUnit)       -> Right VUnit,
   gEnv lEnv (ExApp f x) ->
     bindRight (eval gEnv lEnv f) { fv ->
@@ -285,7 +356,7 @@ def apply = { gEnv fn arg ->
     (VBuiltin name arity acc) ->
       let newAcc = append acc (Cons arg Nil);
       if (eqInt32 (length newAcc) arity)
-        { applyBuiltin gEnv name newAcc }
+        { applyBuiltin gEnv name (unwrapBuiltinArgs name newAcc) }
         { Right (VBuiltin(name, arity, newAcc)) },
     _ -> Left (appendString "cannot apply: " (showValue fn))
   }
@@ -771,13 +842,14 @@ def applyInt64Cmp = {
   f fname _ -> Left (appendString fname ": type error")
 }
 
+-- A boxed `String#(s)` argument used to need special-casing here (this was
+-- the one ad hoc unwrap the generic `unwrapBuiltinArgs` step above now
+-- replaces): every caller of `printStringValue` reaches it only through
+-- `applyBuiltin`'s dispatch, so `args` has already been unwrapped by the
+-- time it gets here.
 def printStringValue : String -> List Value -> Either String Value
 def printStringValue = {
   fname (Cons (VString s) Nil) -> let _ = printString s; Right VUnit,
-  fname (Cons (VCon cname _ (Cons (VString s) Nil)) Nil) ->
-    if (eqString cname "String#")
-      { let _ = printString s; Right VUnit }
-      { Left (appendString fname ": type error") },
   fname _ -> Left (appendString fname ": type error")
 }
 

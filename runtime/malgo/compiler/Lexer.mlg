@@ -13,7 +13,7 @@ module {..} = import "../../../runtime/malgo/compiler/Token.mlg"
 
 def tokenize : String -> Either String (List Token)
 def tokenize = { src ->
-  let result = lexAll src Nil;
+  let result = lexAll src False Nil;
   mapRight { toks -> append (reverseList toks) (Cons TkEof Nil) } result
 }
 
@@ -21,25 +21,45 @@ def tokenize = { src ->
 def reverseList : List a -> List a
 def reverseList = { xs -> foldl { acc x -> Cons x acc } Nil xs }
 
--- Lex all tokens from src, accumulating into acc (reversed)
-def lexAll : String -> List Token -> Either String (List Token)
-def lexAll = { src acc ->
+-- Overwrite a freshly-lexed token's tight flag (see Token.mlg) with
+-- whether it was actually adjacent to the previous token. lexOne/lexOp
+-- always emit False as a placeholder since they don't track adjacency
+-- themselves; lexAll is the sole place that does.
+def attachTight : Bool -> Token -> Token
+def attachTight = { tight tok ->
+  case tok {
+    (TkLParen _) -> TkLParen tight,
+    (TkDot _)    -> TkDot tight,
+    _            -> tok
+  }
+}
+
+-- Lex all tokens from src, accumulating into acc (reversed). `tight`
+-- tracks whether the token about to be lexed is immediately adjacent to
+-- the end of the previous one (no whitespace/comment in between); it
+-- resets to False at the start of input and after skipping any gap.
+-- Comments count as a gap (unlike the Lean parser's PState.prevChar,
+-- which incidentally reports a comment-only gap as tight) -- a comment
+-- is a natural place to allow a loose binding, and this is deliberate
+-- rather than a corner case to match.
+def lexAll : String -> Bool -> List Token -> Either String (List Token)
+def lexAll = { src tight acc ->
   if (eqString src "")
     { Right acc }
     { let c = atString 0i64 src;
       if (isWhitespaceCh c)
-        { lexAll (substring src 1i64 (lengthString src)) acc }
+        { lexAll (substring src 1i64 (lengthString src)) False acc }
         { if (isLineCommentStart src)
             { let rest = skipLineComment src;
-              lexAll rest acc
+              lexAll rest False acc
             }
             { if (isPragmaStart src)
                 { let rest = skipLineComment src;
-                  lexAll rest acc
+                  lexAll rest False acc
                 }
                 { if (isBlockCommentStart src)
-                { bindRight (skipBlockComment src) { r -> lexAll r acc } }
-                { bindRight (lexOne src) { {.val -> tok, .rest -> rest} -> lexAll rest (Cons tok acc) } }
+                { bindRight (skipBlockComment src) { r -> lexAll r False acc } }
+                { bindRight (lexOne src) { {.val -> tok, .rest -> rest} -> lexAll rest True (Cons (attachTight tight tok) acc) } }
               }
             }
         }
@@ -172,7 +192,7 @@ def lexOne = { src ->
       case c {
         '{'  -> Right {.val -> TkLBrace, .rest -> rest},
         '}'  -> Right {.val -> TkRBrace, .rest -> rest},
-        '('  -> Right {.val -> TkLParen, .rest -> rest},
+        '('  -> Right {.val -> TkLParen False, .rest -> rest},
         ')'  -> Right {.val -> TkRParen, .rest -> rest},
         '['  -> Right {.val -> TkLBracket, .rest -> rest},
         ']'  -> Right {.val -> TkRBracket, .rest -> rest},
@@ -399,12 +419,17 @@ def identLen = { src i ->
 -- Operator lexer
 -- ──────────────────────────────────────────────────────────
 
+-- A lone "." becomes TkDot (see Token.mlg); any longer op run containing
+-- "." (e.g. "..", "#.") is still a regular TkOp. The False here is a
+-- placeholder tight flag -- lexAll's attachTight overwrites it.
 def lexOp : String -> Either String {val: Token, rest: String}
 def lexOp = { src ->
   let len = opLen src 0i64;
   let op = substring src 0i64 len;
   let rest = substring src len (lengthString src);
-  Right {.val -> TkOp op, .rest -> rest}
+  if (eqString op ".")
+    { Right {.val -> TkDot False, .rest -> rest} }
+    { Right {.val -> TkOp op, .rest -> rest} }
 }
 
 def opLen : String -> Int64 -> Int64

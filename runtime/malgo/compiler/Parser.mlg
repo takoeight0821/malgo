@@ -60,9 +60,21 @@ def isNextComma = {
   _ -> False
 }
 
+-- Ignores the tight flag: this is "is there a '(' here at all", used
+-- pervasively outside expression application chains. See
+-- isNextTightLParen for the tight-specific check parseAppRest needs.
 def isNextLParen : List Token -> Bool
 def isNextLParen = {
-  (Cons TkLParen _) -> True,
+  (Cons (TkLParen _) _) -> True,
+  _ -> False
+}
+
+-- True when the next token is '(' tightly adjacent to the previous token
+-- -- eligible to fold as a C-style call onto the atom parseAppRest just
+-- finished parsing, rather than being a loose, space-separated argument.
+def isNextTightLParen : List Token -> Bool
+def isNextTightLParen = {
+  (Cons (TkLParen True) _) -> True,
   _ -> False
 }
 
@@ -72,9 +84,17 @@ def isNextLBrace = {
   _ -> False
 }
 
+-- Ignores the tight flag: used both by copattern-segment parsing (where
+-- tightness is irrelevant) and by parseAppRest (see its comment -- a
+-- *tight* dot can legitimately reach that check too, once it's chained
+-- off a loose-dot-built accumulator, e.g. `g a state .dict.head`: the
+-- loose `.dict` binds to `g a state`, and the following tight `.head`
+-- must still bind to *that* accumulator, matching the Lean parser's
+-- pApplyPostfix field-projection branch, which never consults tightness
+-- either -- only parseTightPostfix (folding onto a fresh atom) does.
 def isNextDot : List Token -> Bool
 def isNextDot = {
-  (Cons (TkOp s) _) -> eqString s ".",
+  (Cons (TkDot _) _) -> True,
   _ -> False
 }
 
@@ -86,7 +106,7 @@ def isCopatternStart = {
 
 def isRecordStart : List Token -> Bool
 def isRecordStart = {
-  (Cons (TkOp op) _) -> eqString op ".",
+  (Cons (TkDot _) _) -> True,
   _ -> False
 }
 
@@ -144,8 +164,19 @@ def expectLParen : List Token -> Either String (List Token)
 def expectLParen = { ts ->
   bindRight (nextTok ts) { {.val -> t, .rest -> ts2} ->
     case t {
-      TkLParen -> Right ts2,
+      (TkLParen _) -> Right ts2,
       _ -> Left (appendString "expected '(' but got " (showToken t))
+    }
+  }
+}
+
+-- Consume and assert a '.'
+def expectDot : List Token -> Either String (List Token)
+def expectDot = { ts ->
+  bindRight (nextTok ts) { {.val -> t, .rest -> ts2} ->
+    case t {
+      (TkDot _) -> Right ts2,
+      _ -> Left (appendString "expected '.' but got " (showToken t))
     }
   }
 }
@@ -190,6 +221,7 @@ def isUpperFirst = { s ->
 
 -- True when an operator string can appear as an infix binary operator in exprs
 -- Exclude: -> : = ; .. | (these are used in declarations/arms, not exprs)
+-- A lone "." is never a TkOp (see Token.mlg's TkDot), so no case for it here.
 def isBinaryOp : String -> Bool
 def isBinaryOp = {
   "->" -> False,
@@ -198,7 +230,6 @@ def isBinaryOp = {
   ";"  -> False,
   ".." -> False,
   "|"  -> False,
-  "."  -> False,
   _ -> True
 }
 
@@ -217,7 +248,7 @@ def isAtomStart = {
   (Cons (TkInt64 _) _)  -> True,
   (Cons (TkChar _) _)   -> True,
   (Cons (TkString _) _) -> True,
-  (Cons TkLParen _)     -> True,
+  (Cons (TkLParen _) _) -> True,
   (Cons TkLBrace _)     -> True,
   (Cons TkLBracket _)   -> True,
   _ -> False
@@ -311,7 +342,7 @@ def parseAtomPat = { ts ->
       (TkInt64 n)   -> Right {.val -> PatLit (LitInt64 n), .rest -> ts2},
       (TkChar c)    -> Right {.val -> PatLit (LitChar c), .rest -> ts2},
       (TkString s)  -> Right {.val -> PatLit (LitString s), .rest -> ts2},
-      TkLParen      -> parseParenPat ts2,
+      (TkLParen _)  -> parseParenPat ts2,
       TkLBrace      -> parseBracePat ts2,
       TkLBracket    -> parseListPat ts2,
       _ -> Left (appendString "expected pattern but got " (showToken t))
@@ -342,7 +373,7 @@ def parseSpaceAtomPat = { ts ->
       (TkInt64 n)   -> Right {.val -> PatLit (LitInt64 n), .rest -> ts2},
       (TkChar c)    -> Right {.val -> PatLit (LitChar c), .rest -> ts2},
       (TkString s)  -> Right {.val -> PatLit (LitString s), .rest -> ts2},
-      TkLParen      -> parseParenPat ts2,
+      (TkLParen _)  -> parseParenPat ts2,
       TkLBrace      -> parseBracePat ts2,
       TkLBracket    -> parseListPat ts2,
       _ -> Left (appendString "expected pattern but got " (showToken t))
@@ -407,7 +438,7 @@ def parseBracePat = { ts ->
 
 def parseRecordPatFields : List Token -> Either String {val: List PatField, rest: List Token}
 def parseRecordPatFields = { ts ->
-  bindRight (expectOp "." ts) { ts1 ->
+  bindRight (expectDot ts) { ts1 ->
     bindRight (eatIdent ts1) { {.val -> name, .rest -> ts2} ->
       bindRight (expectOp "->" ts2) { ts3 ->
         bindRight (parseAtomPat ts3) { {.val -> pat, .rest -> ts4} ->
@@ -563,7 +594,7 @@ def parseArmPats = { ts ->
   if (isNextOpStr "->" ts)
     { Right {.val -> Nil, .rest -> ts} }
     { case ts {
-        (Cons TkLParen rest) ->
+        (Cons (TkLParen _) rest) ->
           if (hasTopLevelCommaBeforeRParen rest 0i32)
             { bindRight (parseParenArmPats rest) { {.val -> headPats, .rest -> ts2} ->
                 bindRight (parseArmPats ts2) { {.val -> tailPats, .rest -> ts3} ->
@@ -602,7 +633,7 @@ def hasTopLevelCommaBeforeRParen = { ts depth ->
       if (eqInt32 depth 0i32)
         { False }
         { hasTopLevelCommaBeforeRParen rest (subInt32 depth 1i32) },
-    (Cons TkLParen rest) -> hasTopLevelCommaBeforeRParen rest (addInt32 depth 1i32),
+    (Cons (TkLParen _) rest) -> hasTopLevelCommaBeforeRParen rest (addInt32 depth 1i32),
     (Cons TkRBrace rest) -> hasTopLevelCommaBeforeRParen rest (subInt32 depth 1i32),
     (Cons TkLBrace rest) -> hasTopLevelCommaBeforeRParen rest (addInt32 depth 1i32),
     (Cons TkRBracket rest) -> hasTopLevelCommaBeforeRParen rest (subInt32 depth 1i32),
@@ -643,11 +674,17 @@ def parseParenArmPatsRest = { ts ->
 -- Expression parsers
 -- ────────────────────────────────────────────────────────────────────────────
 
--- Parse an atom (non-left-recursive base expression)
+-- Parse an atom (non-left-recursive base expression), then greedily fold
+-- any immediately-adjacent (tight, no whitespace) chain of '.field'/
+-- C-style '(args)' postfixes onto it via
+-- parseTightPostfix -- for every atom kind, not just identifiers, so
+-- `f state.dict.head` binds the trailing dots to `state.dict` (the atom
+-- parseAppRest just finished parsing) rather than to the whole `f state`
+-- accumulated application (malgo#450).
 def parseAtom : List FixityEntry -> List Token -> Either String {val: Expr, rest: List Token}
 def parseAtom = { ftable ts ->
   bindRight (nextTok ts) { {.val -> t, .rest -> ts2} ->
-    case t {
+    bindRight (case t {
       (TkIdent s)  ->
         if (eqString s "label")
           { parseLabelExpr ftable ts2 }
@@ -656,10 +693,12 @@ def parseAtom = { ftable ts ->
       (TkInt64 n)  -> Right {.val -> ExLit (LitInt64 n), .rest -> ts2},
       (TkChar c)   -> Right {.val -> ExLit (LitChar c), .rest -> ts2},
       (TkString s) -> Right {.val -> ExLit (LitString s), .rest -> ts2},
-      TkLParen     -> parseParenExpr ftable ts2,
+      (TkLParen _) -> parseParenExpr ftable ts2,
       TkLBrace     -> parseCaseLambda ftable ts2,
       TkLBracket   -> parseListExpr ftable ts2,
       _ -> Left (appendString "expected expression but got " (showToken t))
+    }) { {.val -> atomExpr, .rest -> ts3} ->
+      parseTightPostfix ftable atomExpr ts3
     }
   }
 }
@@ -675,16 +714,49 @@ def parseLabelExpr = { ftable ts ->
   }
 }
 
+-- Fold a tight (no-whitespace) chain of '.field' projections and C-style
+-- '(args)' calls onto expr, one step at a time -- each successive step
+-- must itself start right where the previous one ended, since re-reading
+-- the next token's own tight flag is what gives this chaining (mirrors
+-- the Lean parser's pTightPostfix, CStyle.lean). A loose
+-- (whitespace-preceded) '.' or '(' is left in `rest` for parseAppRest to
+-- bind to the whole accumulated application instead (malgo#450).
+-- The call branch folds onto *any* expr, not just an ExVar/ExField head,
+-- matching the Lean parser's pTightPostfix (which dropped that same
+-- restriction in 26eaf4fe): after the first call in a chain like
+-- `addThree(1)(2)(3)`, the accumulator is itself an ExApp, and there's no
+-- reason a second or third tight call shouldn't chain onto it the same
+-- way the first did. parseAppRest's own, unrelated tight-call branch
+-- keeps the canCStyleCall restriction, since it exists for a different
+-- case (a call immediately tight to a *loose*-dot-built accumulator).
+def parseTightPostfix : List FixityEntry -> Expr -> List Token -> Either String {val: Expr, rest: List Token}
+def parseTightPostfix = { ftable expr ts ->
+  case ts {
+    (Cons (TkDot True) rest) ->
+      bindRight (eatIdent rest) { {.val -> field, .rest -> ts2} ->
+        parseTightPostfix ftable (ExField(expr, field)) ts2
+      },
+    (Cons (TkLParen True) _) ->
+      bindRight (parseCStyleCallArgs ftable ts) { {.val -> args, .rest -> ts2} ->
+        parseTightPostfix ftable (applyExprArgs expr args) ts2
+      },
+    _ -> Right {.val -> expr, .rest -> ts}
+  }
+}
+
+-- Parse a bare identifier reference. A tight (no-whitespace) '.field'
+-- immediately following is either a module-qualified name (uppercase
+-- head, e.g. `Foo.bar`) or the first step of a field-projection chain --
+-- the rest of that chain (further tight '.field'/'(args)' steps) is
+-- folded on afterwards by parseAtom's call to parseTightPostfix. A loose
+-- dot is left untouched, for parseAppRest to bind to the accumulator.
 def parseIdentExpr : String -> List Token -> Either String {val: Expr, rest: List Token}
 def parseIdentExpr = { name ts ->
   case ts {
-    (Cons (TkOp dot) (Cons (TkIdent field) rest)) ->
-      if (eqString dot ".")
-        { if (isUpperFirst name)
-            { Right {.val -> ExVar (appendString name (appendString "." field)), .rest -> rest} }
-            { Right {.val -> ExField(ExVar name, field), .rest -> rest} }
-        }
-        { Right {.val -> ExVar name, .rest -> ts} },
+    (Cons (TkDot True) (Cons (TkIdent field) rest)) ->
+      if (isUpperFirst name)
+        { Right {.val -> ExVar (appendString name (appendString "." field)), .rest -> rest} }
+        { Right {.val -> ExField(ExVar name, field), .rest -> rest} },
     _ -> Right {.val -> ExVar name, .rest -> ts}
   }
 }
@@ -786,7 +858,7 @@ def skipAscriptionToRParen = { depth ts ->
         if (eqInt32 depth 0i32)
           { Right ts2 }
           { skipAscriptionToRParen (subInt32 depth 1i32) ts2 },
-      TkLParen -> skipAscriptionToRParen (addInt32 depth 1i32) ts2,
+      (TkLParen _) -> skipAscriptionToRParen (addInt32 depth 1i32) ts2,
       TkEof -> Left "unexpected EOF in type ascription",
       _ -> skipAscriptionToRParen depth ts2
     }
@@ -859,7 +931,7 @@ def parseCaseLambda = { ftable ts ->
 
 def parseRecordExprFields : List FixityEntry -> List Token -> Either String {val: List ExprField, rest: List Token}
 def parseRecordExprFields = { ftable ts ->
-  bindRight (expectOp "." ts) { ts1 ->
+  bindRight (expectDot ts) { ts1 ->
     bindRight (eatIdent ts1) { {.val -> name, .rest -> ts2} ->
       bindRight (expectOp "->" ts2) { ts3 ->
         bindRight (parseOp ftable ts3) { {.val -> expr, .rest -> ts4} ->
@@ -981,7 +1053,7 @@ def hasTopLevelArrow = { ts depth ->
         { hasTopLevelArrow rest (subInt32 depth 1i32) },
     (Cons TkLBrace rest) -> hasTopLevelArrow rest (addInt32 depth 1i32),
     (Cons TkRParen rest) -> hasTopLevelArrow rest (subInt32 depth 1i32),
-    (Cons TkLParen rest) -> hasTopLevelArrow rest (addInt32 depth 1i32),
+    (Cons (TkLParen _) rest) -> hasTopLevelArrow rest (addInt32 depth 1i32),
     (Cons TkRBracket rest) -> hasTopLevelArrow rest (subInt32 depth 1i32),
     (Cons TkLBracket rest) -> hasTopLevelArrow rest (addInt32 depth 1i32),
     (Cons (TkOp op) rest) ->
@@ -1007,7 +1079,19 @@ def parseApp = { ftable ts ->
   }
 }
 
--- Continue application chain while next token starts an atom
+-- Continue application chain while next token starts an atom. A tight
+-- '.'/'(' immediately after a *fresh* atom has already been folded onto
+-- it by parseAtom's call to parseTightPostfix, so the isNextTightLParen
+-- branch below only ever fires on a call immediately following a
+-- loose-dot-built ExField (canCStyleCall allows that). isNextDot,
+-- though, deliberately does not distinguish tight from loose: once a
+-- loose dot has bound a field onto `f` here, a *further* tight dot right
+-- after it (e.g. `g a state .dict.head`: loose `.dict` builds
+-- ExField(g a state, "dict"), then tight `.head` must still bind to
+-- *that* accumulator, not be stranded) has to keep chaining onto the
+-- same `f`, matching the Lean parser's pApplyPostfix field-projection
+-- branch, which never consults tightness either -- only parseTightPostfix
+-- (folding onto a fresh atom) does (malgo#450).
 def parseAppRest : List FixityEntry -> Expr -> List Token -> Either String {val: Expr, rest: List Token}
 def parseAppRest = { ftable f ts ->
   if (isNextDot ts)
@@ -1017,7 +1101,7 @@ def parseAppRest = { ftable f ts ->
         }
       }
     }
-    { if (isNextLParen ts)
+    { if (isNextTightLParen ts)
         { if (canCStyleCall f)
     { bindRight (parseCStyleCallArgs ftable ts) { {.val -> args, .rest -> ts2} ->
         parseAppRest ftable (applyExprArgs f args) ts2
@@ -1139,7 +1223,7 @@ def collectFixityEntry = { assocStr ts ->
     (Cons (TkInt32 prec) (Cons (TkOp op) rest)) ->
       let assoc = if (eqString assocStr "left") { AssocLeft } { if (eqString assocStr "right") { AssocRight } { AssocNone } };
       Cons (FixityEntry(op, prec, assoc)) (collectFixityTable rest),
-    (Cons (TkInt32 prec) (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest)))) ->
+    (Cons (TkInt32 prec) (Cons (TkLParen _) (Cons (TkOp op) (Cons TkRParen rest)))) ->
       let assoc = if (eqString assocStr "left") { AssocLeft } { if (eqString assocStr "right") { AssocRight } { AssocNone } };
       Cons (FixityEntry(op, prec, assoc)) (collectFixityTable rest),
     _ -> collectFixityTable ts
@@ -1339,7 +1423,7 @@ def skipNestedParens = { depth ts ->
     { Right ts }
     { bindRight (nextTok ts) { {.val -> t, .rest -> ts2} ->
         case t {
-          TkLParen -> skipNestedParens (addInt32 depth 1i32) ts2,
+          (TkLParen _) -> skipNestedParens (addInt32 depth 1i32) ts2,
           TkRParen ->
             if (eqInt32 depth 1i32)
               { Right ts2 }
@@ -1360,7 +1444,7 @@ def countCStyleArity = { count depth ts ->
         if (eqInt32 depth 0i32)
           { Right {.val -> count, .rest -> ts2} }
           { countCStyleArity count (subInt32 depth 1i32) ts2 },
-      TkLParen -> countCStyleArity count (addInt32 depth 1i32) ts2,
+      (TkLParen _) -> countCStyleArity count (addInt32 depth 1i32) ts2,
       TkComma ->
         if (eqInt32 depth 0i32)
           { countCStyleArity (addInt32 count 1i32) depth ts2 }
@@ -1375,7 +1459,7 @@ def countCStyleArity = { count depth ts ->
 def isTypeTokenStart : List Token -> Bool
 def isTypeTokenStart = {
   (Cons (TkIdent s) _) -> not (isDeclStart s),
-  (Cons TkLParen _)    -> True,
+  (Cons (TkLParen _) _)    -> True,
   (Cons TkLBrace _)    -> True,
   (Cons TkLBracket _)  -> True,
   _ -> False
@@ -1388,7 +1472,7 @@ def countSpaceArity = { count ts ->
     { bindRight (nextTok ts) { {.val -> t, .rest -> ts2} ->
         case t {
           -- Skip over parenthesized type group (counts as 1 field)
-          TkLParen ->
+          (TkLParen _) ->
             bindRight (skipNestedParens 1i32 ts2) { ts3 ->
               countSpaceArity (addInt32 count 1i32) ts3
             },
@@ -1581,7 +1665,7 @@ def parseDefDecl = { ftable ts ->
 def eatDefName : List Token -> Either String {val: String, rest: List Token}
 def eatDefName = { ts ->
   case ts {
-    (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest))) -> Right {.val -> op, .rest -> rest},
+    (Cons (TkLParen _) (Cons (TkOp op) (Cons TkRParen rest))) -> Right {.val -> op, .rest -> rest},
     _ -> eatIdent ts
   }
 }
@@ -1663,7 +1747,7 @@ def parseImportNames = { ts ->
 def parseImportName : List Token -> Either String {val: ImportName, rest: List Token}
 def parseImportName = {
   (Cons (TkIdent name) rest) -> Right {.val -> ImportName name, .rest -> rest},
-  (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest))) -> Right {.val -> ImportName op, .rest -> rest},
+  (Cons (TkLParen _) (Cons (TkOp op) (Cons TkRParen rest))) -> Right {.val -> ImportName op, .rest -> rest},
   _ -> Left "expected import name"
 }
 
@@ -1762,7 +1846,7 @@ def parseInfixDecl = { assocStr ts ->
   case ts {
     (Cons (TkInt32 prec) (Cons (TkOp op) rest)) ->
       Right {.val -> Just (DeclInfix(assocStr, prec, op)), .rest -> rest},
-    (Cons (TkInt32 prec) (Cons TkLParen (Cons (TkOp op) (Cons TkRParen rest)))) ->
+    (Cons (TkInt32 prec) (Cons (TkLParen _) (Cons (TkOp op) (Cons TkRParen rest)))) ->
       Right {.val -> Just (DeclInfix(assocStr, prec, op)), .rest -> rest},
     _ -> Right {.val -> Nothing, .rest -> skipToNextDecl ts}
   }

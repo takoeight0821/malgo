@@ -84,36 +84,6 @@ def pVarP : P (Pat .parse) := P.captureRange do
   let name ← P.ident
   pure fun range => Pat.var range name
 
-/-- Accumulate `.field` projections for `pVariable`; each `Project`
-spans from the whole expression's start to the end of the latest field. -/
-private partial def pVariableFoldFields
-    (projStart : SourcePos) (expr : Expr .parse) : P (Expr .parse) := do
-  let mField ← P.optional (P.attempt (P.char '.' *> P.rawIdent))
-  match mField with
-  | none => pure expr
-  | some field =>
-    let fieldEndPos ← P.getSourcePos
-    pVariableFoldFields projStart
-      (Expr.project { start := projStart, stop := fieldEndPos } expr field)
-
-/-- `pVariable`: an identifier, greedily consuming immediately-adjacent
-`.field` access chains (no whitespace before the `.`). -/
-def pVariable : P (Expr .parse) := do
-  let startPos ← P.getSourcePos
-  P.notFollowedBy P.anyReserved
-  let name ← P.rawIdent
-  let identEndPos ← P.getSourcePos
-  let hasDot ← P.option false (P.lookAhead (P.char '.') *> pure true)
-  if hasDot then
-    let result ← pVariableFoldFields startPos
-      (Expr.var { start := startPos, stop := identEndPos } name)
-    P.space
-    pure result
-  else
-    P.space
-    let endPos ← P.getSourcePos
-    pure (Expr.var { start := startPos, stop := endPos } name)
-
 /-- A bracketed, comma-separated list: `open_ item (, item)* close`. The
 singleton case is a genuine three-way policy split across this grammar's
 six bracketed-list sites (collapse to the bare element, wrap it in a
@@ -252,12 +222,47 @@ partial def pApply : P (Expr .parse) := do
 
 partial def pApplyPostfix : P (Expr .parse → Expr .parse) :=
   P.choice [
-    -- Function application: expr(arg1, ...); () is treated as ({})
+    -- Function application: expr(arg1, ...); () is treated as ({}).
+    -- For an identifier-headed chain, this branch is only reached once
+    -- whitespace has already intervened since the accumulator: an
+    -- *adjacent* `name(args)` is fully consumed by
+    -- `pVariable`/`pTightPostfix` before `pApply`'s postfix loop ever runs
+    -- (so `nats(0).tail` keeps binding `.tail` to the call, matching the
+    -- corpus's existing call-then-project convention). So a single
+    -- parenthesized argument here is a *loose*, space-separated
+    -- application (`f (expr)`) that happens to look like a call; if a
+    -- `.field` chain immediately (no whitespace) follows the closing
+    -- paren, it binds to that argument rather than to the whole
+    -- application — the same tight-binding treatment `pTightPostfix`
+    -- already gives a bare identifier (#424). `f(a, b)`/multi-arg and
+    -- empty-arg calls are untouched. (A tight call on a non-identifier
+    -- atom, e.g. an immediately-invoked lambda `{ ... }(x)`, still reaches
+    -- this branch tightly and isn't intercepted — out of scope here, no
+    -- corpus case has a dot chain immediately after one; the self-hosted
+    -- parser's `canCStyleCall` draws the same identifier/field-only
+    -- boundary for tight calls, for unrelated reasons.)
     P.captureRange do
-      let args ← P.between (P.symbol "(") (P.symbol ")") (P.sepBy pExpr (P.symbol ","))
-      pure fun range fn =>
-        let actualArgs := if args.isEmpty then [Expr.tuple range []] else args
-        actualArgs.foldl (fun f a => Expr.apply range f a) fn,
+      let parenStart ← P.getSourcePos
+      P.symbol "("
+      let args ← P.sepBy pExpr (P.symbol ",")
+      match args with
+      | [single] =>
+        _ ← P.char ')'
+        let closeEndPos ← P.getSourcePos
+        let hasDot ← P.option false (P.lookAhead (P.char '.') *> pure true)
+        if hasDot then
+          let projected ← pTightPostfix parenStart
+            (Expr.parens { start := parenStart, stop := closeEndPos } single)
+          P.space
+          pure fun range fn => Expr.apply range fn projected
+        else
+          P.space
+          pure fun range fn => Expr.apply range fn single
+      | _ =>
+        P.symbol ")"
+        pure fun range fn =>
+          let actualArgs := if args.isEmpty then [Expr.tuple range []] else args
+          actualArgs.foldl (fun f a => Expr.apply range f a) fn,
     -- Field projection: expr.field
     P.captureRange do
       P.reservedOperator "."
@@ -267,6 +272,60 @@ partial def pApplyPostfix : P (Expr .parse → Expr .parse) :=
     P.captureRange do
       let argument ← pAtom
       pure fun range fn => Expr.apply range fn argument ]
+
+/-- Accumulate tight (no-whitespace) postfix operations immediately
+following `expr`: `.field` projections and C-style `(args)` calls,
+chained for as long as each starts right where the previous one ended.
+Used by `pVariable` so a bare identifier's dot/call chain binds as
+tightly as the identifier itself, matching the corpus's existing
+call-then-project convention (`nats(0).tail`, `addThree(1)(2)(3).apply`,
+`ifChain(True).then(t).else(e)`). Because this loop already swallows
+every *adjacent* continuation at the atom level, `pApplyPostfix`'s own
+call-args branch is only ever reached once whitespace has intervened, so
+it may safely give a *loose* `f (expr).field` the opposite treatment:
+binding the dot to the parenthesized argument instead of to the call
+(#424). Also reused by that branch once it has decided a trailing dot
+chain binds to the parenthesized argument, so further tight continuations
+(`f (g x).a(y).b`) keep chaining onto it. -/
+partial def pTightPostfix
+    (start : SourcePos) (expr : Expr .parse) : P (Expr .parse) := do
+  let mField ← P.optional (P.attempt (P.char '.' *> P.rawIdent))
+  match mField with
+  | some field =>
+    let fieldEndPos ← P.getSourcePos
+    pTightPostfix start (Expr.project { start, stop := fieldEndPos } expr field)
+  | none =>
+    let hasParen ← P.option false (P.lookAhead (P.char '(') *> pure true)
+    if hasParen then
+      P.symbol "("
+      let args ← P.sepBy pExpr (P.symbol ",")
+      _ ← P.char ')'
+      let closeEndPos ← P.getSourcePos
+      let range : Range := { start, stop := closeEndPos }
+      let actualArgs := if args.isEmpty then [Expr.tuple range []] else args
+      pTightPostfix start (actualArgs.foldl (fun f a => Expr.apply range f a) expr)
+    else
+      pure expr
+
+/-- `pVariable`: an identifier, greedily consuming an immediately-adjacent
+(no whitespace) chain of `.field` projections and C-style `(args)` calls
+(#424; see `pTightPostfix`). -/
+partial def pVariable : P (Expr .parse) := do
+  let startPos ← P.getSourcePos
+  P.notFollowedBy P.anyReserved
+  let name ← P.rawIdent
+  let identEndPos ← P.getSourcePos
+  let hasTight ← P.option false
+    (P.lookAhead (P.char '.' <|> P.char '(') *> pure true)
+  if hasTight then
+    let result ← pTightPostfix startPos
+      (Expr.var { start := startPos, stop := identEndPos } name)
+    P.space
+    pure result
+  else
+    P.space
+    let endPos ← P.getSourcePos
+    pure (Expr.var { start := startPos, stop := endPos } name)
 
 partial def pAtom : P (Expr .parse) :=
   P.choice [

@@ -59,6 +59,19 @@ instance : Std.TransOrd ArtifactPath :=
   let external := mkArtifactPath "/external/lib/Foo.mlg" "Foo.mlg"
   inProject != external && compare inProject external != .eq
 
+-- Converse of the above, pinning the property the doc comment above still
+-- claims: two `ModuleName`s reached via different traversal routes but
+-- naming the same origin file (same `originPath`, different `rawPath`)
+-- must still collapse to one artifact -- this is what lets
+-- `dedupeByArtifactPath` (#429) treat aliases of one file as one entry.
+#guard
+  let mkArtifactPath (rawPath : String) : ArtifactPath :=
+    { rawPath, originPath := ⟨"/project/Foo.mlg"⟩, relPath := ⟨"Foo.mlg"⟩
+      targetPath := ⟨"/project/Foo.mlg"⟩ }
+  let viaBareImport := mkArtifactPath "Foo"
+  let viaRelativeImport := mkArtifactPath "./Foo.mlg"
+  viaBareImport == viaRelativeImport && compare viaBareImport viaRelativeImport == .eq
+
 end ArtifactPath
 
 inductive ModuleName where

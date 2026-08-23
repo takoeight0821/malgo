@@ -137,6 +137,20 @@ inductive EvalError where
   | noMatch (range : Range) (value : Value)
   | primitiveNotImplemented (range : Range) (name : String) (values : List Value)
   | invalidArguments (range : Range) (name : String) (values : List Value)
+  /-- `malgo_panic`: a fatal, uncatchable error carrying a user-supplied
+  message (Builtin.mlg's `panic : String -> a`). Not control-flow like
+  `exitSuccess`/`exitWith` below -- unlike those, the Zig/Scheme backends
+  both treat this as an error (Zig: `panic(msg)` to stderr + `exit(1)`;
+  Scheme: `(error 'panic msg)`), so it belongs with the other `EvalError`
+  cases and terminates via the same throw-and-render path as `noMatch`.
+  Carries no `range`, unlike most `EvalError` cases above (same shape as
+  `exitSuccess`/`exitWith` below): `panic` is a shared Malgo-level wrapper
+  (`runtime/malgo/Builtin.mlg`'s `def panic = { (String# message) ->
+  malgo_panic message }`), so `fetchPrimitive`'s call-site range is always
+  that wrapper's own foreign-import declaration, never the caller's actual
+  `panic(...)` site -- reporting it would be actively misleading, not
+  merely imprecise. -/
+  | panic (message : String)
   /-- Haskell `div`/`mod` throw a divide-by-zero `ArithException`;
   `Int.fdiv/fmod` would silently yield 0/`a`. -/
   | divideByZero (range : Range)
@@ -175,6 +189,7 @@ def EvalError.render : EvalError → String
     s!"Invalid arguments for {name}: " ++
       String.intercalate ", " (values.map valueToText)
   | .divideByZero _ => "divide by zero"
+  | .panic message => s!"panic: {message}"
   | .exitSuccess => "ExitSuccess"
   | .exitWith code => s!"ExitWith {code}"
 
@@ -189,6 +204,7 @@ def EvalError.rangeOf : EvalError → Option Range
   | .primitiveNotImplemented r _ _ => some r
   | .invalidArguments r _ _ => some r
   | .divideByZero r => some r
+  | .panic _ => none
   | .exitSuccess => none
   | .exitWith _ => none
 
@@ -693,6 +709,10 @@ def fetchPrimitive (range : Range) (name : String) (values : List Value) : EvalM
     | "malgo_get_args" =>
       unaryPrim range name (fun _ _ =>
         pure (.immediate (.string (String.intercalate "\n" h.arguments)))) values
+    | "malgo_panic" =>
+      unaryPrim range name (fun _ v => match v with
+        | .immediate (.string message) => throw (.panic message)
+        | _ => throw (.invalidArguments range name [v])) values
     | "malgo_exit_success" =>
       unaryPrim range name (fun _ _ => throw .exitSuccess) values
     | "malgo_exit_with_code" =>

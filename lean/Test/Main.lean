@@ -1065,7 +1065,29 @@ def runUnitTests : IO (Nat × Nat) := do
         pure (!(← runUnify (.tTuple [tyInt32]) (.tTuple [tyInt32, tyString])).isOk)),
       ("unify-record-match", do
         pure (← runUnify (.tRecord [("x", tyInt32), ("y", tyString)] none)
-                         (.tRecord [("x", tyInt32), ("y", tyString)] none)).isOk) ]
+                         (.tRecord [("x", tyInt32), ("y", tyString)] none)).isOk),
+      -- Regression coverage for the commonSubst/row-tail interaction: a
+      -- common field's type is a metavariable that ALSO appears in a
+      -- leftover field on the other side. Unifying the common field solves
+      -- the metavariable; that solution must propagate into the leftover
+      -- field before it's folded into the open row tail's unification, or
+      -- the row tail resolves to a stale, unsubstituted type.
+      ("unify-record-open-row-propagates-commonSubst", do
+        let commonMeta := mkId "_commonR"
+        let rowVar := mkId "_rowR"
+        pure (match (← runUnify
+            (.tRecord [("x", .tVar commonMeta 0)] (some (.tVar rowVar 0)))
+            (.tRecord [("x", tyInt32), ("y", .tVar commonMeta 0)] none)) with
+          | .ok subst => subst.get? rowVar == some (.tRecord [("y", tyInt32)] none)
+          | .error _ => false)),
+      ("unify-variant-open-row-propagates-commonSubst", do
+        let commonMeta := mkId "_commonV"
+        let rowVar := mkId "_rowV"
+        pure (match (← runUnify
+            (.tVariant [("X", [.tVar commonMeta 0])] (some (.tVar rowVar 0)))
+            (.tVariant [("X", [tyInt32]), ("Y", [.tVar commonMeta 0])] none)) with
+          | .ok subst => subst.get? rowVar == some (.tVariant [("Y", [tyInt32])] none)
+          | .error _ => false)) ]
   let mut failed := 0
   for (label, act) in checks do
     if ← act then IO.println s!"ok Malgo.Infer/unit/{label}"

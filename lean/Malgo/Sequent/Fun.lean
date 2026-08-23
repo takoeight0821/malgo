@@ -69,13 +69,21 @@ def Pattern.range : Pattern → Range
 
 instance : HasRange Pattern := ⟨Pattern.range⟩
 
-partial def Pattern.toSExpr : Pattern → SExpr
+def Pattern.toSExpr : Pattern → SExpr
   | .pvar _ name => Malgo.toSExpr name
   | .pliteral _ lit => Malgo.toSExpr lit
   | .destruct _ tag patterns => .list [Malgo.toSExpr tag, .list (patterns.map Pattern.toSExpr)]
   | .expand _ fields =>
     .list [sym "expand",
-      .list ((sortAssocAscending fields).map fun (k, v) => .list [sym k, v.toSExpr])]
+      .list ((sortAssocAscending fields).attach.map fun ⟨kv, hkv⟩ =>
+        .list [sym kv.1, kv.2.toSExpr])]
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem (mem_sortAssocAscending hkv)) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
 instance : ToSExpr Pattern := ⟨Pattern.toSExpr⟩
 
@@ -123,7 +131,7 @@ instance : HasRange Branch := ⟨Branch.range⟩
 
 mutual
 
-partial def Expr.toSExpr : Expr → SExpr
+def Expr.toSExpr : Expr → SExpr
   | .var _ name => Malgo.toSExpr name
   | .literal _ literal => Malgo.toSExpr literal
   | .construct _ tag arguments =>
@@ -134,7 +142,8 @@ partial def Expr.toSExpr : Expr → SExpr
     .list [sym "lambda", .list (parameters.map Malgo.toSExpr), body.toSExpr]
   | .object _ fields =>
     .list [sym "object",
-      .list ((sortAssocAscending fields).map fun (k, v) => .list [sym k, v.toSExpr])]
+      .list ((sortAssocAscending fields).attach.map fun ⟨kv, hkv⟩ =>
+        .list [sym kv.1, kv.2.toSExpr])]
   | .apply _ callee arguments =>
     .list [sym "apply", callee.toSExpr, .list (arguments.map Expr.toSExpr)]
   | .project _ callee field =>
@@ -145,9 +154,18 @@ partial def Expr.toSExpr : Expr → SExpr
     .list [sym "select", scrutinee.toSExpr, .list (branches.map Branch.toSExpr)]
   | .invoke _ name => .list [sym "invoke", Malgo.toSExpr name]
   | .fix _ name body => .list [sym "fix", Malgo.toSExpr name, body.toSExpr]
+termination_by e => sizeOf e
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem (mem_sortAssocAscending hkv)) (by omega)
+    | (rename_i h
+       exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem h) (by omega))
 
-partial def Branch.toSExpr : Branch → SExpr
+def Branch.toSExpr : Branch → SExpr
   | .branch _ pattern body => .list [Malgo.toSExpr pattern, body.toSExpr]
+termination_by b => sizeOf b
 
 end
 

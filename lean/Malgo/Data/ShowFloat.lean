@@ -35,19 +35,16 @@ private def parseBack (mantissa : Nat) (exp10 : Int) : Float :=
   else
     Float.ofScientific mantissa true (-exp10).toNat
 
-/-- Shortest `(digits, exp10)` with `digits * 10^exp10` parsing back to
-`f` (positive finite `f`). -/
-private def shortestDigits (f : Float) : Nat × Int := Id.run do
-  -- Exact decomposition f = m53 * 2^e2.
-  let (m, e) := f.frExp
-  let m53 := (m * Float.ofNat (2 ^ 53)).toUInt64.toNat
-  let e2 : Int := e - 53
-  -- Exact decimal form f = d0 * 10^exp0.
-  let (d0, exp0) : Nat × Int :=
-    if e2 ≥ 0 then (m53 * 2 ^ e2.toNat, 0)
-    else (m53 * 5 ^ (-e2).toNat, e2)
+/-- Shared core of `shortestDigits`/`shortestDigits32`: search precisions
+`1..precisionCap` for the shortest half-even rounding of `d0 * 10^exp0`
+whose parse-back (`roundTrips`) recovers the original value. The exact
+decimal decomposition and the round-trip check are width-dependent
+(mantissa bit width, `Float`/`Float32`); everything past that point is
+plain `Nat`/`Int` arithmetic, identical for both widths. -/
+private def shortestDigitsCore (d0 : Nat) (exp0 : Int) (precisionCap : Nat)
+    (roundTrips : Nat → Int → Bool) : Nat × Int := Id.run do
   let nd := digitCount d0
-  for p in [1 : min nd 17 + 1] do
+  for p in [1 : min nd precisionCap + 1] do
     let drop := nd - p
     let mut cand := roundHalfEven d0 drop
     let mut candExp := exp0 + drop
@@ -55,7 +52,7 @@ private def shortestDigits (f : Float) : Nat × Int := Id.run do
     if digitCount cand > p then
       cand := cand / 10
       candExp := candExp + 1
-    if parseBack cand candExp == f then
+    if roundTrips cand candExp then
       -- Strip trailing zeros the rounding may have produced (keeps the
       -- digit string canonical; the value is unchanged).
       let mut c := cand
@@ -65,6 +62,46 @@ private def shortestDigits (f : Float) : Nat × Int := Id.run do
         ce := ce + 1
       return (c, ce)
   return (d0, exp0)
+
+/-- Shortest `(digits, exp10)` with `digits * 10^exp10` parsing back to
+`f` (positive finite `f`). -/
+private def shortestDigits (f : Float) : Nat × Int :=
+  -- Exact decomposition f = m53 * 2^e2.
+  let (m, e) := f.frExp
+  let m53 := (m * Float.ofNat (2 ^ 53)).toUInt64.toNat
+  let e2 : Int := e - 53
+  -- Exact decimal form f = d0 * 10^exp0.
+  let (d0, exp0) : Nat × Int :=
+    if e2 ≥ 0 then (m53 * 2 ^ e2.toNat, 0)
+    else (m53 * 5 ^ (-e2).toNat, e2)
+  shortestDigitsCore d0 exp0 17 (fun cand candExp => parseBack cand candExp == f)
+
+/-- Shared formatting of a shortest-digit-string result: `useFixed` selects
+Haskell `showGFloat`'s fixed notation (`0.1 ≤ |x| < 10^7`) vs. scientific;
+the threshold comparison itself is width-dependent (`Float`/`Float32`), so
+the caller computes it and passes the resulting `Bool` in. -/
+private def formatDigits (sign : String) (digits : Nat) (exp10 : Int) (useFixed : Bool) : String :=
+  let ds := toString digits
+  -- Decimal-point position: a = 0.ds * 10^(pointPow + 1).
+  let pointPow : Int := (ds.length - 1 : Int) + exp10
+  if useFixed then
+    -- Fixed notation, at least one fractional digit.
+    if pointPow ≥ 0 then
+      let ip := pointPow.toNat + 1
+      let intPart :=
+        if ds.length ≥ ip then ds.take ip
+        else ds ++ String.ofList (List.replicate (ip - ds.length) '0')
+      let fracPart := if ds.length > ip then toString (ds.drop ip) else "0"
+      sign ++ toString intPart ++ "." ++ fracPart
+    else
+      sign ++ "0." ++ String.ofList (List.replicate (-pointPow - 1).toNat '0') ++ ds
+  else
+    -- Scientific: d.ddd e±e, mantissa has at least one fractional digit.
+    let headDigit := ds.take 1
+    let rest := ds.drop 1
+    let mantissa :=
+      toString headDigit ++ "." ++ (if rest.isEmpty then "0" else toString rest)
+    sign ++ mantissa ++ "e" ++ toString pointPow
 
 /-- Haskell `show` for a `Float` (GHC `showGFloat`). -/
 def haskellShowFloat (f : Float) : String :=
@@ -77,27 +114,7 @@ def haskellShowFloat (f : Float) : String :=
     if a == 0 then sign ++ "0.0"
     else
       let (digits, exp10) := shortestDigits a
-      let ds := toString digits
-      -- Decimal-point position: a = 0.ds * 10^(pointPow + 1).
-      let pointPow : Int := (ds.length - 1 : Int) + exp10
-      if 0.1 ≤ a && a < 1e7 then
-        -- Fixed notation, at least one fractional digit.
-        if pointPow ≥ 0 then
-          let ip := pointPow.toNat + 1
-          let intPart :=
-            if ds.length ≥ ip then ds.take ip
-            else ds ++ String.ofList (List.replicate (ip - ds.length) '0')
-          let fracPart := if ds.length > ip then toString (ds.drop ip) else "0"
-          sign ++ toString intPart ++ "." ++ fracPart
-        else
-          sign ++ "0." ++ String.ofList (List.replicate (-pointPow - 1).toNat '0') ++ ds
-      else
-        -- Scientific: d.ddd e±e, mantissa has at least one fractional digit.
-        let headDigit := ds.take 1
-        let rest := ds.drop 1
-        let mantissa :=
-          toString headDigit ++ "." ++ (if rest.isEmpty then "0" else toString rest)
-        sign ++ mantissa ++ "e" ++ toString pointPow
+      formatDigits sign digits exp10 (0.1 ≤ a && a < 1e7)
 
 #guard haskellShowFloat 0.0 == "0.0"
 #guard haskellShowFloat 3.14 == "3.14"
@@ -132,7 +149,7 @@ private def parseBack32 (mantissa : Nat) (exp10 : Int) : Float32 :=
 
 /-- Shortest `(digits, exp10)` with `digits * 10^exp10` parsing back to
 `f` (positive finite `f`, 32-bit). -/
-private def shortestDigits32 (f : Float32) : Nat × Int := Id.run do
+private def shortestDigits32 (f : Float32) : Nat × Int :=
   -- Exact decomposition f = m24 * 2^e2.
   let (m, e) := f.frExp
   let m24 := (m * Float32.ofNat (2 ^ 24)).toUInt64.toNat
@@ -141,25 +158,7 @@ private def shortestDigits32 (f : Float32) : Nat × Int := Id.run do
   let (d0, exp0) : Nat × Int :=
     if e2 ≥ 0 then (m24 * 2 ^ e2.toNat, 0)
     else (m24 * 5 ^ (-e2).toNat, e2)
-  let nd := digitCount d0
-  for p in [1 : min nd 9 + 1] do
-    let drop := nd - p
-    let mut cand := roundHalfEven d0 drop
-    let mut candExp := exp0 + drop
-    -- Renormalize a rounding carry (e.g. 999 → 1000).
-    if digitCount cand > p then
-      cand := cand / 10
-      candExp := candExp + 1
-    if parseBack32 cand candExp == f then
-      -- Strip trailing zeros the rounding may have produced (keeps the
-      -- digit string canonical; the value is unchanged).
-      let mut c := cand
-      let mut ce := candExp
-      while c % 10 == 0 && c > 9 do
-        c := c / 10
-        ce := ce + 1
-      return (c, ce)
-  return (d0, exp0)
+  shortestDigitsCore d0 exp0 9 (fun cand candExp => parseBack32 cand candExp == f)
 
 /-- Haskell `show` for a `Float` (32-bit, GHC `showGFloat`). -/
 def haskellShowFloat32 (f : Float32) : String :=
@@ -172,27 +171,7 @@ def haskellShowFloat32 (f : Float32) : String :=
     if a == 0 then sign ++ "0.0"
     else
       let (digits, exp10) := shortestDigits32 a
-      let ds := toString digits
-      -- Decimal-point position: a = 0.ds * 10^(pointPow + 1).
-      let pointPow : Int := (ds.length - 1 : Int) + exp10
-      if (0.1 : Float32) ≤ a && a < (1e7 : Float32) then
-        -- Fixed notation, at least one fractional digit.
-        if pointPow ≥ 0 then
-          let ip := pointPow.toNat + 1
-          let intPart :=
-            if ds.length ≥ ip then ds.take ip
-            else ds ++ String.ofList (List.replicate (ip - ds.length) '0')
-          let fracPart := if ds.length > ip then toString (ds.drop ip) else "0"
-          sign ++ toString intPart ++ "." ++ fracPart
-        else
-          sign ++ "0." ++ String.ofList (List.replicate (-pointPow - 1).toNat '0') ++ ds
-      else
-        -- Scientific: d.ddd e±e, mantissa has at least one fractional digit.
-        let headDigit := ds.take 1
-        let rest := ds.drop 1
-        let mantissa :=
-          toString headDigit ++ "." ++ (if rest.isEmpty then "0" else toString rest)
-        sign ++ mantissa ++ "e" ++ toString pointPow
+      formatDigits sign digits exp10 ((0.1 : Float32) ≤ a && a < (1e7 : Float32))
 
 #guard haskellShowFloat32 0.0 == "0.0"
 #guard haskellShowFloat32 3.14 == "3.14"

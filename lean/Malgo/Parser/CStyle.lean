@@ -114,6 +114,19 @@ def pVariable : P (Expr .parse) := do
     let endPos ← P.getSourcePos
     pure (Expr.var { start := startPos, stop := endPos } name)
 
+/-- A bracketed, comma-separated list: `open_ item (, item)* close`. The
+singleton case is a genuine three-way policy split across this grammar's
+six bracketed-list sites (collapse to the bare element, wrap it in a
+marker node, or reject it outright), so it's the one parameter callers
+must supply; `multi` handles everything else (0 or 2+ elements) alike. -/
+def pBracketedList (open_ close : String) (item : P α)
+    (single : α → P (Range → β)) (multi : List α → Range → β) : P β :=
+  P.captureRange do
+    let xs ← P.between (P.symbol open_) (P.symbol close) (P.sepBy item (P.symbol ","))
+    match xs with
+    | [x] => single x
+    | xs => pure (multi xs)
+
 /-! ## Type parsers -/
 
 mutual
@@ -134,6 +147,8 @@ partial def pTyApp : P (Ty .parse) := P.captureRange do
     | [] => ty
     | _ => Ty.app range ty tys
 
+-- `pTyBlock` must precede `pTyCStyleTuple`: both parse `{ singleType }`,
+-- and `{T}` is exclusively `pTyBlock`'s block/thunk-type syntax.
 partial def pAtomType : P (Ty .parse) :=
   P.choice [P.attempt pTyBottom, pTyTilde, pTyVar, pTyTuple,
     P.attempt pTyRecord, pTyVariant, P.attempt pTyBlock, pTyCStyleTuple]
@@ -142,11 +157,8 @@ partial def pTyVar : P (Ty .parse) := P.captureRange do
   let name ← P.ident
   pure fun range => Ty.var range name
 
-partial def pTyTuple : P (Ty .parse) := P.captureRange do
-  let tys ← P.between (P.symbol "(") (P.symbol ")") (P.sepBy pType (P.symbol ","))
-  pure fun range => match tys with
-    | [ty] => ty
-    | _ => Ty.tuple range tys
+partial def pTyTuple : P (Ty .parse) :=
+  pBracketedList "(" ")" pType (fun ty => pure fun _ => ty) (fun tys range => Ty.tuple range tys)
 
 partial def pTyRecord : P (Ty .parse) := P.captureRange do
   let (fields, rowTail) ← P.between (P.symbol "{") (P.symbol "}") do
@@ -190,11 +202,15 @@ partial def pVariantCase : P (String × List (Ty .parse)) := do
   let args ← P.many pAtomType
   pure (name, args)
 
-partial def pTyCStyleTuple : P (Ty .parse) := P.captureRange do
-  let tys ← P.between (P.symbol "{") (P.symbol "}") (P.sepBy pType (P.symbol ","))
-  pure fun range => match tys with
-    | [ty] => ty
-    | _ => Ty.tuple range tys
+/-- Unlike `pTyTuple`, a singleton here is rejected rather than collapsed:
+`{T}` is exclusively `pTyBlock`'s block/thunk-type syntax (tried first in
+`pAtomType`'s candidate list, so it always wins on a single type), which
+would otherwise make a collapsing singleton branch here dead code that
+can never fire. Reject it explicitly instead of leaving that unreachable. -/
+partial def pTyCStyleTuple : P (Ty .parse) :=
+  pBracketedList "{" "}" pType
+    (fun _ => P.fail "c-style tuple must have at least two types or be empty")
+    (fun tys range => Ty.tuple range tys)
 
 partial def pTyBlock : P (Ty .parse) := P.captureRange do
   let ty ← P.between (P.symbol "{") (P.symbol "}") pType
@@ -273,17 +289,14 @@ partial def pGoto : P (Expr .parse) := P.captureRange do
     pure (value, lbl)
   pure fun range => Expr.goto range value lbl
 
-partial def pParenTuple : P (Expr .parse) := P.captureRange do
-  let exprs ← P.between (P.symbol "(") (P.symbol ")") (P.sepBy pExpr (P.symbol ","))
-  match exprs with
-  | [expr] => pure fun range => Expr.parens range expr
-  | _ => pure fun range => Expr.tuple range exprs
+partial def pParenTuple : P (Expr .parse) :=
+  pBracketedList "(" ")" pExpr
+    (fun e => pure fun range => Expr.parens range e) (fun es range => Expr.tuple range es)
 
-partial def pTuple : P (Expr .parse) := P.captureRange do
-  let exprs ← P.between (P.symbol "{") (P.symbol "}") (P.sepBy pExpr (P.symbol ","))
-  match exprs with
-  | [_] => P.fail "c-style tuple must have at least two expressions or be empty"
-  | _ => pure fun range => Expr.tuple range exprs
+partial def pTuple : P (Expr .parse) :=
+  pBracketedList "{" "}" pExpr
+    (fun _ => P.fail "c-style tuple must have at least two expressions or be empty")
+    (fun es range => Expr.tuple range es)
 
 partial def pRecord : P (Expr .parse) := P.captureRange do
   let fields ← P.between (P.symbol "{") (P.symbol "}") (P.sepEndBy1 pRecordField (P.symbol ","))
@@ -392,17 +405,13 @@ partial def pConP : P (Pat .parse) := P.captureRange do
     <|> (NEList.toList <$> P.some pAtomPat)
   pure fun range => Pat.con range constructor patterns
 
-partial def pTupleP : P (Pat .parse) := P.captureRange do
-  let patterns ← P.between (P.symbol "{") (P.symbol "}") (P.sepBy pPat (P.symbol ","))
-  match patterns with
-  | [_] => P.fail "c-style tuple must have at least two patterns or be empty"
-  | _ => pure fun range => Pat.tuple range patterns
+partial def pTupleP : P (Pat .parse) :=
+  pBracketedList "{" "}" pPat
+    (fun _ => P.fail "c-style tuple must have at least two patterns or be empty")
+    (fun ps range => Pat.tuple range ps)
 
-partial def pParensTupleP : P (Pat .parse) := P.captureRange do
-  let patterns ← P.between (P.symbol "(") (P.symbol ")") (P.sepBy pPat (P.symbol ","))
-  match patterns with
-  | [pattern] => pure fun _ => pattern
-  | _ => pure fun range => Pat.tuple range patterns
+partial def pParensTupleP : P (Pat .parse) :=
+  pBracketedList "(" ")" pPat (fun p => pure fun _ => p) (fun ps range => Pat.tuple range ps)
 
 partial def pRecordP : P (Pat .parse) := P.captureRange do
   let fields ← P.between (P.symbol "{") (P.symbol "}") (P.sepEndBy1 pRecordPField (P.symbol ","))

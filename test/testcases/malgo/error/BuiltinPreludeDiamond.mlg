@@ -1,0 +1,18 @@
+-- Regression for #429: this program depends on Builtin.mlg twice under two
+-- different `ModuleName` aliases -- once directly, via this file's own
+-- relative-path import (`.artifact` form), and once transitively, via
+-- Prelude's own bare `import Builtin` (`.moduleName` form) -- both of which
+-- resolve to the identical file on disk. `Query.Engine.buildDepsEnv` must
+-- dedupe those aliases by resolved file identity rather than by the raw
+-- `ModuleName`, or this diamond import trips its duplicate-export check
+-- even though nothing actually collides. See
+-- `test/testcases/malgo/error/README.md` for the full story; this file has
+-- no `.expect` sidecar on purpose -- unlike the fixtures documented there,
+-- it is meant to succeed, and `scripts/cli-gate.sh`'s dedicated
+-- `infer-ok` check asserts exactly that (exit 0 under `malgo eval --infer`)
+-- so the regression is exercised through the real CLI binary, not just the
+-- Lean test suite's lenient fold.
+module {..} = import "../../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../../runtime/malgo/Prelude.mlg"
+
+def main = { (_) -> printString (toStringInt32 (identity (addInt32 40 2))) }

@@ -118,9 +118,10 @@ theorem mem_sortAssocAscending {κ α : Type} [Ord κ] {xs : List (κ × α)} {p
 monotonicity" lemma (`s ⊆ t → s.size ≤ t.size`), and no `TreeSet`-level
 extensionality principle usable without `LawfulEqCmp` (which a key type
 like `ModuleName` can genuinely fail — two `ModuleName.artifact` values
-with the same `relPath` but different other `ArtifactPath` fields compare
-`.eq` without being `=`). Both facts below are derived purely from
-existing size/diff/inter identities (`isEmpty_diff_iff`,
+with the same `originPath` but different other `ArtifactPath` fields
+(`rawPath`/`relPath`/`targetPath`) compare `.eq` without being `=`). Both
+facts below are derived purely from existing size/diff/inter identities
+(`isEmpty_diff_iff`,
 `size_diff_add_size_inter_eq_size_left`, `size_inter_le_size_right`,
 `size_erase`), so they need only `[Std.TransCmp cmp]`. -/
 

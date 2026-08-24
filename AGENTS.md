@@ -255,3 +255,17 @@ removed; `PORTING.md` records the module-by-module mapping and why the
 retirement criteria were overridden. Documents under `docs/plans/`,
 `docs/reports/`, `bench/` and `wiki/` describe that period and are left as
 written — do not "correct" them to the current layout.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub Issues in this repo (`gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

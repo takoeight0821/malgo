@@ -40,9 +40,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
+      - uses: ./.github/actions/setup-lean
         with:
-          lake-package-directory: lean
           test: true
 
   # What lean-parity used to be: it diffed the two implementations' output
@@ -56,11 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
-        with:
-          lake-package-directory: lean
-          build: true
-          test: false
+      - uses: ./.github/actions/setup-lean
 
       - name: CLI gate (eval / bigstep / error)
         run: bash scripts/cli-gate.sh
@@ -79,11 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
-        with:
-          lake-package-directory: lean
-          build: true
-          test: false
+      - uses: ./.github/actions/setup-lean
 
       # Same include_str staleness as lean-zig-golden: without this the job
       # compiles Main.mlg against a cached, stale embedded runtime. That is
@@ -131,11 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
-        with:
-          lake-package-directory: lean
-          build: true
-          test: false
+      - uses: ./.github/actions/setup-lean
 
       # Not optional, for the same reason lean-selfhost and lean-zig-golden do
       # it: Lake does not reliably track the include_str that embeds
@@ -208,18 +195,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
-        with:
-          lake-package-directory: lean
-          build: true
-          test: false
+      - uses: ./.github/actions/setup-lean
 
       # Lake's tracking of `include_str` is not reliable: measured on one edit,
       # changing runtime.zig rebuilt Runtime.olean but reverting that change did
       # not, and `lake build` reported success while the binary kept embedding
-      # the old runtime text. Combined with lean-action's .lake cache, a PR that
+      # the old runtime text. Combined with setup-lean's .lake cache, a PR that
       # touches only runtime.zig would otherwise compile all 73 cases against
-      # the PREVIOUS runtime and report green. Runs after lean-action because
+      # the PREVIOUS runtime and report green. Runs after setup-lean because
       # that is what restores the cache; rebuilding one module is negligible
       # against this job's Zig toolchain time. Unconditional on purpose — a
       # "did runtime.zig change?" guard reintroduces the bug it fixes.
@@ -261,11 +244,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
-        with:
-          lake-package-directory: lean
-          build: true
-          test: false
+      - uses: ./.github/actions/setup-lean
 
       # Not `apt-get install chezscheme`: Ubuntu's apt package tracks its own
       # release cadence, not Chez's upstream version, so it silently drifts

@@ -110,8 +110,12 @@ step, and any program of more than ~150k steps died with SIGSEGV — `fib 16` wa
 is not a substitute: Zig requires the callee's signature to match the caller's, which
 rules out helpers like `applyCovalue(Value, Value)`, and a genuine tail call would
 release the frame holding the `&[_]rt.Value{...}` argument slice before the callee read
-it. An `Action` carries its arguments in a fixed inline array (`MAX_ARGS`, currently 4;
-the front end tops out at 2) precisely so no argument outlives its storage.
+it. An `Action` carries its arguments in a fixed inline array (`MAX_ARGS`, currently 2 —
+tightened from 4 by #407 after confirming empirically that no call site in the golden
+corpus, either self-hosted compiler level, `examples/`, or `bench/fixtures/` ever
+carries more than 2) precisely so no argument outlives its storage. Shrinking
+`MAX_ARGS` shrinks every `Action` by two words, which `rt.run` copies by value on
+every one of `selfhost-l2`'s 1.4e10+ dispatches.
 
 **An Action is a move, not a borrow.** It carries exactly the references a direct call
 would have transferred — one of the callee into `self`, one of each operand into

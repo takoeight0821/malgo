@@ -105,9 +105,16 @@ def valueSlice (pv : Name → String) (vs : List Name) : String :=
   "&[_]rt.Value{" ++ ", ".intercalate (vs.map pv) ++ "}"
 
 /-- Mirrors `MAX_ARGS` in `runtime/zig/runtime.zig`, the fixed argument capacity
-of an `rt.Action`. The runtime's own `rcInvariant` in `mkAction` is the
-authoritative backstop if the two ever drift. -/
-def maxCallArgs : Nat := 4
+of an `rt.Action`. Tightened from 4 to 2 by #407 after confirming (by dumping
+generated Zig for the full golden corpus, both self-hosted compiler levels,
+`examples/`, and `bench/fixtures/`) that no call site ever carries more than 2
+arguments -- shrinking `Action` by two words reduces the per-dispatch copy on
+`selfhost-l2`'s 1.4e10+ dispatches, each of which copies an `Action` by value
+(a mechanism argument; the workload's actual wall clock is too noisy at this
+harness's resolution to attribute a specific delta to this change alone). The
+runtime's own `rcInvariant` in `mkAction` is the authoritative backstop if the
+two ever drift. -/
+def maxCallArgs : Nat := 2
 
 /-- `valueSlice` for a call site, rejecting an arity the runtime's Action cannot
 carry. The front end tops out at 2 (`callClosure f [arg, kont]`), so exceeding

@@ -1,0 +1,23 @@
+#c-style-apply
+module {panic, String#} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- Regression test for malgo#452: the self-hosted evaluator's `import
+-- Builtin.mlg` substitutes a synthetic roster (`makeBaseEnv`) instead of
+-- actually evaluating Builtin.mlg's source, so any wrapper defined there in
+-- terms of a foreign primitive (`panic = { (String# message) -> malgo_panic
+-- message }`) has to be mirrored into that roster by hand or it comes back
+-- `undefined: panic`. Panic.mlg already covers a *wildcard* import
+-- (`module {..} = import ...`); this covers the *named* form (`module
+-- {panic} = import ...`), which resolves via a different code path
+-- (`extendImportOnlyDirect`'s per-name `envLookup`, vs `mergeEnvs` for
+-- wildcard) that needs the same fix. `String#` is imported alongside
+-- `panic` only so the Lean renderer's literal-boxing desugar
+-- (`Malgo.Rename.Pass.lookupBox`) has it in scope -- it isn't otherwise
+-- used by this test. Not a `.golden/Malgo.Sequent.Eval` golden case -- see
+-- `evalHarnessUnsupported` and `Malgo.Test.PanicGate.run` in
+-- lean/Test/Main.lean for why.
+def main = { (_) ->
+  let _ = putStrLn("before panic");
+  panic "malgo#452 named-import regression check"
+}

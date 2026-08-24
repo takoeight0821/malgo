@@ -33,6 +33,34 @@ private def jList (f : α → Json) (xs : List α) : Json := Json.arr (xs.map f)
 private def jParseList (f : Json → Except String α) (j : Json) : Except String (List α) := do
   (← j.getArr?).toList.mapM f
 
+/-- `Json.getArr?` succeeding pins the input down to that exact array — its
+2-arm match (`Lean/Data/Json/Basic.lean`) makes this a one-line case split. -/
+private theorem getArr?_eq_ok {j : Json} {a : Array Json} (h : j.getArr? = .ok a) :
+    j = .arr a := by
+  cases j <;> simp_all [Json.getArr?, Except.pure, pure]
+
+/-- Parser-side counterpart to `List.attach`, used in place of `jParseList`
+wherever an array's elements recurse into one of the mutually-recursive
+`fromJson?` codecs below. `toJson`'s `decreasing_by` blocks get a
+`sizeOf`-decrease for free by recursing over the already-typed AST
+(`pats.attach.map fun ⟨p, hp⟩ => ...`); `fromJson?` instead recurses over the
+*untyped* `Json` being decoded, so this attaches the same kind of proof to
+every array element up front, from `getArr?_eq_ok` plus the core-library
+`Array.sizeOf_lt_of_mem`. -/
+private def jParseArrAttach (j : Json) :
+    Except String (List {e : Json // sizeOf e < sizeOf j}) :=
+  match h : j.getArr? with
+  | .error e => .error e
+  | .ok arr =>
+    .ok (arr.toList.attach.map fun ⟨e, he⟩ =>
+      ⟨e, by
+        have hj : j = Json.arr arr := getArr?_eq_ok h
+        have hmem : e ∈ arr := Array.mem_toList_iff.mp he
+        have h1 : sizeOf e < sizeOf arr := Array.sizeOf_lt_of_mem hmem
+        subst hj
+        simp only [Json.arr.sizeOf_spec]
+        omega⟩)
+
 /-! ## Leaf codecs -/
 
 instance : ToJson SourcePos where
@@ -136,20 +164,24 @@ decreasing_by
     | exact Nat.lt_of_lt_of_le (sizeOf_snd_lt_of_mem hkp) (by omega)
     | exact Nat.lt_of_lt_of_le (List.sizeOf_lt_of_mem hp) (by omega)
 
-partial def patternFromJson (j : Json) : Except String Pattern := do
-  match (← j.getArr?).toList with
-  | [tag, r, a] => match ← tag.getStr? with
+def patternFromJson (j : Json) : Except String Pattern := do
+  match ← jParseArrAttach j with
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨a, ha⟩] => match ← tag.getStr? with
     | "pvar" => return .pvar (← fromJson? r) (← fromJson? a)
     | "plit" => return .pliteral (← fromJson? r) (← fromJson? a)
-    | "expand" => return .expand (← fromJson? r) (← jParseList (fun e => do
-        match (← e.getArr?).toList with
-        | [k, p] => return (← k.getStr?, ← patternFromJson p)
-        | _ => .error "Pattern.expand: bad field") a)
+    | "expand" => return .expand (← fromJson? r) (← (← jParseArrAttach a).mapM fun ⟨e, he⟩ => do
+        match ← jParseArrAttach e with
+        | [⟨k, _⟩, ⟨p, hp⟩] => return (← k.getStr?, ← patternFromJson p)
+        | _ => .error "Pattern.expand: bad field")
     | other => .error s!"Pattern: unknown 3-element tag {other}"
-  | [tag, r, a, b] => match ← tag.getStr? with
-    | "destruct" => return .destruct (← fromJson? r) (← fromJson? a) (← jParseList patternFromJson b)
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨a, _⟩, ⟨b, hb⟩] => match ← tag.getStr? with
+    | "destruct" => return .destruct (← fromJson? r) (← fromJson? a) (← (← jParseArrAttach b).mapM fun ⟨p, hp⟩ => patternFromJson p)
     | other => .error s!"Pattern: unknown 4-element tag {other}"
   | _ => .error "Pattern: unexpected shape"
+termination_by sizeOf j
+decreasing_by
+  all_goals simp_wf
+  all_goals omega
 
 instance : ToJson Pattern := ⟨patternToJson⟩
 instance : FromJson Pattern := ⟨patternFromJson⟩
@@ -224,66 +256,82 @@ end
 
 mutual
 
-partial def producerFromJson (j : Json) : Except String Producer := do
-  match (← j.getArr?).toList with
-  | [tag, r, a] => match ← tag.getStr? with
+def producerFromJson (j : Json) : Except String Producer := do
+  match ← jParseArrAttach j with
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨a, ha⟩] => match ← tag.getStr? with
     | "var" => return .var (← fromJson? r) (← fromJson? a)
     | "lit" => return .literal (← fromJson? r) (← fromJson? a)
-    | "obj" => return .object (← fromJson? r) (← jParseList (fun e => do
-        match (← e.getArr?).toList with
-        | [k, name, s] => return (← k.getStr?, ← fromJson? name, ← statementFromJson s)
-        | _ => .error "Producer.object: bad field") a)
+    | "obj" => return .object (← fromJson? r) (← (← jParseArrAttach a).mapM fun ⟨e, he⟩ => do
+        match ← jParseArrAttach e with
+        | [⟨k, _⟩, ⟨name, _⟩, ⟨s, hs⟩] => return (← k.getStr?, ← fromJson? name, ← statementFromJson s)
+        | _ => .error "Producer.object: bad field")
     | other => .error s!"Producer: unknown 3-element tag {other}"
-  | [tag, r, a, b] => match ← tag.getStr? with
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨a, ha⟩, ⟨b, hb⟩] => match ← tag.getStr? with
     | "mu" => return .mu (← fromJson? r) (← fromJson? a) (← statementFromJson b)
     | "lam" => return .lambda (← fromJson? r) (← jParseList fromJson? a) (← statementFromJson b)
     | other => .error s!"Producer: unknown 4-element tag {other}"
-  | [tag, r, a, b, c] => match ← tag.getStr? with
-    | "con" => return .construct (← fromJson? r) (← fromJson? a) (← jParseList producerFromJson b) (← jParseList fromJson? c)
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨a, _⟩, ⟨b, hb⟩, ⟨c, _⟩] => match ← tag.getStr? with
+    | "con" => return .construct (← fromJson? r) (← fromJson? a) (← (← jParseArrAttach b).mapM fun ⟨p, hp⟩ => producerFromJson p) (← jParseList fromJson? c)
     | other => .error s!"Producer: unknown 5-element tag {other}"
   | _ => .error "Producer: unexpected shape"
+termination_by sizeOf j
+decreasing_by
+  all_goals simp_wf
+  all_goals omega
 
-partial def consumerFromJson (j : Json) : Except String Consumer := do
-  match (← j.getArr?).toList with
-  | [tag, r] => match ← tag.getStr? with
+def consumerFromJson (j : Json) : Except String Consumer := do
+  match ← jParseArrAttach j with
+  | [⟨tag, _⟩, ⟨r, _⟩] => match ← tag.getStr? with
     | "finish" => return .finish (← fromJson? r)
     | other => .error s!"Consumer: unknown 2-element tag {other}"
-  | [tag, r, a] => match ← tag.getStr? with
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨a, ha⟩] => match ← tag.getStr? with
     | "label" => return .label (← fromJson? r) (← fromJson? a)
-    | "select" => return .select (← fromJson? r) (← jParseList branchFromJson a)
+    | "select" => return .select (← fromJson? r) (← (← jParseArrAttach a).mapM fun ⟨p, hp⟩ => branchFromJson p)
     | other => .error s!"Consumer: unknown 3-element tag {other}"
-  | [tag, r, a, b] => match ← tag.getStr? with
-    | "apply" => return .apply (← fromJson? r) (← jParseList producerFromJson a) (← jParseList fromJson? b)
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨a, ha⟩, ⟨b, _⟩] => match ← tag.getStr? with
+    | "apply" => return .apply (← fromJson? r) (← (← jParseArrAttach a).mapM fun ⟨p, hp⟩ => producerFromJson p) (← jParseList fromJson? b)
     | "proj" => return .project (← fromJson? r) (← a.getStr?) (← fromJson? b)
     | "then" => return .«then» (← fromJson? r) (← fromJson? a) (← statementFromJson b)
     | other => .error s!"Consumer: unknown 4-element tag {other}"
   | _ => .error "Consumer: unexpected shape"
+termination_by sizeOf j
+decreasing_by
+  all_goals simp_wf
+  all_goals omega
 
-partial def statementFromJson (j : Json) : Except String Statement := do
-  match (← j.getArr?).toList with
-  | [tag, a, b] => match ← tag.getStr? with
+def statementFromJson (j : Json) : Except String Statement := do
+  match ← jParseArrAttach j with
+  | [⟨tag, _⟩, ⟨a, ha⟩, ⟨b, _⟩] => match ← tag.getStr? with
     | "cut" => return .cut (← producerFromJson a) (← fromJson? b)
     | other => .error s!"Statement: unknown 3-element tag {other}"
-  | [tag, r, a, b] => match ← tag.getStr? with
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨a, _⟩, ⟨b, _⟩] => match ← tag.getStr? with
     | "invoke" => return .invoke (← fromJson? r) (← fromJson? a) (← fromJson? b)
     | other => .error s!"Statement: unknown 4-element tag {other}"
-  | [tag, r, a, b, c] => match ← tag.getStr? with
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨a, ha⟩, ⟨b, hb⟩, ⟨c, hc⟩] => match ← tag.getStr? with
     | "join" => return .join (← fromJson? r) (← fromJson? a) (← consumerFromJson b) (← statementFromJson c)
-    | "prim" => return .primitive (← fromJson? r) (← a.getStr?) (← jParseList producerFromJson b) (← fromJson? c)
-    | "extern" => return .externalCall (← fromJson? r) (← a.getStr?) (← jParseList producerFromJson b) (← fromJson? c)
+    | "prim" => return .primitive (← fromJson? r) (← a.getStr?) (← (← jParseArrAttach b).mapM fun ⟨p, hp⟩ => producerFromJson p) (← fromJson? c)
+    | "extern" => return .externalCall (← fromJson? r) (← a.getStr?) (← (← jParseArrAttach b).mapM fun ⟨p, hp⟩ => producerFromJson p) (← fromJson? c)
     | "ifz" => return .ifz (← fromJson? r) (← producerFromJson a) (← statementFromJson b) (← statementFromJson c)
     | other => .error s!"Statement: unknown 5-element tag {other}"
-  | [tag, r, op, l, rhs, c] => match ← tag.getStr? with
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨op, _⟩, ⟨l, hl⟩, ⟨rhs, hrhs⟩, ⟨c, _⟩] => match ← tag.getStr? with
     | "binop" => return .binOp (← fromJson? r) (← op.getStr?) (← producerFromJson l) (← producerFromJson rhs) (← fromJson? c)
     | other => .error s!"Statement: unknown 6-element tag {other}"
   | _ => .error "Statement: unexpected shape"
+termination_by sizeOf j
+decreasing_by
+  all_goals simp_wf
+  all_goals omega
 
-partial def branchFromJson (j : Json) : Except String Branch := do
-  match (← j.getArr?).toList with
-  | [tag, r, a, b] => match ← tag.getStr? with
+def branchFromJson (j : Json) : Except String Branch := do
+  match ← jParseArrAttach j with
+  | [⟨tag, _⟩, ⟨r, _⟩, ⟨a, _⟩, ⟨b, hb⟩] => match ← tag.getStr? with
     | "branch" => return .branch (← fromJson? r) (← patternFromJson a) (← statementFromJson b)
     | other => .error s!"Branch: unknown tag {other}"
   | _ => .error "Branch: expected a 4-element array"
+termination_by sizeOf j
+decreasing_by
+  all_goals simp_wf
+  all_goals omega
 
 end
 
@@ -346,6 +394,45 @@ private def roundtrips [ToJson α] [FromJson α] [BEq α] (x : α) : Bool :=
 #guard roundtrips (Literal.char 'a')
 #guard roundtrips (Literal.float 1.5)
 #guard roundtrips (Literal.double 3.25)
+
+-- `Producer`/`Consumer`/`Statement`/`Branch`/`Pattern` have no `BEq` (their
+-- mutual `inductive`s derive none), so these check shape by pattern match
+-- instead of `roundtrips`, mirroring the `prog`/`Resource` guards below.
+-- Covers every previously-untested tag — a decode arity bug in one of these
+-- (`.object`/`.cocase` misrouted to the wrong arity branch) was only caught
+-- because a disk-based golden gate happened to exercise it (commit 90410d4b).
+#guard match (fromJson? (toJson (Producer.construct r0 .tuple [.var r0 (nm "x")] [nm "k"])) : Except String Producer) with
+  | .ok (.construct _ tag [.var _ name] [k]) => tag == .tuple && name == nm "x" && k == nm "k"
+  | _ => false
+#guard match (fromJson? (toJson (Producer.object r0 [("f", nm "x", .cut (.var r0 (nm "y")) (nm "k"))])) : Except String Producer) with
+  | .ok (.object _ [(field, name, _)]) => field == "f" && name == nm "x"
+  | _ => false
+#guard match (fromJson? (toJson (Producer.lambda r0 [nm "x"] (.cut (.var r0 (nm "x")) (nm "k")))) : Except String Producer) with
+  | .ok (.lambda _ [name] _) => name == nm "x"
+  | _ => false
+#guard match (fromJson? (toJson (Consumer.select r0 [.branch r0 (.pvar r0 (nm "x")) (.cut (.var r0 (nm "x")) (nm "k"))])) : Except String Consumer) with
+  | .ok (.select _ [.branch _ (.pvar _ name) _]) => name == nm "x"
+  | _ => false
+#guard match (fromJson? (toJson (Statement.join r0 (nm "j") (.finish r0) (.cut (.var r0 (nm "x")) (nm "k")))) : Except String Statement) with
+  | .ok (.join _ name (.finish _) _) => name == nm "j"
+  | _ => false
+#guard match (fromJson? (toJson (Statement.primitive r0 "add" [.var r0 (nm "x"), .var r0 (nm "y")] (nm "k"))) : Except String Statement) with
+  | .ok (.primitive _ name [.var _ _, .var _ _] consumer) => name == "add" && consumer == nm "k"
+  | _ => false
+#guard match (fromJson? (toJson (Statement.externalCall r0 "puts" [.var r0 (nm "x")] (nm "k"))) : Except String Statement) with
+  | .ok (.externalCall _ name [.var _ _] consumer) => name == "puts" && consumer == nm "k"
+  | _ => false
+#guard match (fromJson? (toJson (Statement.binOp r0 "+" (.var r0 (nm "x")) (.var r0 (nm "y")) (nm "k"))) : Except String Statement) with
+  | .ok (.binOp _ op (.var _ l) (.var _ r) consumer) => op == "+" && l == nm "x" && r == nm "y" && consumer == nm "k"
+  | _ => false
+#guard match (fromJson? (toJson (Statement.ifz r0 (.var r0 (nm "c")) (.cut (.var r0 (nm "x")) (nm "k")) (.cut (.var r0 (nm "y")) (nm "k")))) : Except String Statement) with
+  | .ok (.ifz _ (.var _ cond) (.cut (.var _ t) _) (.cut (.var _ e) _)) => cond == nm "c" && t == nm "x" && e == nm "y"
+  | _ => false
+-- Pattern round-trip: nests `.expand` inside `.destruct` to cover both tags.
+#guard match (fromJson? (toJson (Pattern.destruct r0 .tuple [.expand r0 [("f", .pvar r0 (nm "x"))]])) : Except String Pattern) with
+  | .ok (.destruct _ tag [.expand _ [(k, .pvar _ name)]]) => tag == .tuple && k == "f" && name == nm "x"
+  | _ => false
+
 -- A small Program round-trips.
 private def prog : Join.Program :=
   { definitions := [{ range := r0, name := nm "main", ret := nm "ret",

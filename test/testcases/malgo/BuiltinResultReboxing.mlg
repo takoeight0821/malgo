@@ -1,0 +1,46 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- Regression coverage for malgo#451: the self-hosted evaluator
+-- (runtime/malgo/compiler/Eval.mlg) unwraps a native-shortcut builtin's
+-- boxed arguments before dispatch (`unwrapBuiltinArgs`, added by #425/#446)
+-- but used to return the shortcut's raw, unboxed result with no rebox
+-- step, diverging from Builtin.mlg/Prelude.mlg's own box-symmetric source
+-- definitions (e.g. `addInt32 : Int32 -> Int32 -> Int32 = {(Int32# x)
+-- (Int32# y) -> Int32# (addInt32# x y)}`). `print`, which observes a
+-- value's box directly via `valueToText` rather than unwrapping it first,
+-- is what makes the gap visible.
+--
+-- Covers arithmetic (Int32/Int64), string ops, char ops, and the IO-
+-- returning `getContents` across every wrapper kind (`Int32#`/`Int64#`/
+-- `Char#`/`String#`), plus `max`/`min`/`abs` (Prelude.mlg, not
+-- Builtin.mlg, but still box-symmetric end to end). The trailing pair
+-- checks the raw ("#"-suffixed) counterparts of the same operators stay
+-- unboxed -- no behavior change for builtins that were never box-
+-- symmetric to begin with.
+def main = { () ->
+  print(addInt32(3i32, 4i32));
+  print(subInt64(10i64, 3i64));
+  print(toStringInt32(42i32));
+  print(toStringInt64(7i64));
+  print(substring("hello world", 0i64, 5i64));
+  print(atString(1i64, "hello"));
+  print(consString('h', "ello"));
+  print(reverseString("abc"));
+  print(lengthString("hello"));
+  print(appendString("foo", "bar"));
+  print(ordChar('A'));
+  print(chrInt32(65i32));
+  print(negInt32(5i32));
+  print(negInt64(5i64));
+  print(max(3i32, 7i32));
+  print(min(3i32, 7i32));
+  print(abs(negInt32(9i32)));
+  print(parseIntString32("123"));
+  print(parseIntString64("456"));
+  print(modInt32(10i32, 3i32));
+  print(modInt64(10i64, 3i64));
+  print(getContents());
+  print(addInt32# 3# 4#);
+  print(toStringInt32# 7#)
+}

@@ -1,0 +1,73 @@
+name: "Set up Lean and build"
+description: >
+  Installs elan (with its own retry loop), restores/saves the .lake build
+  cache, and optionally runs `lake build` / `lake test`. A minimal in-repo
+  replacement for leanprover/lean-action's malgo-relevant subset -- this
+  project uses none of that action's Mathlib cache, lint, mk_all-check, or
+  external-checker features, and its own elan-install script does an
+  unretried `curl | sh` with no way to configure retry via inputs (confirmed
+  by reading leanprover/lean-action's scripts/install_elan.sh directly), so
+  a transient network blip there fails the whole step outright.
+inputs:
+  lake-package-directory:
+    description: "Directory containing the Lake package"
+    required: false
+    default: "lean"
+  build:
+    description: "Run `lake build`"
+    required: false
+    default: "true"
+  test:
+    description: "Run `lake test`"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install elan
+      shell: bash
+      working-directory: ${{ inputs.lake-package-directory }}
+      run: |
+        set -euo pipefail
+        attempt=1
+        max_attempts=5
+        until curl --retry 3 --retry-connrefused -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+                | sh -s -- -y --default-toolchain none; do
+          if [ "$attempt" -ge "$max_attempts" ]; then
+            echo "::error::elan install failed after $attempt attempts"
+            exit 1
+          fi
+          delay=$((attempt * 10))
+          echo "elan install attempt $attempt failed, retrying in ${delay}s..."
+          sleep "$delay"
+          attempt=$((attempt + 1))
+        done
+        echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+    # Same cache key shape leanprover/lean-action used, for continuity.
+    - name: Restore .lake build cache
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: ${{ inputs.lake-package-directory }}/.lake
+        key: lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/lean-toolchain', inputs.lake-package-directory)) }}-${{ hashFiles(format('{0}/lake-manifest.json', inputs.lake-package-directory)) }}-${{ github.sha }}
+        restore-keys: |
+          lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/lean-toolchain', inputs.lake-package-directory)) }}-${{ hashFiles(format('{0}/lake-manifest.json', inputs.lake-package-directory)) }}
+
+    - name: lake build
+      if: ${{ inputs.build == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.lake-package-directory }}
+      run: lake build
+
+    - name: Save .lake build cache
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: ${{ inputs.lake-package-directory }}/.lake
+        key: lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/lean-toolchain', inputs.lake-package-directory)) }}-${{ hashFiles(format('{0}/lake-manifest.json', inputs.lake-package-directory)) }}-${{ github.sha }}
+
+    - name: lake test
+      if: ${{ inputs.test == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.lake-package-directory }}
+      run: lake test

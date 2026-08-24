@@ -195,6 +195,64 @@ done
 
 printf 'PASS: %s\nFAIL: %s\nTIMEOUT: %s\n' "$pass" "$fail" "$timeout_count"
 
+# Self-hosted panic-import gate (regression test for malgo#452, not part of
+# the golden sweep above -- see below for why). `panic` is a Builtin.mlg
+# wrapper around the `malgo_panic` foreign primitive
+# (`def panic = { (String# message) -> malgo_panic message }`), but under
+# self-hosting `import Builtin.mlg` substitutes a synthetic roster
+# (`makeBaseEnv` in Eval.mlg) instead of actually evaluating that file's
+# source (see `isPreloadedImport`'s doc comment there) -- so a wrapper
+# defined there needs its own entry mirrored into that roster, or it comes
+# back `undefined: panic` after a normal import. `Panic`/`CondPanic` cover
+# a wildcard import (`module {..} = import ...`); `PanicNamedImport` covers
+# the named form (`module {panic} = import ...`), which resolves through a
+# different code path in Eval.mlg's import machinery
+# (`extendImportOnlyDirect`'s per-name `envLookup` vs `mergeEnvs`).
+#
+# Not part of the golden sweep above because `panic` *by design* never
+# returns normally (mirroring the Lean interpreters' `PanicGate` in
+# `lean/Test/Main.lean`, whose `evalHarnessUnsupported` excludes these same
+# three cases from ever getting a `.golden/Malgo.Sequent.Eval/*` entry --
+# which is also why the sweep above, which discovers its cases by listing
+# that directory, never runs them). Unlike the Lean/Zig/Scheme backends,
+# the self-hosted evaluator's `Main.mlg` always exits 0 and reports the
+# panic on stdout (`"Runtime error: " ++ msg`), so this checks stdout
+# content, not exit status.
+panic_fail=0
+panic_scenarios=(
+  $'Panic\001before panic\001panic: malgo#426 regression check'
+  $'CondPanic\001before cond\001panic: no branch'
+  $'PanicNamedImport\001before panic\001panic: malgo#452 named-import regression check'
+)
+for entry in "${panic_scenarios[@]}"; do
+  case_name=$(cut -d $'\001' -f1 <<< "$entry")
+  expected_stdout_line=$(cut -d $'\001' -f2 <<< "$entry")
+  expected_message=$(cut -d $'\001' -f3 <<< "$entry")
+  src="test/testcases/malgo/$case_name.mlg"
+  expected=$(printf '%s\nRuntime error: %s\n' "$expected_stdout_line" "$expected_message")
+  out=$(mktemp)
+  err=$(mktemp)
+  if printf 'Hello\n' | timeout "$CASE_TIMEOUT" "$NATIVE_MAIN" "$src" >"$out" 2>"$err"; then
+    actual=$(< "$out")
+    if [[ -s "$err" ]]; then
+      log "panic gate FAIL: $case_name wrote to stderr unexpectedly ($(printf '%q' "$(< "$err")"))"
+      panic_fail=1
+    elif [[ "$actual" == "$expected" ]]; then
+      log "panic gate pass: $case_name"
+    else
+      log "panic gate FAIL: $case_name (want: $(printf '%q' "$expected"), got: $(printf '%q' "$actual"))"
+      panic_fail=1
+    fi
+  else
+    log "panic gate FAIL: $case_name exited nonzero unexpectedly"
+    panic_fail=1
+  fi
+  rm -f "$out" "$err"
+done
+if [[ $panic_fail -eq 0 ]]; then
+  log "panic gate: ${#panic_scenarios[@]}/${#panic_scenarios[@]} passed"
+fi
+
 # One extra serial run of the evaluator already built above, instrumented, to gate
 # the selfhost-l1 counters (#399). Costs ~1s: this is the tier #385's own baseline
 # reading came from, and the sweep above is parallel so its wall clock is
@@ -240,4 +298,4 @@ else
   [[ -f "$BASELINE" ]] || log "perf gate: no $BASELINE -- skipping"
 fi
 
-[[ $fail -eq 0 && $perf_fail -eq 0 ]]
+[[ $fail -eq 0 && $perf_fail -eq 0 && $panic_fail -eq 0 ]]

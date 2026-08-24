@@ -1,0 +1,953 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg (panic, String#)
+
+import runtime/malgo/Prelude.mlg 
+
+def main =
+  fn {
+    _ ->
+      {
+        let _ = putStrLn("before panic")
+        panic("malgo#452 named-import regression check")
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg (panic, String#)
+
+import runtime/malgo/Prelude.mlg 
+
+def main =
+  fn {
+    _#0 ->
+      {
+        let _#1 = putStrLn(String#("before panic"))
+        panic(String#("malgo#452 named-import regression check"))
+      }
+  }
+
+=== ToFun ===
+def main =
+  \param$2 ->
+    case param$2 of {
+      _#0 ->
+        let _#1 =
+          invoke putStrLn(invoke String#("before panic"))
+        in
+          invoke panic( invoke String#( "malgo#452 named-import regression check" ) )
+    }
+
+=== SaturateCtor ===
+def main =
+  \param$2 ->
+    case param$2 of {
+      _#0 ->
+        let _#1 =
+          invoke putStrLn(invoke String#("before panic"))
+        in
+          invoke panic( invoke String#( "malgo#452 named-import regression check" ) )
+    }
+
+=== ReuseSpecialize ===
+def main =
+  \param$2 ->
+    case param$2 of {
+      _#0 ->
+        let _#1 =
+          invoke putStrLn(invoke String#("before panic"))
+        in
+          invoke panic( invoke String#( "malgo#452 named-import regression check" ) )
+    }
+
+=== ToCore ===
+def main(return$3) =
+  \param$2 return$4 . {
+    param$2 ~ select {
+      _#0 ->
+        invoke putStrLn ~ ( do return$6 . {
+          invoke String# ~ ("before panic", return$6)
+        }
+        , then _#1 -> {
+          invoke panic ~ ( do return$5 . {
+            invoke String# ~ ( "malgo#452 named-import regression check"
+            , return$5 )
+          }
+          , return$4 )
+        } )
+    }
+  } ~ return$3
+
+=== Flat ===
+def main(return$3) =
+  \param$2 return$4 . {
+    param$2 ~ select {
+      _#0 ->
+        invoke putStrLn ~ then outer$7 -> {
+          join return$6 = then inner$8 -> {
+            outer$7 ~ ( inner$8
+            , then _#1 -> {
+              invoke panic ~ then outer$9 -> {
+                join return$5 = then inner$10 -> {
+                  outer$9 ~ (inner$10, return$4)
+                }
+                in invoke String# ~ ( "malgo#452 named-import regression check"
+                , return$5 )
+              }
+            } )
+          }
+          in invoke String# ~ ("before panic", return$6)
+        }
+    }
+  } ~ return$3
+
+=== Join ===
+def main(return$3) =
+  \param$2 return$4 . {
+    join select$18 = select {
+      _#0 ->
+        join then$17 = then outer$7 -> {
+          join return$6 = then inner$8 -> {
+            join then$15 = then _#1 -> {
+              join then$14 = then outer$9 -> {
+                join return$5 = then inner$10 -> {
+                  join apply$13 = (inner$10, return$4)
+                  in outer$9 ~ apply$13
+                }
+                in join apply$12 = ( "malgo#452 named-import regression check"
+                , return$5 )
+                in invoke String# ~ apply$12
+              }
+              in invoke panic ~ then$14
+            }
+            in join apply$16 = (inner$8, then$15)
+            in outer$7 ~ apply$16
+          }
+          in join apply$11 = ("before panic", return$6)
+          in invoke String# ~ apply$11
+        }
+        in invoke putStrLn ~ then$17
+    }
+    in param$2 ~ select$18
+  } ~ return$3
+
+=== ClosureConv ===
+toplevel fn main(return$3) =
+  let closure$45 = closure lambda$20()
+  return return$3(closure$45)
+
+closure fn lambda$20(self$21, param$2, return$4) =
+  if  then {
+    let _#0 = param$2
+    let then$17 = closure join$22(return$4)
+    return putStrLn(then$17)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$22(self$23, value$24) =
+  let return$4 = self$23.cap[0]
+  let return$6 = closure join$25(return$4, value$24)
+  let apply$11 = closure join$41(return$6)
+  return String#(apply$11)
+
+closure fn join$25(self$26, value$27) =
+  let return$4 = self$26.cap[0]
+  let value$24 = self$26.cap[1]
+  let then$15 = closure join$28(return$4)
+  return value$24(value$27, then$15)
+
+closure fn join$28(self$29, value$30) =
+  let return$4 = self$29.cap[0]
+  let then$14 = closure join$31(return$4)
+  return panic(then$14)
+
+closure fn join$31(self$32, value$33) =
+  let return$4 = self$32.cap[0]
+  let return$5 = closure join$34(return$4, value$33)
+  let apply$12 = closure join$37(return$5)
+  return String#(apply$12)
+
+closure fn join$34(self$35, value$36) =
+  let return$4 = self$35.cap[0]
+  let value$33 = self$35.cap[1]
+  return value$33(value$36, return$4)
+
+closure fn join$37(self$38, value$39) =
+  let return$5 = self$38.cap[0]
+  let lit$40 = "malgo#452 named-import regression check"
+  return value$39(lit$40, return$5)
+
+closure fn join$41(self$42, value$43) =
+  let return$6 = self$42.cap[0]
+  let lit$44 = "before panic"
+  return value$43(lit$44, return$6)
+
+toplevel fn zig_main$48() =
+  let finish$46 = closure join$50()
+  let after_main$47 = closure join$53(finish$46)
+  return main(after_main$47)
+
+closure fn join$50(self$51, value$52) = return value$52
+
+closure fn join$53(self$54, value$55) =
+  let finish$46 = self$54.cap[0]
+  let struct$56 = Tuple()
+  return value$55(struct$56, finish$46)
+
+entry = zig_main$48
+
+=== Peephole ===
+toplevel fn main(return$3) =
+  let closure$45 = closure lambda$20()
+  return return$3(closure$45)
+
+closure fn lambda$20(self$21, param$2, return$4) =
+  if  then {
+    let then$17 = closure join$22(return$4)
+    return putStrLn(then$17)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$22(self$23, value$24) =
+  let return$4 = self$23.cap[0]
+  let return$6 = closure join$25(return$4, value$24)
+  let apply$11 = closure join$41(return$6)
+  return String#(apply$11)
+
+closure fn join$25(self$26, value$27) =
+  let return$4 = self$26.cap[0]
+  let value$24 = self$26.cap[1]
+  let then$15 = closure join$28(return$4)
+  return value$24(value$27, then$15)
+
+closure fn join$28(self$29, value$30) =
+  let return$4 = self$29.cap[0]
+  let then$14 = closure join$31(return$4)
+  return panic(then$14)
+
+closure fn join$31(self$32, value$33) =
+  let return$4 = self$32.cap[0]
+  let return$5 = closure join$34(return$4, value$33)
+  let apply$12 = closure join$37(return$5)
+  return String#(apply$12)
+
+closure fn join$34(self$35, value$36) =
+  let return$4 = self$35.cap[0]
+  let value$33 = self$35.cap[1]
+  return value$33(value$36, return$4)
+
+closure fn join$37(self$38, value$39) =
+  let return$5 = self$38.cap[0]
+  let lit$40 = "malgo#452 named-import regression check"
+  return value$39(lit$40, return$5)
+
+closure fn join$41(self$42, value$43) =
+  let return$6 = self$42.cap[0]
+  let lit$44 = "before panic"
+  return value$43(lit$44, return$6)
+
+toplevel fn zig_main$48() =
+  let finish$46 = closure join$50()
+  let after_main$47 = closure join$53(finish$46)
+  return main(after_main$47)
+
+closure fn join$50(self$51, value$52) = return value$52
+
+closure fn join$53(self$54, value$55) =
+  let finish$46 = self$54.cap[0]
+  let struct$56 = Tuple()
+  return value$55(struct$56, finish$46)
+
+entry = zig_main$48
+
+=== Perceus ===
+toplevel fn main(return$3) =
+  let closure$45 = closure lambda$20()
+  return return$3(closure$45)
+
+closure fn lambda$20(self$21, param$2, return$4) =
+  drop param$2
+  drop self$21
+  if  then {
+    let then$17 = closure join$22(return$4)
+    return putStrLn(then$17)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$22(self$23, value$24) =
+  let return$4 = self$23.cap[0]
+  dup return$4
+  drop self$23
+  let return$6 = closure join$25(return$4, value$24)
+  let apply$11 = closure join$41(return$6)
+  return String#(apply$11)
+
+closure fn join$25(self$26, value$27) =
+  let return$4 = self$26.cap[0]
+  dup return$4
+  let value$24 = self$26.cap[1]
+  dup value$24
+  drop self$26
+  let then$15 = closure join$28(return$4)
+  return value$24(value$27, then$15)
+
+closure fn join$28(self$29, value$30) =
+  drop value$30
+  let return$4 = self$29.cap[0]
+  dup return$4
+  drop self$29
+  let then$14 = closure join$31(return$4)
+  return panic(then$14)
+
+closure fn join$31(self$32, value$33) =
+  let return$4 = self$32.cap[0]
+  dup return$4
+  drop self$32
+  let return$5 = closure join$34(return$4, value$33)
+  let apply$12 = closure join$37(return$5)
+  return String#(apply$12)
+
+closure fn join$34(self$35, value$36) =
+  let return$4 = self$35.cap[0]
+  dup return$4
+  let value$33 = self$35.cap[1]
+  dup value$33
+  drop self$35
+  return value$33(value$36, return$4)
+
+closure fn join$37(self$38, value$39) =
+  let return$5 = self$38.cap[0]
+  dup return$5
+  drop self$38
+  let lit$40 = "malgo#452 named-import regression check"
+  return value$39(lit$40, return$5)
+
+closure fn join$41(self$42, value$43) =
+  let return$6 = self$42.cap[0]
+  dup return$6
+  drop self$42
+  let lit$44 = "before panic"
+  return value$43(lit$44, return$6)
+
+toplevel fn zig_main$48() =
+  let finish$46 = closure join$50()
+  let after_main$47 = closure join$53(finish$46)
+  return main(after_main$47)
+
+closure fn join$50(self$51, value$52) =
+  drop self$51
+  return value$52
+
+closure fn join$53(self$54, value$55) =
+  let finish$46 = self$54.cap[0]
+  dup finish$46
+  drop self$54
+  let struct$56 = Tuple()
+  return value$55(struct$56, finish$46)
+
+entry = zig_main$48
+
+=== Reuse ===
+toplevel fn main(return$3) =
+  let closure$45 = closure lambda$20()
+  return return$3(closure$45)
+
+closure fn lambda$20(self$21, param$2, return$4) =
+  drop param$2
+  drop self$21
+  if  then {
+    let then$17 = closure join$22(return$4)
+    return putStrLn(then$17)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$22(self$23, value$24) =
+  let return$4 = self$23.cap[0]
+  dup return$4
+  let return$6 = closure join$25(return$4, value$24)
+  let apply$11 = closure join$41(return$6)
+  drop self$23
+  return String#(apply$11)
+
+closure fn join$25(self$26, value$27) =
+  let return$4 = self$26.cap[0]
+  dup return$4
+  let value$24 = self$26.cap[1]
+  dup value$24
+  let then$15 = closure join$28(return$4)
+  drop self$26
+  return value$24(value$27, then$15)
+
+closure fn join$28(self$29, value$30) =
+  let return$4 = self$29.cap[0]
+  dup return$4
+  let then$14 = closure join$31(return$4)
+  drop value$30
+  drop self$29
+  return panic(then$14)
+
+closure fn join$31(self$32, value$33) =
+  let return$4 = self$32.cap[0]
+  dup return$4
+  let return$5 = closure join$34(return$4, value$33)
+  let apply$12 = closure join$37(return$5)
+  drop self$32
+  return String#(apply$12)
+
+closure fn join$34(self$35, value$36) =
+  let return$4 = self$35.cap[0]
+  dup return$4
+  let value$33 = self$35.cap[1]
+  dup value$33
+  drop self$35
+  return value$33(value$36, return$4)
+
+closure fn join$37(self$38, value$39) =
+  let return$5 = self$38.cap[0]
+  dup return$5
+  let lit$40 = "malgo#452 named-import regression check"
+  drop self$38
+  return value$39(lit$40, return$5)
+
+closure fn join$41(self$42, value$43) =
+  let return$6 = self$42.cap[0]
+  dup return$6
+  let lit$44 = "before panic"
+  drop self$42
+  return value$43(lit$44, return$6)
+
+toplevel fn zig_main$48() =
+  let finish$46 = closure join$50()
+  let after_main$47 = closure join$53(finish$46)
+  return main(after_main$47)
+
+closure fn join$50(self$51, value$52) =
+  drop self$51
+  return value$52
+
+closure fn join$53(self$54, value$55) =
+  let finish$46 = self$54.cap[0]
+  dup finish$46
+  dropReuse reuse$57 = self$54 /0
+  let struct$56 = reuse reuse$57 Tuple()
+  return value$55(struct$56, finish$46)
+
+entry = zig_main$48
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg (panic, String#)
+  
+  import runtime/malgo/Prelude.mlg 
+  
+  def main =
+    fn {
+-     _ ->
++     _#0 ->
+        {
+-         let _ = putStrLn("before panic")
++         let _#1 = putStrLn(String#("before panic"))
+-         panic("malgo#452 named-import regression check")
++         panic(String#("malgo#452 named-import regression check"))
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg (panic, String#)
+- 
+- import runtime/malgo/Prelude.mlg 
+- 
+  def main =
+-   fn {
++   \param$2 ->
+-     _#0 ->
++     case param$2 of {
+-       {
++       _#0 ->
+-         let _#1 = putStrLn(String#("before panic"))
++         let _#1 =
+-         panic(String#("malgo#452 named-import regression check"))
++           invoke putStrLn(invoke String#("before panic"))
+-       }
++         in
+-   }
++           invoke panic( invoke String#( "malgo#452 named-import regression check" ) )
++     }
+
+
+=== ToFun -> SaturateCtor ===
+  def main =
+    \param$2 ->
+      case param$2 of {
+        _#0 ->
+          let _#1 =
+            invoke putStrLn(invoke String#("before panic"))
+          in
+            invoke panic( invoke String#( "malgo#452 named-import regression check" ) )
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def main =
+    \param$2 ->
+      case param$2 of {
+        _#0 ->
+          let _#1 =
+            invoke putStrLn(invoke String#("before panic"))
+          in
+            invoke panic( invoke String#( "malgo#452 named-import regression check" ) )
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def main =
++ def main(return$3) =
+-   \param$2 ->
++   \param$2 return$4 . {
+-     case param$2 of {
++     param$2 ~ select {
+        _#0 ->
+-         let _#1 =
++         invoke putStrLn ~ ( do return$6 . {
+-           invoke putStrLn(invoke String#("before panic"))
++           invoke String# ~ ("before panic", return$6)
+-         in
++         }
+-           invoke panic( invoke String#( "malgo#452 named-import regression check" ) )
++         , then _#1 -> {
++           invoke panic ~ ( do return$5 . {
++             invoke String# ~ ( "malgo#452 named-import regression check"
++             , return$5 )
++           }
++           , return$4 )
++         } )
+      }
++   } ~ return$3
+
+
+=== ToCore -> Flat ===
+  def main(return$3) =
+    \param$2 return$4 . {
+      param$2 ~ select {
+        _#0 ->
+-         invoke putStrLn ~ ( do return$6 . {
++         invoke putStrLn ~ then outer$7 -> {
+-           invoke String# ~ ("before panic", return$6)
++           join return$6 = then inner$8 -> {
+-         }
++             outer$7 ~ ( inner$8
+-         , then _#1 -> {
++             , then _#1 -> {
+-           invoke panic ~ ( do return$5 . {
++               invoke panic ~ then outer$9 -> {
+-             invoke String# ~ ( "malgo#452 named-import regression check"
++                 join return$5 = then inner$10 -> {
+-             , return$5 )
++                   outer$9 ~ (inner$10, return$4)
++                 }
++                 in invoke String# ~ ( "malgo#452 named-import regression check"
++                 , return$5 )
++               }
++             } )
+            }
+-           , return$4 )
++           in invoke String# ~ ("before panic", return$6)
+-         } )
++         }
+      }
+    } ~ return$3
+
+
+=== Flat -> Join ===
+  def main(return$3) =
+    \param$2 return$4 . {
+-     param$2 ~ select {
++     join select$18 = select {
+        _#0 ->
+-         invoke putStrLn ~ then outer$7 -> {
++         join then$17 = then outer$7 -> {
+            join return$6 = then inner$8 -> {
+-             outer$7 ~ ( inner$8
++             join then$15 = then _#1 -> {
+-             , then _#1 -> {
++               join then$14 = then outer$9 -> {
+-               invoke panic ~ then outer$9 -> {
+                  join return$5 = then inner$10 -> {
+-                   outer$9 ~ (inner$10, return$4)
++                   join apply$13 = (inner$10, return$4)
++                   in outer$9 ~ apply$13
+                  }
+-                 in invoke String# ~ ( "malgo#452 named-import regression check"
++                 in join apply$12 = ( "malgo#452 named-import regression check"
+                  , return$5 )
++                 in invoke String# ~ apply$12
+                }
+-             } )
++               in invoke panic ~ then$14
++             }
++             in join apply$16 = (inner$8, then$15)
++             in outer$7 ~ apply$16
+            }
+-           in invoke String# ~ ("before panic", return$6)
++           in join apply$11 = ("before panic", return$6)
++           in invoke String# ~ apply$11
+          }
++         in invoke putStrLn ~ then$17
+      }
++     in param$2 ~ select$18
+    } ~ return$3
+
+
+=== Join -> ClosureConv ===
+- def main(return$3) =
++ toplevel fn main(return$3) =
+-   \param$2 return$4 . {
++   let closure$45 = closure lambda$20()
+-     join select$18 = select {
++   return return$3(closure$45)
+-       _#0 ->
++ 
+-         join then$17 = then outer$7 -> {
++ closure fn lambda$20(self$21, param$2, return$4) =
+-           join return$6 = then inner$8 -> {
++   if  then {
+-             join then$15 = then _#1 -> {
++     let _#0 = param$2
+-               join then$14 = then outer$9 -> {
++     let then$17 = closure join$22(return$4)
+-                 join return$5 = then inner$10 -> {
++     return putStrLn(then$17)
+-                   join apply$13 = (inner$10, return$4)
++   } else {
+-                   in outer$9 ~ apply$13
++     panic "no matching branch"
+-                 }
++   }
+-                 in join apply$12 = ( "malgo#452 named-import regression check"
++ 
+-                 , return$5 )
++ closure fn join$22(self$23, value$24) =
+-                 in invoke String# ~ apply$12
++   let return$4 = self$23.cap[0]
+-               }
++   let return$6 = closure join$25(return$4, value$24)
+-               in invoke panic ~ then$14
++   let apply$11 = closure join$41(return$6)
+-             }
++   return String#(apply$11)
+-             in join apply$16 = (inner$8, then$15)
++ 
+-             in outer$7 ~ apply$16
++ closure fn join$25(self$26, value$27) =
+-           }
++   let return$4 = self$26.cap[0]
+-           in join apply$11 = ("before panic", return$6)
++   let value$24 = self$26.cap[1]
+-           in invoke String# ~ apply$11
++   let then$15 = closure join$28(return$4)
+-         }
++   return value$24(value$27, then$15)
+-         in invoke putStrLn ~ then$17
++ 
+-     }
++ closure fn join$28(self$29, value$30) =
+-     in param$2 ~ select$18
++   let return$4 = self$29.cap[0]
+-   } ~ return$3
++   let then$14 = closure join$31(return$4)
++   return panic(then$14)
++ 
++ closure fn join$31(self$32, value$33) =
++   let return$4 = self$32.cap[0]
++   let return$5 = closure join$34(return$4, value$33)
++   let apply$12 = closure join$37(return$5)
++   return String#(apply$12)
++ 
++ closure fn join$34(self$35, value$36) =
++   let return$4 = self$35.cap[0]
++   let value$33 = self$35.cap[1]
++   return value$33(value$36, return$4)
++ 
++ closure fn join$37(self$38, value$39) =
++   let return$5 = self$38.cap[0]
++   let lit$40 = "malgo#452 named-import regression check"
++   return value$39(lit$40, return$5)
++ 
++ closure fn join$41(self$42, value$43) =
++   let return$6 = self$42.cap[0]
++   let lit$44 = "before panic"
++   return value$43(lit$44, return$6)
++ 
++ toplevel fn zig_main$48() =
++   let finish$46 = closure join$50()
++   let after_main$47 = closure join$53(finish$46)
++   return main(after_main$47)
++ 
++ closure fn join$50(self$51, value$52) = return value$52
++ 
++ closure fn join$53(self$54, value$55) =
++   let finish$46 = self$54.cap[0]
++   let struct$56 = Tuple()
++   return value$55(struct$56, finish$46)
++ 
++ entry = zig_main$48
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn main(return$3) =
+    let closure$45 = closure lambda$20()
+    return return$3(closure$45)
+  
+  closure fn lambda$20(self$21, param$2, return$4) =
+    if  then {
+-     let _#0 = param$2
+      let then$17 = closure join$22(return$4)
+      return putStrLn(then$17)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$22(self$23, value$24) =
+    let return$4 = self$23.cap[0]
+    let return$6 = closure join$25(return$4, value$24)
+    let apply$11 = closure join$41(return$6)
+    return String#(apply$11)
+  
+  closure fn join$25(self$26, value$27) =
+    let return$4 = self$26.cap[0]
+    let value$24 = self$26.cap[1]
+    let then$15 = closure join$28(return$4)
+    return value$24(value$27, then$15)
+  
+  closure fn join$28(self$29, value$30) =
+    let return$4 = self$29.cap[0]
+    let then$14 = closure join$31(return$4)
+    return panic(then$14)
+  
+  closure fn join$31(self$32, value$33) =
+    let return$4 = self$32.cap[0]
+    let return$5 = closure join$34(return$4, value$33)
+    let apply$12 = closure join$37(return$5)
+    return String#(apply$12)
+  
+  closure fn join$34(self$35, value$36) =
+    let return$4 = self$35.cap[0]
+    let value$33 = self$35.cap[1]
+    return value$33(value$36, return$4)
+  
+  closure fn join$37(self$38, value$39) =
+    let return$5 = self$38.cap[0]
+    let lit$40 = "malgo#452 named-import regression check"
+    return value$39(lit$40, return$5)
+  
+  closure fn join$41(self$42, value$43) =
+    let return$6 = self$42.cap[0]
+    let lit$44 = "before panic"
+    return value$43(lit$44, return$6)
+  
+  toplevel fn zig_main$48() =
+    let finish$46 = closure join$50()
+    let after_main$47 = closure join$53(finish$46)
+    return main(after_main$47)
+  
+  closure fn join$50(self$51, value$52) = return value$52
+  
+  closure fn join$53(self$54, value$55) =
+    let finish$46 = self$54.cap[0]
+    let struct$56 = Tuple()
+    return value$55(struct$56, finish$46)
+  
+  entry = zig_main$48
+
+
+=== Peephole -> Perceus ===
+  toplevel fn main(return$3) =
+    let closure$45 = closure lambda$20()
+    return return$3(closure$45)
+  
+  closure fn lambda$20(self$21, param$2, return$4) =
++   drop param$2
++   drop self$21
+    if  then {
+      let then$17 = closure join$22(return$4)
+      return putStrLn(then$17)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$22(self$23, value$24) =
+    let return$4 = self$23.cap[0]
++   dup return$4
++   drop self$23
+    let return$6 = closure join$25(return$4, value$24)
+    let apply$11 = closure join$41(return$6)
+    return String#(apply$11)
+  
+  closure fn join$25(self$26, value$27) =
+    let return$4 = self$26.cap[0]
++   dup return$4
+    let value$24 = self$26.cap[1]
++   dup value$24
++   drop self$26
+    let then$15 = closure join$28(return$4)
+    return value$24(value$27, then$15)
+  
+  closure fn join$28(self$29, value$30) =
++   drop value$30
+    let return$4 = self$29.cap[0]
++   dup return$4
++   drop self$29
+    let then$14 = closure join$31(return$4)
+    return panic(then$14)
+  
+  closure fn join$31(self$32, value$33) =
+    let return$4 = self$32.cap[0]
++   dup return$4
++   drop self$32
+    let return$5 = closure join$34(return$4, value$33)
+    let apply$12 = closure join$37(return$5)
+    return String#(apply$12)
+  
+  closure fn join$34(self$35, value$36) =
+    let return$4 = self$35.cap[0]
++   dup return$4
+    let value$33 = self$35.cap[1]
++   dup value$33
++   drop self$35
+    return value$33(value$36, return$4)
+  
+  closure fn join$37(self$38, value$39) =
+    let return$5 = self$38.cap[0]
++   dup return$5
++   drop self$38
+    let lit$40 = "malgo#452 named-import regression check"
+    return value$39(lit$40, return$5)
+  
+  closure fn join$41(self$42, value$43) =
+    let return$6 = self$42.cap[0]
++   dup return$6
++   drop self$42
+    let lit$44 = "before panic"
+    return value$43(lit$44, return$6)
+  
+  toplevel fn zig_main$48() =
+    let finish$46 = closure join$50()
+    let after_main$47 = closure join$53(finish$46)
+    return main(after_main$47)
+  
+- closure fn join$50(self$51, value$52) = return value$52
++ closure fn join$50(self$51, value$52) =
++   drop self$51
++   return value$52
+  
+  closure fn join$53(self$54, value$55) =
+    let finish$46 = self$54.cap[0]
++   dup finish$46
++   drop self$54
+    let struct$56 = Tuple()
+    return value$55(struct$56, finish$46)
+  
+  entry = zig_main$48
+
+
+=== Perceus -> Reuse ===
+  toplevel fn main(return$3) =
+    let closure$45 = closure lambda$20()
+    return return$3(closure$45)
+  
+  closure fn lambda$20(self$21, param$2, return$4) =
+    drop param$2
+    drop self$21
+    if  then {
+      let then$17 = closure join$22(return$4)
+      return putStrLn(then$17)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$22(self$23, value$24) =
+    let return$4 = self$23.cap[0]
+    dup return$4
+-   drop self$23
+    let return$6 = closure join$25(return$4, value$24)
+    let apply$11 = closure join$41(return$6)
++   drop self$23
+    return String#(apply$11)
+  
+  closure fn join$25(self$26, value$27) =
+    let return$4 = self$26.cap[0]
+    dup return$4
+    let value$24 = self$26.cap[1]
+    dup value$24
+-   drop self$26
+    let then$15 = closure join$28(return$4)
++   drop self$26
+    return value$24(value$27, then$15)
+  
+  closure fn join$28(self$29, value$30) =
+-   drop value$30
+    let return$4 = self$29.cap[0]
+    dup return$4
+-   drop self$29
+    let then$14 = closure join$31(return$4)
++   drop value$30
++   drop self$29
+    return panic(then$14)
+  
+  closure fn join$31(self$32, value$33) =
+    let return$4 = self$32.cap[0]
+    dup return$4
+-   drop self$32
+    let return$5 = closure join$34(return$4, value$33)
+    let apply$12 = closure join$37(return$5)
++   drop self$32
+    return String#(apply$12)
+  
+  closure fn join$34(self$35, value$36) =
+    let return$4 = self$35.cap[0]
+    dup return$4
+    let value$33 = self$35.cap[1]
+    dup value$33
+    drop self$35
+    return value$33(value$36, return$4)
+  
+  closure fn join$37(self$38, value$39) =
+    let return$5 = self$38.cap[0]
+    dup return$5
+-   drop self$38
+    let lit$40 = "malgo#452 named-import regression check"
++   drop self$38
+    return value$39(lit$40, return$5)
+  
+  closure fn join$41(self$42, value$43) =
+    let return$6 = self$42.cap[0]
+    dup return$6
+-   drop self$42
+    let lit$44 = "before panic"
++   drop self$42
+    return value$43(lit$44, return$6)
+  
+  toplevel fn zig_main$48() =
+    let finish$46 = closure join$50()
+    let after_main$47 = closure join$53(finish$46)
+    return main(after_main$47)
+  
+  closure fn join$50(self$51, value$52) =
+    drop self$51
+    return value$52
+  
+  closure fn join$53(self$54, value$55) =
+    let finish$46 = self$54.cap[0]
+    dup finish$46
+-   drop self$54
++   dropReuse reuse$57 = self$54 /0
+-   let struct$56 = Tuple()
++   let struct$56 = reuse reuse$57 Tuple()
+    return value$55(struct$56, finish$46)
+  
+  entry = zig_main$48

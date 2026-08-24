@@ -32,6 +32,17 @@ def envLookupBoth = { name lEnv gEnv ->
   orElse (envLookup name lEnv) { envLookup name gEnv }
 }
 
+-- `addInt32#`/`subInt32#`/`mulInt32#`/`divInt32#` (the raw, unboxed Int32
+-- operators) have no entry in `builtinNames`, unlike their Int64
+-- counterparts (`addInt64#` etc, registered explicitly in
+-- `int64BuiltinNames` with their own `applyBuiltin` arms). A program that
+-- imports the preloaded Builtin.mlg and calls one of these bare hits
+-- `envLookupBoth` returning `Nothing`; this table catches exactly those
+-- four names and synthesizes a `VBuiltin` for them, dispatching under
+-- their own (hash-suffixed) name -- see the matching `applyBuiltin` arms
+-- below, which reuse the boxed op's host computation but keep the raw
+-- name so `builtinResultWrapper` (their result must stay unboxed) doesn't
+-- confuse them with the boxed `addInt32` etc.
 def isImplicitBuiltin : String -> Bool
 def isImplicitBuiltin = {
   "addInt32#" -> True,
@@ -39,15 +50,6 @@ def isImplicitBuiltin = {
   "mulInt32#" -> True,
   "divInt32#" -> True,
   _ -> False
-}
-
-def implicitBuiltinRuntimeName : String -> String
-def implicitBuiltinRuntimeName = {
-  "addInt32#" -> "addInt32",
-  "subInt32#" -> "subInt32",
-  "mulInt32#" -> "mulInt32",
-  "divInt32#" -> "divInt32",
-  name -> name
 }
 
 def forceValue : Env -> Value -> Either String Value
@@ -200,6 +202,103 @@ def unwrapBuiltinArgs = { name args ->
   if (isPassthroughBuiltin name) { args } { mapList unwrapBoxed args }
 }
 
+-- The output-side counterpart to `unwrapBuiltinArgs` above: the boxing
+-- wrapper a native-shortcut arm's raw result must be re-wrapped in, or
+-- `Nothing` if that arm's result is not boxed at all under the real
+-- Malgo-level Builtin.mlg/Prelude.mlg definition of the same name.
+-- Box-symmetric functions (`addInt32 : Int32 -> Int32 -> Int32 = {(Int32#
+-- x)(Int32# y) -> Int32#(addInt32# x y)}` and similar) unbox their
+-- arguments and rebox their result; `applyBuiltin`'s shortcut arms already
+-- mirror the unboxing (via `unwrapBuiltinArgs`) but returned the raw
+-- result with no rebox step, diverging from the interpreter for exactly
+-- this shape (malgo#451; #425/#446 fixed the analogous gap for literals).
+--
+-- Excluded, deliberately, and why:
+--   * Bool-returning comparisons/predicates (`eqInt32`, `isDigit`, `not`,
+--     ...) -- `boolVal` already returns a real `VCon("True"/"False", 0,
+--     Nil)`, not a raw payload needing a wrapper.
+--   * Unit-returning IO (`printString`, `newline`, `putStr`, ...) and
+--     always-Left builtins (`exitFailure`, `malgo_panic`, ...) -- nothing
+--     to box; and `reboxBuiltinResult` only ever touches a `Right` value
+--     regardless (see its call site in `apply`).
+--   * `isPassthroughBuiltin`'s members (`print`, `|>`, `if`, `case`, ...)
+--     -- these return an arbitrary value some other computation already
+--     produced (and already boxed correctly, if it needed to be); boxing
+--     it again here would double-box.
+--   * Names with a `#` suffix or `malgo_` prefix (`addInt64#`,
+--     `malgo_add_int64_t`, `toStringInt32#`, `hasEnv#`, `getEnvRaw#`, the
+--     new `addInt32#`/etc arms above, ...) -- these mirror Builtin.mlg's
+--     *raw* primitives (`Int32# -> Int32# -> Int32#`, no boxing
+--     constructor in the type at all), so their unboxed shortcut result
+--     already matches. `hasEnv#`/`getEnvRaw#` additionally rebox their
+--     result already, by hand, for an unrelated reason (satisfying
+--     `Value.mlg`'s own `VInt32 : Int32 -> Value`/`VString : String ->
+--     Value` field types at the host level) -- adding them here would
+--     double-box.
+--   * `Int32#`/`String#`/etc called as a builtin (the `isWrapperName`
+--     fallback at the bottom of `applyBuiltin6`) and `charToString` (no
+--     Builtin.mlg/Prelude.mlg definition to mirror at all) -- both stay
+--     out of scope for #451; see that arm's own comment.
+def builtinResultWrapper : String -> Maybe String
+def builtinResultWrapper = {
+  "addInt32"          -> Just "Int32#",
+  "subInt32"          -> Just "Int32#",
+  "mulInt32"          -> Just "Int32#",
+  "divInt32"          -> Just "Int32#",
+  "modInt32"          -> Just "Int32#",
+  "negInt32"          -> Just "Int32#",
+  "ordChar"           -> Just "Int32#",
+  "parseIntString32"  -> Just "Int32#",
+  -- Prelude.mlg, not Builtin.mlg (`max`/`min`/`abs` : Int32 -> ... ->
+  -- Int32, operating on already-boxed Int32 all the way through -- no
+  -- unbox/rebox pattern of their own, but still box-symmetric end to end).
+  "max"               -> Just "Int32#",
+  "min"               -> Just "Int32#",
+  "abs"               -> Just "Int32#",
+  name -> builtinResultWrapper2 name
+}
+
+def builtinResultWrapper2 : String -> Maybe String
+def builtinResultWrapper2 = {
+  "addInt64"          -> Just "Int64#",
+  "subInt64"          -> Just "Int64#",
+  "mulInt64"          -> Just "Int64#",
+  "divInt64"          -> Just "Int64#",
+  "modInt64"          -> Just "Int64#",
+  "negInt64"          -> Just "Int64#",
+  "lengthString"      -> Just "Int64#",
+  "parseIntString64"  -> Just "Int64#",
+  "atString"          -> Just "Char#",
+  "chrInt32"          -> Just "Char#",
+  name -> builtinResultWrapper3 name
+}
+
+def builtinResultWrapper3 : String -> Maybe String
+def builtinResultWrapper3 = {
+  "appendString"      -> Just "String#",
+  "toStringInt32"     -> Just "String#",
+  "toStringInt64"     -> Just "String#",
+  "consString"        -> Just "String#",
+  "substring"         -> Just "String#",
+  "reverseString"     -> Just "String#",
+  "getRawArgs"        -> Just "String#",
+  "readFile"          -> Just "String#",
+  "getContents"       -> Just "String#",
+  "toStringDouble"    -> Just "String#",
+  _ -> Nothing
+}
+
+-- Applied to every `applyBuiltin` result at the one dispatch site (`apply`'s
+-- `VBuiltin` case): a no-op unless `builtinResultWrapper` names a wrapper
+-- for this builtin.
+def reboxBuiltinResult : String -> Value -> Value
+def reboxBuiltinResult = { name result ->
+  case (builtinResultWrapper name) {
+    (Just wrapper) -> VCon(wrapper, 1i32, Cons result Nil),
+    Nothing -> result
+  }
+}
+
 def matchLit : Env -> Lit -> Value -> Either String Env
 def matchLit = { lEnv lit val ->
   -- Reverse direction from `matchWrappedPat`: a bare literal pattern like
@@ -260,7 +359,7 @@ def eval = {
       (Just v) -> forceValue gEnv v,
       Nothing  ->
         if (isImplicitBuiltin name)
-          { Right (VBuiltin(implicitBuiltinRuntimeName name, 2i32, Nil)) }
+          { Right (VBuiltin(name, 2i32, Nil)) }
           { Left (appendString "undefined: " name) }
     },
   -- Literals are boxed here to match Malgo.Rename.Pass.lookupBox, which
@@ -356,7 +455,10 @@ def apply = { gEnv fn arg ->
     (VBuiltin name arity acc) ->
       let newAcc = append acc (Cons arg Nil);
       if (eqInt32 (length newAcc) arity)
-        { applyBuiltin gEnv name (unwrapBuiltinArgs name newAcc) }
+        { bindRight (applyBuiltin gEnv name (unwrapBuiltinArgs name newAcc)) { result ->
+            Right (reboxBuiltinResult name result)
+          }
+        }
         { Right (VBuiltin(name, arity, newAcc)) },
     _ -> Left (appendString "cannot apply: " (showValue fn))
   }
@@ -914,6 +1016,17 @@ def applyBuiltin = { gEnv name args ->
     "mulInt32"     -> applyInt2 mulInt32 "mulInt32" args,
     "divInt32"     -> applyInt2 divInt32 "divInt32" args,
     "modInt32"     -> applyInt2 modInt32 "modInt32" args,
+    -- Raw counterparts reached only via `isImplicitBuiltin`'s ExVar
+    -- fallback above (no `builtinNames` entry). Same host computation as
+    -- their boxed siblings just above -- Int32/Int32# share a host
+    -- representation -- kept as separate arms (rather than reusing the
+    -- "addInt32" name) purely so `builtinResultWrapper` can tell them
+    -- apart: these must stay unboxed, matching Builtin.mlg's `addInt32#`
+    -- (`Int32# -> Int32# -> Int32#`), unlike the boxed `addInt32`.
+    "addInt32#"    -> applyInt2 addInt32 "addInt32#" args,
+    "subInt32#"    -> applyInt2 subInt32 "subInt32#" args,
+    "mulInt32#"    -> applyInt2 mulInt32 "mulInt32#" args,
+    "divInt32#"    -> applyInt2 divInt32 "divInt32#" args,
     _ -> applyBuiltin2 gEnv name args
   }
 }
@@ -1022,6 +1135,18 @@ def applyBuiltin6 = { gEnv name args ->
     "parseIntString64"        -> case args { (Cons (VString s) Nil) -> Right (VInt64 (parseIntString64 s)), _ -> Left "parseIntString64: type error" },
     "|>" -> case args { (Cons x (Cons f Nil)) -> apply gEnv f x, _ -> Left "|>: type error" },
     "<|" -> case args { (Cons f (Cons x Nil)) -> apply gEnv f x, _ -> Left "<|: type error" },
+    -- `Int32#`/`String#`/etc called directly as a builtin function value
+    -- (only reachable when a program imports Builtin.mlg -- preloaded, so
+    -- its own `data Int32 = Int32# Int32#` never actually runs -- and
+    -- applies the constructor name without a local `data` decl of its own
+    -- to shadow it): this returns the raw argument unchanged instead of
+    -- building `VCon(name, 1, [x])`, so it doesn't actually box. Left
+    -- alone here -- out of scope for #451 (that issue's ~90 native-
+    -- shortcut arms cover named functions like `addInt32`/`toStringInt32`,
+    -- not a boxing constructor called as a value), and `builtinResultWrapper`
+    -- deliberately has no entries for these names either, for the same
+    -- reason: it exists for arms whose Builtin.mlg definition unboxes-then-
+    -- reboxes, not for the boxing constructors themselves.
     _ ->
       if (isWrapperName name) {
         case args { (Cons x Nil) -> Right x, _ -> Left (appendString name ": type error") }

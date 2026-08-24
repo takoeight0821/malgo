@@ -62,19 +62,49 @@ def isNextComma = {
 
 -- Ignores the tight flag: this is "is there a '(' here at all", used
 -- pervasively outside expression application chains. See
--- isNextTightLParen for the tight-specific check parseAppRest needs.
+-- isNextCallLParen for the call-specific check parseAppRest needs.
 def isNextLParen : List Token -> Bool
 def isNextLParen = {
   (Cons (TkLParen _) _) -> True,
   _ -> False
 }
 
--- True when the next token is '(' tightly adjacent to the previous token
--- -- eligible to fold as a C-style call onto the atom parseAppRest just
--- finished parsing, rather than being a loose, space-separated argument.
-def isNextTightLParen : List Token -> Bool
-def isNextTightLParen = {
+-- True when the next '(' must be folded as a C-style call by
+-- parseAppRest's own accumulator-level check, rather than being left for
+-- its generic isAtomStart fallback (which parses "(...)" as a plain atom
+-- via parseAtom -- transparent grouping for one expr, an ExTuple for a
+-- comma-separated list -- then applies the accumulator to that one
+-- value). Two shapes need the call-branch instead:
+--   - a *tight* '(' -- it can only be reached here at all once chained
+--     off a loose-dot-built accumulator (e.g. `g a state.dict(x, y)`:
+--     the loose `.dict` binds to `g a state`, so the tight `(x, y)`
+--     right after "dict" is still parseAppRest's to fold, not
+--     parseAtom's -- a fresh atom's own tight paren is already folded by
+--     parseAtom's call to parseTightPostfix before parseAppRest ever
+--     runs);
+--   - a *loose* '(' whose contents have a top-level comma -- a real
+--     multi-arg call (`f (a, b)`) that the isAtomStart fallback would
+--     otherwise misparse as `f` applied to a single ExTuple(a, b)
+--     argument (malgo#450 follow-up regression: narrowing this check to
+--     tight-only, to avoid double-handling a fresh atom's own tight
+--     call, silently dropped the *loose* multi-arg case too).
+-- A loose *single*-argument '(' is deliberately left out of both cases
+-- above: the isAtomStart fallback already parses it correctly (a
+-- transparent group, identical to applying the accumulator to the one
+-- argument), including the case where a tight '.field'/'(args)' chain
+-- immediately follows the closing paren -- parseAtom's own trailing
+-- parseTightPostfix call redirects that chain onto the *argument*, not
+-- onto the whole call, matching the Lean parser's pApplyPostfix
+-- single-arg branch (#424). Folding a single-argument loose '(' into the
+-- call-branch here too would steal that redirect: `printInt32 (g a
+-- state.dict).head` needs its tight `.head` bound to the parenthesized
+-- argument (`(g a state.dict).head`, matching DotChainTightLoose's
+-- c2_tight), not to printInt32's call result -- exactly what a naive
+-- widening of this check back to "any '(' " regresses.
+def isNextCallLParen : List Token -> Bool
+def isNextCallLParen = {
   (Cons (TkLParen True) _) -> True,
+  (Cons (TkLParen False) rest) -> hasTopLevelCommaBeforeRParen rest 0i32,
   _ -> False
 }
 
@@ -1081,10 +1111,12 @@ def parseApp = { ftable ts ->
 
 -- Continue application chain while next token starts an atom. A tight
 -- '.'/'(' immediately after a *fresh* atom has already been folded onto
--- it by parseAtom's call to parseTightPostfix, so the isNextTightLParen
+-- it by parseAtom's call to parseTightPostfix, so the isNextCallLParen
 -- branch below only ever fires on a call immediately following a
--- loose-dot-built ExField (canCStyleCall allows that). isNextDot,
--- though, deliberately does not distinguish tight from loose: once a
+-- loose-dot-built ExField, or on a loose multi-arg call (canCStyleCall
+-- allows both -- see isNextCallLParen's own comment for why a loose
+-- *single*-arg '(' is excluded). isNextDot, though, deliberately does
+-- not distinguish tight from loose: once a
 -- loose dot has bound a field onto `f` here, a *further* tight dot right
 -- after it (e.g. `g a state .dict.head`: loose `.dict` builds
 -- ExField(g a state, "dict"), then tight `.head` must still bind to
@@ -1101,24 +1133,32 @@ def parseAppRest = { ftable f ts ->
         }
       }
     }
-    { if (isNextTightLParen ts)
-        { if (canCStyleCall f)
-    { bindRight (parseCStyleCallArgs ftable ts) { {.val -> args, .rest -> ts2} ->
-        parseAppRest ftable (applyExprArgs f args) ts2
-      }
-    }
-          { bindRight (parseAtom ftable ts) { {.val -> x, .rest -> ts2} ->
-              parseAppRest ftable (ExApp(f, x)) ts2
+    -- canCStyleCall is checked before isNextCallLParen (not after, as
+    -- parseAppRest's earlier shape had it): whenever f isn't call-eligible,
+    -- the outcome is the isAtomStart fallback regardless of what kind of
+    -- '(' (if any) comes next, so there's no reason to pay for
+    -- isNextCallLParen's top-level-comma scan only to discard the result.
+    { if (canCStyleCall f)
+        { if (isNextCallLParen ts)
+            { bindRight (parseCStyleCallArgs ftable ts) { {.val -> args, .rest -> ts2} ->
+                parseAppRest ftable (applyExprArgs f args) ts2
+              }
             }
-          }
+            { if (isAtomStart ts)
+                { bindRight (parseAtom ftable ts) { {.val -> x, .rest -> ts2} ->
+                    parseAppRest ftable (ExApp(f, x)) ts2
+                  }
+                }
+                { Right {.val -> f, .rest -> ts} }
+            }
         }
-    { if (isAtomStart ts)
-    { bindRight (parseAtom ftable ts) { {.val -> x, .rest -> ts2} ->
-        parseAppRest ftable (ExApp(f, x)) ts2
-      }
-    }
-    { Right {.val -> f, .rest -> ts} }
-    }
+        { if (isAtomStart ts)
+            { bindRight (parseAtom ftable ts) { {.val -> x, .rest -> ts2} ->
+                parseAppRest ftable (ExApp(f, x)) ts2
+              }
+            }
+            { Right {.val -> f, .rest -> ts} }
+        }
     }
 }
 

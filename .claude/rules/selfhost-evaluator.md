@@ -152,3 +152,45 @@ Level 2 は Level 1 より 50〜200 倍遅い。CI では `l2-build`（評価器
 いるので、ローカルで手動確認する際も `BUILD_ONLY=1` / `EVAL_BIN=PATH` /
 `L2_CASES="A B"` が使える（詳細は `scripts/selfhost-level2.sh` 冒頭のコメント）。
 タイムアウトは余裕を持たせること。
+
+---
+
+## 5. `builtinResultWrapper` は `isPassthroughBuiltin` の出力側版
+
+### 背景
+
+`unwrapBuiltinArgs`（項目2の4箇所目、`isPassthroughBuiltin` が制御）は
+ディスパッチ**前**にボックス化された引数を unbox する。`builtinResultWrapper`
+（`reboxBuiltinResult` から呼ばれ、`apply` の `VBuiltin` ケースでディスパッチ
+**後**に一箇所だけ適用される）はその逆方向を担う、5箇所目の分散サイトである。
+`Int32`/`Int64`/`Char`/`String` を返し、かつ Builtin.mlg/Prelude.mlg 側の本来の
+定義が「引数を unbox して計算し、結果を再び box する」形（box対称、例:
+`addInt32 = {(Int32# x)(Int32# y) -> Int32# (addInt32# x y)}`）のビルトインだけが
+対象。比較演算（`Bool` を返す）、IO（`Unit` を返す）、`isPassthroughBuiltin` に
+載っている制御フロー系（`print`/`if`/`case`/`goto`/`|>`/`<|`/`const`/
+`malgo_unsafe_cast`/`malgo_panic`）、および `#` サフィックス/`malgo_` プレフィックス
+の raw 版（`addInt64#`, `malgo_add_int64_t`, `toStringInt32#` など、
+Builtin.mlg 側の型自体が raw = `Int32# -> Int32# -> Int32#` で box を経由しない）
+は対象外（malgo#451 参照）。
+
+### ルール
+
+新しいビルトイン `foo` を追加・変更する際、その実装が
+「引数を unbox して計算し、box 対称な結果を返す」形（`foo` の Builtin.mlg/
+Prelude.mlg 側の定義が対応する box 型を返す）なら、`builtinResultWrapper`
+（`builtinResultWrapper2/3/...`)に `"foo" -> Just "Int32#"` のようなエントリを
+追加すること。
+
+`isPassthroughBuiltin` と同じ理由で、ここへの追加漏れは:
+
+- コンパイルは通る
+- 実行時エラーにもならない
+- ただし `print`/`valueToText` で直接観察したときだけオラクルと食い違う
+  （例: 期待される `Int32#(7)` ではなく unbox 済みの `7` が出力される）
+
+という形で気付きにくく壊れる。ただし多くの場合、後続の別ビルトイン呼び出しが
+`unwrapBuiltinArgs` で同じ値を再度 unbox するため、中間結果が
+box/unbox を往復して観察できないケースも多い（例: `toStringInt32(addInt32(x,
+y))` は `addInt32` の reboxing 漏れがあっても出力に現れない）。ズレが実際に
+見えるのは、結果を `print`/`malgo_print` に直接渡す、または明示的に
+`Foo#` パターンで分解するなど、box を経由せず値を観察する経路だけ。

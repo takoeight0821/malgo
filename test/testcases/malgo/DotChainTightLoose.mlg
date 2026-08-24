@@ -1,0 +1,58 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+def mkSt = { n -> { .dict -> { .head -> n }, .head -> n } }
+
+def bump = { n -> addInt32(n, 1i32) }
+
+-- g ignores the *content* of its arguments -- it always returns the same
+-- fixed record -- so a tight-vs-loose difference in how its arguments
+-- are grouped can only show up as a difference in which shape the caller
+-- ends up projecting `.head` off of, not in a value g itself computes
+-- (malgo#450).
+def g = { a s -> { .dict -> { .head -> 222i32 }, .head -> 111i32 } }
+
+def main = {
+  let state = mkSt 42i32;
+  let a = 1i32;
+
+  -- criterion 1: `f state.dict.head` must bind as `f (state.dict.head)`,
+  -- not `(f state.dict).head`.
+  putStr "c1_chain: ";
+  printInt32 (bump state.dict.head);
+  newline ();
+
+  -- already-agreeing, must remain unchanged: tight call-then-project on
+  -- an identifier head (`nats(0).tail`-style).
+  putStr "unchanged_call_then_dot: ";
+  printInt32 mkSt(5i32).head;
+  newline ();
+
+  -- criterion 2: tight `g a state.dict` groups state.dict as g's second
+  -- argument, so the `.head` outside the parens projects g's own field.
+  putStr "c2_tight: ";
+  printInt32 (g a state.dict).head;
+  newline ();
+
+  -- criterion 2: loose `g a state .dict` (space before the dot) groups
+  -- only `state` as g's argument, then projects `.dict` off the call's
+  -- result -- a different value than c2_tight, from the same call.
+  putStr "c2_loose: ";
+  printInt32 (g a state .dict).head;
+  newline ();
+
+  -- criterion 3: a loose parenthesized argument immediately (tight)
+  -- followed by a '.field' chain binds the chain to the argument, not to
+  -- the whole call (mirrors `toStringInt32 (mk 7).exitCode`).
+  putStr "c3_loose_paren_tight_dot: ";
+  printInt32 (bump (mkSt 5i32).dict.head);
+  newline ();
+
+  -- a tight dot chained directly off a loose one must still bind to the
+  -- same accumulator the loose dot built, not be stranded as a parse
+  -- error: `g a state .dict.head` is `((g a state).dict).head`, same
+  -- value as c2_loose, reached by one more (tight) field access.
+  putStr "loose_then_tight_dot: ";
+  printInt32 (g a state .dict.head);
+  newline ()
+}

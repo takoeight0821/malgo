@@ -1,0 +1,45 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+
+-- malgo#450 follow-up: hoisting tight '.field'/'(args)' folding to the atom
+-- level (parseTightPostfix) narrowed parseAppRest's own call-detection to
+-- tight parens only, which made a LOOSE multi-argument call (`f (a, b)`,
+-- space before the paren) invisible to parseAppRest -- it fell through to
+-- the generic atom fallback and misparsed as `f` applied to a single
+-- ExTuple(a, b) argument instead of a two-argument call. addInt32
+-- immediately surfaces the difference: a tuple argument doesn't match a
+-- two-parameter clause, so the regression showed up as a runtime crash
+-- rather than a silently wrong value.
+def add2 = { a b -> addInt32(a, b) }
+
+def add3 = { a b c -> addInt32(addInt32(a, b), c) }
+
+-- Returns a record so a tight '.field' immediately following a loose
+-- multi-arg call's closing paren can be exercised too: it must bind to the
+-- call's *result*, not to its last argument -- matching the Lean parser's
+-- pApplyPostfix, which only gives the "redirect to the argument" treatment
+-- to a *one*-argument call (DotChainTightLoose.mlg's c3_loose_paren_tight_dot),
+-- never to a multi-argument one.
+def wrap2 = { a b -> { .sum -> addInt32(a, b) } }
+
+def main = {
+  -- criterion 1: a loose two-argument call must still apply both
+  -- arguments, not misparse `(a, b)` as one tuple argument.
+  putStr "loose_two_arg: ";
+  printInt32 (add2 (1i32, 2i32));
+  newline ();
+
+  -- criterion 2: a loose three-argument call -- same shape with one more
+  -- argument, guarding against an off-by-one in the top-level-comma scan.
+  putStr "loose_three_arg: ";
+  printInt32 (add3 (1i32, 2i32, 3i32));
+  newline ();
+
+  -- criterion 3: a tight '.field' immediately after a loose multi-arg
+  -- call's closing paren binds to the call's result, combining this
+  -- case with the dot-binding concern DotChainTightLoose.mlg covers for
+  -- single-argument calls.
+  putStr "loose_multiarg_then_tight_dot: ";
+  printInt32 (wrap2 (10i32, 20i32).sum);
+  newline ()
+}

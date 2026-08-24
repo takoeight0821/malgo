@@ -9,16 +9,23 @@ module {..} = import "../../../runtime/malgo/Either.mlg"
 -- All identifier-like tokens (keywords and plain identifiers) are TkIdent.
 -- The parser distinguishes keywords by checking the string value.
 
+-- TkLParen and TkDot each carry a "tight" flag: True when the token is
+-- immediately adjacent to the previous token (no whitespace or comment in
+-- between). The parser uses this to fold a tightly-adjacent '.field'
+-- projection or C-style '(args)' call onto the atom that precedes it,
+-- rather than onto the whole application chain built up so far
+-- (malgo#450). Every other token ignores adjacency, so it's untracked.
 data Token
   = TkIdent String     -- identifier or keyword (e.g. "def", "data", "foo")
-  | TkOp String        -- operator (e.g. "->", "=", "|", "+")
+  | TkOp String        -- operator (e.g. "->", "=", "|", "+"); never "." alone (see TkDot)
+  | TkDot Bool         -- . (tight flag)
   | TkInt32 Int32      -- integer literal without suffix (default Int32)
   | TkInt64 Int64      -- integer literal with i64 suffix
   | TkChar Char        -- char literal
   | TkString String    -- string literal
   | TkLBrace           -- {
   | TkRBrace           -- }
-  | TkLParen           -- (
+  | TkLParen Bool      -- ( (tight flag)
   | TkRParen           -- )
   | TkLBracket         -- [
   | TkRBracket         -- ]
@@ -33,13 +40,14 @@ def showToken : Token -> String
 def showToken = {
   (TkIdent s)  -> appendString "TkIdent(" (appendString s ")"),
   (TkOp s)     -> appendString "TkOp(" (appendString s ")"),
+  (TkDot _)    -> "TkOp(.)",
   (TkInt32 _)  -> "TkInt32",
   (TkInt64 _)  -> "TkInt64",
   (TkChar _)   -> "TkChar",
   (TkString s) -> appendString "TkString(\"" (appendString s "\")"),
   TkLBrace     -> "TkLBrace",
   TkRBrace     -> "TkRBrace",
-  TkLParen     -> "TkLParen",
+  (TkLParen _) -> "TkLParen",
   TkRParen     -> "TkRParen",
   TkLBracket   -> "TkLBracket",
   TkRBracket   -> "TkRBracket",
@@ -47,17 +55,20 @@ def showToken = {
   TkEof        -> "TkEof"
 }
 
+-- Ignores the tight flag on TkLParen/TkDot: this compares token *kind*,
+-- not the whitespace-adjacency parseTightPostfix separately tracks.
 def eqToken : Token -> Token -> Bool
 def eqToken = {
   (TkIdent a)  (TkIdent b)  -> eqString a b,
   (TkOp a)     (TkOp b)     -> eqString a b,
+  (TkDot _)    (TkDot _)    -> True,
   (TkInt32 a)  (TkInt32 b)  -> eqInt32 a b,
   (TkInt64 a)  (TkInt64 b)  -> eqInt64 a b,
   (TkChar a)   (TkChar b)   -> eqChar a b,
   (TkString a) (TkString b) -> eqString a b,
   TkLBrace     TkLBrace     -> True,
   TkRBrace     TkRBrace     -> True,
-  TkLParen     TkLParen     -> True,
+  (TkLParen _) (TkLParen _) -> True,
   TkRParen     TkRParen     -> True,
   TkLBracket   TkLBracket   -> True,
   TkRBracket   TkRBracket   -> True,

@@ -44,14 +44,24 @@ pub const Tag = union(enum) { tuple: void, named: []const u8 };
 /// recursive process gets an explicit loop rather than the native stack.
 pub const CodeFn = *const fn (self: Value, args: []const Value) Action;
 
-/// Maximum number of arguments at any call site. The front end cannot
+/// Maximum number of arguments at any call site. Was 4 (a defensive margin
+/// with no known call site needing it); tightened to 2 by #407 once that
+/// margin was actually checked rather than assumed. The front end cannot
 /// currently produce more than 2 (`ToFun` builds only single-parameter
 /// lambdas and singleton applies; `ToCore` appends exactly one consumer,
-/// giving `TCallClosure f [arg, kont]`), but nothing in the IR enforces
-/// that, so this is generous. `Malgo.Backend.Zig.Emit` mirrors the number
-/// to reject an over-arity call site with a readable message; `mkAction`'s
-/// `rcInvariant` below is the authoritative backstop if the two drift.
-pub const MAX_ARGS: usize = 4;
+/// giving `TCallClosure f [arg, kont]`) -- confirmed empirically, not just
+/// by reading the front end: every `rt.callClosure`/`rt.staticCall` site in
+/// the generated Zig for the full golden corpus, both self-hosted compiler
+/// levels, `examples/`, and `bench/fixtures/` (220k+ call sites) carries at
+/// most 2 arguments. Nothing in the IR *enforces* that bound, so
+/// `Malgo.Backend.Zig.Emit`'s `maxCallArgs` mirrors this number to reject an
+/// over-arity call site with a readable compile-time message rather than
+/// truncating args silently; `mkAction`'s `rcInvariant` below is the
+/// authoritative runtime backstop if the two ever drift. Lowering it shrinks
+/// every `Action` (see below) by two words, which matters on
+/// `selfhost-l2`'s 1.4e10+ dispatches (#407): each `run` iteration copies an
+/// `Action` by value.
+pub const MAX_ARGS: usize = 2;
 
 /// What a generated function returns instead of calling: either the next
 /// call to perform (`code != null`) or the finished value (`code == null`,
@@ -66,6 +76,16 @@ pub const Action = struct {
     argv: [MAX_ARGS]Value,
     argc: usize,
 };
+
+// #407: Action must actually be 5 words (40 bytes on a 64-bit target), not
+// 7 -- the whole point of shrinking MAX_ARGS. A future MAX_ARGS bump that
+// forgets this comptime check would silently grow every `run` dispatch's
+// per-call copy back to 7 words with no compiler error to catch it.
+comptime {
+    if (@sizeOf(usize) == 8) {
+        std.debug.assert(@sizeOf(Action) == 5 * @sizeOf(usize));
+    }
+}
 
 pub const Struct = struct { tag: Tag, fields: []const Value };
 pub const Closure = struct { code: CodeFn, captures: []const Value };

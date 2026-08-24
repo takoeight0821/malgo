@@ -180,9 +180,10 @@ same underlying file under two different `ModuleName` *aliases* — e.g.
 `.moduleName "Builtin"` (a bare `import Builtin`) and the `.artifact` form a
 relative-path import resolves to — because `ModuleName`'s derived `BEq`/`Ord`
 treats different constructors as always-unequal even when they name the
-same file on disk (`ArtifactPath`'s own equality is `relPath`-only precisely
-so that traversal-route aliases of one `.artifact` collapse, per its doc
-comment, but that never bridges a `.moduleName` alias to an `.artifact` one).
+same file on disk (`ArtifactPath`'s own equality is `originPath`-only
+precisely so that traversal-route aliases of one `.artifact` collapse, per
+its doc comment, but that never bridges a `.moduleName` alias to an
+`.artifact` one).
 Since `Prelude.mlg` re-exports `Builtin.mlg` via its own bare `import
 Builtin`, any program that imports both Builtin and Prelude by two different
 route shapes (confirmed via

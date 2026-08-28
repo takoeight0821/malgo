@@ -750,15 +750,9 @@ def parseLabelExpr = { ftable ts ->
 -- the next token's own tight flag is what gives this chaining (mirrors
 -- the Lean parser's pTightPostfix, CStyle.lean). A loose
 -- (whitespace-preceded) '.' or '(' is left in `rest` for parseAppRest to
--- bind to the whole accumulated application instead (malgo#450).
--- The call branch folds onto *any* expr, not just an ExVar/ExField head,
--- matching the Lean parser's pTightPostfix (which dropped that same
--- restriction in 26eaf4fe): after the first call in a chain like
--- `addThree(1)(2)(3)`, the accumulator is itself an ExApp, and there's no
--- reason a second or third tight call shouldn't chain onto it the same
--- way the first did. parseAppRest's own, unrelated tight-call branch
--- keeps the canCStyleCall restriction, since it exists for a different
--- case (a call immediately tight to a *loose*-dot-built accumulator).
+-- bind to the whole accumulated application instead (malgo#450). Its call
+-- case delegates to foldCallOnto -- see that function for why folding a
+-- call never depends on expr's shape.
 def parseTightPostfix : List FixityEntry -> Expr -> List Token -> Either String {val: Expr, rest: List Token}
 def parseTightPostfix = { ftable expr ts ->
   case ts {
@@ -766,11 +760,24 @@ def parseTightPostfix = { ftable expr ts ->
       bindRight (eatIdent rest) { {.val -> field, .rest -> ts2} ->
         parseTightPostfix ftable (ExField(expr, field)) ts2
       },
-    (Cons (TkLParen True) _) ->
-      bindRight (parseCStyleCallArgs ftable ts) { {.val -> args, .rest -> ts2} ->
-        parseTightPostfix ftable (applyExprArgs expr args) ts2
-      },
+    (Cons (TkLParen True) _) -> foldCallOnto (parseTightPostfix ftable) ftable expr ts,
     _ -> Right {.val -> expr, .rest -> ts}
+  }
+}
+
+-- Parse a call-eligible '(' at ts, fold its arguments onto expr via
+-- applyExprArgs (which pattern-matches on the argument list, never on
+-- expr), and hand the result to `continue`. Shared by parseTightPostfix's
+-- and parseAppRest's call branches so "a call folds onto any accumulator"
+-- only has to be true of this one function instead of being kept in sync
+-- between two -- matching the Lean parser's pTightPostfix/pApplyPostfix,
+-- which impose no such restriction either: parseTightPostfix's call
+-- branch never had one (#456 introduced it that way), and parseAppRest's
+-- dropped its ExVar/ExField-only gate to match (malgo#464).
+def foldCallOnto : (Expr -> List Token -> Either String {val: Expr, rest: List Token}) -> List FixityEntry -> Expr -> List Token -> Either String {val: Expr, rest: List Token}
+def foldCallOnto = { continue ftable expr ts ->
+  bindRight (parseCStyleCallArgs ftable ts) { {.val -> args, .rest -> ts2} ->
+    continue (applyExprArgs expr args) ts2
   }
 }
 
@@ -1113,14 +1120,14 @@ def parseApp = { ftable ts ->
 -- '.'/'(' immediately after a *fresh* atom has already been folded onto
 -- it by parseAtom's call to parseTightPostfix, so the isNextCallLParen
 -- branch below only ever fires on a call immediately following a
--- loose-dot-built ExField, or on a loose multi-arg call (canCStyleCall
--- allows both -- see isNextCallLParen's own comment for why a loose
--- *single*-arg '(' is excluded). isNextDot, though, deliberately does
--- not distinguish tight from loose: once a
--- loose dot has bound a field onto `f` here, a *further* tight dot right
--- after it (e.g. `g a state .dict.head`: loose `.dict` builds
--- ExField(g a state, "dict"), then tight `.head` must still bind to
--- *that* accumulator, not be stranded) has to keep chaining onto the
+-- loose-dot-built ExField, or on a loose multi-arg call -- see
+-- isNextCallLParen's own comment for why a loose *single*-arg '(' is
+-- excluded, and foldCallOnto's for why this branch doesn't care what `f`
+-- is. isNextDot, though, deliberately does not distinguish tight from
+-- loose: once a loose dot has bound a field onto `f` here, a *further*
+-- tight dot right after it (e.g. `g a state .dict.head`: loose `.dict`
+-- builds ExField(g a state, "dict"), then tight `.head` must still bind
+-- to *that* accumulator, not be stranded) has to keep chaining onto the
 -- same `f`, matching the Lean parser's pApplyPostfix field-projection
 -- branch, which never consults tightness either -- only parseTightPostfix
 -- (folding onto a fresh atom) does (malgo#450).
@@ -1133,25 +1140,8 @@ def parseAppRest = { ftable f ts ->
         }
       }
     }
-    -- canCStyleCall is checked before isNextCallLParen (not after, as
-    -- parseAppRest's earlier shape had it): whenever f isn't call-eligible,
-    -- the outcome is the isAtomStart fallback regardless of what kind of
-    -- '(' (if any) comes next, so there's no reason to pay for
-    -- isNextCallLParen's top-level-comma scan only to discard the result.
-    { if (canCStyleCall f)
-        { if (isNextCallLParen ts)
-            { bindRight (parseCStyleCallArgs ftable ts) { {.val -> args, .rest -> ts2} ->
-                parseAppRest ftable (applyExprArgs f args) ts2
-              }
-            }
-            { if (isAtomStart ts)
-                { bindRight (parseAtom ftable ts) { {.val -> x, .rest -> ts2} ->
-                    parseAppRest ftable (ExApp(f, x)) ts2
-                  }
-                }
-                { Right {.val -> f, .rest -> ts} }
-            }
-        }
+    { if (isNextCallLParen ts)
+        { foldCallOnto (parseAppRest ftable) ftable f ts }
         { if (isAtomStart ts)
             { bindRight (parseAtom ftable ts) { {.val -> x, .rest -> ts2} ->
                 parseAppRest ftable (ExApp(f, x)) ts2
@@ -1160,13 +1150,6 @@ def parseAppRest = { ftable f ts ->
             { Right {.val -> f, .rest -> ts} }
         }
     }
-}
-
-def canCStyleCall : Expr -> Bool
-def canCStyleCall = {
-  (ExVar _) -> True,
-  (ExField _ _) -> True,
-  _ -> False
 }
 
 def parseCStyleCallArgs : List FixityEntry -> List Token -> Either String {val: List Expr, rest: List Token}

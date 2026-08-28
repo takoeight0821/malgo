@@ -62,7 +62,12 @@ so it's cached across sessions in this environment for about a week
 instead of re-running every time. It installs elan, mise, and pre-fetches
 the exact toolchain versions this repo pins — `lean/lean-toolchain` and
 `mise.toml`'s `zig`/`chezscheme` — so update the hardcoded versions below
-if those files change.
+if those files change. If you forget: it isn't a correctness bug, only a
+speed one. The SessionStart hook below reconciles against the actual
+checkout every session (`lake build` auto-resolves the toolchain from
+`lean/lean-toolchain`; `mise install` re-resolves `zig`/`chezscheme` from
+`mise.toml`), so a stale pre-fetch here just means that reconciliation
+falls back to a network fetch instead of using the cached one.
 
 ```bash
 #!/bin/bash
@@ -97,23 +102,32 @@ export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
 # Keep in sync with mise.toml's [tools] versions.
 mise use -g zig@0.16.0 || true
 mise use -g chezscheme@10.4.1 || true
-
-echo 'export PATH="$HOME/.elan/bin:$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"' \
-  > /etc/profile.d/malgo-toolchain.sh
 ```
+
+This deliberately doesn't try to persist `PATH` for later shells (e.g. via
+`/etc/profile.d`): Claude Code's own commands run as non-login shells that
+wouldn't source it anyway, and it's not the mechanism that actually
+matters here — the SessionStart hook below exports `PATH` through
+`$CLAUDE_ENV_FILE`, which is guaranteed to reach every command Claude
+runs.
 
 ## SessionStart hook
 
-`.claude/settings.json` registers `.claude/hooks/session-start.sh`, which
-runs on every session (cloud and local, a no-op locally since it checks
-`CLAUDE_CODE_REMOTE`). Unlike the setup script above, a fresh clone has no
-`.lake` build cache, so it re-runs `lake build` every session — this is
-the one setup step per-session latency can't avoid. It only exports `PATH`
-for what the setup script installed and runs `mise trust` / `lake build`;
-it does not install toolchains itself; if it reports `elan: NOT FOUND` or
-`lake build failed`, the setup script above hasn't run or the network
-access above isn't configured yet, and the transcript will point at
-whichever host is missing.
+`.claude/settings.json` registers `.claude/hooks/session-start.sh` with
+`"matcher": "startup|resume"`, so it runs once per fresh cloud session (and
+on resume), not on every `/clear`/compact. It's a no-op locally since it
+checks `CLAUDE_CODE_REMOTE`. Unlike the setup script above, a fresh clone
+has no `.lake` build cache, so it re-runs `lake build` every session —
+this is the one setup step per-session latency can't avoid. Besides
+exporting `PATH` for what the setup script installed, it also runs `mise
+install` from the checkout so `zig`/`chezscheme` get reconciled against
+`mise.toml` even if the setup script's own pre-fetch drifted out of sync
+(see the note above). It does not install elan or the Lean toolchain
+itself — if it reports `elan: NOT FOUND`, the setup script above hasn't
+run or failed. If `lake build` fails, it greps the build output for the
+network-fetch error signature (`CONNECT tunnel failed` / `error during
+download`) before blaming network access, so an unrelated compile error
+isn't misdiagnosed as a missing domain.
 
 Running the hook (synchronous) adds the fresh `lake build`'s time to every
 session start, in exchange for `mise run test`/`lake test`/lint working

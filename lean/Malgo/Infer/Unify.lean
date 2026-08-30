@@ -106,6 +106,10 @@ partial def unifyInternal (pos : Range) : Ty → Ty → UnifyM Subst
     if x == y then pure {}
     else pure (({} : Subst).insert x (.tVar y ly))
   | .tVar x _, t =>
+    -- A genuine occurs-check situation resolves into an equirecursive `tMu`
+    -- type here rather than failing -- this is why `InferError.occursCheckError`
+    -- is never actually thrown by current code (see `inferErrorCoverage` in
+    -- lean/Test/Main.lean).
     if occursIn x t then pure (({} : Subst).insert x (.tMu (abstractVar x t)))
     else pure (({} : Subst).insert x t)
   | t, .tVar x l => unifyTypes pos (.tVar x l) t

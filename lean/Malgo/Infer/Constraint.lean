@@ -250,6 +250,9 @@ def dummyRange : Range :=
   let pos : SourcePos := { sourceName := "<infer>", line := 1, column := 1 }
   { start := pos, stop := pos }
 
+-- `.notImplemented` exists only to give `InferError` this `Inhabited`
+-- witness; it is never thrown by real inference code (see
+-- `inferErrorCoverage` in lean/Test/Main.lean).
 instance : Inhabited InferError := ⟨.notImplemented dummyRange "uninhabited"⟩
 
 def InferError.render : InferError → String

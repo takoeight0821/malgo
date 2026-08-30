@@ -1219,7 +1219,14 @@ private def seedParsed (ws : Workspace) (db : Malgo.Query.QueryDB) (path : Syste
   let text ← MalgoM.io (IO.FS.readFile path)
   match ← Malgo.Parser.pass ws path text with
   | (.error e, _) => throw (parseError' e)
-  | (.ok parsed, _) =>
+  | (.ok parsed, flags) =>
+    -- Mirrors `Malgo.Driver.linkForCli`: a source's own pragmas (e.g.
+    -- `#malgo-2025`, `#c-style-apply`) must be folded into the ambient
+    -- `FeatureFlags` the same way the real CLI does, or a testcase that
+    -- only requests a feature via its own pragma (rather than via the
+    -- flags this call was seeded with) infers under a weaker feature set
+    -- than `malgo eval` actually gives it.
+    addFeatures flags
     MalgoM.io (db.cacheParsedModule.modify (·.insert parsed.moduleName parsed))
     return parsed
 
@@ -1258,27 +1265,50 @@ private def buildDepsEnvLenient (ws : Workspace) (db : Malgo.Query.QueryDB)
     let depEnv ← Malgo.Query.Engine.fetchInferredModule ws db dep
     pure (depEnv.foldl (fun m k v => if m.contains k then m else m.insert k v) acc)
 
-/-- Run inference on one testcase; `.ok ()` on success, `.error msg` on any
-compile error. Mirrors Haskell `InferSpec.runInfer`/`driveInfer`: renames the
-target directly (never calling `fetchInferredModule` ON the top-level
-testcase itself — only on each of its dependencies, via
-`buildDepsEnvLenient`), then infers with the accumulated deps env. -/
-def driveInfer (name : String) : IO (Except String Unit) := do
+/-- Shared Infer pipeline body: seed the parsed module → rename → (Elaborate,
+if `malgo2025`) → infer, under an explicit feature set and against an
+explicit source `path`. Discards the result -- callers only care whether it
+throws. Factored out so `driveInferWithFeatures` and `inferErrorGolden`
+below (positive and negative golden-error drivers over the same pipeline)
+can't silently drift out of sync. -/
+private def runInferPipeline (ws : Workspace) (features : FeatureFlags)
+    (path : System.FilePath) : IO Unit :=
+  MalgoM.run inferFlag features do
+    let db ← MalgoM.io Malgo.Query.newQueryDB
+    registerRuntime ws
+    let parsed ← seedParsed ws db path
+    let (renamed, rnState) ← Malgo.Query.Engine.fetchRenamedModule ws db parsed.moduleName
+    let depsEnv ← buildDepsEnvLenient ws db rnState.dependencies
+    let bindGroup ← if (← Malgo.hasFeature .malgo2025)
+      then Malgo.Elaborate.pass renamed.moduleName renamed.moduleDefinition
+      else pure renamed.moduleDefinition
+    let _ ← Malgo.Infer.pass renamed.moduleName depsEnv bindGroup
+    pure ()
+
+/-- Run inference on one testcase under an explicit feature set; `.ok ()` on
+success, `.error msg` on any compile error. Generalizes `driveInfer` (below,
+which fixes `malgo2025` on) so the CLI-default configuration can be driven
+the same way -- `malgo eval`'s `eval` subcommand has no `--feature` option
+at all (only the separate `debug-trace` subcommand takes `--malgo2025`), so
+every real invocation of `malgo eval --infer` runs with an *empty*
+`FeatureFlags`, never the `malgo2025`-on one this test suite otherwise
+always exercises. Renames the target directly (never calling
+`fetchInferredModule` ON the top-level testcase itself — only on each of
+its dependencies, via `buildDepsEnvLenient`), then infers with the
+accumulated deps env. -/
+def driveInferWithFeatures (features : FeatureFlags) (name : String) :
+    IO (Except String Unit) := do
   let ws ← Workspace.setup
   try
-    MalgoM.run inferFlag malgo2025 do
-      let db ← MalgoM.io Malgo.Query.newQueryDB
-      registerRuntime ws
-      let parsed ← seedParsed ws db (testcasePath name)
-      let (renamed, rnState) ← Malgo.Query.Engine.fetchRenamedModule ws db parsed.moduleName
-      let depsEnv ← buildDepsEnvLenient ws db rnState.dependencies
-      let bindGroup ← if (← Malgo.hasFeature .malgo2025)
-        then Malgo.Elaborate.pass renamed.moduleName renamed.moduleDefinition
-        else pure renamed.moduleDefinition
-      let _ ← Malgo.Infer.pass renamed.moduleName depsEnv bindGroup
-      pure ()
+    runInferPipeline ws features (testcasePath name)
     return .ok ()
   catch e => return .error (toString e)
+
+/-- Run inference on one testcase with `malgo2025` on; `.ok ()` on success,
+`.error msg` on any compile error. Mirrors Haskell
+`InferSpec.runInfer`/`driveInfer`. See `driveInferWithFeatures` for the
+CLI-default (`malgo2025`-off) counterpart. -/
+def driveInfer (name : String) : IO (Except String Unit) := driveInferWithFeatures malgo2025 name
 
 /-- Capture the module name, dependency env, and exported env from inference
 (port of `runInferCapturing`), for the export-boundary tests. -/
@@ -1318,6 +1348,32 @@ def runBoundaryTests : IO Nat := do
     failed := failed + 1
     IO.println s!"FAIL Malgo.Infer/boundary/single-main: found {mainNames.length}"
   return failed
+
+/-! ## Infer error golden cases (`test/Malgo/InferSpec/errors/*.mlg`)
+
+Mirrors the Parser/Rename error-golden pattern above: each fixture is
+driven through the same Parse → Rename → (Elaborate) → Infer pipeline as
+`driveInfer`, and the caught `CompileError`'s rendered text (i.e.
+`InferError.render` wrapped by `Malgo.wrapError`) becomes the golden.
+Unlike `runInferGate`, these testcases are deliberately negative. -/
+
+private def inferErrorCaseDir : System.FilePath :=
+  System.FilePath.mk "test/Malgo/InferSpec/errors"
+
+private def inferErrorGolden (path : System.FilePath) : IO String := do
+  let ws ← Workspace.setup
+  try
+    runInferPipeline ws malgo2025 path
+    return "INFERRED WITHOUT ERROR"
+  catch e => return toString e
+
+private def inferErrorCase (name : String) : GoldenCase :=
+  { group := "Malgo.Infer", name := s!"error/{name}",
+    run := inferErrorGolden (inferErrorCaseDir / s!"{name}.mlg") }
+
+def enumerateInferErrorCases : IO (List String) := enumerateErrorCases inferErrorCaseDir
+
+def inferErrorCases (names : List String) : List GoldenCase := names.map inferErrorCase
 
 /-! ## Constraint/Unify unit tests (port of the `Malgo.InferSpec` unit cases)
 
@@ -1411,6 +1467,117 @@ def runUnitTests : IO (Nat × Nat) := do
       IO.println s!"FAIL Malgo.Infer/unit/{label}"
   return (failed, checks.length)
 
+/-! ## Infer error constructor coverage
+
+Guards against a newly added `InferError` constructor going silently
+untested: `inferErrorCoverage` is written as an exhaustive match with no
+wildcard arm, so Lean's own exhaustiveness checker forces every case to be
+addressed here the moment a constructor is added or removed to
+`Malgo.Infer.InferError` -- a compile error, not a runtime gap that could
+go unnoticed. -/
+
+/-- Whether an `InferError` constructor is exercised by a golden fixture
+under `test/Malgo/InferSpec/errors/`, or explicitly known-unreachable
+(with why). -/
+inductive InferErrorCoverage where
+  | tested (fixture : String)
+  | unreachable (reason : String)
+
+open Malgo.Infer in
+/-- One entry per `InferError` constructor. Field values are irrelevant
+here (matched via `..`) -- only the constructor shape decides coverage. -/
+def inferErrorCoverage : InferError → InferErrorCoverage
+  | .unificationError .. => .tested "ConstructorMismatch"
+  | .unboundVariable .. =>
+    .unreachable "Rename's own scope resolution guarantees every renamed \
+term-level reference already resolves to a binding before Infer ever sees \
+it; the one plausible non-recursive-scope gap (a local self-referencing \
+`let`) is already rejected at Rename, not Infer. No construct was found \
+that reaches Infer.lean's `env.get? name == none` branches while Rename \
+still succeeds -- see docs/plans/2026-08-30-type-system-error-test-coverage.md."
+  | .occursCheckError .. =>
+    .unreachable "the unifier resolves a genuine occurs-check situation \
+into an equirecursive `tMu` type (Infer/Unify.lean's `unifyInternal`, the \
+`.tVar x _, t` case) instead of throwing -- this constructor is never \
+constructed by current code."
+  | .notImplemented .. =>
+    .unreachable "exists only as the `Inhabited InferError` default \
+witness (Infer/Constraint.lean); never thrown by real inference code."
+  | .cyclicSynonym .. => .tested "CyclicSynonym"
+  | .synonymArityMismatch .. => .tested "SynonymArityMissing"
+
+open Malgo.Infer in
+/-- Cross-checks every `.tested` fixture name above against the real
+fixture directory, catching a rename on either side that forgot the
+other. The `InferError` sample values are throwaways: only their
+constructor shape reaches `inferErrorCoverage`. -/
+def runInferErrorCoverageGate (fixtureNames : List String) : IO UInt32 := do
+  let samples : List (String × InferErrorCoverage) :=
+    [ ("unificationError", inferErrorCoverage (.unificationError dummyRange .tBottom .tBottom "sample"))
+    , ("unboundVariable", inferErrorCoverage (.unboundVariable dummyRange (mkId "sample")))
+    , ("occursCheckError", inferErrorCoverage (.occursCheckError dummyRange (mkId "sample") .tBottom))
+    , ("notImplemented", inferErrorCoverage (.notImplemented dummyRange "sample"))
+    , ("cyclicSynonym", inferErrorCoverage (.cyclicSynonym dummyRange (mkId "sample")))
+    , ("synonymArityMismatch", inferErrorCoverage (.synonymArityMismatch dummyRange (mkId "sample") 0 0)) ]
+  let mut failed := 0
+  for (tag, cov) in samples do
+    match cov with
+    | .tested fixture =>
+      if fixtureNames.contains fixture then
+        IO.println s!"ok Malgo.InferErrorCoverage/{tag} (fixture: {fixture})"
+      else
+        failed := failed + 1
+        IO.println s!"FAIL Malgo.InferErrorCoverage/{tag}: fixture '{fixture}' not found under {inferErrorCaseDir}"
+    | .unreachable reason =>
+      IO.println s!"ok Malgo.InferErrorCoverage/{tag} (known-unreachable: {reason})"
+  return if failed == 0 then 0 else 1
+
+/-- One entry in a known-gap allowlist for a corpus-wide Infer sweep: `name`
+currently fails under that sweep's feature set but succeeds under another,
+so it's an acknowledged gap rather than a regression. Each entry is checked
+for staleness (still actually failing) on every run; closing a gap for real
+means deleting its entry, same discipline as
+`PrimitiveCoverage.knownMissing`. -/
+structure InferKnownGap where
+  name : String
+  reason : String
+
+/-- Fixtures that currently fail Infer under the CLI-default (`malgo2025`
+off) configuration but pass with `malgo2025` on -- i.e. real gaps in what
+`malgo eval --infer` can type-check today, not artifacts of the
+`runInferGateCliDefault` gate below. -/
+def inferMalgo2025OffKnownGaps : List InferKnownGap :=
+  [ { name := "Bool"
+    , reason := "without Elaborate's desugaring, inference reports a \
+Type error (Expected: (() -> ...), Actual: Bool) -- a real gap in `malgo \
+eval --infer`'s default behavior, not a test-harness artifact." }
+  , { name := "FibCopattern"
+    , reason := "without Elaborate, this copattern-based codata \
+definition fails to unify -- same class of real gap as Bool above." } ]
+
+/-- Run `driveInferWithFeatures features n` for every name in `selected`,
+printing `ok`/`FAIL` under `label/<name>` and treating any name in
+`knownGaps` as an expected failure. Shared by `runInferGate`
+(`malgo2025`-on, no allowlist) and `runInferGateCliDefault` (CLI-default,
+`inferMalgo2025OffKnownGaps`) so the two corpus sweeps can't drift apart.
+Returns `(failed, total)`. -/
+def runInferCorpusLoop (label : String) (features : FeatureFlags)
+    (knownGaps : List InferKnownGap) (selected : List String) : IO (Nat × Nat) := do
+  let mut failed := 0
+  let mut total := 0
+  for n in selected do
+    total := total + 1
+    match (← driveInferWithFeatures features n), knownGaps.find? (·.name == n) with
+    | .ok (), some _ =>
+      failed := failed + 1
+      IO.println s!"FAIL {label}/{n}: passes now -- known-gap entry is stale, delete it"
+    | .ok (), none => IO.println s!"ok {label}/{n}"
+    | .error _, some gap => IO.println s!"ok {label}/{n} (known-gap: {gap.reason})"
+    | .error msg, none =>
+      failed := failed + 1
+      IO.println s!"FAIL {label}/{n}: {msg}"
+  return (failed, total)
+
 /-- Full-program inference gate + boundary tests. Respects `--match`. -/
 def runInferGate (cfg : Config) (names : List String) : IO UInt32 := do
   let selected := names.filter fun n => match cfg.match? with
@@ -1429,17 +1596,32 @@ def runInferGate (cfg : Config) (names : List String) : IO UInt32 := do
     let (unitFail, unitTotal) ← runUnitTests
     failed := failed + unitFail
     total := total + unitTotal
-  for n in selected do
-    total := total + 1
-    match ← driveInfer n with
-    | .ok () => IO.println s!"ok Malgo.Infer/{n}"
-    | .error msg =>
-      failed := failed + 1
-      IO.println s!"FAIL Malgo.Infer/{n}: {msg}"
+  let (corpusFailed, corpusTotal) ← runInferCorpusLoop "Malgo.Infer" malgo2025 [] selected
+  failed := failed + corpusFailed
+  total := total + corpusTotal
   if runBoundary then
     total := total + 2
     failed := failed + (← runBoundaryTests)
   IO.println s!"=== infer {total - failed}/{total} passed ==="
+  return if failed == 0 then 0 else 1
+
+/-- Full-program inference gate under the CLI-DEFAULT configuration: empty
+`FeatureFlags` (`malgo2025` off), matching what `malgo eval --infer`
+actually runs with in every real invocation (see
+`driveInferWithFeatures`'s doc comment). `runInferGate` above only ever
+exercises `malgo2025`-on, a configuration unreachable through the `eval`
+subcommand at all -- this gate is what actually stands behind the CLI's
+default type-checking behavior. Two known, real gaps are allowlisted (see
+`inferMalgo2025OffKnownGaps`); any other regression fails the gate.
+Respects `--match` against the `Malgo.InferCliDefault/<name>` label. -/
+def runInferGateCliDefault (cfg : Config) (names : List String) : IO UInt32 := do
+  let selected := names.filter fun n => match cfg.match? with
+    | none => true
+    | some pat => (s!"Malgo.InferCliDefault/{n}".splitOn pat).length > 1
+  if selected.isEmpty then return 0
+  let (failed, total) ←
+    runInferCorpusLoop "Malgo.InferCliDefault" {} inferMalgo2025OffKnownGaps selected
+  IO.println s!"=== infer-cli-default {total - failed}/{total} passed ==="
   return if failed == 0 then 0 else 1
 
 end Malgo.Test
@@ -1461,9 +1643,11 @@ def main (args : List String) : IO UInt32 := do
     let exampleNames ← Malgo.Test.enumerateExamples
     let parserErrorNames ← Malgo.Test.enumerateParserErrorCases
     let renameErrorNames ← Malgo.Test.enumerateRenameErrorCases
+    let inferErrorNames ← Malgo.Test.enumerateInferErrorCases
     let allCases := Malgo.Test.cases
       ++ Malgo.Test.parserErrorCases parserErrorNames
       ++ Malgo.Test.renameErrorCases renameErrorNames
+      ++ Malgo.Test.inferErrorCases inferErrorNames
       ++ Malgo.Test.toCoreCases memo names
       ++ Malgo.Test.evalCases memo evalNames
       ++ Malgo.Test.bigStepEvalCases memo evalNames
@@ -1472,6 +1656,8 @@ def main (args : List String) : IO UInt32 := do
       ++ Malgo.Test.prettyIRCases names exampleNames
     let goldenCode ← Malgo.Test.runSuite cfg allCases
     let inferCode ← Malgo.Test.runInferGate cfg names
+    let inferCliDefaultCode ← Malgo.Test.runInferGateCliDefault cfg names
+    let inferErrorCoverageFailures ← Malgo.Test.runInferErrorCoverageGate inferErrorNames
     let metPageFailures ← Malgo.Test.runMetPageGate
     let reuseFailures ← Malgo.Test.ZigReuse.run
     let corpusFailures ← Malgo.Test.ZigCorpus.run memo names
@@ -1480,7 +1666,9 @@ def main (args : List String) : IO UInt32 := do
     let parserFailures ← Malgo.Test.ParserSurface.run
     let panicFailures ← Malgo.Test.PanicGate.run memo
     let primitiveCoverageFailures ← Malgo.Test.PrimitiveCoverage.run
-    return (if goldenCode == 0 && inferCode == 0 && metPageFailures == 0
+    return (if goldenCode == 0 && inferCode == 0 && inferCliDefaultCode == 0
+        && inferErrorCoverageFailures == 0
+        && metPageFailures == 0
         && reuseFailures == 0 && corpusFailures == 0 && irFailures == 0
         && specFailures == 0 && parserFailures == 0 && panicFailures == 0
         && primitiveCoverageFailures == 0

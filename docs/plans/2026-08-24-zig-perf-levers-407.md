@@ -2,6 +2,21 @@
 
 Date: 2026-08-24
 
+## Outcome (2026-08-25)
+
+Implemented and measured. **Lever 3 (Object pool) was reverted** — measured
+consistently ~3% slower (`l2-ratio` 5.29x-5.34x across 3 runs vs. 5.18x
+before), not an improvement. Task 1's `c_allocator` comparison point was
+even more clearly negative (5.18x -> 8.08x) and was reverted immediately.
+All correctness gates passed before the revert decision (`mise run test`,
+`zig test`, `zig-golden.sh` 82/82 zero leaks, `zig-deep-recursion.sh`
+counter-neutral). Full numbers and the final per-lever status are recorded
+on [#407](https://github.com/takoeight0821/malgo/issues/407)'s own comment
+thread. No code from this session's implementation was merged — the
+`ready-for-agent` label was removed from #407 since lever 1 (the only
+lever still open) needs new malloc-level accounting built first, per this
+document's own Context section below, before it's actually pickable up.
+
 ## Context
 
 #407 tracks the Zig backend's remaining performance gap against its ~2x

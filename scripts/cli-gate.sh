@@ -38,15 +38,24 @@
 set -u
 
 # Cases that must make `malgo eval --infer` exit 0 -- see the "infer-ok"
-# check above. All three import Builtin AND Prelude directly by relative
-# path while also inheriting Builtin transitively through Prelude's own
-# bare `import Builtin`, so `deps` legitimately lists the identical
-# Builtin.mlg under two different `ModuleName` aliases; buildDepsEnv must
-# not treat that as a duplicate-export collision (#429).
+# check above. The first three import Builtin AND Prelude directly by
+# relative path while also inheriting Builtin transitively through
+# Prelude's own bare `import Builtin`, so `deps` legitimately lists the
+# identical Builtin.mlg under two different `ModuleName` aliases;
+# buildDepsEnv must not treat that as a duplicate-export collision (#429).
+# TaggedRecordDiamondUse.mlg is the same shape for a user-defined module
+# chain instead of the hardcoded Builtin/Prelude one: it imports
+# TaggedRecordDiamondDef.mlg both directly and transitively (through
+# TaggedRecordDiamondMid.mlg) -- see that file and
+# lean/Test/Main.lean's evalHarnessUnsupported for why this is the only
+# place its real (multi-module-linked) behavior gets automated coverage at
+# all, since every golden-listing-driven script excludes it the same way
+# it excludes TaggedRecordCrossModuleUse.
 INFER_OK_CASES=(
   "test/testcases/malgo/error/BuiltinPreludeDiamond.mlg"
   "test/testcases/malgo/error/ConstructorArity.mlg"
   "test/testcases/malgo/error/StringPatIsNotSupported.mlg"
+  "test/testcases/malgo/TaggedRecordDiamondUse.mlg"
 )
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

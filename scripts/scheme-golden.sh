@@ -63,7 +63,9 @@ TESTCASE_DIR="test/testcases/malgo"
 # interpreter treats a missing main as a silent no-op (empty golden), but
 # this backend errors on it, so it's excluded here the same way
 # lean/Test/Main.lean's evalHarnessUnsupported excludes its companion.
-SKIP_CASES=("TaggedRecordCrossModuleDef")
+# TaggedRecordDiamondDef.mlg/TaggedRecordDiamondMid.mlg are the same shape,
+# one hop further (see evalHarnessUnsupported's doc comment).
+SKIP_CASES=("TaggedRecordCrossModuleDef" "TaggedRecordDiamondDef" "TaggedRecordDiamondMid")
 
 pass=0
 compile_fail=0
@@ -136,10 +138,62 @@ echo "run-fail:     $run_fail ${run_fail_names[*]:-}"
 echo "mismatch:     $mismatch ${mismatch_names[*]:-}"
 echo "timeout:      $timeout_fail ${timeout_names[*]:-}"
 
+# Panic gate (regression test for malgo#426/#452, not part of the golden
+# sweep above -- `Panic`/`CondPanic`/`PanicNamedImport` are excluded from
+# `.golden/Malgo.Sequent.Eval/*` by lean/Test/Main.lean's
+# evalHarnessUnsupported precisely because they never return normally, so
+# the sweep above -- which discovers cases by listing that directory --
+# never runs them, leaving this backend's own panic path (`Backend/
+# Scheme.lean` compiles `malgo_panic` to `(error 'panic <msg>)`, which Chez
+# reports as "Exception in panic: <msg>" on stderr and exits nonzero)
+# entirely unverified. Mirrors `PanicGate` in lean/Test/Main.lean and the
+# self-hosted panic gate in scripts/selfhost-golden.sh.
+panic_fail=0
+panic_scenarios=(
+  $'Panic\001before panic\001malgo#426 regression check'
+  $'CondPanic\001before cond\001no branch'
+  $'PanicNamedImport\001before panic\001malgo#452 named-import regression check'
+)
+for entry in "${panic_scenarios[@]}"; do
+  case_name=$(cut -d $'\001' -f1 <<< "$entry")
+  expected_stdout=$(cut -d $'\001' -f2 <<< "$entry")
+  expected_message=$(cut -d $'\001' -f3 <<< "$entry")
+  src="$TESTCASE_DIR/$case_name.mlg"
+  out_scm="$WORK/panic-$case_name.scm"
+  if ! timeout "$COMPILE_TIMEOUT" "$MALGO" eval --target scheme "$src" \
+       >"$out_scm" 2>"$WORK/panic-$case_name.compile.log"; then
+    echo "panic gate FAIL: $case_name failed to compile"
+    panic_fail=1
+    continue
+  fi
+  out="$WORK/panic-$case_name.out"
+  err="$WORK/panic-$case_name.err"
+  printf 'Hello\n' | timeout "$CASE_TIMEOUT" "$SCHEME" --script "$out_scm" >"$out" 2>"$err"
+  run_exit=$?
+  actual_out="$(cat "$out")"
+  if [ "$run_exit" -eq 0 ]; then
+    echo "panic gate FAIL: $case_name exited 0, expected nonzero"
+    panic_fail=1
+  elif [ "$actual_out" != "$expected_stdout" ]; then
+    echo "panic gate FAIL: $case_name stdout was '$actual_out', expected '$expected_stdout'"
+    panic_fail=1
+  elif ! grep -qF "panic: $expected_message" "$err"; then
+    echo "panic gate FAIL: $case_name stderr missing 'panic: $expected_message' (got: $(cat "$err"))"
+    panic_fail=1
+  else
+    echo "panic gate ok: $case_name"
+  fi
+done
+if [ "$panic_fail" -eq 0 ]; then
+  echo "=== scheme panic-gate: ${#panic_scenarios[@]}/${#panic_scenarios[@]} passed ==="
+else
+  echo "=== scheme panic-gate: FAILED ==="
+fi
+
 if [ "$total" -eq 0 ]; then
   echo "No golden+testcase pairs were found under $GOLDEN_ROOT / $TESTCASE_DIR -- treating this as failure, not success." >&2
   exit 1
-elif [ "$pass" -eq "$total" ]; then
+elif [ "$pass" -eq "$total" ] && [ "$panic_fail" -eq 0 ]; then
   exit 0
 else
   exit 1

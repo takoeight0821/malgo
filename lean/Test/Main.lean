@@ -249,6 +249,19 @@ for its own reason:
   Point" here regardless of whether the compiler itself is correct. The
   real CLI's `Query.Engine.fetchLinkedProgram` does link the full
   dependency closure and evaluates this case correctly (verified manually).
+- `TaggedRecordDiamondUse` is the same limitation one hop further:
+  it imports `TaggedRecordDiamondDef.mlg` both directly and transitively
+  (through `TaggedRecordDiamondMid.mlg`, which also imports it) -- the
+  same diamond-dependency shape as importing both Builtin and Prelude
+  directly, the pattern #429's `buildDepsEnv` identity-confusion bug was
+  about, but exercised here for a user-defined module chain. Four modules
+  beyond the hardcoded three-way `linkPrograms` link, so it hits the exact
+  same "Undefined variable: Point" wall; its real (correctly-linked)
+  behavior is instead covered by `scripts/cli-gate.sh`'s `INFER_OK_CASES`,
+  which drives the actual CLI end to end.
+  `TaggedRecordDiamondDef`/`TaggedRecordDiamondMid` define no `main`
+  (companions only, like `TaggedRecordCrossModuleDef`) so they aren't
+  excluded here -- evaluating them standalone is a legitimate no-op.
 - `Panic` and `CondPanic` (both malgo#426) call `malgo_panic` -- the former
   directly, the latter via `Prelude.mlg`'s `cond`'s `Nil -> panic "no
   branch"` fallback (the specific path #426's own issue text called out as
@@ -269,7 +282,7 @@ Excluding these here keeps `scripts/cli-gate.sh`'s `eval` mode, and
 rather than scanning `test/testcases/malgo/` directly), from ever seeing
 any of these names — no per-script skip-list needed. -/
 def evalHarnessUnsupported : List String :=
-  ["TaggedRecordCrossModuleUse", "Panic", "CondPanic", "PanicNamedImport"]
+  ["TaggedRecordCrossModuleUse", "TaggedRecordDiamondUse", "Panic", "CondPanic", "PanicNamedImport"]
 
 private def evalGolden (memo : IO.Ref (Std.HashMap String Malgo.Driver.AllIR))
     (name : String) : IO String := do
@@ -856,7 +869,17 @@ private def cases : List Case :=
     , expect := some "(project (apply (apply f a) b) \"field\")" }
   , { name := "keeps a tight nullary call's .field bound to the call result: f().field"
     , src := "def main = f().field"
-    , expect := some "(project (apply f (tuple)) \"field\")" } ]
+    , expect := some "(project (apply f (tuple)) \"field\")" }
+  , { name := "binds .field to a parenthesized call when it is the whole body, not a call argument (#424)"
+    , src := "def main = (mk 7).exitCode"
+    , expect := some "(project (parens (apply mk (int32 7))) \"exitCode\")" }
+  , { name := "chains a tight call onto a projection off a parenthesized argument"
+    , src := "def main = f (g x).a(y).b"
+    , expect := some
+        "(apply f (project (apply (project (parens (apply g x)) \"a\") y) \"b\"))" }
+  , { name := "binds .field through doubly-nested parens"
+    , src := "def main = ((f x)).field"
+    , expect := some "(project (parens (parens (apply f x))) \"field\")" } ]
 
 def run : IO Nat := do
   let mut failed := 0

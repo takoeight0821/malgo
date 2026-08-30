@@ -1,0 +1,563 @@
+=== Parse ===
+import runtime/malgo/Builtin.mlg 
+
+import test/testcases/malgo/TaggedRecordDiamondDef.mlg 
+
+def originPoint =
+  fn {
+    _ ->
+      {
+        Point({x = 0, y = 0})
+      }
+  }
+
+=== Rename ===
+import runtime/malgo/Builtin.mlg 
+
+import test/testcases/malgo/TaggedRecordDiamondDef.mlg 
+
+def originPoint =
+  fn {
+    _#0 ->
+      {
+        Point({x = Int32#(0), y = Int32#(0)})
+      }
+  }
+
+=== ToFun ===
+def originPoint =
+  \param$1 ->
+    case param$1 of {
+      _#0 -> invoke Point({x = invoke Int32#(0), y = invoke Int32#(0)})
+    }
+
+=== SaturateCtor ===
+def originPoint =
+  \param$1 ->
+    case param$1 of {
+      _#0 -> invoke Point({x = invoke Int32#(0), y = invoke Int32#(0)})
+    }
+
+=== ReuseSpecialize ===
+def originPoint =
+  \param$1 ->
+    case param$1 of {
+      _#0 -> invoke Point({x = invoke Int32#(0), y = invoke Int32#(0)})
+    }
+
+=== ToCore ===
+def originPoint(return$2) =
+  \param$1 return$3 . {
+    param$1 ~ select {
+      _#0 ->
+        invoke Point ~ ( { x(return$4) = {
+          invoke Int32# ~ (0, return$4)
+        }
+        , y(return$5) = {
+          invoke Int32# ~ (0, return$5)
+        } }
+        , return$3 )
+    }
+  } ~ return$2
+
+=== Flat ===
+def originPoint(return$2) =
+  \param$1 return$3 . {
+    param$1 ~ select {
+      _#0 ->
+        invoke Point ~ ( { x(return$4) = {
+          invoke Int32# ~ (0, return$4)
+        }
+        , y(return$5) = {
+          invoke Int32# ~ (0, return$5)
+        } }
+        , return$3 )
+    }
+  } ~ return$2
+
+=== Join ===
+def originPoint(return$2) =
+  \param$1 return$3 . {
+    join select$9 = select {
+      _#0 ->
+        join apply$8 = ( { x(return$4) = {
+          join apply$6 = (0, return$4)
+          in invoke Int32# ~ apply$6
+        }
+        , y(return$5) = {
+          join apply$7 = (0, return$5)
+          in invoke Int32# ~ apply$7
+        } }
+        , return$3 )
+        in invoke Point ~ apply$8
+    }
+    in param$1 ~ select$9
+  } ~ return$2
+
+=== ClosureConv ===
+toplevel fn originPoint(return$2) =
+  let closure$29 = closure lambda$11()
+  return return$2(closure$29)
+
+closure fn lambda$11(self$12, param$1, return$3) =
+  if  then {
+    let _#0 = param$1
+    let apply$8 = closure join$13(return$3)
+    return Point(apply$8)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$13(self$14, value$15) =
+  let return$3 = self$14.cap[0]
+  let record$28 = record(x = field$16, y = field$22) captures()
+  return value$15(record$28, return$3)
+
+field fn field$16(self$17, return$4) =
+  let apply$6 = closure join$18(return$4)
+  return Int32#(apply$6)
+
+closure fn join$18(self$19, value$20) =
+  let return$4 = self$19.cap[0]
+  let lit$21 = 0
+  return value$20(lit$21, return$4)
+
+field fn field$22(self$23, return$5) =
+  let apply$7 = closure join$24(return$5)
+  return Int32#(apply$7)
+
+closure fn join$24(self$25, value$26) =
+  let return$5 = self$25.cap[0]
+  let lit$27 = 0
+  return value$26(lit$27, return$5)
+
+=== Peephole ===
+toplevel fn originPoint(return$2) =
+  let closure$29 = closure lambda$11()
+  return return$2(closure$29)
+
+closure fn lambda$11(self$12, param$1, return$3) =
+  if  then {
+    let apply$8 = closure join$13(return$3)
+    return Point(apply$8)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$13(self$14, value$15) =
+  let return$3 = self$14.cap[0]
+  let record$28 = record(x = field$16, y = field$22) captures()
+  return value$15(record$28, return$3)
+
+field fn field$16(self$17, return$4) =
+  let apply$6 = closure join$18(return$4)
+  return Int32#(apply$6)
+
+closure fn join$18(self$19, value$20) =
+  let return$4 = self$19.cap[0]
+  let lit$21 = 0
+  return value$20(lit$21, return$4)
+
+field fn field$22(self$23, return$5) =
+  let apply$7 = closure join$24(return$5)
+  return Int32#(apply$7)
+
+closure fn join$24(self$25, value$26) =
+  let return$5 = self$25.cap[0]
+  let lit$27 = 0
+  return value$26(lit$27, return$5)
+
+=== Perceus ===
+toplevel fn originPoint(return$2) =
+  let closure$29 = closure lambda$11()
+  return return$2(closure$29)
+
+closure fn lambda$11(self$12, param$1, return$3) =
+  drop param$1
+  drop self$12
+  if  then {
+    let apply$8 = closure join$13(return$3)
+    return Point(apply$8)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$13(self$14, value$15) =
+  let return$3 = self$14.cap[0]
+  dup return$3
+  drop self$14
+  let record$28 = record(x = field$16, y = field$22) captures()
+  return value$15(record$28, return$3)
+
+field fn field$16(self$17, return$4) =
+  drop self$17
+  let apply$6 = closure join$18(return$4)
+  return Int32#(apply$6)
+
+closure fn join$18(self$19, value$20) =
+  let return$4 = self$19.cap[0]
+  dup return$4
+  drop self$19
+  let lit$21 = 0
+  return value$20(lit$21, return$4)
+
+field fn field$22(self$23, return$5) =
+  drop self$23
+  let apply$7 = closure join$24(return$5)
+  return Int32#(apply$7)
+
+closure fn join$24(self$25, value$26) =
+  let return$5 = self$25.cap[0]
+  dup return$5
+  drop self$25
+  let lit$27 = 0
+  return value$26(lit$27, return$5)
+
+=== Reuse ===
+toplevel fn originPoint(return$2) =
+  let closure$29 = closure lambda$11()
+  return return$2(closure$29)
+
+closure fn lambda$11(self$12, param$1, return$3) =
+  drop param$1
+  drop self$12
+  if  then {
+    let apply$8 = closure join$13(return$3)
+    return Point(apply$8)
+  } else {
+    panic "no matching branch"
+  }
+
+closure fn join$13(self$14, value$15) =
+  let return$3 = self$14.cap[0]
+  dup return$3
+  let record$28 = record(x = field$16, y = field$22) captures()
+  drop self$14
+  return value$15(record$28, return$3)
+
+field fn field$16(self$17, return$4) =
+  let apply$6 = closure join$18(return$4)
+  drop self$17
+  return Int32#(apply$6)
+
+closure fn join$18(self$19, value$20) =
+  let return$4 = self$19.cap[0]
+  dup return$4
+  let lit$21 = 0
+  drop self$19
+  return value$20(lit$21, return$4)
+
+field fn field$22(self$23, return$5) =
+  let apply$7 = closure join$24(return$5)
+  drop self$23
+  return Int32#(apply$7)
+
+closure fn join$24(self$25, value$26) =
+  let return$5 = self$25.cap[0]
+  dup return$5
+  let lit$27 = 0
+  drop self$25
+  return value$26(lit$27, return$5)
+
+=== DIFFS ===
+
+=== Parse -> Rename ===
+  import runtime/malgo/Builtin.mlg 
+  
+  import test/testcases/malgo/TaggedRecordDiamondDef.mlg 
+  
+  def originPoint =
+    fn {
+-     _ ->
++     _#0 ->
+        {
+-         Point({x = 0, y = 0})
++         Point({x = Int32#(0), y = Int32#(0)})
+        }
+    }
+
+
+=== Rename -> ToFun ===
+- import runtime/malgo/Builtin.mlg 
+- 
+- import test/testcases/malgo/TaggedRecordDiamondDef.mlg 
+- 
+  def originPoint =
+-   fn {
++   \param$1 ->
+-     _#0 ->
++     case param$1 of {
+-       {
++       _#0 -> invoke Point({x = invoke Int32#(0), y = invoke Int32#(0)})
+-         Point({x = Int32#(0), y = Int32#(0)})
++     }
+-       }
+-   }
+
+
+=== ToFun -> SaturateCtor ===
+  def originPoint =
+    \param$1 ->
+      case param$1 of {
+        _#0 -> invoke Point({x = invoke Int32#(0), y = invoke Int32#(0)})
+      }
+
+
+=== SaturateCtor -> ReuseSpecialize ===
+  def originPoint =
+    \param$1 ->
+      case param$1 of {
+        _#0 -> invoke Point({x = invoke Int32#(0), y = invoke Int32#(0)})
+      }
+
+
+=== ReuseSpecialize -> ToCore ===
+- def originPoint =
++ def originPoint(return$2) =
+-   \param$1 ->
++   \param$1 return$3 . {
+-     case param$1 of {
++     param$1 ~ select {
+-       _#0 -> invoke Point({x = invoke Int32#(0), y = invoke Int32#(0)})
++       _#0 ->
++         invoke Point ~ ( { x(return$4) = {
++           invoke Int32# ~ (0, return$4)
++         }
++         , y(return$5) = {
++           invoke Int32# ~ (0, return$5)
++         } }
++         , return$3 )
+      }
++   } ~ return$2
+
+
+=== ToCore -> Flat ===
+  def originPoint(return$2) =
+    \param$1 return$3 . {
+      param$1 ~ select {
+        _#0 ->
+          invoke Point ~ ( { x(return$4) = {
+            invoke Int32# ~ (0, return$4)
+          }
+          , y(return$5) = {
+            invoke Int32# ~ (0, return$5)
+          } }
+          , return$3 )
+      }
+    } ~ return$2
+
+
+=== Flat -> Join ===
+  def originPoint(return$2) =
+    \param$1 return$3 . {
+-     param$1 ~ select {
++     join select$9 = select {
+        _#0 ->
+-         invoke Point ~ ( { x(return$4) = {
++         join apply$8 = ( { x(return$4) = {
+-           invoke Int32# ~ (0, return$4)
++           join apply$6 = (0, return$4)
++           in invoke Int32# ~ apply$6
+          }
+          , y(return$5) = {
+-           invoke Int32# ~ (0, return$5)
++           join apply$7 = (0, return$5)
++           in invoke Int32# ~ apply$7
+          } }
+          , return$3 )
++         in invoke Point ~ apply$8
+      }
++     in param$1 ~ select$9
+    } ~ return$2
+
+
+=== Join -> ClosureConv ===
+- def originPoint(return$2) =
++ toplevel fn originPoint(return$2) =
+-   \param$1 return$3 . {
++   let closure$29 = closure lambda$11()
+-     join select$9 = select {
++   return return$2(closure$29)
+-       _#0 ->
++ 
+-         join apply$8 = ( { x(return$4) = {
++ closure fn lambda$11(self$12, param$1, return$3) =
+-           join apply$6 = (0, return$4)
++   if  then {
+-           in invoke Int32# ~ apply$6
++     let _#0 = param$1
+-         }
++     let apply$8 = closure join$13(return$3)
+-         , y(return$5) = {
++     return Point(apply$8)
+-           join apply$7 = (0, return$5)
++   } else {
+-           in invoke Int32# ~ apply$7
++     panic "no matching branch"
+-         } }
++   }
+-         , return$3 )
++ 
+-         in invoke Point ~ apply$8
++ closure fn join$13(self$14, value$15) =
+-     }
++   let return$3 = self$14.cap[0]
+-     in param$1 ~ select$9
++   let record$28 = record(x = field$16, y = field$22) captures()
+-   } ~ return$2
++   return value$15(record$28, return$3)
++ 
++ field fn field$16(self$17, return$4) =
++   let apply$6 = closure join$18(return$4)
++   return Int32#(apply$6)
++ 
++ closure fn join$18(self$19, value$20) =
++   let return$4 = self$19.cap[0]
++   let lit$21 = 0
++   return value$20(lit$21, return$4)
++ 
++ field fn field$22(self$23, return$5) =
++   let apply$7 = closure join$24(return$5)
++   return Int32#(apply$7)
++ 
++ closure fn join$24(self$25, value$26) =
++   let return$5 = self$25.cap[0]
++   let lit$27 = 0
++   return value$26(lit$27, return$5)
+
+
+=== ClosureConv -> Peephole ===
+  toplevel fn originPoint(return$2) =
+    let closure$29 = closure lambda$11()
+    return return$2(closure$29)
+  
+  closure fn lambda$11(self$12, param$1, return$3) =
+    if  then {
+-     let _#0 = param$1
+      let apply$8 = closure join$13(return$3)
+      return Point(apply$8)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$13(self$14, value$15) =
+    let return$3 = self$14.cap[0]
+    let record$28 = record(x = field$16, y = field$22) captures()
+    return value$15(record$28, return$3)
+  
+  field fn field$16(self$17, return$4) =
+    let apply$6 = closure join$18(return$4)
+    return Int32#(apply$6)
+  
+  closure fn join$18(self$19, value$20) =
+    let return$4 = self$19.cap[0]
+    let lit$21 = 0
+    return value$20(lit$21, return$4)
+  
+  field fn field$22(self$23, return$5) =
+    let apply$7 = closure join$24(return$5)
+    return Int32#(apply$7)
+  
+  closure fn join$24(self$25, value$26) =
+    let return$5 = self$25.cap[0]
+    let lit$27 = 0
+    return value$26(lit$27, return$5)
+
+
+=== Peephole -> Perceus ===
+  toplevel fn originPoint(return$2) =
+    let closure$29 = closure lambda$11()
+    return return$2(closure$29)
+  
+  closure fn lambda$11(self$12, param$1, return$3) =
++   drop param$1
++   drop self$12
+    if  then {
+      let apply$8 = closure join$13(return$3)
+      return Point(apply$8)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$13(self$14, value$15) =
+    let return$3 = self$14.cap[0]
++   dup return$3
++   drop self$14
+    let record$28 = record(x = field$16, y = field$22) captures()
+    return value$15(record$28, return$3)
+  
+  field fn field$16(self$17, return$4) =
++   drop self$17
+    let apply$6 = closure join$18(return$4)
+    return Int32#(apply$6)
+  
+  closure fn join$18(self$19, value$20) =
+    let return$4 = self$19.cap[0]
++   dup return$4
++   drop self$19
+    let lit$21 = 0
+    return value$20(lit$21, return$4)
+  
+  field fn field$22(self$23, return$5) =
++   drop self$23
+    let apply$7 = closure join$24(return$5)
+    return Int32#(apply$7)
+  
+  closure fn join$24(self$25, value$26) =
+    let return$5 = self$25.cap[0]
++   dup return$5
++   drop self$25
+    let lit$27 = 0
+    return value$26(lit$27, return$5)
+
+
+=== Perceus -> Reuse ===
+  toplevel fn originPoint(return$2) =
+    let closure$29 = closure lambda$11()
+    return return$2(closure$29)
+  
+  closure fn lambda$11(self$12, param$1, return$3) =
+    drop param$1
+    drop self$12
+    if  then {
+      let apply$8 = closure join$13(return$3)
+      return Point(apply$8)
+    } else {
+      panic "no matching branch"
+    }
+  
+  closure fn join$13(self$14, value$15) =
+    let return$3 = self$14.cap[0]
+    dup return$3
+-   drop self$14
+    let record$28 = record(x = field$16, y = field$22) captures()
++   drop self$14
+    return value$15(record$28, return$3)
+  
+  field fn field$16(self$17, return$4) =
+-   drop self$17
+    let apply$6 = closure join$18(return$4)
++   drop self$17
+    return Int32#(apply$6)
+  
+  closure fn join$18(self$19, value$20) =
+    let return$4 = self$19.cap[0]
+    dup return$4
+-   drop self$19
+    let lit$21 = 0
++   drop self$19
+    return value$20(lit$21, return$4)
+  
+  field fn field$22(self$23, return$5) =
+-   drop self$23
+    let apply$7 = closure join$24(return$5)
++   drop self$23
+    return Int32#(apply$7)
+  
+  closure fn join$24(self$25, value$26) =
+    let return$5 = self$25.cap[0]
+    dup return$5
+-   drop self$25
+    let lit$27 = 0
++   drop self$25
+    return value$26(lit$27, return$5)

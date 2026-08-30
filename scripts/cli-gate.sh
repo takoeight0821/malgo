@@ -8,26 +8,33 @@
 # side effect of comparing the two implementations; this keeps the coverage
 # once there is only one implementation left to compare against itself.
 #
-# Four checks:
-#   eval      73 testcases, stdout must equal .golden/Malgo.Sequent.Eval/<case>
-#   bigstep   the same 73 under --eval-mode bigstep
-#   error     every test/testcases/malgo/error/*.mlg.expect fixture must make
-#             `malgo eval --infer` exit nonzero (message text is deliberately
-#             not compared -- see that directory's README.md)
-#   infer-ok  the opposite polarity check: each case listed in
-#             INFER_OK_CASES below must make `malgo eval --infer` exit ZERO.
-#             These exercise Query.Engine.buildDepsEnv's real strict fold
-#             directly through the CLI binary -- the Lean test suite's own
-#             infer gate uses a separate, deliberately lenient fold
-#             (`buildDepsEnvLenient` in lean/Test/Main.lean) that never
-#             touches the code path these guard (see #429 and that
-#             directory's README.md).
+# Five checks:
+#   eval        73 testcases, stdout must equal .golden/Malgo.Sequent.Eval/<case>
+#   bigstep     the same 73 under --eval-mode bigstep
+#   error       every test/testcases/malgo/error/*.mlg.expect fixture must make
+#               `malgo eval --infer` exit nonzero (message text is deliberately
+#               not compared -- see that directory's README.md)
+#   infer-ok    the opposite polarity check: each case listed in
+#               INFER_OK_CASES below must make `malgo eval --infer` exit ZERO.
+#               These exercise Query.Engine.buildDepsEnv's real strict fold
+#               directly through the CLI binary -- the Lean test suite's own
+#               infer gate uses a separate, deliberately lenient fold
+#               (`buildDepsEnvLenient` in lean/Test/Main.lean) that never
+#               touches the code path these guard (see #429 and that
+#               directory's README.md).
+#   type-error  a smoke check that `InferError.render`'s text actually
+#               reaches the real CLI's stderr unmangled end-to-end (flag
+#               parsing -> MalgoM.run -> IO.eprintln), complementing the
+#               fast in-process goldens at test/Malgo/InferSpec/errors/.
+#               Substring match, not exact-text: the message's absolute
+#               source path varies by checkout location, so only the
+#               fixed portion of the text is asserted.
 #
 # Env knobs (all optional):
 #   MALGO             path to the malgo executable (default: the Lean build)
 #   MALGO_WORK_DIR    workspace mirror (default: .malgo-work)
 #   CASE_TIMEOUT      seconds per case (default: 60)
-#   MODES             space-separated subset of "eval bigstep error infer-ok"
+#   MODES             space-separated subset of "eval bigstep error infer-ok type-error"
 set -u
 
 # Cases that must make `malgo eval --infer` exit 0 -- see the "infer-ok"
@@ -48,7 +55,7 @@ cd "$REPO_ROOT" || exit 1
 MALGO="${MALGO:-lean/.lake/build/bin/malgo}"
 export MALGO_WORK_DIR="${MALGO_WORK_DIR:-.malgo-work}"
 CASE_TIMEOUT="${CASE_TIMEOUT:-60}"
-MODES="${MODES:-eval bigstep error infer-ok}"
+MODES="${MODES:-eval bigstep error infer-ok type-error}"
 
 if [ ! -x "$MALGO" ]; then
   echo "malgo executable not found at '$MALGO' (set MALGO, or run 'lake build' in lean/)." >&2
@@ -135,12 +142,58 @@ run_infer_ok_mode() {
   total_fail=$((total_fail + fail))
 }
 
+# Fixture and stable substrings for the "type-error" smoke check. Picked
+# from test/Malgo/InferSpec/errors/ (self-contained, no Builtin/Prelude
+# import) rather than test/testcases/malgo/error/InvalidPattern.mlg: that
+# fixture's message embeds an internal fresh-type-variable counter that
+# shifts with unrelated Builtin.mlg/Prelude.mlg edits, which would make an
+# exact-text check fail for reasons unrelated to what it's meant to guard.
+TYPE_ERROR_CASE="test/Malgo/InferSpec/errors/ConstructorMismatch.mlg"
+TYPE_ERROR_SUBSTRINGS=(
+  "[Infer] Type error: Cannot unify type constructors 'Foo' and 'Bar'"
+  "Expected: Foo"
+  "Actual: Bar"
+)
+
+run_type_error_message_mode() {
+  local pass=0 fail=0
+  if [ ! -f "$TYPE_ERROR_CASE" ]; then
+    echo "type-error case not found: $TYPE_ERROR_CASE" >&2
+    total_fail=$((total_fail + 1))
+    echo "=== type-error: 0/1 passed ==="
+    return
+  fi
+  local out
+  out="$(timeout "$CASE_TIMEOUT" "$MALGO" eval --infer "$TYPE_ERROR_CASE" 2>&1 >/dev/null)"
+  local status=$?
+  local missing=()
+  for needle in "${TYPE_ERROR_SUBSTRINGS[@]}"; do
+    case "$out" in
+      *"$needle"*) ;;
+      *) missing+=("$needle") ;;
+    esac
+  done
+  if [ "$status" -ne 0 ] && [ "${#missing[@]}" -eq 0 ]; then
+    pass=1
+  else
+    fail=1
+  fi
+  echo "=== type-error: $pass/1 passed ==="
+  if [ "$fail" -eq 1 ]; then
+    echo "  exit status: $status (expected nonzero)"
+    [ "${#missing[@]}" -eq 0 ] || echo "  missing substrings: ${missing[*]}"
+    echo "  actual stderr: $out"
+  fi
+  total_fail=$((total_fail + fail))
+}
+
 for mode in $MODES; do
   case "$mode" in
     eval) run_eval_mode eval "" ;;
     bigstep) run_eval_mode bigstep "--eval-mode bigstep" ;;
     error) run_error_mode ;;
     infer-ok) run_infer_ok_mode ;;
+    type-error) run_type_error_message_mode ;;
     *) echo "unknown mode: $mode" >&2; exit 2 ;;
   esac
 done

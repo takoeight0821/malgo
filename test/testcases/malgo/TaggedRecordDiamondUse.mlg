@@ -1,0 +1,16 @@
+module {..} = import "../../../runtime/malgo/Builtin.mlg"
+module {..} = import "../../../runtime/malgo/Prelude.mlg"
+module {..} = import "./TaggedRecordDiamondDef.mlg"
+module {..} = import "./TaggedRecordDiamondMid.mlg"
+
+-- Imports TaggedRecordDiamondDef.mlg both directly and, transitively,
+-- through TaggedRecordDiamondMid.mlg (which also imports it) -- the same
+-- diamond-dependency shape as importing both Builtin and Prelude directly
+-- (Prelude re-imports Builtin for its own use), the pattern #429's
+-- buildDepsEnv identity-confusion bug was about, but for a user-defined
+-- module chain instead of the hardcoded runtime one.
+def sumPoint = { Point { .x -> x, .y -> y } -> addInt32(x, y) }
+
+def main = {
+  printString (toStringInt32 (sumPoint (Point { .x -> 4, .y -> 9 })))
+}

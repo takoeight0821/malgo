@@ -81,7 +81,18 @@ log "native compilation done"
 # interpreter treats a missing main as a silent no-op (empty golden), but
 # the self-hosted evaluator errors on it, so it's excluded here the same way
 # lean/Test/Main.lean's evalHarnessUnsupported excludes its companion.
-skip_cases=("TaggedRecordCrossModuleDef")
+# TaggedRecordDiamondDef.mlg/TaggedRecordDiamondMid.mlg are the same shape,
+# one hop further (see evalHarnessUnsupported's doc comment). Their "Use"
+# companions (TaggedRecordCrossModuleUse.mlg, TaggedRecordDiamondUse.mlg)
+# don't need a skip_cases entry here -- both are already absent from
+# .golden/Malgo.Sequent.Eval (evalHarnessUnsupported excludes them there),
+# and this script discovers its case list from exactly that directory (the
+# `find` below), so it never sees either name in the first place. Their
+# real multi-module linking is verified separately, against the actual CLI
+# (which -- unlike this script and the Lean-side harness -- follows imports
+# transitively rather than through a fixed module list): see
+# scripts/cli-gate.sh's diamond-use check.
+skip_cases=("TaggedRecordCrossModuleDef" "TaggedRecordDiamondDef" "TaggedRecordDiamondMid")
 
 cases=()
 while IFS= read -r case_name; do

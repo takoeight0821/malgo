@@ -120,6 +120,14 @@ else
   for field in total_allocs dispatches force_depth_max; do
     actual_v="$(printf '%s\n' "$stats_line" | sed -n "s/.*$field=\([0-9]*\).*/\1/p")"
     base_v="$(jq -r --arg f "$field" '.tiers["fib-deep"].counters[$f] // empty' "$BASELINE")"
+    # A ratchet with no floor reads a counter that stopped counting as a
+    # win: `dispatches=0` would take the "improved" branch below and exit 0.
+    # Every field here is a count of work this fixture certainly does.
+    if [ -n "$actual_v" ] && [ "$field" != "force_depth_max" ] && [ "$actual_v" -eq 0 ]; then
+      echo "FAIL: $field is 0 -- the counter is not counting" >&2
+      perf_fail=1
+      continue
+    fi
     if [ -z "$actual_v" ]; then
       echo "FAIL: could not parse $field from '$stats_line'" >&2
       exit 1

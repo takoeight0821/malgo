@@ -87,9 +87,16 @@ def buildExecutable (zigCacheRoot srcPath outPath : String) (mode : OptMode) : I
        -- That backend is the default for Debug on x86_64, so without this the
        -- whole backend compiles on aarch64-macos and on every release mode,
        -- and fails on exactly one configuration -- which is how CI found it
-       -- and a local macOS run did not. Release modes already go through
-       -- LLVM, so the cost is Debug-only: measured 2.5s -> 8.7s on the 20MB
-       -- self-hosted evaluator, proportionally less on a golden-sized case.
+       -- and a local macOS run did not.
+       --
+       -- The cost is Debug-only -- release modes already go through LLVM, and
+       -- on a target whose Debug default is already LLVM (aarch64-macos) the
+       -- flag is a no-op in both modes. Where it is paid is per compile, and
+       -- the exposure is `scripts/zig-golden.sh`: 86 golden cases plus 3 panic
+       -- cases at `malgo compile`'s default `--opt debug`, on x86_64 runners.
+       -- Nothing compiles the self-hosted evaluator at Debug -- selfhost-golden,
+       -- selfhost-level2 and perf-baseline all pass `--opt release-fast` -- so
+       -- do not price this as one big build.
        "-fllvm" ]
        -- Deliberately NOT `-fsingle-threaded`, though nothing in the runtime or
        -- in generated code spawns a thread: `std.heap.SmpAllocator` opens with

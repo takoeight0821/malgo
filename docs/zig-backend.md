@@ -182,7 +182,23 @@ Every counter is unchanged — `dispatches` 18,815,851 and 9,028,449
 respectively, `total_allocs` and `reuse_hits` identical — so the two
 conventions perform the same reductions and the same allocations. `run`
 counted each loop iteration; `rt.countDispatch()` in each function's prologue
-counts the same events at the same cost, `identityCode` included.
+counts the same events, `identityCode` included.
+
+Not at the same cost, though. The counter was structurally free under the
+trampoline — the loop existed anyway — and is now a deliberate store in the
+prologue of every generated function. Measured at `fib 32` (546M dispatches,
+~6.9s, paired interleaved runs, which is the window needed to resolve it):
+**6.961s with, 6.873s without — 1.26%, and 112 KB of the evaluator's `__text`,
+2.7%.** Per-dispatch wall time is 12.7ns here against 13.4ns at Level 2, so
+that is ≈2.6s of L2's 217.7s.
+
+It stays on. The counter is what both ratchets read (`zig-deep-recursion.sh`
+and `perf-baseline.sh`), from a `--opt release-fast` binary, and always-on is
+what makes the instrumented binary the same one that was timed. Gating it on
+`builtin.mode` the way `rc_trace_supported` is gated would be worse than the
+1.26%: both ratchets would then read `dispatches=0` from a release-fast build
+and — before the zero-floor added alongside this — take the "improved" branch
+and exit 0, measuring nothing while reporting success.
 
 ## Data representation
 

@@ -104,27 +104,26 @@ def emitGuard (pv : Name → String) : Guard → String
 def valueSlice (pv : Name → String) (vs : List Name) : String :=
   "&[_]rt.Value{" ++ ", ".intercalate (vs.map pv) ++ "}"
 
-/-- Mirrors `MAX_ARGS` in `runtime/zig/runtime.zig`, the fixed argument capacity
-of an `rt.Action`. Tightened from 4 to 2 by #407 after confirming (by dumping
-generated Zig for the full golden corpus, both self-hosted compiler levels,
-`examples/`, and `bench/fixtures/`) that no call site ever carries more than 2
-arguments -- shrinking `Action` by two words reduces the per-dispatch copy on
-`selfhost-l2`'s 1.4e10+ dispatches, each of which copies an `Action` by value
-(a mechanism argument; the workload's actual wall clock is too noisy at this
-harness's resolution to attribute a specific delta to this change alone). The
-runtime's own `rcInvariant` in `mkAction` is the authoritative backstop if the
-two ever drift. -/
+/-- Mirrors `MAX_ARGS` in `runtime/zig/runtime.zig`: the number of argument
+slots a generated function has. Tightened from 4 to 2 by #407 after confirming
+(by dumping generated Zig for the full golden corpus, both self-hosted compiler
+levels, `examples/`, and `bench/fixtures/`) that no call site ever carries more
+than 2 arguments. -/
 def maxCallArgs : Nat := 2
 
-/-- `valueSlice` for a call site, rejecting an arity the runtime's Action cannot
-carry. The front end tops out at 2 (`callClosure f [arg, kont]`), so exceeding
-this is a compiler bug rather than a user error. -/
+/-- Argument list for a call site, padded to `maxCallArgs` with the immortal
+`no_self` sentinel because a generated function takes that many parameters
+whatever its own arity. `no_self` rather than `undefined`: a stray `dup`/`drop`
+on it is a no-op instead of a crash.
+
+Over-arity is a compiler bug rather than a user error -- the front end tops out
+at 2 (`callClosure f [arg, kont]`) -- so it panics rather than truncating. -/
 def callArgs (pv : Name → String) (what : String) (vs : List Name) : String :=
   if vs.length > maxCallArgs then
     panic! s!"Malgo.Backend.Zig.Emit: {what} call site has {vs.length} arguments, \
              exceeding MAX_ARGS ({maxCallArgs}) in runtime/zig/runtime.zig"
   else
-    valueSlice pv vs
+    ", ".intercalate (vs.map pv ++ List.replicate (maxCallArgs - vs.length) "rt.no_self")
 
 /-- A Zig string-literal slice of `vs`'s symbolic (compile-time) names, in the
 same order as the matching `valueSlice` — passed alongside it to an `rt.*Named`
@@ -205,7 +204,7 @@ partial def emitTerminator (pv : Name → String) (funcName : String) : Terminat
   | .callClosure f args => "return rt.callClosure(" ++ pv f ++ ", " ++ callArgs pv "closure" args ++ ");\n"
   | .staticCall fn args => "return rt.staticCall(&" ++ mangleId fn ++ ", " ++ callArgs pv "static" args ++ ");\n"
   | .project v field k => "return rt.projectField(" ++ pv v ++ ", " ++ zigStringLit field ++ ", " ++ pv k ++ ");\n"
-  | .«return» v => "return rt.done(" ++ pv v ++ ");\n"
+  | .«return» v => "return " ++ pv v ++ ";\n"
   | .«if» guard t e =>
     "if (" ++ emitGuard pv guard ++ ") {\n"
       ++ emitBlock pv funcName t
@@ -216,16 +215,25 @@ partial def emitTerminator (pv : Name → String) (funcName : String) : Terminat
 
 end
 
+/-- Positional parameter name for argument slot `i`. -/
+private def argSlot (i : Nat) : String := "a" ++ toString i
+
 def emitFunc (fn : Func) : String :=
   let pv := fun (nm : Name) => if nm == fn.selfVar then "self" else mangleId nm
   let funcNameLit := zigStringLit (Malgo.Id.toText fn.name)
   let bodyFree := freeVarsBlock fn.body
   let discardSelf := discardUnless "self" (bodyFree.contains fn.selfVar)
-  let discardArgs := if fn.params.isEmpty then "_ = args;\n" else ""
   let paramBinds := String.join (fn.params.zipIdx.map (fun (p, i) =>
-    declareConst (pv p) ("args[" ++ toString i ++ "]") (bodyFree.contains p)))
-  "fn " ++ mangleId fn.name ++ "(self: rt.Value, args: []const rt.Value) rt.Action {\n"
-    ++ discardSelf ++ discardArgs ++ paramBinds
+    declareConst (pv p) (argSlot i) (bodyFree.contains p)))
+  -- Slots this function does not take are still parameters; Zig rejects an
+  -- unused one.
+  let discardSpare := String.join
+    ((List.range maxCallArgs).drop fn.params.length |>.map (fun i => "_ = " ++ argSlot i ++ ";\n"))
+  let params := ", ".intercalate ((List.range maxCallArgs).map (fun i => argSlot i ++ ": rt.Value"))
+  "fn " ++ mangleId fn.name ++ "(self: rt.Value, " ++ params ++ ") rt.Value {\n"
+    -- One reduction step. There is no dispatch loop to count in.
+    ++ "rt.countDispatch();\n"
+    ++ discardSelf ++ discardSpare ++ paramBinds
     ++ emitBlock pv funcNameLit fn.body ++ "}"
 
 /-- `T.unlines`: each line followed by a newline. -/
@@ -239,9 +247,11 @@ def emitProgram (modName : ModuleName) (staged : Staged .reuse) : String :=
   let program := staged.program
   let entryCall := match program.entry with
     | none => ""
-    -- The Finish value comes back out of the trampoline here; dropping it is
-    -- the last consumption the leak check relies on.
-    | some name => "    rt.drop(rt.run(&" ++ mangleId name ++ ", rt.no_self, &[_]rt.Value{}));"
+    -- The whole program is one tail-call chain, so its Finish value is what
+    -- this single call returns; dropping it is the last consumption the leak
+    -- check relies on.
+    | some name =>
+      "    rt.drop(" ++ mangleId name ++ "(rt.no_self, rt.no_self, rt.no_self));"
   unlines
     [ "// Generated by the Malgo Zig backend from module " ++ modName.toStr ++ ".",
       "// Memory: Perceus reference counting (dup/drop inserted by the compiler);",

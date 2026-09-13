@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # Deep-recursion regression gate for the Zig backend (issue #360).
 #
-# The pipeline is CPS: every call is a tail call. Emitting those as native Zig
+# The pipeline is CPS: every call is a tail call. Emitting those as plain Zig
 # calls meant nothing ever returned until the program exited, so the stack grew
 # by one frame (~98.6 bytes, measured) per reduction step and any sufficiently
-# long-running program died with SIGSEGV -- `fib 16` was enough. `rt.run`'s
-# trampoline makes native stack O(1) in reduction steps.
+# long-running program died with SIGSEGV -- `fib 16` was enough.
 #
-# `BenchFibDeep.mlg` is ~18.8 million dispatches, which under the old calling
-# convention would have needed ~1.85 GB of stack. If the trampoline ever
-# regresses -- a terminator that emits a native call again, a helper that
-# dispatches instead of returning an Action -- this crashes immediately, at any
-# stack size, on any platform.
+# Generated code now uses `@call(.always_tail, ...)`, so the *stack-growth*
+# half of this gate is enforced by the Zig compiler: a call that cannot be a
+# tail call is a compile error, which `zig-golden.sh` would hit first. What
+# this gate still buys is the part a compiler cannot check -- that
+# `BenchFibDeep.mlg`'s ~18.8 million reductions actually produce 75025, at a
+# depth (~1.85 GB of stack under a plain-call convention) no golden case
+# reaches -- plus the perf ratchet below, which needs a long run to be
+# meaningful.
 #
 # Deliberately NOT a `test/testcases/malgo` case: `zig-golden.sh` compiles at
 # `--opt debug`, where Zig's DebugAllocator captures a stack trace per
@@ -66,7 +68,7 @@ if ! timeout "$COMPILE_TIMEOUT" "$MALGO" compile "$SRC" -o "$WORK/fibdeep" --opt
   exit 1
 fi
 
-echo "=== running (a SIGSEGV here means the trampoline regressed) ==="
+echo "=== running ==="
 set +e
 actual="$(MALGO_RC_STATS=1 timeout "$CASE_TIMEOUT" "$WORK/fibdeep" 2>"$WORK/stats")"
 status=$?
@@ -76,9 +78,10 @@ if [ "$status" -eq 124 ]; then
   echo "FAIL: timed out after ${CASE_TIMEOUT}s" >&2
   exit 1
 fi
-# 139 = SIGSEGV, the exact pre-#360 failure mode. 83 = the runtime's leak gate.
+# 139 = SIGSEGV, the pre-#360 failure mode -- now unreachable, since a
+# non-tail call no longer compiles. 83 = the runtime's leak gate.
 if [ "$status" -ne 0 ]; then
-  echo "FAIL: exited $status (139 = SIGSEGV: native stack grew with reduction steps again)" >&2
+  echo "FAIL: exited $status (83 = leak gate; 139 = SIGSEGV)" >&2
   exit 1
 fi
 if [ "$actual" != "$EXPECTED" ]; then

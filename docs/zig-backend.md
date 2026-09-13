@@ -96,26 +96,65 @@ rule implementable: the callee dups the captures it still needs, then drops `sel
 itself — the caller has no post-call point to do either, since every call in this IR
 is a tail call.
 
-### Trampoline
+### Guaranteed tail calls
 
-A generated function never *performs* a call. It returns an `rt.Action` — either
-`{code, self, argv}` naming the call to make next, or `done(v)` carrying the finished
-value — and `rt.run` dispatches in a loop until something is `done`.
+Every call a generated function makes is `@call(.always_tail, ...)`, which Zig
+either compiles to a jump or rejects at compile time. The native stack stays
+flat however many reduction steps a program takes, and a `Finish` is a plain
+`return`.
 
-This is not a stylistic choice. Zig does not guarantee tail-call optimization, so
-emitting these tail calls as native `return f(...)` meant nothing ever returned until
-the program exited: the stack grew by one frame (~98.6 bytes, measured) per reduction
-step, and any program of more than ~150k steps died with SIGSEGV — `fib 16` was enough
-([issue #360](https://github.com/takoeight0821/malgo/issues/360)). `@call(.always_tail)`
-is not a substitute: Zig requires the callee's signature to match the caller's, which
-rules out helpers like `applyCovalue(Value, Value)`, and a genuine tail call would
-release the frame holding the `&[_]rt.Value{...}` argument slice before the callee read
-it. An `Action` carries its arguments in a fixed inline array (`MAX_ARGS`, currently 2 —
-tightened from 4 by #407 after confirming empirically that no call site in the golden
-corpus, either self-hosted compiler level, `examples/`, or `bench/fixtures/` ever
-carries more than 2) precisely so no argument outlives its storage. Shrinking
-`MAX_ARGS` shrinks every `Action` by two words, which `rt.run` copies by value on
-every one of `selfhost-l2`'s 1.4e10+ dispatches.
+This replaced a trampoline — a generated function returned an `rt.Action`
+naming the next call, and `rt.run` dispatched in a loop. That existed because
+emitting these calls as plain `return f(...)` meant nothing ever returned
+until the program exited: the stack grew by one frame (~98.6 bytes, measured)
+per reduction step, and any program of more than ~150k steps died with SIGSEGV
+— `fib 16` was enough ([issue #360](https://github.com/takoeight0821/malgo/issues/360)).
+
+Two constraints made `@call(.always_tail)` look unusable at the time, and both
+are addressed rather than worked around (the approach is Deegen's, from
+[luajit-remake](https://github.com/luajit-remake/luajit-remake) — see
+`wiki/2026-09-12-go-backend-performance-investigation.md` §5):
+
+- **Caller and callee must share a prototype.** Every handler now has exactly
+  `fn (self: rt.Value, a0: rt.Value, a1: rt.Value) rt.Value`, and the helpers
+  that do not (`applyCovalue`, `callClosure`, `staticCall`, `projectField`,
+  `applyDestructor`) are `inline fn`, so their tail call lands in the caller's
+  frame where the prototype does match. A non-inline helper is a compile
+  error, which is what keeps the convention honest — the runtime's own
+  `destructorProbe` exists because a `test` block's prototype does not match
+  either.
+- **Arguments must not outlive the frame.** They are two by-value parameters
+  rather than a `[]const rt.Value` slice pointing into an `Action`. A callee
+  knows its own arity, so an unused slot is the immortal `rt.no_self`
+  sentinel — never `undefined`, so a stray `dup`/`drop` on it is a no-op.
+
+`MAX_ARGS` is still 2, for the reason #407 established: the front end cannot
+produce more (`ToFun` builds single-parameter lambdas and singleton applies;
+`ToCore` appends exactly one consumer), verified across 220k+ generated call
+sites.
+
+The RC passes are unaffected. A tail call is a **move, not a borrow**, exactly
+as the Action it replaced was: it transfers one reference of the callee into
+`self` and one of each operand into `a0`/`a1`. `Perceus` and `RcCheck` model a
+single frame, and "these references leave this frame here" is still true.
+
+`forceField` is the one place native stack still grows, and by one frame per
+level of dynamic `Force` nesting rather than per reduction step: `Ir.Force` is
+a mid-block expression, so it makes an ordinary call and everything the
+field's code goes on to do is a tail call that stays flat.
+
+Measured on Darwin arm64, `--opt release-fast`, 20 runs under hyperfine:
+
+| | trampoline | tail calls | |
+|---|---|---|---|
+| `BenchFibDeep` | 318.0 ms ± 6.0 | **239.2 ms ± 4.1** | **1.33x** |
+| selfhost Level 1 | 257.0 ms ± 44.3 | **210.3 ms ± 1.9** | **1.22x** |
+
+Every counter is unchanged — `dispatches` 18,815,851 and 9,028,449
+respectively, `total_allocs` and `reuse_hits` identical — so the two
+conventions perform the same reductions and the same allocations. `run`
+counted each loop iteration; `rt.countDispatch()` in each function's prologue
+counts the same events at the same cost, `identityCode` included.
 
 **An Action is a move, not a borrow.** It carries exactly the references a direct call
 would have transferred — one of the callee into `self`, one of each operand into

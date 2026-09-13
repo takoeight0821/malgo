@@ -34,58 +34,51 @@ pub const Tag = union(enum) { tuple: void, named: []const u8 };
 /// call. Top-level definitions are called directly with the `no_self`
 /// sentinel and ignore it.
 ///
-/// Generated code never *performs* a call: it returns an `Action` naming
-/// the call it wants, and `run` below dispatches it in a loop. Zig does
-/// not guarantee tail-call optimization, so emitting these tail calls as
-/// native `return f(...)` grew the stack by one frame per reduction step
-/// -- ~98.6 bytes each, never popped until the program exited, which
-/// SIGSEGV'd any program of more than ~150k steps (issue #360). Same
-/// reasoning as `g_free_worklist`'s iterative free below: a structurally
-/// recursive process gets an explicit loop rather than the native stack.
-pub const CodeFn = *const fn (self: Value, args: []const Value) Action;
+/// Every call a generated function makes is a guaranteed tail call:
+/// `@call(.always_tail, ...)`, which Zig either compiles to a jump or
+/// rejects at compile time. The native stack therefore stays flat however
+/// many reduction steps a program takes.
+///
+/// This replaced a trampoline (an `Action` return plus a dispatch loop in
+/// `run`), which existed because emitting these calls as plain `return
+/// f(...)` grew the stack by one frame per reduction step -- ~98.6 bytes
+/// each, never popped, which SIGSEGV'd any program past ~150k steps (issue
+/// #360). Two constraints made `.always_tail` look unusable at the time,
+/// and both are addressed here rather than worked around:
+///
+///   * **Caller and callee must share a prototype.** Every handler now has
+///     exactly this one, and the helpers below (`applyCovalue`,
+///     `callClosure`, `staticCall`, `projectField`, `applyDestructor`) are
+///     `inline fn`, so their tail call lands in the caller's frame where the
+///     prototype does match.
+///   * **Arguments must not live in the caller's frame.** They are two
+///     by-value parameters rather than a `[]const Value` slice pointing into
+///     an `Action`, so nothing outlives the frame the tail call releases.
+///
+/// A tail call is a **move, not a borrow**, exactly as the Action it
+/// replaced was: it transfers one reference of the callee into `self` and
+/// one of each operand into `a0`/`a1`. That is what keeps
+/// `Malgo.Backend.Zig.Perceus` and `RcCheck` sound unchanged -- both model a
+/// single frame, and "these references leave this frame here" is still true.
+pub const CodeFn = *const fn (self: Value, a0: Value, a1: Value) Value;
 
-/// Maximum number of arguments at any call site. Was 4 (a defensive margin
-/// with no known call site needing it); tightened to 2 by #407 once that
-/// margin was actually checked rather than assumed. The front end cannot
-/// currently produce more than 2 (`ToFun` builds only single-parameter
-/// lambdas and singleton applies; `ToCore` appends exactly one consumer,
-/// giving `TCallClosure f [arg, kont]`) -- confirmed empirically, not just
-/// by reading the front end: every `rt.callClosure`/`rt.staticCall` site in
-/// the generated Zig for the full golden corpus, both self-hosted compiler
+/// Argument slots at any call site. Was 4 (a defensive margin with no known
+/// call site needing it); tightened to 2 by #407 once that margin was
+/// actually checked rather than assumed. The front end cannot currently
+/// produce more than 2 (`ToFun` builds only single-parameter lambdas and
+/// singleton applies; `ToCore` appends exactly one consumer, giving
+/// `TCallClosure f [arg, kont]`) -- confirmed empirically, not just by
+/// reading the front end: every `rt.callClosure`/`rt.staticCall` site in the
+/// generated Zig for the full golden corpus, both self-hosted compiler
 /// levels, `examples/`, and `bench/fixtures/` (220k+ call sites) carries at
 /// most 2 arguments. Nothing in the IR *enforces* that bound, so
 /// `Malgo.Backend.Zig.Emit`'s `maxCallArgs` mirrors this number to reject an
 /// over-arity call site with a readable compile-time message rather than
-/// truncating args silently; `mkAction`'s `rcInvariant` below is the
-/// authoritative runtime backstop if the two ever drift. Lowering it shrinks
-/// every `Action` (see below) by two words, which matters on
-/// `selfhost-l2`'s 1.4e10+ dispatches (#407): each `run` iteration copies an
-/// `Action` by value.
+/// truncating args silently. A callee knows its own arity, so an unused slot
+/// is the immortal `no_self` sentinel -- never `undefined`, so that a stray
+/// `dup`/`drop` on it is a no-op rather than a crash.
 pub const MAX_ARGS: usize = 2;
 
-/// What a generated function returns instead of calling: either the next
-/// call to perform (`code != null`) or the finished value (`code == null`,
-/// result in `argv[0]`).
-///
-/// An Action is a **move, not a borrow**. It carries exactly the references
-/// a direct call would have transferred: one of the callee into `self`, one
-/// of each operand into `argv[0..argc]`. See `run` for the full contract.
-pub const Action = struct {
-    code: ?CodeFn,
-    self: Value,
-    argv: [MAX_ARGS]Value,
-    argc: usize,
-};
-
-// #407: Action must actually be 5 words (40 bytes on a 64-bit target), not
-// 7 -- the whole point of shrinking MAX_ARGS. A future MAX_ARGS bump that
-// forgets this comptime check would silently grow every `run` dispatch's
-// per-call copy back to 7 words with no compiler error to catch it.
-comptime {
-    if (@sizeOf(usize) == 8) {
-        std.debug.assert(@sizeOf(Action) == 5 * @sizeOf(usize));
-    }
-}
 
 pub const Struct = struct { tag: Tag, fields: []const Value };
 pub const Closure = struct { code: CodeFn, captures: []const Value };
@@ -646,70 +639,60 @@ pub fn mkRecordNamed(fields: []const NamedField, captures: []const Value, names:
 }
 
 // ===== Dispatch =====
+//
+// Every helper here is `inline fn` on purpose. `@call(.always_tail, ...)`
+// requires the callee's prototype to match the *caller's*, and these are
+// called from generated handlers -- inlining puts the tail call in a frame
+// that has the right prototype. A non-inline helper would be rejected at
+// compile time, which is what made `.always_tail` look unusable before.
 
-/// Package a call as an `Action` for `run` to dispatch. Takes ownership of
-/// `self` and every element of `args` on the caller's behalf -- see `run`.
-fn mkAction(code: CodeFn, self: Value, args: []const Value) Action {
-    rcInvariant(args.len <= MAX_ARGS, "call arity exceeds MAX_ARGS");
-    var action = Action{ .code = code, .self = self, .argv = undefined, .argc = args.len };
-    for (args, 0..) |a, i| action.argv[i] = a;
-    return action;
-}
-
-/// The finished value: what a generated function returns for Join IR's
-/// `Finish` (`Ir.TReturn`).
-pub fn done(value: Value) Action {
-    var action = Action{ .code = null, .self = no_self, .argv = undefined, .argc = 1 };
-    action.argv[0] = value;
-    return action;
+/// One reduction step. Counted in each generated function's prologue rather
+/// than in a dispatch loop, since there is no loop any more. Always on, like
+/// every other counter here: an instrumented run and a timed run measure the
+/// same binary, so there is no observer cost to subtract.
+pub inline fn countDispatch() void {
+    g_dispatches += 1;
 }
 
 /// A direct call to a lifted top-level function (`Ir.TStaticCall`), whose
 /// `self` is the immortal `no_self` sentinel.
-pub fn staticCall(code: CodeFn, args: []const Value) Action {
-    return mkAction(code, no_self, args);
+pub inline fn staticCall(code: CodeFn, a0: Value, a1: Value) Value {
+    return @call(.always_tail, code, .{ no_self, a0, a1 });
 }
 
-/// The trampoline. Dispatches actions until one is `done`, and returns the
-/// single owned reference that one carries.
-///
-/// **`run` is strictly RC-neutral.** Between receiving an Action and
-/// dispatching it, it performs no `dup`, no `drop`, and no read of any
-/// `Value`'s payload; it never discards an Action without dispatching it
-/// (that would leak every reference the Action carries). Ownership passes
-/// straight through: the references a generated function moved into the
-/// Action are the ones the callee receives as `self`/`args`. This is what
-/// keeps `Malgo.Backend.Zig.Perceus` and `RcCheck` sound unchanged -- both
-/// model only a single frame, and "these references leave this frame here"
-/// is still true when they leave into an Action.
-///
-/// Nesting `run` is legal and costs one native frame per nesting level;
-/// `forceField` is the only nesting site today, and any future synchronous
-/// helper counts against the same budget.
-pub fn run(code: CodeFn, self: Value, args: []const Value) Value {
-    var cur = mkAction(code, self, args);
-    while (cur.code) |c| {
-        // Deliberately not `cur = c(...)`: Zig's result-location semantics
-        // would let the callee build its returned Action directly into
-        // `cur` while `args` still points into `cur.argv`. A separate slot
-        // makes that aliasing impossible.
-        const next = c(cur.self, cur.argv[0..cur.argc]);
-        cur = next;
-        g_dispatches += 1;
-    }
-    return cur.argv[0];
-}
-
-pub fn applyCovalue(covalue: Value, value: Value) Action {
-    return callClosure(covalue, &[_]Value{value});
-}
-
-pub fn callClosure(closure: Value, args: []const Value) Action {
+pub inline fn callClosure(closure: Value, a0: Value, a1: Value) Value {
     if (closure.kind != .closure) panic("callClosure: value is not a function");
-    // Resolved eagerly, while the caller's reference to `closure` is still
-    // being moved in: the code pointer must be read before ownership of the
-    // closure object passes into the Action.
-    return mkAction(closure.payload.closure.code, closure, args);
+    // Resolved before the call, while this frame still holds its reference to
+    // `closure`: the tail call moves that reference into the callee's `self`,
+    // so the code pointer has to be read first.
+    const code = closure.payload.closure.code;
+    return @call(.always_tail, code, .{ closure, a0, a1 });
+}
+
+pub inline fn applyCovalue(covalue: Value, value: Value) Value {
+    if (covalue.kind != .closure) panic("applyCovalue: value is not a function");
+    const code = covalue.payload.closure.code;
+    return @call(.always_tail, code, .{ covalue, value, no_self });
+}
+
+pub inline fn applyDestructor(codata: Value, name: []const u8, a0: Value, a1: Value) Value {
+    if (codata.kind != .codata) panic("applyDestructor: value is not codata");
+    for (codata.payload.codata.branches) |branch| {
+        if (stringEq(branch.name, name)) {
+            return @call(.always_tail, branch.code, .{ codata, a0, a1 });
+        }
+    }
+    panic("applyDestructor: no matching destructor");
+}
+
+pub inline fn projectField(record: Value, name: []const u8, k: Value) Value {
+    if (record.kind != .record) panic("projectField: value is not a record");
+    for (record.payload.record.fields) |field| {
+        if (stringEq(field.name, name)) {
+            return @call(.always_tail, field.code, .{ record, k, no_self });
+        }
+    }
+    panic("projectField: no such field");
 }
 
 /// The captures slice of a closure/record/codata value, read by the
@@ -723,28 +706,17 @@ pub fn capturesOf(v: Value) []const Value {
     };
 }
 
-pub fn applyDestructor(codata: Value, name: []const u8, args: []const Value) Action {
-    if (codata.kind != .codata) panic("applyDestructor: value is not codata");
-    for (codata.payload.codata.branches) |branch| {
-        if (stringEq(branch.name, name)) return mkAction(branch.code, codata, args);
-    }
-    panic("applyDestructor: no matching destructor");
-}
-
-pub fn projectField(record: Value, name: []const u8, k: Value) Action {
-    if (record.kind != .record) panic("projectField: value is not a record");
-    for (record.payload.record.fields) |field| {
-        if (stringEq(field.name, name)) return mkAction(field.code, record, &[_]Value{k});
-    }
-    panic("projectField: no such field");
-}
-
-fn identityCode(self: Value, args: []const Value) Action {
+fn identityCode(self: Value, a0: Value, a1: Value) Value {
+    // Counted like a generated function: it is one, in every respect the
+    // `dispatches` counter cares about, and leaving it out would silently
+    // shift the number away from what the perf baseline recorded.
+    countDispatch();
     // The uniform closure protocol is "dup used captures, then drop self";
     // with no captures and an immortal self this is a no-op, kept for
     // uniformity with generated closure bodies.
     drop(self);
-    return done(args[0]);
+    _ = a1;
+    return a0;
 }
 
 var IDENTITY_KONT_OBJ: Object = .{
@@ -754,12 +726,13 @@ var IDENTITY_KONT_OBJ: Object = .{
 };
 
 /// A covalue that, once invoked, finishes with its argument unchanged.
-/// Running a record field's code with this as its continuation makes the
-/// field's (call-by-name) computation synchronous from the caller's point of
-/// view -- the nested `run` in `forceField` dispatches until this kont turns
-/// the value into a `done` Action. Used by `Expand` pattern matching to force
-/// a field into a plain value it can immediately test and bind against.
-/// Immortal: forcing a field allocates nothing and creates no RC obligation.
+/// Passing it as a record field's continuation makes the field's
+/// (call-by-name) computation synchronous from the caller's point of view:
+/// the field's code tail-calls onward until this kont returns the value,
+/// and that return lands directly in `forceField`'s frame. Used by `Expand`
+/// pattern matching to force a field into a plain value it can immediately
+/// test and bind against. Immortal: forcing a field allocates nothing and
+/// creates no RC obligation.
 pub fn identityKont() Value {
     return &IDENTITY_KONT_OBJ;
 }
@@ -769,10 +742,10 @@ pub fn identityKont() Value {
 /// matching after its own `.kind == .record` guard, can skip that check).
 ///
 /// `Ir.Force` is an expression in the middle of a block, so this has to hand
-/// back a plain `?Value` -- it runs a *nested* trampoline to completion
-/// rather than returning an Action. That is the one place native stack
-/// still grows: depth is bounded by the maximum dynamic nesting of `Force`
-/// (three frames per level), not by the total number of reduction steps.
+/// back a plain `?Value`. It makes an ordinary (non-tail) call, which is the
+/// one place native stack still grows: one frame per level of dynamic
+/// `Force` nesting, not per reduction step -- everything the field's code
+/// goes on to do is a tail call and stays flat.
 /// `g_force_depth_max` reports the high-water mark under MALGO_RC_STATS.
 pub fn forceField(record: Value, name: []const u8) ?Value {
     if (record.kind != .record) return null;
@@ -781,7 +754,7 @@ pub fn forceField(record: Value, name: []const u8) ?Value {
             g_force_depth += 1;
             if (g_force_depth > g_force_depth_max) g_force_depth_max = g_force_depth;
             defer g_force_depth -= 1;
-            return run(field.code, record, &[_]Value{identityKont()});
+            return field.code(record, identityKont(), no_self);
         }
     }
     return null;
@@ -1777,17 +1750,16 @@ test "mkStructReuse allocates fresh on a null token" {
     try std.testing.expectEqual(before, g_live_objects);
 }
 
-// --- Trampoline dispatch (see `CodeFn`/`run`) ---
+// --- Tail-call dispatch (see `CodeFn`) ---
 
 var t_remaining: usize = 0;
 var t_first_frame: usize = 0;
 var t_last_frame: usize = 0;
 
-/// Passes its `self` and argument straight through for `t_remaining`
-/// dispatches, then finishes -- the minimal shape of a generated function
-/// under the Action protocol, and a probe of the frame address `run`
-/// dispatches from.
-fn chainCode(self: Value, args: []const Value) Action {
+/// Tail-calls itself for `t_remaining` steps, then finishes -- the minimal
+/// shape of a generated function, and a probe of the frame address each step
+/// runs in.
+fn chainCode(self: Value, a0: Value, a1: Value) Value {
     var probe: u8 = 0;
     std.mem.doNotOptimizeAway(&probe);
     const addr = @intFromPtr(&probe);
@@ -1795,13 +1767,13 @@ fn chainCode(self: Value, args: []const Value) Action {
     t_last_frame = addr;
     if (t_remaining == 0) {
         drop(self);
-        return done(args[0]);
+        return a0;
     }
     t_remaining -= 1;
-    return mkAction(&chainCode, self, args);
+    return @call(.always_tail, chainCode, .{ self, a0, a1 });
 }
 
-test "run dispatches in constant native stack and is RC-neutral" {
+test "a tail-call chain runs in constant native stack and is RC-neutral" {
     initHeap();
     const before = g_live_objects;
     t_remaining = 100_000;
@@ -1809,26 +1781,27 @@ test "run dispatches in constant native stack and is RC-neutral" {
     t_last_frame = 0;
 
     const callee = mkClosure(&chainCode, &[_]Value{});
-    const result = run(&chainCode, callee, &[_]Value{mkInt32(7)});
+    const result = chainCode(callee, mkInt32(7), no_self);
 
-    // The property issue #360 is about: 100k dispatches, one frame. Before
-    // the trampoline this chain cost ~98.6 bytes of never-popped stack each.
+    // The property issue #360 is about: 100k steps, one frame. Emitted as
+    // plain calls this chain cost ~98.6 bytes of never-popped stack each.
     try std.testing.expect(t_first_frame != 0);
     try std.testing.expectEqual(t_first_frame, t_last_frame);
 
     try std.testing.expectEqual(@as(i32, 7), result.payload.int32);
     drop(result);
-    // `run` neither dups nor drops: the one reference of `callee` and the one
-    // of the argument that went in are the ones that came back out.
+    // Dispatch neither dups nor drops: the one reference of `callee` and the
+    // one of the argument that went in are the ones that came back out.
     try std.testing.expectEqual(before, g_live_objects);
 }
 
-fn forcedFieldCode(self: Value, args: []const Value) Action {
+fn forcedFieldCode(self: Value, a0: Value, a1: Value) Value {
     drop(self);
-    return applyCovalue(args[0], mkInt32(99));
+    _ = a1;
+    return applyCovalue(a0, mkInt32(99));
 }
 
-test "forceField runs a nested trampoline down to a plain value" {
+test "forceField makes a call-by-name field synchronous" {
     initHeap();
     const before = g_live_objects;
     const rec = mkRecord(&[_]NamedField{.{ .name = "f", .code = &forcedFieldCode }}, &[_]Value{});
@@ -1843,24 +1816,32 @@ test "forceField runs a nested trampoline down to a plain value" {
     try std.testing.expectEqual(before, g_live_objects);
 }
 
-fn dropRestCode(self: Value, args: []const Value) Action {
+fn dropRestCode(self: Value, a0: Value, a1: Value) Value {
     drop(self);
-    for (args[1..]) |a| drop(a);
-    return done(args[0]);
+    drop(a1);
+    return a0;
 }
 
-test "an action carrying exactly MAX_ARGS arguments round-trips" {
+test "a call carrying exactly MAX_ARGS arguments round-trips" {
     initHeap();
     const before = g_live_objects;
-    var argv: [MAX_ARGS]Value = undefined;
-    for (&argv, 0..) |*slot, i| slot.* = mkInt32(@intCast(i));
+    comptime std.debug.assert(MAX_ARGS == 2);
 
     const callee = mkClosure(&dropRestCode, &[_]Value{});
-    const result = run(&dropRestCode, callee, argv[0..MAX_ARGS]);
+    const result = dropRestCode(callee, mkInt32(0), mkInt32(1));
 
     try std.testing.expectEqual(@as(i32, 0), result.payload.int32);
     drop(result);
     try std.testing.expectEqual(before, g_live_objects);
+}
+
+/// A tail call is only legal from a function with the matching prototype, and
+/// a `test` block's is `fn () anyerror!void`. Calling `applyDestructor` from
+/// here instead of from the test body is what satisfies that -- and Zig
+/// rejecting the direct call is the compile-time check that keeps the whole
+/// convention honest.
+fn destructorProbe(self: Value, a0: Value, a1: Value) Value {
+    return applyDestructor(self, "wanted", a0, a1);
 }
 
 test "applyDestructor dispatches to the matching branch" {
@@ -1874,9 +1855,7 @@ test "applyDestructor dispatches to the matching branch" {
         .{ .name = "wanted", .code = &forcedFieldCode },
     }, &[_]Value{});
 
-    const action = applyDestructor(cd, "wanted", &[_]Value{identityKont()});
-    try std.testing.expectEqual(cd, action.self);
-    const result = run(action.code.?, action.self, action.argv[0..action.argc]);
+    const result = destructorProbe(cd, identityKont(), no_self);
 
     try std.testing.expectEqual(@as(i32, 99), result.payload.int32);
     drop(result);

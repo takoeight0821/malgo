@@ -132,12 +132,17 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
 - Small `int32`s (`-128..1024`) are interned as `IMMORTAL` statics by `rt.mkInt32`,
   so they cost no allocation and no RC traffic; and RC tracing is compiled out of
   `release-fast` entirely. Both are #385 work — see `docs/perceus-gc.md`.
-- Calling convention is a trampoline: a generated function returns an
-  `rt.Action` (the next call, or `done(v)`) and `rt.run` dispatches in a loop.
-  Zig does not guarantee tail calls, so emitting this CPS IR's tail calls as
-  native `return f(..)` grew the stack by one frame per reduction step and
-  SIGSEGV'd past ~150k steps (#360). The IR and the RC passes are unaffected —
-  an Action carries exactly the references a direct call moved.
+- Calling convention is guaranteed tail calls: every call a generated function
+  makes is `@call(.always_tail, ...)`, which Zig compiles to a jump or rejects
+  at compile time, so the native stack stays flat. Emitting them as plain
+  `return f(..)` grew the stack by one frame per reduction step and SIGSEGV'd
+  past ~150k steps (#360); a trampoline (`rt.Action` + `rt.run`) held the line
+  until the two constraints on `.always_tail` were addressed — a shared
+  prototype for every handler, with the non-matching helpers as `inline fn`,
+  and arguments in by-value parameters rather than a slice into the caller's
+  frame. Worth 1.33x on `BenchFibDeep` and 1.22x on Level 1 with every counter
+  unchanged. The IR and the RC passes are unaffected: a tail call moves
+  exactly the references an Action did. See `docs/zig-backend.md`.
 - Golden parity harness: `bash scripts/zig-golden.sh` (CI job `zig-golden`)
   compiles every golden testcase and diffs stdout byte-for-byte against the
   interpreter's goldens, failing on any leak.

@@ -13,6 +13,11 @@ chezscheme = "10.4.1"
 # Pinned: Zig minor releases break std (e.g. std.Io churn between 0.15 and
 # 0.16). Bump deliberately, re-running the full zig-golden sweep.
 zig = "0.16.0"
+# Pinned so local dev and CI compile the generated Go with the identical
+# toolchain. The generated go.mod names an older floor on purpose (see
+# Backend/Go/Toolchain.lean's `goDirective`) so a build never tries to
+# download a toolchain. Bump deliberately, re-running the go-golden sweep.
+go = "1.26.7"
 
 [env]
 _.path = ["~/.local/bin", "~/.elan/bin"]
@@ -22,11 +27,14 @@ description = "Install elan (Lean toolchain manager); the toolchain itself is pi
 run = "command -v elan >/dev/null 2>&1 || curl -sSf https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none"
 
 [tasks.bust-runtime]
-description = "Force a re-embed of runtime/zig/runtime.zig (Lake does not reliably track include_str)"
+description = "Force a re-embed of the Zig and Go runtimes (Lake does not reliably track include_str)"
 run = """
 rm -f lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.olean \
       lean/.lake/build/lib/lean/Malgo/Backend/Zig/Runtime.trace \
-      lean/.lake/build/ir/Malgo/Backend/Zig/Runtime.c
+      lean/.lake/build/ir/Malgo/Backend/Zig/Runtime.c \
+      lean/.lake/build/lib/lean/Malgo/Backend/Go/Runtime.olean \
+      lean/.lake/build/lib/lean/Malgo/Backend/Go/Runtime.trace \
+      lean/.lake/build/ir/Malgo/Backend/Go/Runtime.c
 """
 
 [tasks.build]
@@ -78,6 +86,16 @@ run = "bash scripts/zig-golden.sh"
 description = "Run Zig backend deep-recursion gate (18.8M dispatches; #360 regression)"
 depends = ["build"]
 run = "bash scripts/zig-deep-recursion.sh"
+
+[tasks.go-golden]
+description = "Run Go backend golden parity sweep (byte parity + panic gate)"
+depends = ["build"]
+run = "bash scripts/go-golden.sh"
+
+[tasks.go-deep-recursion]
+description = "Run Go backend deep-recursion gate (18.8M dispatches; trampoline regression)"
+depends = ["build"]
+run = "bash scripts/go-deep-recursion.sh"
 
 [tasks.perf-baseline]
 description = "Compare MALGO_RC_STATS counters against bench/perf-baseline.json (#385); -- --tier=all --update to reseed"

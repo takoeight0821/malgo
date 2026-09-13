@@ -16,6 +16,8 @@ import Malgo.Query.Engine
 import Malgo.Backend.Scheme
 import Malgo.Backend.Zig
 import Malgo.Backend.Zig.Toolchain
+import Malgo.Backend.Go
+import Malgo.Backend.Go.Toolchain
 
 /-! M1 mini-driver: a direct, in-memory compile pipeline up to Rename.
 
@@ -262,20 +264,44 @@ def compileZig (flag : Flag) (path : System.FilePath) : IO UInt32 := do
     MalgoM.io (IO.print zigText)
   return 0
 
-/-- CLI entry for `malgo compile SOURCE -o OUT`: link and lower to Zig exactly
-as `compileZig`, then write the generated source to `OUT.zig` and invoke the
-`zig` toolchain to produce a native executable at `OUT`. Mirrors Haskell
-`Driver.compileToExecutable` (cache root = the workspace dir). -/
+/-- CLI entry for `malgo eval --target go`: link exactly as `compileScheme`,
+then lower the linked Join program straight to Go source text and print it.
+No pipeline in between — Go's closures and GC make closure conversion and
+reference counting unnecessary, so `Malgo.Backend.Go.compileToGo` is the
+whole backend. -/
+def compileGo (flag : Flag) (path : System.FilePath) : IO UInt32 := do
+  let ws ← Workspace.setup
+  MalgoM.run flag {} do
+    let (moduleName, linked) ← linkForCli ws path
+    let goText ← Malgo.Backend.Go.compileToGo moduleName linked
+    MalgoM.io (IO.print goText)
+  return 0
+
+/-- CLI entry for `malgo compile SOURCE -o OUT [--target zig|go]`: link, lower
+to the chosen backend's source text, and invoke that backend's toolchain to
+produce a native executable at `OUT`. Both toolchains keep their build caches
+under the workspace dir and leave the generated source next to `OUT` for
+inspection. `eval` and `scheme` are not native targets and are rejected by
+the CLI before reaching here. -/
 def compileToNativeExecutable (flag : Flag) (path : System.FilePath)
     (outPath : System.FilePath) (optMode : Malgo.Backend.OptMode) : IO UInt32 := do
   let ws ← Workspace.setup
   MalgoM.run flag {} do
     let (moduleName, linked) ← linkForCli ws path
-    let zigText ← Malgo.Backend.Zig.compileToZigText moduleName linked
-    let zigPath := outPath.toString ++ ".zig"
-    MalgoM.io (IO.FS.writeFile zigPath zigText)
-    MalgoM.io (Malgo.Backend.Zig.Toolchain.buildExecutable
-      (toString ws.dir) zigPath outPath.toString optMode)
+    match flag.target with
+    | .go =>
+      let goText ← Malgo.Backend.Go.compileToGo moduleName linked
+      MalgoM.io (Malgo.Backend.Go.Toolchain.buildExecutable
+        (toString ws.dir) goText outPath.toString optMode)
+    | .zig =>
+      let zigText ← Malgo.Backend.Zig.compileToZigText moduleName linked
+      let zigPath := outPath.toString ++ ".zig"
+      MalgoM.io (IO.FS.writeFile zigPath zigText)
+      MalgoM.io (Malgo.Backend.Zig.Toolchain.buildExecutable
+        (toString ws.dir) zigPath outPath.toString optMode)
+    | t =>
+      throw { passName := "Driver",
+              message := s!"{repr t} is not a native compilation target" }
   return 0
 
 end Malgo.Driver

@@ -21,6 +21,7 @@ import Malgo.Sequent.Core.Full
 import Malgo.Sequent.Core.Flat
 import Malgo.Sequent.Core.Join
 import Malgo.Sequent.Core.Normalize
+import Malgo.Sequent.Core.Escape
 import Malgo.Sequent.ToFun
 import Malgo.Sequent.SaturateCtor
 import Malgo.Sequent.ReuseSpecialize
@@ -38,7 +39,6 @@ import Malgo.Infer
 import Malgo.Query
 import Malgo.Query.Engine
 import Malgo.Backend.Scheme
-import Malgo.Backend.OptMode
 import Malgo.Backend.Zig.Ir
 import Malgo.Backend.Zig.Stage
 import Malgo.Backend.Zig.ClosureConv
@@ -50,6 +50,10 @@ import Malgo.Backend.Zig.Toolchain
 import Malgo.Backend.Zig.RcCheck
 import Malgo.Backend.Zig.Emit
 import Malgo.Backend.Zig
+import Malgo.Backend.OptMode
+import Malgo.Backend.Go.Runtime
+import Malgo.Backend.Go
+import Malgo.Backend.Go.Toolchain
 import Malgo.Lint.Diagnostic
 import Malgo.Lint.Traversal
 import Malgo.Lint.Rule

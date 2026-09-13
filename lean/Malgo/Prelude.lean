@@ -327,6 +327,7 @@ inductive Target where
   | eval
   | scheme
   | zig
+  | go
   deriving BEq, Repr
 
 /-- Evaluation mode (small-step CPS or big-step). -/

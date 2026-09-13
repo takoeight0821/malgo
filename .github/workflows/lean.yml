@@ -280,6 +280,43 @@ jobs:
       - name: JSON parser regression check (interpreter vs Scheme backend)
         run: bash scripts/json-check.sh
 
+  # Ungated, like lean-scheme-golden: this is fast enough for per-PR feedback,
+  # so it needs no kill switch in lean/ci-gates.env.
+  lean-go-golden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-lean
+
+      # Installed via mise rather than actions/setup-go so the version comes
+      # from mise.toml alone -- the same reasoning as the Chez step above,
+      # and one fewer place for the pin to drift.
+      - name: Install Go (pinned via mise, matches mise.toml)
+        run: |
+          curl https://mise.run | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/mise" install go
+          echo "$("$HOME/.local/bin/mise" where go)/bin" >> "$GITHUB_PATH"
+
+      # Lake does not reliably track the `include_str` that embeds
+      # runtime/go/runtime.go, so a build can report success while the binary
+      # keeps emitting the previous runtime text. Same step, same reason, as
+      # the Zig job's.
+      - name: Force a re-embed of the Go runtime
+        run: |
+          rm -f lean/.lake/build/lib/lean/Malgo/Backend/Go/Runtime.olean \
+                lean/.lake/build/lib/lean/Malgo/Backend/Go/Runtime.trace \
+                lean/.lake/build/ir/Malgo/Backend/Go/Runtime.c
+          cd lean && lake build
+
+      - name: Go backend golden parity sweep
+        run: bash scripts/go-golden.sh
+
+      - name: Go backend deep-recursion gate
+        run: bash scripts/go-deep-recursion.sh
+
   # Gated off pull requests for the same reason as l2-build/l2-case: a
   # from-source Lean bootstrap (flake.nix pins an off-nixpkgs-cache 4.32.0,
   # see PR #421) takes 45-60 minutes with no cache.nixos.org substitute --
@@ -318,7 +355,7 @@ jobs:
           [ "$out" = "Hello, world!" ]
 
   actions-timeline:
-    needs: [gates, lean-build, cli-gate, lean-selfhost, lean-zig-golden, lean-scheme-golden, l2-build, l2-case, nix-build]
+    needs: [gates, lean-build, cli-gate, lean-selfhost, lean-zig-golden, lean-scheme-golden, lean-go-golden, l2-build, l2-case, nix-build]
     if: always()
     runs-on: ubuntu-latest
     permissions:

@@ -27,6 +27,7 @@ def parseTargetArg : String → Except String Target
   | "eval" => .ok .eval
   | "scheme" => .ok .scheme
   | "zig" => .ok .zig
+  | "go" => .ok .go
   | t => .error s!"Unknown target: {t}"
 
 def parseEvalModeArg : String → Except String EvalMode
@@ -37,14 +38,23 @@ def parseEvalModeArg : String → Except String EvalMode
 def parseOptModeArg : String → Except String OptMode :=
   Malgo.Backend.parseOptMode
 
+/-- Targets `malgo compile` can produce a native executable for. `eval` and
+`scheme` are not among them: one is the interpreter, the other needs a Chez
+runtime rather than a linker. -/
+def parseNativeTargetArg : String → Except String Target
+  | "zig" => .ok .zig
+  | "go" => .ok .go
+  | t => .error s!"Unknown compile target: {t} (expected zig or go)"
+
 def usage : String :=
   "malgo programming language\n\n" ++
   "Usage: malgo COMMAND\n\n" ++
   "Commands:\n" ++
   "  eval SOURCE [--no-opt] [--lambdalift] [--debug-mode]\n" ++
-  "              [--target eval|scheme|zig] [--eval-mode smallstep|bigstep]\n" ++
+  "              [--target eval|scheme|zig|go] [--eval-mode smallstep|bigstep]\n" ++
   "              [--infer] [ARG...]\n" ++
-  "  compile SOURCE [-o|--output OUT] [--opt debug|release-safe|release-fast]\n" ++
+  "  compile SOURCE [-o|--output OUT] [--target zig|go]\n" ++
+  "                 [--opt debug|release-safe|release-fast]\n" ++
   "  lint SOURCE [--deny-warnings]\n" ++
   "  debug-trace SOURCE [-o|--output trace.html] [--infer] [--malgo2025]"
 
@@ -120,6 +130,7 @@ private structure CompileAcc where
   source : Option System.FilePath := none
   outPath : Option System.FilePath := none
   optMode : OptMode := .debug
+  target : Target := .zig
 
 private partial def parseCompile (args : List String) (acc : CompileAcc) :
     Except String CompileAcc :=
@@ -131,6 +142,10 @@ private partial def parseCompile (args : List String) (acc : CompileAcc) :
       let (v, rest') ← takeValue "--opt" inline rest
       let m ← parseOptModeArg v
       parseCompile rest' { acc with optMode := m }
+    else if name == "--target" then do
+      let (v, rest') ← takeValue "--target" inline rest
+      let t ← parseNativeTargetArg v
+      parseCompile rest' { acc with target := t }
     else if name == "-o" || name == "--output" then do
       let (v, rest') ← takeValue name inline rest
       parseCompile rest' { acc with outPath := some (System.FilePath.mk v) }
@@ -239,9 +254,15 @@ def runEval (flag : Flag) (source : System.FilePath) : IO UInt32 := do
     catch e =>
       IO.eprintln (toString e)
       return 1
+  | .go =>
+    try
+      Malgo.Driver.compileGo flag source
+    catch e =>
+      IO.eprintln (toString e)
+      return 1
 
 def runCompile (source : System.FilePath) (outPath : Option System.FilePath)
-    (optMode : OptMode) : IO UInt32 := do
+    (optMode : OptMode) (target : Target) : IO UInt32 := do
   let out := outPath.getD (System.FilePath.mk ((source.fileStem).getD source.toString))
   -- `source` is already absolute (resolved in `main`); comparing the
   -- default output's absolute form catches `malgo compile hello` on an
@@ -253,7 +274,7 @@ def runCompile (source : System.FilePath) (outPath : Option System.FilePath)
     return 1
   let flag : Flag :=
     { noOptimize := false, lambdaLift := false, debugMode := false, testMode := false,
-      target := .zig, evalMode := .smallStep, useInfer := false, programArgs := [] }
+      target, evalMode := .smallStep, useInfer := false, programArgs := [] }
   try
     Malgo.Driver.compileToNativeExecutable flag source out optMode
   catch e =>
@@ -355,7 +376,7 @@ def run : List String → IO UInt32
           | none => parseError "compile: missing SOURCE"
           | some src => do
             let srcAbs ← makeAbsolute src
-            runCompile srcAbs acc.outPath acc.optMode
+            runCompile srcAbs acc.outPath acc.optMode acc.target
       | "lint" =>
         match parseLint rest {} with
         | .error e => parseError e

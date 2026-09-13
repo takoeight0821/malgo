@@ -1005,6 +1005,20 @@ def declaredPrimitives (text : String) : List String :=
       some (toString ((line.drop "foreign import ".length).takeWhile (fun c => c != ' ' && c != ':')))
     else none
 
+/-- Primitive names the Go runtime implements. The Go backend deliberately
+names each primitive's Go function after the `foreign import` it serves, so
+coverage is readable straight off the embedded runtime text instead of being
+mirrored by hand the way the interpreter's `isHandled` is. -/
+def goImplemented (text : String) : List String :=
+  (text.splitOn "\n").filterMap fun line =>
+    if line.startsWith "func " then
+      let rest := line.drop "func ".length
+      let name := rest.takeWhile (fun c => c != '(')
+      -- Skip a method declaration (`func (*Int32) malgoValue()`), whose
+      -- "name" would be the receiver.
+      if name.isEmpty || name.any (fun c => c == ' ') then none else some (toString name)
+    else none
+
 def run : IO Nat := do
   let text ← IO.FS.readFile (System.FilePath.mk "runtime/malgo/Builtin.mlg")
   let declared := declaredPrimitives text
@@ -1048,6 +1062,20 @@ def run : IO Nat := do
       failed := failed + 1
       IO.println
         s!"FAIL Malgo.PrimitiveCoverage/handled/{name}: no foreign import in Builtin.mlg, and not in knownUndeclared"
+
+  -- The Go backend has no allowlist: it implements all 99, so any gap here
+  -- is a regression. This is the one backend whose coverage is checked
+  -- mechanically -- the Zig runtime's arms would need the same grep, and the
+  -- Scheme backend's are a Lean `match` with nothing to reflect on.
+  let goNames := goImplemented Malgo.Backend.Go.goRuntime
+  for name in declared do
+    total := total + 1
+    if goNames.contains name then
+      IO.println s!"ok Malgo.PrimitiveCoverage/go/{name}"
+    else
+      failed := failed + 1
+      IO.println
+        s!"FAIL Malgo.PrimitiveCoverage/go/{name}: runtime/go/runtime.go has no `func {name}(`"
 
   -- Allowlist staleness: a known-missing name must still be
   -- declared-but-unhandled, and a known-undeclared name must still be

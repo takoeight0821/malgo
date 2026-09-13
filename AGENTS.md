@@ -140,8 +140,8 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
   until the two constraints on `.always_tail` were addressed — a shared
   prototype for every handler, with the non-matching helpers as `inline fn`,
   and arguments in by-value parameters rather than a slice into the caller's
-  frame. Worth 1.33x on `BenchFibDeep` and 1.22x on Level 1 with every counter
-  unchanged. The IR and the RC passes are unaffected: a tail call moves
+  frame. Worth 1.33x on `BenchFibDeep`, 1.22x on Level 1 and 1.25x on Level 2 (271.5s
+  -> 217.7s), with every counter unchanged. The IR and the RC passes are unaffected: a tail call moves
   exactly the references an Action did. See `docs/zig-backend.md`.
 - Golden parity harness: `bash scripts/zig-golden.sh` (CI job `zig-golden`)
   compiles every golden testcase and diffs stdout byte-for-byte against the

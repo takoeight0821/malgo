@@ -149,6 +149,13 @@ Measured on Darwin arm64, `--opt release-fast`, 20 runs under hyperfine:
 |---|---|---|---|
 | `BenchFibDeep` | 318.0 ms ± 6.0 | **239.2 ms ± 4.1** | **1.33x** |
 | selfhost Level 1 | 257.0 ms ± 44.3 | **210.3 ms ± 1.9** | **1.22x** |
+| selfhost Level 2 | 271.5 s | **217.7 s** | **1.25x** |
+
+Level 2 is one serial run each rather than a hyperfine series — it is the
+16 minutes #385 exists to keep out of CI. Its 1.62e10 dispatches lose 53.8s,
+or 3.3ns each, which is the microbenchmark's 4ns diluted by the work between
+dispatches. Chez ran the same case in 52.8s in the same session, so #385's
+`l2_ratio` moves from 5.14x to **4.12x**.
 
 Every counter is unchanged — `dispatches` 18,815,851 and 9,028,449
 respectively, `total_allocs` and `reuse_hits` identical — so the two

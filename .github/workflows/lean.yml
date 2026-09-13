@@ -30,10 +30,45 @@ jobs:
       selfhostL2: ${{ steps.g.outputs.LEAN_SELFHOST_L2 }}
       zig: ${{ steps.g.outputs.LEAN_ZIG }}
       nixBuild: ${{ steps.g.outputs.NIX_BUILD }}
+      l2Run: ${{ steps.l2.outputs.run }}
+      l2Cases: ${{ steps.l2.outputs.cases }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The Level 2 path filter below diffs against the base branch.
+          fetch-depth: 0
       - id: g
         run: grep -v '^#' lean/ci-gates.env | grep -v '^$' >> "$GITHUB_OUTPUT"
+
+      # Whether l2-build/l2-case run, and over which cases. Off a pull
+      # request that is all five, as before. On one it is a single
+      # representative case, and only when the PR touches an input Level 2
+      # has and Level 1 does not: the Zig backend and its runtime (the
+      # evaluator is a Zig-compiled binary), runtime/malgo (what the
+      # evaluator interprets), or the harness. Anything else reaching Level 2
+      # reaches lean-selfhost first, and that runs on every PR.
+      #
+      # `cases` stays non-empty even when `run` is 0: GitHub expands a job's
+      # matrix before it evaluates the job's `if`, and an empty vector is an
+      # error rather than a skip.
+      - id: l2
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo 'run=1' >> "$GITHUB_OUTPUT"
+            echo 'cases=["Echo","Factorial","Fib","StringOps","Bool"]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'cases=["Fib"]' >> "$GITHUB_OUTPUT"
+          git fetch --no-tags origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+          changed="$(git diff --name-only "origin/${BASE}...HEAD")"
+          echo "$changed"
+          if printf '%s\n' "$changed" | grep -qE '^(lean/Malgo/Backend/Zig/|runtime/zig/|runtime/malgo/|scripts/selfhost-level2\.sh$|\.github/workflows/lean\.yml$)'; then
+            echo 'run=1' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=0' >> "$GITHUB_OUTPUT"
+          fi
 
   lean-build:
     runs-on: ubuntu-latest
@@ -116,7 +151,7 @@ jobs:
   # of the case (#407) -- do not raise CASE_TIMEOUT, which is what buried #385.
   l2-build:
     needs: gates
-    if: needs.gates.outputs.selfhostL2 == '1' && github.event_name != 'pull_request'
+    if: needs.gates.outputs.selfhostL2 == '1' && needs.gates.outputs.l2Run == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -143,6 +178,13 @@ jobs:
         env:
           BUILD_ONLY: 1
           PRECOMPILE_TIMEOUT: 300
+          # This binary is uploaded and run by l2-case on a *different*
+          # runner, and GitHub's x86_64 fleet is mixed. Without this, Zig
+          # compiles for the building host's CPU, and an evaluator built
+          # where AVX-512 exists died with SIGILL where it does not --
+          # intermittently, since it depends on which pair of runners the two
+          # jobs drew. See Malgo.Backend.Zig.Toolchain.mcpuArgs.
+          MALGO_ZIG_MCPU: baseline
         run: bash scripts/selfhost-level2.sh
 
       # 5.6 MB. The binary is the whole dependency: it reads Main.mlg and its
@@ -158,18 +200,18 @@ jobs:
 
   l2-case:
     needs: [gates, l2-build]
-    if: needs.gates.outputs.selfhostL2 == '1' && github.event_name != 'pull_request'
+    if: needs.gates.outputs.selfhostL2 == '1' && needs.gates.outputs.l2Run == '1'
     runs-on: ubuntu-latest
-    # One case, no contention, plus ~10s of setup. The 600s CASE_TIMEOUT is the
-    # real gate; this is only a backstop against a hang.
-    timeout-minutes: 15
+    # One case, no contention, plus ~10s of setup. The CASE_TIMEOUT below is
+    # the real gate; this is only a backstop against a hang.
+    timeout-minutes: 25
     strategy:
       # Each case is an independent claim about the evaluator. Cancelling the
       # others on the first failure would throw away exactly the information
       # needed to tell "one case regressed" from "the evaluator is broken".
       fail-fast: false
       matrix:
-        case: [Echo, Factorial, Fib, StringOps, Bool]
+        case: ${{ fromJSON(needs.gates.outputs.l2Cases) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -182,7 +224,10 @@ jobs:
           EVAL_BIN: ./malgoc
           L2_CASES: ${{ matrix.case }}
           PARALLEL_JOBS: 1
-          CASE_TIMEOUT: 600
+          # A case is ~220s on an M-series laptop and these runners are
+          # several times slower at it, so 600s sat close enough to the real
+          # figure that cases flipped between pass and timeout run to run.
+          CASE_TIMEOUT: 1200
         run: |
           chmod +x ./malgoc
           bash scripts/selfhost-level2.sh

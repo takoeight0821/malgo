@@ -16,13 +16,7 @@ open Malgo
 
 namespace Malgo.Cli
 
-/-- Zig build mode for `compile --opt` (the Zig backend and its real
-`OptMode` are not ported yet; this local enum only records the choice). -/
-inductive OptMode where
-  | debug
-  | releaseSafe
-  | releaseFast
-  deriving BEq, Repr
+open Malgo.Backend (OptMode)
 
 def OptMode.toString : OptMode → String
   | .debug => "debug"
@@ -40,11 +34,8 @@ def parseEvalModeArg : String → Except String EvalMode
   | "bigstep" => .ok .bigStep
   | m => .error s!"Unknown eval-mode: {m}"
 
-def parseOptModeArg : String → Except String OptMode
-  | "debug" => .ok .debug
-  | "release-safe" => .ok .releaseSafe
-  | "release-fast" => .ok .releaseFast
-  | m => .error s!"Unknown opt mode: {m}"
+def parseOptModeArg : String → Except String OptMode :=
+  Malgo.Backend.parseOptMode
 
 def usage : String :=
   "malgo programming language\n\n" ++
@@ -249,11 +240,6 @@ def runEval (flag : Flag) (source : System.FilePath) : IO UInt32 := do
       IO.eprintln (toString e)
       return 1
 
-def toToolchainOpt : OptMode → Malgo.Backend.Zig.Toolchain.OptMode
-  | .debug => .debug
-  | .releaseSafe => .releaseSafe
-  | .releaseFast => .releaseFast
-
 def runCompile (source : System.FilePath) (outPath : Option System.FilePath)
     (optMode : OptMode) : IO UInt32 := do
   let out := outPath.getD (System.FilePath.mk ((source.fileStem).getD source.toString))
@@ -269,7 +255,7 @@ def runCompile (source : System.FilePath) (outPath : Option System.FilePath)
     { noOptimize := false, lambdaLift := false, debugMode := false, testMode := false,
       target := .zig, evalMode := .smallStep, useInfer := false, programArgs := [] }
   try
-    Malgo.Driver.compileToNativeExecutable flag source out (toToolchainOpt optMode)
+    Malgo.Driver.compileToNativeExecutable flag source out optMode
   catch e =>
     IO.eprintln (toString e)
     return 1

@@ -267,7 +267,7 @@ as `compileZig`, then write the generated source to `OUT.zig` and invoke the
 `zig` toolchain to produce a native executable at `OUT`. Mirrors Haskell
 `Driver.compileToExecutable` (cache root = the workspace dir). -/
 def compileToNativeExecutable (flag : Flag) (path : System.FilePath)
-    (outPath : System.FilePath) (optMode : Malgo.Backend.Zig.Toolchain.OptMode) : IO UInt32 := do
+    (outPath : System.FilePath) (optMode : Malgo.Backend.OptMode) : IO UInt32 := do
   let ws ← Workspace.setup
   MalgoM.run flag {} do
     let (moduleName, linked) ← linkForCli ws path

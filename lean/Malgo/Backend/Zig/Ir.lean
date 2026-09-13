@@ -10,7 +10,7 @@ The IR is first-order and in ANF: every value is produced by a named `Let`
 and every operand position is a variable. Closure conversion has already
 happened — captures are explicit index reads (`ReadCapture`) against the
 function's own closure object (the `self` parameter of the self-passing
-calling convention `fn (self, args) rt.Action`), and every nested Lambda /
+calling convention `rt.CodeFn`), and every nested Lambda /
 escaping join / Object field has been lifted into its own `Func`. This is
 exactly the shape the Perceus pass needs: reference counting reduces to
 counting variable occurrences.
@@ -126,10 +126,9 @@ mutual
 /-- Every terminator except `if`/`panic` consumes one reference of each of
 its operands (the call moves them into the callee).
 
-The call terminators do not emit a native Zig call: each returns an `rt.Action`
-that the runtime's `rt.run` trampoline dispatches (see `Emit`). The RC contract
-above is unaffected — an Action carries exactly the references a direct call
-would have moved. -/
+Each call terminator emits a guaranteed tail call (see `runtime/zig/runtime.zig`'s
+`CodeFn`). The RC contract above is what makes that sound: a tail call is a move,
+carrying exactly the references the terminator's operands were to leave with. -/
 inductive Terminator where
   /-- `return rt.applyCovalue(k, v)` -/
   | applyCo (k v : Name)
@@ -139,8 +138,9 @@ inductive Terminator where
   | staticCall (fn : Name) (args : List Name)
   /-- `return rt.projectField(v, field, k)` -/
   | project (v : Name) (field : String) (k : Name)
-  /-- `return rt.done(v)` (Join IR's `Finish`; the generated `main` owns the
-  result, which comes back out of the trampoline) -/
+  /-- `return v` (Join IR's `Finish`; the whole program is one tail-call chain,
+  so this value is what the generated `main`'s single call returns, and `main`
+  owns it) -/
   | «return» (v : Name)
   /-- `Ifz` and every lowered `Select` arm. The guard only borrows. -/
   | «if» (guard : Guard) (thenB elseB : Block)

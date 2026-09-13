@@ -79,6 +79,19 @@ pub const CodeFn = *const fn (self: Value, a0: Value, a1: Value) Value;
 /// `dup`/`drop` on it is a no-op rather than a crash.
 pub const MAX_ARGS: usize = 2;
 
+// The trampoline used to make `MAX_ARGS` load-bearing: it sized `Action.argv`
+// and `mkAction` checked call arity against it. With the Action gone, the real
+// slot count is whatever `CodeFn` spells, and an unchecked constant beside it
+// is worse than none. This ties the two together.
+//
+// It reaches `CodeFn` only. `Malgo.Backend.Zig.Emit`'s `maxCallArgs` is still
+// a hand-kept mirror -- but a mismatch there now makes the generated function
+// fail to coerce to `CodeFn`, which is a Zig type error rather than the silent
+// argument truncation the old `rcInvariant` guarded against.
+comptime {
+    const fn_info = @typeInfo(@typeInfo(CodeFn).pointer.child).@"fn";
+    std.debug.assert(fn_info.params.len == MAX_ARGS + 1); // +1 for `self`
+}
 
 pub const Struct = struct { tag: Tag, fields: []const Value };
 pub const Closure = struct { code: CodeFn, captures: []const Value };
@@ -139,15 +152,17 @@ pub var g_total_allocs: usize = 0;
 /// Reported alongside `g_total_allocs`.
 pub var g_reuse_hits: usize = 0;
 
-/// Actions dispatched by `run`. Reported alongside `g_total_allocs`: a
+/// Reduction steps: one per generated-function entry, counted by
+/// `countDispatch`. Reported alongside `g_total_allocs`: a
 /// deterministic, machine-independent reduction-step count, so a pass that
 /// accidentally doubles the work shows up here even when wall-clock noise
 /// hides it.
 pub var g_dispatches: usize = 0;
 
-/// Current and high-water nesting depth of `forceField`'s nested `run`.
-/// The trampoline makes native stack O(this), not O(reduction steps), so
-/// the high-water mark is the quantity worth watching.
+/// Current and high-water nesting depth of `forceField`, the only call in
+/// the runtime that is not a tail call. Native stack is O(this), not
+/// O(reduction steps), so the high-water mark is the quantity worth
+/// watching.
 pub var g_force_depth: usize = 0;
 pub var g_force_depth_max: usize = 0;
 
@@ -669,10 +684,12 @@ pub inline fn callClosure(closure: Value, a0: Value, a1: Value) Value {
     return @call(.always_tail, code, .{ closure, a0, a1 });
 }
 
+/// A covalue takes exactly one value, so the spare slot is `no_self`. An
+/// `inline fn` may delegate to another that performs the tail call -- both
+/// bodies land in the generated handler's frame -- so the ordering rule in
+/// `callClosure` is stated once rather than mirrored here.
 pub inline fn applyCovalue(covalue: Value, value: Value) Value {
-    if (covalue.kind != .closure) panic("applyCovalue: value is not a function");
-    const code = covalue.payload.closure.code;
-    return @call(.always_tail, code, .{ covalue, value, no_self });
+    return callClosure(covalue, value, no_self);
 }
 
 pub inline fn applyDestructor(codata: Value, name: []const u8, a0: Value, a1: Value) Value {
@@ -1760,6 +1777,7 @@ var t_last_frame: usize = 0;
 /// shape of a generated function, and a probe of the frame address each step
 /// runs in.
 fn chainCode(self: Value, a0: Value, a1: Value) Value {
+    countDispatch();
     var probe: u8 = 0;
     std.mem.doNotOptimizeAway(&probe);
     const addr = @intFromPtr(&probe);
@@ -1813,25 +1831,6 @@ test "forceField makes a call-by-name field synchronous" {
     try std.testing.expect(g_force_depth_max >= 1);
     drop(forced);
     // forceField consumed the record's reference as the field code's `self`.
-    try std.testing.expectEqual(before, g_live_objects);
-}
-
-fn dropRestCode(self: Value, a0: Value, a1: Value) Value {
-    drop(self);
-    drop(a1);
-    return a0;
-}
-
-test "a call carrying exactly MAX_ARGS arguments round-trips" {
-    initHeap();
-    const before = g_live_objects;
-    comptime std.debug.assert(MAX_ARGS == 2);
-
-    const callee = mkClosure(&dropRestCode, &[_]Value{});
-    const result = dropRestCode(callee, mkInt32(0), mkInt32(1));
-
-    try std.testing.expectEqual(@as(i32, 0), result.payload.int32);
-    drop(result);
     try std.testing.expectEqual(before, g_live_objects);
 }
 

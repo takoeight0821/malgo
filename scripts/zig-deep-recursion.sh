@@ -6,14 +6,24 @@
 # by one frame (~98.6 bytes, measured) per reduction step and any sufficiently
 # long-running program died with SIGSEGV -- `fib 16` was enough.
 #
-# Generated code now uses `@call(.always_tail, ...)`, so the *stack-growth*
-# half of this gate is enforced by the Zig compiler: a call that cannot be a
-# tail call is a compile error, which `zig-golden.sh` would hit first. What
-# this gate still buys is the part a compiler cannot check -- that
-# `BenchFibDeep.mlg`'s ~18.8 million reductions actually produce 75025, at a
-# depth (~1.85 GB of stack under a plain-call convention) no golden case
-# reaches -- plus the perf ratchet below, which needs a long run to be
-# meaningful.
+# Generated code now uses `@call(.always_tail, ...)`. That moves *one* of the
+# two regressions this gate watched for into the compiler and leaves the other
+# here:
+#
+#   * A runtime helper that dispatches instead of tail-calling is now a compile
+#     error -- a non-`inline` helper containing `@call(.always_tail, ..)` is
+#     rejected, which is why `destructorProbe` exists in runtime.zig.
+#   * **A terminator that emits a plain call again is not checked by anything
+#     else.** Zig rejects an `.always_tail` it cannot honor; it never demands
+#     that a call be one. `return someFn(self, a0, a1)` out of `emitTerminator`
+#     compiles happily and grows the stack a frame per reduction step again.
+#     Nothing else in CI reads emitted Zig text -- `zig-corpus` works on IR and
+#     there are no emit goldens -- so this script is still the only guard.
+#
+# `BenchFibDeep.mlg` is ~18.8 million reductions, a depth no golden case
+# reaches (~1.85 GB of stack under a plain-call convention), which is what
+# makes it the one that catches it. The perf ratchet below needs a long run
+# to be meaningful too.
 #
 # Deliberately NOT a `test/testcases/malgo` case: `zig-golden.sh` compiles at
 # `--opt debug`, where Zig's DebugAllocator captures a stack trace per
@@ -68,7 +78,7 @@ if ! timeout "$COMPILE_TIMEOUT" "$MALGO" compile "$SRC" -o "$WORK/fibdeep" --opt
   exit 1
 fi
 
-echo "=== running ==="
+echo "=== running (a SIGSEGV here means a terminator emits a plain call again) ==="
 set +e
 actual="$(MALGO_RC_STATS=1 timeout "$CASE_TIMEOUT" "$WORK/fibdeep" 2>"$WORK/stats")"
 status=$?
@@ -78,10 +88,10 @@ if [ "$status" -eq 124 ]; then
   echo "FAIL: timed out after ${CASE_TIMEOUT}s" >&2
   exit 1
 fi
-# 139 = SIGSEGV, the pre-#360 failure mode -- now unreachable, since a
-# non-tail call no longer compiles. 83 = the runtime's leak gate.
+# 83 = the runtime's leak gate.
 if [ "$status" -ne 0 ]; then
-  echo "FAIL: exited $status (83 = leak gate; 139 = SIGSEGV)" >&2
+  echo "FAIL: exited $status (139 = SIGSEGV: native stack grew with reduction steps again;" >&2
+  echo "      83 = leak gate)" >&2
   exit 1
 fi
 if [ "$actual" != "$EXPECTED" ]; then

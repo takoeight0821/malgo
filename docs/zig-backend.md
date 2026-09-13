@@ -82,8 +82,8 @@ pass" primitive over the backend IR itself, used by `Perceus` and `Emit`.
 
 ## Calling convention
 
-Every generated Zig function shares one signature,
-`fn (self: rt.Value, args: []const rt.Value) rt.Action`:
+Every generated Zig function shares one signature, `rt.CodeFn` —
+`fn (self: rt.Value, a0: rt.Value, a1: rt.Value) rt.Value`:
 
 - A closure or record field or codata branch receives the closure/record/codata
   object itself as `self` and reads its captures out of it
@@ -111,9 +111,11 @@ per reduction step, and any program of more than ~150k steps died with SIGSEGV
 — `fib 16` was enough ([issue #360](https://github.com/takoeight0821/malgo/issues/360)).
 
 Two constraints made `@call(.always_tail)` look unusable at the time, and both
-are addressed rather than worked around (the approach is Deegen's, from
-[luajit-remake](https://github.com/luajit-remake/luajit-remake) — see
-`wiki/2026-09-12-go-backend-performance-investigation.md` §5):
+are addressed rather than worked around. The approach is Deegen's, from
+[luajit-remake](https://github.com/luajit-remake/luajit-remake) — it generates
+interpreters whose bytecode handlers dispatch by `[[clang::musttail]]`, and
+solves the same two constraints by unifying every handler's prototype and
+keeping arguments in registers:
 
 - **Caller and callee must share a prototype.** Every handler now has exactly
   `fn (self: rt.Value, a0: rt.Value, a1: rt.Value) rt.Value`, and the helpers
@@ -163,28 +165,24 @@ Level 2 is one serial run each rather than a hyperfine series — it is the
 16 minutes #385 exists to keep out of CI. Its 1.62e10 dispatches lose 53.8s,
 or 3.3ns each, which is the microbenchmark's 4ns diluted by the work between
 dispatches. Chez ran the same case in 52.8s in the same session, so #385's
-`l2_ratio` moves from 5.14x to **4.12x**.
+`l2_ratio` moves from **5.14x to 4.12x**.
+
+Those three seconds figures live here rather than in `bench/perf-baseline.json`:
+`scripts/perf-baseline.sh`'s `record_ratio` replaces `.l2_ratio` wholesale and
+times with whole-second `$SECONDS`, so it can neither keep an extra field nor
+reproduce a decimal. The JSON holds what that script can write; this table holds
+the measurement.
+
+Reverting is a supported move if a target ever needs it. The trampoline is the
+parent of the commit that introduced this section, and it is what made the
+backend buildable without LLVM — `@call(.always_tail)` needs the LLVM backend
+(see `-fllvm` below), so a target LLVM does not serve means going back to it.
 
 Every counter is unchanged — `dispatches` 18,815,851 and 9,028,449
 respectively, `total_allocs` and `reuse_hits` identical — so the two
 conventions perform the same reductions and the same allocations. `run`
 counted each loop iteration; `rt.countDispatch()` in each function's prologue
 counts the same events at the same cost, `identityCode` included.
-
-**An Action is a move, not a borrow.** It carries exactly the references a direct call
-would have transferred — one of the callee into `self`, one of each operand into
-`argv` — and `rt.run` is strictly RC-neutral: no dup, no drop, and it never discards an
-Action without dispatching it. That is why the IR and every RC pass
-(`Perceus`, `RcCheck`, `Reuse`) are untouched by this: they model a single frame and
-only assert that a terminator's operands leave it, which is still true when they leave
-into an Action.
-
-Native stack is now O(maximum dynamic `Force` nesting depth) rather than O(total
-reduction steps). `Ir.Force` is an expression in the middle of a block, so `rt.forceField`
-has to return a plain value and runs a *nested* trampoline to get one — three frames per
-nesting level. In the current corpus record fields are only ever forced as siblings
-(depth 1); `MALGO_RC_STATS=1` reports `force_depth_max` so this stays measured rather
-than assumed.
 
 ## Data representation
 
@@ -198,7 +196,7 @@ constructor name never needs a heap allocation of its own).
 ## Building and testing
 
 - `mise run build` runs `lake build`, covering the compiler itself.
-- `zig test -lc -fllvm runtime/zig/runtime.zig` runs the runtime's own unit tests
+- `mise run zig-runtime-test` runs the runtime's own unit tests
   (`-lc` links libc explicitly; required on Linux since the runtime calls
   `std.c.write`/`std.c.getenv` directly — masked on macOS, where libc is always
   linked via libSystem).

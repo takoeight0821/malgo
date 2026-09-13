@@ -149,10 +149,11 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
 - Deep-recursion gate: `bash scripts/zig-deep-recursion.sh` (same CI jobs)
   compiles `bench/fixtures/BenchFibDeep.mlg` release-fast and runs it — 18.8M
   dispatches, which pre-#360 would have needed ~1.85 GB of native stack. Every
-  golden-sweep case is shallow, so this is the only thing that catches a
-  trampoline regression. Kept out of the sweep because its cases run
+  golden-sweep case is shallow, so this is still the only thing that catches an
+  emitter regression to plain calls — Zig rejects an `.always_tail` it cannot
+  honor, but never demands that a call be one. Kept out of the sweep because its cases run
   `--opt debug`, where DebugAllocator makes a case this long ~13s.
-- Runtime unit tests: `zig test -lc -fllvm runtime/zig/runtime.zig` (`-lc` is required on
+- Runtime unit tests: `mise run zig-runtime-test` (`-lc` is required on
   Linux since the runtime calls `std.c.write`/`std.c.getenv` directly; macOS
   masks this because it always links libc via libSystem).
 - **After editing `runtime/zig/runtime.zig`, run `mise run bust-runtime`

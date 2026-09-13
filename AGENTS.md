@@ -134,22 +134,28 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
 - Small `int32`s (`-128..1024`) are interned as `IMMORTAL` statics by `rt.mkInt32`,
   so they cost no allocation and no RC traffic; and RC tracing is compiled out of
   `release-fast` entirely. Both are #385 work — see `docs/perceus-gc.md`.
-- Calling convention is a trampoline: a generated function returns an
-  `rt.Action` (the next call, or `done(v)`) and `rt.run` dispatches in a loop.
-  Zig does not guarantee tail calls, so emitting this CPS IR's tail calls as
-  native `return f(..)` grew the stack by one frame per reduction step and
-  SIGSEGV'd past ~150k steps (#360). The IR and the RC passes are unaffected —
-  an Action carries exactly the references a direct call moved.
+- Calling convention is guaranteed tail calls: every call a generated function
+  makes is `@call(.always_tail, ...)`, which Zig compiles to a jump or rejects
+  at compile time, so the native stack stays flat. Emitting them as plain
+  `return f(..)` grew the stack by one frame per reduction step and SIGSEGV'd
+  past ~150k steps (#360); a trampoline (`rt.Action` + `rt.run`) held the line
+  until the two constraints on `.always_tail` were addressed — a shared
+  prototype for every handler, with the non-matching helpers as `inline fn`,
+  and arguments in by-value parameters rather than a slice into the caller's
+  frame. Worth 1.33x on `BenchFibDeep`, 1.22x on Level 1 and 1.25x on Level 2 (271.5s
+  -> 217.7s), with every counter unchanged. The IR and the RC passes are unaffected: a tail call moves
+  exactly the references an Action did. See `docs/zig-backend.md`.
 - Golden parity harness: `bash scripts/zig-golden.sh` (CI job `zig-golden`)
   compiles every golden testcase and diffs stdout byte-for-byte against the
   interpreter's goldens, failing on any leak.
 - Deep-recursion gate: `bash scripts/zig-deep-recursion.sh` (same CI jobs)
   compiles `bench/fixtures/BenchFibDeep.mlg` release-fast and runs it — 18.8M
   dispatches, which pre-#360 would have needed ~1.85 GB of native stack. Every
-  golden-sweep case is shallow, so this is the only thing that catches a
-  trampoline regression. Kept out of the sweep because its cases run
+  golden-sweep case is shallow, so this is still the only thing that catches an
+  emitter regression to plain calls — Zig rejects an `.always_tail` it cannot
+  honor, but never demands that a call be one. Kept out of the sweep because its cases run
   `--opt debug`, where DebugAllocator makes a case this long ~13s.
-- Runtime unit tests: `zig test -lc runtime/zig/runtime.zig` (`-lc` is required on
+- Runtime unit tests: `mise run zig-runtime-test` (`-lc` is required on
   Linux since the runtime calls `std.c.write`/`std.c.getenv` directly; macOS
   masks this because it always links libc via libSystem).
 - **After editing `runtime/zig/runtime.zig`, run `mise run bust-runtime`
@@ -174,8 +180,9 @@ Join IR → Normalize (Mu/Label elimination) → classifyJoins → Go text → g
 Go has real closures and a GC, so everything the Zig backend needs in order
 to survive without them is absent here: no ANF, no lambda lifting, no
 captures array, no self-passing convention, no Perceus/Reuse/RcCheck, no leak
-check. What survives is the trampoline — Go does not guarantee tail calls
-either, and this IR is CPS — plus `MAX_ARGS = 2` and the `dispatches` counter.
+check. `MAX_ARGS = 2` and the `dispatches` counter are shared with the Zig
+runtime. The trampoline is Go's alone — Go has no `musttail` and no way to
+pick a calling convention, so this CPS IR's tail calls stay real calls.
 
 - Values: every concrete type in a `Value` is one machine word (`*Int32`,
   `*Str`, `Fn`, …) so putting one into the interface never allocates; a bare
@@ -215,27 +222,26 @@ either, and this IR is CPS — plus `MAX_ARGS = 2` and the `dispatches` counter.
   the test suite rather than only a golden diff. This works because the Go
   runtime names each function after the `foreign import` it serves.
 
-Measured 2026-09-12 on Darwin arm64, `--opt release-fast`, run from the repo
-root with a *relative* source path — path length changes the self-hosted
-evaluator's work by up to 3x, so measurements are only comparable at equal
-path length.
+Measured 2026-09-13 on Darwin arm64, `--opt release-fast`, `hyperfine` over 20
+runs, from the repo root with a *relative* source path — path length changes
+the self-hosted evaluator's work by up to 3x, so measurements are only
+comparable at equal path length.
 
 | | selfhost Level 1 | `BenchFibDeep` | Level 1 `dispatches` |
 |---|---|---|---|
-| Zig | 0.24s | 0.32s | 9,028,449 |
-| Go | 0.29s | 0.30s | 9,028,448 |
-| Chez | 0.71s | 0.19s | — |
+| Zig | 0.21s | 0.24s | 9,028,449 |
+| Go | 0.27s | 0.30s | 9,028,448 |
+| Chez | 0.68s | 0.16s | — |
 
-Dispatch counts are at parity with Zig, and Go is ahead of it on pure
-arithmetic.
+Dispatch counts are at parity with Zig. The remaining 1.3x on wall clock is
+per-dispatch cost, which the paragraph below identifies as Go's floor.
 
 Chez's column needs splitting to be read correctly: it compiles the script on
-every run, which is 0.15s for `BenchFibDeep` and 0.60s for the Level 1
-evaluator. Its *execution* is therefore 0.04s and 0.10s — 2.7x to 7x faster
+every run, which is 0.12s for `BenchFibDeep` and 0.58s for the Level 1
+evaluator. Its *execution* is therefore 0.04s and 0.10s — 2.6x to 7.8x faster
 than Go's. That gap is structural and cannot be closed: Go's trampoline alone
 costs 0.068s on `BenchFibDeep`, more than Chez spends running the whole
-program, and there is no `musttail` and no way to pick a calling convention
-in Go. Only the number of dispatches can fall, and it is already at Zig's.
+program. Only the number of dispatches can fall, and it is already at Zig's.
 
 End to end, which is what a script run pays, Go wins everywhere except long
 pure computation: 2.5x on Level 1 and ~15x on the short programs in

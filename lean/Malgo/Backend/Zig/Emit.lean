@@ -7,17 +7,13 @@ import Malgo.Backend.Zig.Stage
 /-! Port of `src/Malgo/Backend/Zig/Emit.hs`: prints the backend `Ir.Program`
 (produced by `ClosureConv.convertProgram`) as Zig source text.
 
-Every `Func` becomes a Zig function with the uniform self-passing signature
-`fn (self: rt.Value, args: []const rt.Value) rt.Action`: a closure/record field
-receives the closure object itself as `self` and reads its captures out of it
-(`ReadCapture` → `rt.capturesOf(self)`), while a top-level definition is called
-directly with the `rt.no_self` sentinel and ignores it.
-
-A generated function never performs a call: it returns an `rt.Action` naming the
-call it wants, and the runtime's `rt.run` trampoline dispatches in a loop. Zig
-does not guarantee tail-call optimization, so emitting these tail calls natively
-grew the stack by one frame per reduction step (issue #360). The RC discipline is
-unchanged — an Action carries exactly the references a direct call moved.
+Every `Func` becomes a Zig function with the one prototype `rt.CodeFn` names:
+a closure/record field receives the closure object itself as `self` and reads
+its captures out of it (`ReadCapture` → `rt.capturesOf(self)`), while a
+top-level definition is called with the `rt.no_self` sentinel and ignores it.
+Sharing that prototype is what makes every call a guaranteed tail call —
+`runtime/zig/runtime.zig`'s `CodeFn` doc has the full contract, including why
+the RC passes are unaffected by it.
 
 Zig errors on both an unused local `const` and a pointless `_ = x;` discard of a
 used one, so the printer discards exactly the bindings (and `self`/`args`) that
@@ -104,27 +100,26 @@ def emitGuard (pv : Name → String) : Guard → String
 def valueSlice (pv : Name → String) (vs : List Name) : String :=
   "&[_]rt.Value{" ++ ", ".intercalate (vs.map pv) ++ "}"
 
-/-- Mirrors `MAX_ARGS` in `runtime/zig/runtime.zig`, the fixed argument capacity
-of an `rt.Action`. Tightened from 4 to 2 by #407 after confirming (by dumping
-generated Zig for the full golden corpus, both self-hosted compiler levels,
-`examples/`, and `bench/fixtures/`) that no call site ever carries more than 2
-arguments -- shrinking `Action` by two words reduces the per-dispatch copy on
-`selfhost-l2`'s 1.4e10+ dispatches, each of which copies an `Action` by value
-(a mechanism argument; the workload's actual wall clock is too noisy at this
-harness's resolution to attribute a specific delta to this change alone). The
-runtime's own `rcInvariant` in `mkAction` is the authoritative backstop if the
-two ever drift. -/
+/-- Mirrors `MAX_ARGS` in `runtime/zig/runtime.zig`: the number of argument
+slots a generated function has. Tightened from 4 to 2 by #407 after confirming
+(by dumping generated Zig for the full golden corpus, both self-hosted compiler
+levels, `examples/`, and `bench/fixtures/`) that no call site ever carries more
+than 2 arguments. -/
 def maxCallArgs : Nat := 2
 
-/-- `valueSlice` for a call site, rejecting an arity the runtime's Action cannot
-carry. The front end tops out at 2 (`callClosure f [arg, kont]`), so exceeding
-this is a compiler bug rather than a user error. -/
+/-- Argument list for a call site, padded to `maxCallArgs` with the immortal
+`no_self` sentinel because a generated function takes that many parameters
+whatever its own arity. `no_self` rather than `undefined`: a stray `dup`/`drop`
+on it is a no-op instead of a crash.
+
+Over-arity is a compiler bug rather than a user error -- the front end tops out
+at 2 (`callClosure f [arg, kont]`) -- so it panics rather than truncating. -/
 def callArgs (pv : Name → String) (what : String) (vs : List Name) : String :=
   if vs.length > maxCallArgs then
     panic! s!"Malgo.Backend.Zig.Emit: {what} call site has {vs.length} arguments, \
              exceeding MAX_ARGS ({maxCallArgs}) in runtime/zig/runtime.zig"
   else
-    valueSlice pv vs
+    ", ".intercalate (vs.map pv ++ List.replicate (maxCallArgs - vs.length) "rt.no_self")
 
 /-- A Zig string-literal slice of `vs`'s symbolic (compile-time) names, in the
 same order as the matching `valueSlice` — passed alongside it to an `rt.*Named`
@@ -205,7 +200,7 @@ partial def emitTerminator (pv : Name → String) (funcName : String) : Terminat
   | .callClosure f args => "return rt.callClosure(" ++ pv f ++ ", " ++ callArgs pv "closure" args ++ ");\n"
   | .staticCall fn args => "return rt.staticCall(&" ++ mangleId fn ++ ", " ++ callArgs pv "static" args ++ ");\n"
   | .project v field k => "return rt.projectField(" ++ pv v ++ ", " ++ zigStringLit field ++ ", " ++ pv k ++ ");\n"
-  | .«return» v => "return rt.done(" ++ pv v ++ ");\n"
+  | .«return» v => "return " ++ pv v ++ ";\n"
   | .«if» guard t e =>
     "if (" ++ emitGuard pv guard ++ ") {\n"
       ++ emitBlock pv funcName t
@@ -216,16 +211,31 @@ partial def emitTerminator (pv : Name → String) (funcName : String) : Terminat
 
 end
 
+/-- Name of argument slot `i` when no parameter occupies it. -/
+private def argSlot (i : Nat) : String := "a" ++ toString i
+
+/-- The `self` slot plus `maxCallArgs` argument slots, each as `(Zig name, is
+it read)`. A parameter names its own slot rather than being aliased into one:
+Zig takes a raw identifier as a parameter name, so `@"Mod.x"` can be the
+parameter. Slots with no parameter get a placeholder name and are discarded,
+since Zig rejects an unused one either way. -/
+def funcSlots (fn : Func) (pv : Name → String) : List (String × Bool) :=
+  let bodyFree := freeVarsBlock fn.body
+  ("self", bodyFree.contains fn.selfVar) ::
+    (List.range maxCallArgs).map (fun i =>
+      match fn.params[i]? with
+      | some p => (pv p, bodyFree.contains p)
+      | none => (argSlot i, false))
+
 def emitFunc (fn : Func) : String :=
   let pv := fun (nm : Name) => if nm == fn.selfVar then "self" else mangleId nm
   let funcNameLit := zigStringLit (Malgo.Id.toText fn.name)
-  let bodyFree := freeVarsBlock fn.body
-  let discardSelf := discardUnless "self" (bodyFree.contains fn.selfVar)
-  let discardArgs := if fn.params.isEmpty then "_ = args;\n" else ""
-  let paramBinds := String.join (fn.params.zipIdx.map (fun (p, i) =>
-    declareConst (pv p) ("args[" ++ toString i ++ "]") (bodyFree.contains p)))
-  "fn " ++ mangleId fn.name ++ "(self: rt.Value, args: []const rt.Value) rt.Action {\n"
-    ++ discardSelf ++ discardArgs ++ paramBinds
+  let slots := funcSlots fn pv
+  let params := ", ".intercalate (slots.map (fun (n, _) => n ++ ": rt.Value"))
+  let discards := String.join (slots.map (fun (n, used) => discardUnless n used))
+  "fn " ++ mangleId fn.name ++ "(" ++ params ++ ") rt.Value {\n"
+    -- One reduction step. There is no dispatch loop to count in.
+    ++ "rt.countDispatch();\n" ++ discards
     ++ emitBlock pv funcNameLit fn.body ++ "}"
 
 /-- `T.unlines`: each line followed by a newline. -/
@@ -239,9 +249,11 @@ def emitProgram (modName : ModuleName) (staged : Staged .reuse) : String :=
   let program := staged.program
   let entryCall := match program.entry with
     | none => ""
-    -- The Finish value comes back out of the trampoline here; dropping it is
-    -- the last consumption the leak check relies on.
-    | some name => "    rt.drop(rt.run(&" ++ mangleId name ++ ", rt.no_self, &[_]rt.Value{}));"
+    -- The whole program is one tail-call chain, so its Finish value is what
+    -- this single call returns; dropping it is the last consumption the leak
+    -- check relies on.
+    | some name =>
+      "    rt.drop(" ++ mangleId name ++ "(rt.no_self, " ++ callArgs (fun _ => "") "entry" [] ++ "));"
   unlines
     [ "// Generated by the Malgo Zig backend from module " ++ modName.toStr ++ ".",
       "// Memory: Perceus reference counting (dup/drop inserted by the compiler);",

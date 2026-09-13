@@ -410,6 +410,19 @@ while read -r tier ta rh di fd; do
   printf '  dispatches      %12s  (baseline %12s)\n' "$di" "$b_di"
   printf '  force_depth_max %12s  (baseline %12s)\n' "$fd" "$b_fd"
 
+  # A ratchet with no floor reads a counter that stopped counting as a win:
+  # zero satisfies every `-le` below and then prints IMPROVED. `total_allocs`
+  # and `dispatches` are counts of work every tier here certainly does, so
+  # zero means the instrument broke, not that the work went away.
+  # `reuse_hits` and `force_depth_max` are legitimately zero (a program with
+  # nothing to recycle, or with no records), so they are exempt.
+  for _f in total_allocs:"$ta" dispatches:"$di"; do
+    if [ "${_f#*:}" -eq 0 ]; then
+      echo "  REGRESSION: ${_f%%:*} is 0 -- the counter is not counting"
+      regressions=1
+    fi
+  done
+
   [ "$ta" -le "$b_ta" ] || { echo "  REGRESSION: total_allocs rose by $((ta - b_ta))"; regressions=1; }
   [ "$di" -le "$b_di" ] || { echo "  REGRESSION: dispatches rose by $((di - b_di))"; regressions=1; }
   [ "$fd" -eq "$b_fd" ] || { echo "  REGRESSION: force_depth_max changed ($b_fd -> $fd) -- see #382"; regressions=1; }

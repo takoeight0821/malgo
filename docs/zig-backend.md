@@ -82,8 +82,8 @@ pass" primitive over the backend IR itself, used by `Perceus` and `Emit`.
 
 ## Calling convention
 
-Every generated Zig function shares one signature,
-`fn (self: rt.Value, args: []const rt.Value) rt.Action`:
+Every generated Zig function shares one signature, `rt.CodeFn` —
+`fn (self: rt.Value, a0: rt.Value, a1: rt.Value) rt.Value`:
 
 - A closure or record field or codata branch receives the closure/record/codata
   object itself as `self` and reads its captures out of it
@@ -96,41 +96,109 @@ rule implementable: the callee dups the captures it still needs, then drops `sel
 itself — the caller has no post-call point to do either, since every call in this IR
 is a tail call.
 
-### Trampoline
+### Guaranteed tail calls
 
-A generated function never *performs* a call. It returns an `rt.Action` — either
-`{code, self, argv}` naming the call to make next, or `done(v)` carrying the finished
-value — and `rt.run` dispatches in a loop until something is `done`.
+Every call a generated function makes is `@call(.always_tail, ...)`, which Zig
+either compiles to a jump or rejects at compile time. The native stack stays
+flat however many reduction steps a program takes, and a `Finish` is a plain
+`return`.
 
-This is not a stylistic choice. Zig does not guarantee tail-call optimization, so
-emitting these tail calls as native `return f(...)` meant nothing ever returned until
-the program exited: the stack grew by one frame (~98.6 bytes, measured) per reduction
-step, and any program of more than ~150k steps died with SIGSEGV — `fib 16` was enough
-([issue #360](https://github.com/takoeight0821/malgo/issues/360)). `@call(.always_tail)`
-is not a substitute: Zig requires the callee's signature to match the caller's, which
-rules out helpers like `applyCovalue(Value, Value)`, and a genuine tail call would
-release the frame holding the `&[_]rt.Value{...}` argument slice before the callee read
-it. An `Action` carries its arguments in a fixed inline array (`MAX_ARGS`, currently 2 —
-tightened from 4 by #407 after confirming empirically that no call site in the golden
-corpus, either self-hosted compiler level, `examples/`, or `bench/fixtures/` ever
-carries more than 2) precisely so no argument outlives its storage. Shrinking
-`MAX_ARGS` shrinks every `Action` by two words, which `rt.run` copies by value on
-every one of `selfhost-l2`'s 1.4e10+ dispatches.
+This replaced a trampoline — a generated function returned an `rt.Action`
+naming the next call, and `rt.run` dispatched in a loop. That existed because
+emitting these calls as plain `return f(...)` meant nothing ever returned
+until the program exited: the stack grew by one frame (~98.6 bytes, measured)
+per reduction step, and any program of more than ~150k steps died with SIGSEGV
+— `fib 16` was enough ([issue #360](https://github.com/takoeight0821/malgo/issues/360)).
 
-**An Action is a move, not a borrow.** It carries exactly the references a direct call
-would have transferred — one of the callee into `self`, one of each operand into
-`argv` — and `rt.run` is strictly RC-neutral: no dup, no drop, and it never discards an
-Action without dispatching it. That is why the IR and every RC pass
-(`Perceus`, `RcCheck`, `Reuse`) are untouched by this: they model a single frame and
-only assert that a terminator's operands leave it, which is still true when they leave
-into an Action.
+Two constraints made `@call(.always_tail)` look unusable at the time, and both
+are addressed rather than worked around. The approach is Deegen's, from
+[luajit-remake](https://github.com/luajit-remake/luajit-remake) — it generates
+interpreters whose bytecode handlers dispatch by `[[clang::musttail]]`, and
+solves the same two constraints by unifying every handler's prototype and
+keeping arguments in registers:
 
-Native stack is now O(maximum dynamic `Force` nesting depth) rather than O(total
-reduction steps). `Ir.Force` is an expression in the middle of a block, so `rt.forceField`
-has to return a plain value and runs a *nested* trampoline to get one — three frames per
-nesting level. In the current corpus record fields are only ever forced as siblings
-(depth 1); `MALGO_RC_STATS=1` reports `force_depth_max` so this stays measured rather
-than assumed.
+- **Caller and callee must share a prototype.** Every handler now has exactly
+  `fn (self: rt.Value, a0: rt.Value, a1: rt.Value) rt.Value`, and the helpers
+  that do not (`applyCovalue`, `callClosure`, `staticCall`, `projectField`,
+  `applyDestructor`) are `inline fn`, so their tail call lands in the caller's
+  frame where the prototype does match. A non-inline helper is a compile
+  error, which is what keeps the convention honest — the runtime's own
+  `destructorProbe` exists because a `test` block's prototype does not match
+  either.
+- **Arguments must not outlive the frame.** They are two by-value parameters
+  rather than a `[]const rt.Value` slice pointing into an `Action`. A callee
+  knows its own arity, so an unused slot is the immortal `rt.no_self`
+  sentinel — never `undefined`, so a stray `dup`/`drop` on it is a no-op.
+
+Both the toolchain and the runtime's unit tests pass `-fllvm`. Zig's
+self-hosted x86_64 backend cannot emit a tail call at all, and it is the
+default for Debug on x86_64 — so without the flag this backend builds fine on
+aarch64-macos and in every release mode, and fails on exactly one
+configuration. Release modes already use LLVM, so the cost falls only on
+Debug: 2.5s → 8.7s on the 20MB self-hosted evaluator, proportionally less on a
+golden-sized case.
+
+`MAX_ARGS` is still 2, for the reason #407 established: the front end cannot
+produce more (`ToFun` builds single-parameter lambdas and singleton applies;
+`ToCore` appends exactly one consumer), verified across 220k+ generated call
+sites.
+
+The RC passes are unaffected. A tail call is a **move, not a borrow**, exactly
+as the Action it replaced was: it transfers one reference of the callee into
+`self` and one of each operand into `a0`/`a1`. `Perceus` and `RcCheck` model a
+single frame, and "these references leave this frame here" is still true.
+
+`forceField` is the one place native stack still grows, and by one frame per
+level of dynamic `Force` nesting rather than per reduction step: `Ir.Force` is
+a mid-block expression, so it makes an ordinary call and everything the
+field's code goes on to do is a tail call that stays flat.
+
+Measured on Darwin arm64, `--opt release-fast`, 20 runs under hyperfine:
+
+| | trampoline | tail calls | |
+|---|---|---|---|
+| `BenchFibDeep` | 318.0 ms ± 6.0 | **239.2 ms ± 4.1** | **1.33x** |
+| selfhost Level 1 | 257.0 ms ± 44.3 | **210.3 ms ± 1.9** | **1.22x** |
+| selfhost Level 2 | 271.5 s | **217.7 s** | **1.25x** |
+
+Level 2 is one serial run each rather than a hyperfine series — it is the
+16 minutes #385 exists to keep out of CI. Its 1.62e10 dispatches lose 53.8s,
+or 3.3ns each, which is the microbenchmark's 4ns diluted by the work between
+dispatches. Chez ran the same case in 52.8s in the same session, so #385's
+`l2_ratio` moves from **5.14x to 4.12x**.
+
+Those three seconds figures live here rather than in `bench/perf-baseline.json`:
+`scripts/perf-baseline.sh`'s `record_ratio` replaces `.l2_ratio` wholesale and
+times with whole-second `$SECONDS`, so it can neither keep an extra field nor
+reproduce a decimal. The JSON holds what that script can write; this table holds
+the measurement.
+
+Reverting is a supported move if a target ever needs it. The trampoline is the
+parent of the commit that introduced this section, and it is what made the
+backend buildable without LLVM — `@call(.always_tail)` needs the LLVM backend
+(see `-fllvm` below), so a target LLVM does not serve means going back to it.
+
+Every counter is unchanged — `dispatches` 18,815,851 and 9,028,449
+respectively, `total_allocs` and `reuse_hits` identical — so the two
+conventions perform the same reductions and the same allocations. `run`
+counted each loop iteration; `rt.countDispatch()` in each function's prologue
+counts the same events, `identityCode` included.
+
+Not at the same cost, though. The counter was structurally free under the
+trampoline — the loop existed anyway — and is now a deliberate store in the
+prologue of every generated function. Measured at `fib 32` (546M dispatches,
+~6.9s, paired interleaved runs, which is the window needed to resolve it):
+**6.961s with, 6.873s without — 1.26%, and 112 KB of the evaluator's `__text`,
+2.7%.** Per-dispatch wall time is 12.7ns here against 13.4ns at Level 2, so
+that is ≈2.6s of L2's 217.7s.
+
+It stays on. The counter is what both ratchets read (`zig-deep-recursion.sh`
+and `perf-baseline.sh`), from a `--opt release-fast` binary, and always-on is
+what makes the instrumented binary the same one that was timed. Gating it on
+`builtin.mode` the way `rc_trace_supported` is gated would be worse than the
+1.26%: both ratchets would then read `dispatches=0` from a release-fast build
+and — before the zero-floor added alongside this — take the "improved" branch
+and exit 0, measuring nothing while reporting success.
 
 ## Data representation
 
@@ -144,7 +212,7 @@ constructor name never needs a heap allocation of its own).
 ## Building and testing
 
 - `mise run build` runs `lake build`, covering the compiler itself.
-- `zig test -lc runtime/zig/runtime.zig` runs the runtime's own unit tests
+- `mise run zig-runtime-test` runs the runtime's own unit tests
   (`-lc` links libc explicitly; required on Linux since the runtime calls
   `std.c.write`/`std.c.getenv` directly — masked on macOS, where libc is always
   linked via libSystem).

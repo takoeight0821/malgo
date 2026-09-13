@@ -1,17 +1,29 @@
 #!/usr/bin/env bash
 # Deep-recursion regression gate for the Zig backend (issue #360).
 #
-# The pipeline is CPS: every call is a tail call. Emitting those as native Zig
+# The pipeline is CPS: every call is a tail call. Emitting those as plain Zig
 # calls meant nothing ever returned until the program exited, so the stack grew
 # by one frame (~98.6 bytes, measured) per reduction step and any sufficiently
-# long-running program died with SIGSEGV -- `fib 16` was enough. `rt.run`'s
-# trampoline makes native stack O(1) in reduction steps.
+# long-running program died with SIGSEGV -- `fib 16` was enough.
 #
-# `BenchFibDeep.mlg` is ~18.8 million dispatches, which under the old calling
-# convention would have needed ~1.85 GB of stack. If the trampoline ever
-# regresses -- a terminator that emits a native call again, a helper that
-# dispatches instead of returning an Action -- this crashes immediately, at any
-# stack size, on any platform.
+# Generated code now uses `@call(.always_tail, ...)`. That moves *one* of the
+# two regressions this gate watched for into the compiler and leaves the other
+# here:
+#
+#   * A runtime helper that dispatches instead of tail-calling is now a compile
+#     error -- a non-`inline` helper containing `@call(.always_tail, ..)` is
+#     rejected, which is why `destructorProbe` exists in runtime.zig.
+#   * **A terminator that emits a plain call again is not checked by anything
+#     else.** Zig rejects an `.always_tail` it cannot honor; it never demands
+#     that a call be one. `return someFn(self, a0, a1)` out of `emitTerminator`
+#     compiles happily and grows the stack a frame per reduction step again.
+#     Nothing else in CI reads emitted Zig text -- `zig-corpus` works on IR and
+#     there are no emit goldens -- so this script is still the only guard.
+#
+# `BenchFibDeep.mlg` is ~18.8 million reductions, a depth no golden case
+# reaches (~1.85 GB of stack under a plain-call convention), which is what
+# makes it the one that catches it. The perf ratchet below needs a long run
+# to be meaningful too.
 #
 # Deliberately NOT a `test/testcases/malgo` case: `zig-golden.sh` compiles at
 # `--opt debug`, where Zig's DebugAllocator captures a stack trace per
@@ -66,7 +78,7 @@ if ! timeout "$COMPILE_TIMEOUT" "$MALGO" compile "$SRC" -o "$WORK/fibdeep" --opt
   exit 1
 fi
 
-echo "=== running (a SIGSEGV here means the trampoline regressed) ==="
+echo "=== running (a SIGSEGV here means a terminator emits a plain call again) ==="
 set +e
 actual="$(MALGO_RC_STATS=1 timeout "$CASE_TIMEOUT" "$WORK/fibdeep" 2>"$WORK/stats")"
 status=$?
@@ -76,9 +88,10 @@ if [ "$status" -eq 124 ]; then
   echo "FAIL: timed out after ${CASE_TIMEOUT}s" >&2
   exit 1
 fi
-# 139 = SIGSEGV, the exact pre-#360 failure mode. 83 = the runtime's leak gate.
+# 83 = the runtime's leak gate.
 if [ "$status" -ne 0 ]; then
-  echo "FAIL: exited $status (139 = SIGSEGV: native stack grew with reduction steps again)" >&2
+  echo "FAIL: exited $status (139 = SIGSEGV: native stack grew with reduction steps again;" >&2
+  echo "      83 = leak gate)" >&2
   exit 1
 fi
 if [ "$actual" != "$EXPECTED" ]; then
@@ -107,6 +120,14 @@ else
   for field in total_allocs dispatches force_depth_max; do
     actual_v="$(printf '%s\n' "$stats_line" | sed -n "s/.*$field=\([0-9]*\).*/\1/p")"
     base_v="$(jq -r --arg f "$field" '.tiers["fib-deep"].counters[$f] // empty' "$BASELINE")"
+    # A ratchet with no floor reads a counter that stopped counting as a
+    # win: `dispatches=0` would take the "improved" branch below and exit 0.
+    # Every field here is a count of work this fixture certainly does.
+    if [ -n "$actual_v" ] && [ "$field" != "force_depth_max" ] && [ "$actual_v" -eq 0 ]; then
+      echo "FAIL: $field is 0 -- the counter is not counting" >&2
+      perf_fail=1
+      continue
+    fi
     if [ -z "$actual_v" ]; then
       echo "FAIL: could not parse $field from '$stats_line'" >&2
       exit 1

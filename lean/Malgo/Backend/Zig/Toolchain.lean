@@ -79,7 +79,18 @@ def buildExecutable (zigCacheRoot srcPath outPath : String) (mode : OptMode) : I
        -- unconditionally (part of libSystem), but Zig does not link libc by
        -- default on Linux, so every generated program would fail at link time
        -- there without this.
-       "-lc" ]
+       "-lc",
+       -- Generated code is one long chain of `@call(.always_tail, ..)`, and
+       -- Zig's self-hosted x86_64 backend cannot emit a tail call:
+       --   "compiler backend 'stage2_x86_64' does not support tail calls on
+       --    target architecture 'x86_64'"
+       -- That backend is the default for Debug on x86_64, so without this the
+       -- whole backend compiles on aarch64-macos and on every release mode,
+       -- and fails on exactly one configuration -- which is how CI found it
+       -- and a local macOS run did not. Release modes already go through
+       -- LLVM, so the cost is Debug-only: measured 2.5s -> 8.7s on the 20MB
+       -- self-hosted evaluator, proportionally less on a golden-sized case.
+       "-fllvm" ]
        -- Deliberately NOT `-fsingle-threaded`, though nothing in the runtime or
        -- in generated code spawns a thread: `std.heap.SmpAllocator` opens with
        -- `assert(!builtin.single_threaded)` ("you're holding it wrong"), so the

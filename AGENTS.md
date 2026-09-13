@@ -152,7 +152,7 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
   golden-sweep case is shallow, so this is the only thing that catches a
   trampoline regression. Kept out of the sweep because its cases run
   `--opt debug`, where DebugAllocator makes a case this long ~13s.
-- Runtime unit tests: `zig test -lc runtime/zig/runtime.zig` (`-lc` is required on
+- Runtime unit tests: `zig test -lc -fllvm runtime/zig/runtime.zig` (`-lc` is required on
   Linux since the runtime calls `std.c.write`/`std.c.getenv` directly; macOS
   masks this because it always links libc via libSystem).
 - **After editing `runtime/zig/runtime.zig`, run `mise run bust-runtime`

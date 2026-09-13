@@ -128,6 +128,14 @@ are addressed rather than worked around (the approach is Deegen's, from
   knows its own arity, so an unused slot is the immortal `rt.no_self`
   sentinel — never `undefined`, so a stray `dup`/`drop` on it is a no-op.
 
+Both the toolchain and the runtime's unit tests pass `-fllvm`. Zig's
+self-hosted x86_64 backend cannot emit a tail call at all, and it is the
+default for Debug on x86_64 — so without the flag this backend builds fine on
+aarch64-macos and in every release mode, and fails on exactly one
+configuration. Release modes already use LLVM, so the cost falls only on
+Debug: 2.5s → 8.7s on the 20MB self-hosted evaluator, proportionally less on a
+golden-sized case.
+
 `MAX_ARGS` is still 2, for the reason #407 established: the front end cannot
 produce more (`ToFun` builds single-parameter lambdas and singleton applies;
 `ToCore` appends exactly one consumer), verified across 220k+ generated call
@@ -190,7 +198,7 @@ constructor name never needs a heap allocation of its own).
 ## Building and testing
 
 - `mise run build` runs `lake build`, covering the compiler itself.
-- `zig test -lc runtime/zig/runtime.zig` runs the runtime's own unit tests
+- `zig test -lc -fllvm runtime/zig/runtime.zig` runs the runtime's own unit tests
   (`-lc` links libc explicitly; required on Linux since the runtime calls
   `std.c.write`/`std.c.getenv` directly — masked on macOS, where libc is always
   linked via libSystem).

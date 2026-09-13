@@ -20,6 +20,7 @@ import Malgo.Sequent.Core.Common
 import Malgo.Sequent.Core.Full
 import Malgo.Sequent.Core.Flat
 import Malgo.Sequent.Core.Join
+import Malgo.Sequent.Core.Normalize
 import Malgo.Sequent.ToFun
 import Malgo.Sequent.SaturateCtor
 import Malgo.Sequent.ReuseSpecialize
@@ -39,7 +40,6 @@ import Malgo.Query.Engine
 import Malgo.Backend.Scheme
 import Malgo.Backend.Zig.Ir
 import Malgo.Backend.Zig.Stage
-import Malgo.Backend.Zig.Normalize
 import Malgo.Backend.Zig.ClosureConv
 import Malgo.Backend.Zig.Peephole
 import Malgo.Backend.Zig.Perceus

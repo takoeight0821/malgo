@@ -2,8 +2,9 @@ import Malgo.Prelude
 import Malgo.Sequent.Core.Join
 import Malgo.Sequent.Fun
 
-/-! Port of `src/Malgo/Backend/Zig/Normalize.hs`: eliminate two forms of
-pure aliasing from Join IR before closure conversion.
+/-! Eliminate two forms of pure aliasing from Join IR. Every backend that
+lowers Join IR wants this first: it is what lets an emitter be a total
+function with no `Mu` arm.
 
   * `Cut (Mu x s) k` binds `x` to the covalue of `k` and runs `s` inline
     (Eval's special case for producer-position `Mu`). Substituting `x := k`
@@ -14,7 +15,7 @@ pure aliasing from Join IR before closure conversion.
 Both eliminations are capture-avoiding for free because every `Id` in the
 pipeline is already globally unique (same invariant as the Haskell). -/
 
-namespace Malgo.Backend.Zig.Normalize
+namespace Malgo.Sequent.Core.Normalize
 
 open Malgo.Sequent.Core.Join
 open Malgo.Sequent.Fun (Name)
@@ -144,4 +145,4 @@ private def nm (s : String) : Name := { name := s, moduleName := .moduleName "t"
   == "(join m finish (cut y m))"
 end Test
 
-end Malgo.Backend.Zig.Normalize
+end Malgo.Sequent.Core.Normalize

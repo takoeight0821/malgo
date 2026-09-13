@@ -7,7 +7,7 @@ import Malgo.Monad
 import Malgo.Sequent.Core.Join
 import Malgo.Sequent.Fun
 import Malgo.Backend.Zig.Ir
-import Malgo.Backend.Zig.Normalize
+import Malgo.Sequent.Core.Normalize
 import Malgo.Backend.Zig.Stage
 
 /-! Port of `src/Malgo/Backend/Zig/ClosureConv.hs`: closure conversion and
@@ -35,7 +35,7 @@ namespace Malgo.Backend.Zig.ClosureConv
 
 open Malgo.Sequent.Core.Join
 open Malgo.Sequent.Fun (Name Literal Tag Pattern)
-open Malgo.Backend.Zig.Normalize (normalizeStatement substStatement)
+open Malgo.Sequent.Core.Normalize (normalizeStatement substStatement)
 
 /-- Whether a `Join`-bound consumer name can be compiled as an inline
 substitution within its defining function, or must be reified as a

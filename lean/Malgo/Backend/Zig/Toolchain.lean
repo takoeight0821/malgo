@@ -1,3 +1,5 @@
+import Malgo.Backend.OptMode
+
 /-! Port of `src/Malgo/Backend/Zig/Toolchain.hs`: invokes the system `zig`
 toolchain to turn generated Zig source into a native executable, for the
 `malgo compile` subcommand.
@@ -41,17 +43,7 @@ private def findOnPath (name : String) : IO Bool := do
       return true
   return false
 
-inductive OptMode where
-  | debug
-  | releaseSafe
-  | releaseFast
-  deriving BEq, Repr
-
-def parseOptMode : String → Except String OptMode
-  | "debug" => .ok .debug
-  | "release-safe" => .ok .releaseSafe
-  | "release-fast" => .ok .releaseFast
-  | m => .error s!"Unknown --opt mode: {m}"
+open Malgo.Backend (OptMode)
 
 def optModeFlag : OptMode → String
   | .debug => "Debug"

@@ -281,14 +281,23 @@ Malgo has two self-hosting levels:
 | Level 1 | The Malgo evaluator written in Malgo (`runtime/malgo/compiler/`) evaluates arbitrary Malgo programs | `scripts/selfhost-golden.sh` | `lean-selfhost` |
 | Level 2 | Level 1 evaluator evaluates `Main.mlg` which evaluates a Malgo program (metacircular interpreter) | `scripts/selfhost-level2.sh` | `l2-build` + `l2-case` (matrix) |
 
-**Level 2 is on in CI, but only for master pushes and the nightly cron — not pull requests**
-(`LEAN_SELFHOST_L2=1` in `lean/ci-gates.env`, gated further by
-`github.event_name != 'pull_request'` in `lean.yml`). It was off for a while (#385)
-because a single job running all five cases took ~16-27 minutes against a target of
-keeping any one CI job under 10. #385 closed by splitting it: `l2-build` compiles the
-evaluator once (~3 min) and uploads it as an artifact; `l2-case` runs one case per job
-from that artifact (~6-8 min each, no contention between cases since each gets its own
-runner). A regression still surfaces within a day even though it never runs on a PR.
+**Level 2 runs all five cases on master pushes and the nightly cron, and one case
+(`Fib`) on a pull request that touches the Zig backend, `runtime/zig/`,
+`runtime/malgo/`, the L2 harness, or `lean.yml`** — the inputs Level 2 has that
+Level 1 does not. `LEAN_SELFHOST_L2=1` in `lean/ci-gates.env` is the kill switch;
+the `l2` step of the `gates` job decides the rest and publishes it as
+`l2Run`/`l2Cases`. It was off entirely for a while (#385) because a single job
+running all five cases took ~16-27 minutes against a target of keeping any one CI
+job under 10. #385 closed by splitting it: `l2-build` compiles the evaluator once
+(~3 min) and uploads it as an artifact; `l2-case` runs one case per job from that
+artifact (no contention between cases since each gets its own runner).
+
+`l2-build` sets `MALGO_ZIG_MCPU=baseline`, and it is the only thing that does.
+The evaluator it uploads runs on a *different* runner, GitHub's x86_64 fleet is
+mixed, and Zig otherwise compiles for the building host's CPU — an evaluator
+built where AVX-512 exists dies with `SIGILL` where it does not. Nothing else in
+the repo moves a compiled program between machines, so nothing else pays for a
+portable binary.
 
 Both levels run on the **Zig backend**: `Main.mlg` is compiled to a native binary with
 `malgo compile --opt release-fast` and that binary is the evaluator. A Scheme backend

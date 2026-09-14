@@ -152,15 +152,16 @@ jobs:
   # past 600s, at PARALLEL_JOBS=2 they were 435-492s. One case alone on a runner
   # has no contention at all.
   #
-  # CASE_TIMEOUT went 600 -> 1200 once, and the rule it replaces said not to do
-  # that -- raising the cap is what buried #385. The reason it is right here is
-  # that nothing got slower. A case is ~220s on an M-series laptop, and over
-  # September the same five cases on the same commit landed on either side of
-  # 600s depending on the day: Bool, Echo and Factorial each passed exactly once
-  # while the rest timed out. That is the spread of GitHub's runner fleet
-  # straddling the cap, not a case that regressed. The rule still holds for the
-  # thing it was written about: if a case gets slower, take the time out of the
-  # case (#407). A cap has to sit clear of fleet variance to measure that at all.
+  # CASE_TIMEOUT is 900s against a measured 413s for Fib on a runner. What
+  # stopped September's timeouts is #483 taking 1.25x out of the evaluator --
+  # the fix the rule below asks for -- not this number. The cap moved off 600s
+  # only because 600 sat inside the fleet's own spread: the same five cases on
+  # the same commit landed on either side of it depending on the day, Bool, Echo
+  # and Factorial each passing exactly once. A cap has to clear that spread
+  # before "this case got slower" is something anyone can see.
+  #
+  # So the rule stands. If a case gets slower, take the time out of the case
+  # (#407) or narrow the trigger. Raising this number is what buried #385.
   l2-build:
     needs: gates
     if: needs.gates.outputs.selfhostL2 == '1' && needs.gates.outputs.l2Run == '1'
@@ -216,7 +217,7 @@ jobs:
     runs-on: ubuntu-latest
     # One case, no contention, plus ~10s of setup. The CASE_TIMEOUT below is
     # the real gate; this is only a backstop against a hang.
-    timeout-minutes: 25
+    timeout-minutes: 20
     strategy:
       # Each case is an independent claim about the evaluator. Cancelling the
       # others on the first failure would throw away exactly the information
@@ -236,10 +237,9 @@ jobs:
           EVAL_BIN: ./malgoc
           L2_CASES: ${{ matrix.case }}
           PARALLEL_JOBS: 1
-          # A case is ~220s on an M-series laptop and these runners are
-          # several times slower at it, so 600s sat close enough to the real
-          # figure that cases flipped between pass and timeout run to run.
-          CASE_TIMEOUT: 1200
+          # 2.2x the 413s Fib measures on a runner. See the block above the
+          # l2-build job for why this is 900 and not 600.
+          CASE_TIMEOUT: 900
         run: |
           chmod +x ./malgoc
           bash scripts/selfhost-level2.sh

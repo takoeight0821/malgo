@@ -147,8 +147,17 @@ jobs:
   # This also buys headroom on CASE_TIMEOUT. Five concurrent cases contend on a
   # runner with far fewer cores than a workstation: unthrottled they all blew
   # past 600s, at PARALLEL_JOBS=2 they were 435-492s. One case alone on a runner
-  # has no contention at all. If a case ever times out again, take the time out
-  # of the case (#407) -- do not raise CASE_TIMEOUT, which is what buried #385.
+  # has no contention at all.
+  #
+  # CASE_TIMEOUT went 600 -> 1200 once, and the rule it replaces said not to do
+  # that -- raising the cap is what buried #385. The reason it is right here is
+  # that nothing got slower. A case is ~220s on an M-series laptop, and over
+  # September the same five cases on the same commit landed on either side of
+  # 600s depending on the day: Bool, Echo and Factorial each passed exactly once
+  # while the rest timed out. That is the spread of GitHub's runner fleet
+  # straddling the cap, not a case that regressed. The rule still holds for the
+  # thing it was written about: if a case gets slower, take the time out of the
+  # case (#407). A cap has to sit clear of fleet variance to measure that at all.
   l2-build:
     needs: gates
     if: needs.gates.outputs.selfhostL2 == '1' && needs.gates.outputs.l2Run == '1'

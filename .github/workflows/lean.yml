@@ -132,11 +132,14 @@ jobs:
 
   # ===== Level 2, split so no single job runs long =====
   #
-  # Not run on pull requests at all: a case is minutes, and the jobs here are
-  # concurrent, so L2 would set the whole run's wall clock and push PR feedback
-  # from ~3 minutes to well past it. Master pushes and the nightly cron still
-  # catch a regression within a day, which is the coverage that mattered --
-  # since #395 L2 had been running nowhere.
+  # All five cases on a master push and on the nightly cron; one case on a pull
+  # request that touches an input Level 2 has and Level 1 does not (the `l2`
+  # step of `gates` holds the list). A case is minutes and the jobs here are
+  # concurrent, so running the full matrix per PR would set the whole run's wall
+  # clock and push PR feedback from ~3 minutes to well past it. Narrowing the
+  # trigger keeps that cost off the PRs that cannot reach Level 2, and keeps the
+  # ones that can from landing untested -- which is how a SIGILL and a timeout
+  # both sat on master for a week.
   #
   # Why two jobs. Measured on run 30239212721, one job running all five cases
   # took 26.7 minutes, and the fixed cost was almost entirely `malgo compile

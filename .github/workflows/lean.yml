@@ -152,16 +152,17 @@ jobs:
   # past 600s, at PARALLEL_JOBS=2 they were 435-492s. One case alone on a runner
   # has no contention at all.
   #
-  # CASE_TIMEOUT is 900s against a measured 413s for Fib on a runner. What
-  # stopped September's timeouts is #483 taking 1.25x out of the evaluator --
-  # the fix the rule below asks for -- not this number. The cap moved off 600s
-  # only because 600 sat inside the fleet's own spread: the same five cases on
-  # the same commit landed on either side of it depending on the day, Bool, Echo
-  # and Factorial each passing exactly once. A cap has to clear that spread
-  # before "this case got slower" is something anyone can see.
+  # CASE_TIMEOUT is 900s. Two runs of the same commit put Fib at 413s and 546s
+  # -- a 1.32x spread from the runner draw alone, with the slower one 9% under
+  # the 600s this replaces. That is why 600 flapped: the same five cases on the
+  # same commit landed on either side of it depending on the day, Bool, Echo and
+  # Factorial each passing exactly once. 900 clears the spread; a cap inside it
+  # cannot tell a slow runner from a case that got slower.
   #
-  # So the rule stands. If a case gets slower, take the time out of the case
-  # (#407) or narrow the trigger. Raising this number is what buried #385.
+  # What stopped September's timeouts is #483 taking 1.25x out of the evaluator,
+  # which is the fix the rule asks for, not this number. So the rule stands: if
+  # a case gets slower, take the time out of the case (#407) or narrow the
+  # trigger. Raising this number is what buried #385.
   l2-build:
     needs: gates
     if: needs.gates.outputs.selfhostL2 == '1' && needs.gates.outputs.l2Run == '1'
@@ -237,7 +238,7 @@ jobs:
           EVAL_BIN: ./malgoc
           L2_CASES: ${{ matrix.case }}
           PARALLEL_JOBS: 1
-          # 2.2x the 413s Fib measures on a runner. See the block above the
+          # 1.65x the slowest Fib measured (546s). See the block above the
           # l2-build job for why this is 900 and not 600.
           CASE_TIMEOUT: 900
         run: |

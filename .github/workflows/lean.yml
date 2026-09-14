@@ -410,6 +410,16 @@ jobs:
 
       - name: Smoke test against nixpkgs' chez (not the mise-installed one)
         run: |
+          # A bare-name import (`import Builtin`, which Prelude.mlg does)
+          # resolves only by searching the .malgo-work mirror, and a fresh
+          # checkout has none -- so Hello.mlg's own path-imports get as far as
+          # Prelude and then fail with "Module not found: Builtin". Seeding the
+          # mirror by compiling each runtime module once is the same protocol
+          # zig-golden.sh and scheme-golden.sh open with; this step was the one
+          # caller that skipped it. See Malgo.Module.searchAndRegister.
+          for module in Builtin Prelude Either; do
+            ./result/bin/malgo eval "runtime/malgo/$module.mlg" >/dev/null
+          done
           ./result/bin/malgo eval examples/malgo/Hello.mlg --target scheme > hello.scm
           out="$(nix shell nixpkgs#chez -c scheme --script hello.scm)"
           echo "$out"

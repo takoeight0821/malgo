@@ -45,6 +45,23 @@ private def findOnPath (name : String) : IO Bool := do
 
 open Malgo.Backend (OptMode)
 
+/-- `-mcpu` for `zig build-exe`, from `$MALGO_ZIG_MCPU`; empty when unset.
+
+Zig defaults a native build to the *building* machine's CPU features, which
+is what you want for a binary that runs where it was built, and wrong for
+one that does not. CI's `l2-build` uploads the Level 1 evaluator as an
+artifact and `l2-case` runs it on a different runner; GitHub's x86_64 fleet
+is mixed, so an evaluator built on a host with AVX-512 died with SIGILL on
+one without — intermittently, depending on which pair of runners the two
+jobs drew. Setting this to `baseline` there makes the artifact portable.
+
+Leave it unset for a local build: a portable binary is slower, and nothing
+outside that artifact hand-off moves a compiled program between machines. -/
+private def mcpuArgs : IO (Array String) := do
+  match ← IO.getEnv "MALGO_ZIG_MCPU" with
+  | some cpu => if cpu.isEmpty then return #[] else return #["-mcpu=" ++ cpu]
+  | none => return #[]
+
 def optModeFlag : OptMode → String
   | .debug => "Debug"
   | .releaseSafe => "ReleaseSafe"
@@ -89,7 +106,7 @@ def buildExecutable (zigCacheRoot srcPath outPath : String) (mode : OptMode) : I
        -- Nothing compiles the self-hosted evaluator at Debug -- selfhost-golden,
        -- selfhost-level2 and perf-baseline all pass `--opt release-fast` -- so
        -- do not price this as one big build.
-       "-fllvm" ]
+       "-fllvm" ] ++ (← mcpuArgs)
        -- Deliberately NOT `-fsingle-threaded`, though nothing in the runtime or
        -- in generated code spawns a thread: `std.heap.SmpAllocator` opens with
        -- `assert(!builtin.single_threaded)` ("you're holding it wrong"), so the

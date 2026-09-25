@@ -333,7 +333,7 @@ record_ratio() {
      --arg machine "$(uname -s) $(uname -m)" \
      --arg commit "$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" '
      .l2_ratio = {
-       "$comment": "#385'"'"'s success metric: Level 2 wall clock through Zig over Chez, one serial case each, back-to-back on one machine. Absolute seconds are not comparable across machines; the ratio is. The Scheme backend is the control. Local only -- never gated in CI, since running L2 there is the 16 minutes #385 exists to remove.",
+       "$comment": "#385'"'"'s success metric: Level 2 wall clock through Zig over Chez, one serial case each, back-to-back on one machine. Absolute seconds are not comparable across machines; the ratio is. The Scheme backend is the control. Local only -- never run in CI, since hosted runners vary far more than the 15% band.",
        chez_s: $chez, zig_s: $zig, ratio: $ratio,
        machine: $machine, commit: $commit
      }' "$BASELINE" >"$WORK/ratio.json" || return 1

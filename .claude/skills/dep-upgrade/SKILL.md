@@ -25,9 +25,9 @@ The malgo project has four categories of dependencies:
 
 | Category | Files | How to check | How to update |
 |----------|-------|--------------|---------------|
-| Lean toolchain | `lean/lean-toolchain` (Lake has no package dependencies) | Lean 4 releases on GitHub | Edit the pin, then `mise run build && mise run test` |
-| GitHub Actions | `.github/workflows/*.yml` | `gh api` to check latest releases | Update SHA + version comment |
-| mise toolchain | `mise.toml` | `mise outdated` | `mise use <tool>@<version>` |
+| Lean toolchain | `lean/lean-toolchain` (Lake has no package dependencies); `flake.nix` builds it through `lean4-nix` | Lean 4 releases on GitHub | Edit the pin, check `lean4-nix`, then `mise run build && mise run test` |
+| GitHub Actions | `.github/workflows/*.yml`, `.github/actions/*/action.yml` | `gh api` to check latest releases | Update SHA + version comment |
+| mise toolchain | `mise.toml`; Zig also in `.github/workflows/lean.yml` and `flake.nix` | `mise outdated` | Edit the pin and every place listed in §4 |
 | Nix flake inputs | `flake.lock` | `nix flake update --dry-run` | `nix flake update` |
 
 ## Prerequisites
@@ -45,12 +45,16 @@ Run detection for each category. Present results as a consolidated table.
 #### Lean toolchain
 
 Compare `lean/lean-toolchain` against the latest `leanprover/lean4` release
-(`gh api repos/leanprover/lean4/releases/latest --jq .tag_name`).
+(`gh api repos/leanprover/lean4/releases/latest --jq .tag_name`). This endpoint
+skips prereleases; never propose an `-rc` tag.
 
 #### GitHub Actions
 
-For each `uses:` line in `.github/workflows/*.yml` that pins to a SHA:
-1. Extract the owner/repo and current SHA/tag
+For each `uses:` line in `.github/workflows/*.yml` and `.github/actions/*/action.yml`
+that pins to a SHA (skip local `./.github/actions/...` references):
+1. Extract the owner/repo and current SHA/tag. For a sub-path action such as
+   `actions/cache/restore@<sha>`, the repository is the first two segments
+   (`actions/cache`)
 2. Use `gh api repos/{owner}/{repo}/releases/latest` to find the latest release
 3. Use `gh api repos/{owner}/{repo}/git/ref/tags/{tag}` to get the SHA for the new tag
 4. Flag any actions where the pinned version is behind latest
@@ -84,6 +88,17 @@ For **GitHub Actions**, check:
 ```bash
 gh api repos/{owner}/{repo}/security-advisories --jq '.[].summary'
 ```
+
+For the **toolchains**:
+
+- Lean: `gh api repos/leanprover/lean4/security-advisories --jq '.[].summary'`
+- Chez Scheme: `gh api repos/cisco/ChezScheme/security-advisories --jq '.[].summary'`
+- Go: read the target's entry on <https://go.dev/doc/devel/release>. An entry
+  that mentions a security fix ("includes security fixes to ...", "includes a
+  security fix to ...") is a security release; list the fixed packages in the
+  summary table.
+- Zig: the project publishes no advisory feed (its GitHub repository has moved to
+  Codeberg). Read the release notes at `https://ziglang.org/download/<version>/release-notes.html`.
 
 For **Nix flake inputs**, check the upstream project's security advisories.
 
@@ -122,11 +137,32 @@ To check release age:
 
 **GitHub Actions:**
 ```bash
-gh api repos/{owner}/{repo}/releases/latest --jq '.published_at'
+gh api repos/{owner}/{repo}/releases/tags/{tag} --jq '.published_at'
 ```
 
+**Lean:**
+```bash
+gh api repos/leanprover/lean4/releases/tags/<tag> --jq '.published_at, .prerelease'
+```
+
+**Chez Scheme** (the GitHub tag has a `v` prefix that `mise.toml` omits, so
+`10.4.1` in `mise.toml` is tag `v10.4.1`):
+```bash
+gh api repos/cisco/ChezScheme/releases/tags/v<version> --jq '.published_at'
+```
+
+**Zig:**
+```bash
+curl -s https://ziglang.org/download/index.json | jq -r '."<version>".date'
+```
+
+**Go:** the release date is in the target's entry on
+<https://go.dev/doc/devel/release> (`goX.Y.Z (released YYYY-MM-DD)`).
+
 If a release is younger than the threshold, flag it and suggest waiting or pinning
-to the previous stable version.
+to the previous stable version. A release that fixes a security issue affecting
+this project is exempt from the waiting period: propose it right away and say so
+in the table.
 
 ### 3. Present findings and get approval
 
@@ -135,10 +171,10 @@ Show the user a comprehensive summary table:
 ```
 Category        | Package/Action          | Current   | Latest    | Risk   | Security | Age     | Action
 ----------------|-------------------------|-----------|-----------|--------|----------|---------|--------
-Lean            | leanprover/lean4        | v4.32.0   | v4.33.0   | medium | clean    | 2 weeks | upgrade
-mise            | zig                     | 0.16.0    | 0.16.1    | low    | clean    | 3 weeks | upgrade
-GitHub Actions  | actions/checkout        | v7.0.1    | v7.0.2    | low    | clean    | 1 month | upgrade
-GitHub Actions  | some/action             | v1.2.0    | v1.2.1    | low    | ⚠ tag moved | 2 days | HOLD
+Lean            | leanprover/lean4        | v4.A.0    | v4.B.0    | medium | clean    | 2 weeks | upgrade
+mise            | zig                     | 0.X.Y     | 0.X.Y+1   | low    | clean    | 3 weeks | upgrade
+GitHub Actions  | actions/checkout        | vN.M.P    | vN.M.P+1  | low    | clean    | 1 month | upgrade
+GitHub Actions  | some/action             | vN.M.P    | vN.M.P+1  | low    | ⚠ tag moved | 2 days | HOLD
 ```
 
 Risk levels:
@@ -166,8 +202,10 @@ What to do at this gate:
    scope), use `AskUserQuestion` to confirm the exact set to apply.
 3. Confirm the scope before any file modification: which version bumps, which
    Action SHA updates, and whether to also push / open a PR later.
-4. Do **not** edit `lean/lean-toolchain`, `mise.toml`, workflow files, or `flake.lock`,
-   or create a branch, until approval is given.
+4. Do **not** edit `lean/lean-toolchain`, `mise.toml`, workflow files,
+   `.github/actions/*/action.yml`, `flake.nix`, `flake.lock`, or the version
+   mentions in `README.md` and `AGENTS.md`, or create a branch, until approval
+   is given.
 
 Once approval is received, proceed to §4.
 
@@ -177,13 +215,32 @@ Once approval is received, proceed to §4.
 
 Edit `lean/lean-toolchain`, then `mise run build` (elan fetches the new toolchain).
 
+`flake.nix` builds Lean from source through `lean4-nix.readToolchainFile` on
+`lean/lean-toolchain`, so the flake breaks unless `lean4-nix` has a manifest for
+the new tag. Check the locked revision first:
+
+```bash
+rev=$(jq -r '.nodes["lean4-nix"].locked.rev' flake.lock)
+gh api "repos/lenianiva/lean4-nix/contents/manifests/<tag>.nix?ref=$rev" --jq .name
+```
+
+If that returns 404, check the default branch (drop `?ref=...`). If the manifest
+exists there, run `nix flake update lean4-nix`; if it does not, hold the Lean
+bump and report it. Also update the comments and the overlay's binding name in
+`flake.nix` that state the Lean version.
+
+Then run `nix build .#default -L` locally. It builds Lean from source, which
+takes 45-60 minutes on an M-series Mac. Do not rely on CI for this: the
+`nix-build` job in `lean.yml` does not run on pull requests, only on master
+pushes, the nightly schedule and manual dispatch.
+
 #### GitHub Actions
 
 For each action to update:
 1. Look up the new release tag and its commit SHA via `gh api`
 2. Verify the SHA matches what the release references
 3. Replace the old SHA with the new one
-4. Update the version comment (e.g., `# v6.0.1` → `# v6.0.2`)
+4. Update the version comment (e.g., `# vN.M.P` → `# vN.M.P+1`)
 
 Format: `uses: owner/repo@<full-sha> # v<tag>`
 
@@ -192,6 +249,24 @@ Format: `uses: owner/repo@<full-sha> # v<tag>`
 Update `mise.toml` directly. For tools pinned to `"latest"`, no change is needed —
 they auto-resolve. For pinned tools (`zig`, `go`, `chezscheme`), update the version string,
 run `mise install`, then run the golden sweep named in the pin's comment.
+
+Zig is pinned in more places than `mise.toml`. Update all of them in the same
+commit:
+
+- `.github/workflows/lean.yml`: the `version:` input of every
+  `mlugg/setup-zig` step (currently three)
+- `flake.nix`: `zig = pkgs.zig_0_X;` and the comments that name the attribute
+  and the version. On a minor bump, first confirm that the locked nixpkgs has
+  the new attribute for every system in `supportedSystems`:
+  ```bash
+  nix eval --inputs-from . --raw nixpkgs#legacyPackages.<system>.zig_0_X.version
+  ```
+  On a patch bump the attribute name stays the same, but nixpkgs may still ship
+  the old patch; if the command above prints the old version, run
+  `nix flake update nixpkgs` or report the mismatch.
+- `README.md` and `AGENTS.md`: the stated Zig version
+
+Finish with `rg -F '<old version>'` to catch anything this list misses.
 
 #### Nix flake
 

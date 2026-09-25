@@ -28,6 +28,7 @@ The compiler lands at `lean/.lake/build/bin/malgo`.
   reuse-specialize, parser-surface, panic-gate, primitive-coverage)
 - `runtime/malgo/` - Malgo runtime/stdlib (`Builtin.mlg`, `Prelude.mlg`)
 - `runtime/zig/runtime.zig` - the Zig backend's runtime
+- `runtime/go/runtime.go` - the Go backend's runtime
 - `examples/malgo/` - Sample `.mlg` programs
 - `test/testcases/` - Test input files; `.golden/` - golden test outputs
 
@@ -54,7 +55,7 @@ conversion: it inlines a fully(-or-over-)saturated call of a data constructor
 (`Cons x xs`, or `Cons (f x) (mapList f xs)` — arguments need not be
 immediate) directly into `Fun.Construct`, instead of invoking the
 constructor's own curried closure. This is shared by every backend
-(Eval/Scheme/Zig) and every direct caller of `toCore`, not Zig-specific.
+(Eval/Scheme/Zig/Go) and every direct caller of `toCore`, not Zig-specific.
 
 ### Chez Scheme Backend
 
@@ -195,7 +196,7 @@ pick a calling convention, so this CPS IR's tail calls stay real calls.
   the standard library, so nothing is fetched. Both matter because the
   development sandbox has no egress. The generated source is left at `OUT.go`
   for inspection, as the Zig backend leaves `OUT.zig`.
-- Gates: `bash scripts/go-golden.sh` (86/86 plus a 3/3 panic gate) and
+- Gates: `bash scripts/go-golden.sh` (every interpreter golden case, plus a panic gate) and
   `bash scripts/go-deep-recursion.sh`. The latter's failure signature differs
   from the Zig gate's — Go prints `fatal error: goroutine stack exceeds ...`
   and exits 2 where Zig gets SIGSEGV.
@@ -263,9 +264,10 @@ portable binary.
 
 Both levels run on the **Zig backend** by default: `Main.mlg` is compiled to a native
 binary with `malgo compile --opt release-fast` and that binary is the evaluator.
-`selfhost-level2.sh` also accepts `TARGET=scheme` (runs the evaluator under Chez),
-which serves only as the performance reference for the `l2-ratio` perf tier; CI
-does not use it.
+`selfhost-level2.sh` also accepts `TARGET=scheme` (runs the evaluator under Chez)
+as a manual cross-implementation reference; CI does not use it. The `l2-ratio`
+perf tier builds its own Chez evaluator in `perf-baseline.sh` and does not call
+this script.
 
 ```bash
 # Level 1: ./malgoc <testcase.mlg>
@@ -314,9 +316,15 @@ EVAL_BIN=.malgo-work/malgoc L2_CASES=Fib bash scripts/selfhost-level2.sh
 Malgo was written in Haskell until 2026-07, and that implementation was the
 semantic oracle while the Lean 4 port was built against it. It has been
 removed; `PORTING.md` records the module-by-module mapping and why the
-retirement criteria were overridden. Documents under `docs/plans/`,
-`docs/reports/`, `bench/` and `wiki/` describe that period and are left as
-written — do not "correct" them to the current layout.
+retirement criteria were overridden.
+
+These documents record the state at the time they were written, and some
+describe the Haskell period: the dated files under `docs/plans/`,
+`docs/reports/` and `wiki/`, the measurement notes under `bench/` (everything
+except `perf-baseline.json` and `fixtures/`), and the milestone tables in
+`PORTING.md` and `lean/README.md`. Leave existing ones as written — do not
+"correct" them to the current layout. New plans go in `docs/plans/` as new
+dated files (see the `design` skill).
 
 ## Agent skills
 

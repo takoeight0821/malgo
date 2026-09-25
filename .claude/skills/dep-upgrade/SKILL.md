@@ -38,7 +38,7 @@ for audited, batched upgrades beyond those.
 
 ## Step-by-step workflow
 
-### 2. Detect outdated dependencies
+### 1. Detect outdated dependencies
 
 Run detection for each category. Present results as a consolidated table.
 
@@ -71,11 +71,11 @@ separately — they break `std`.
 nix flake update --dry-run
 ```
 
-### 3. Security and maturity verification
+### 2. Security and maturity verification
 
 Every upgrade candidate must pass these checks before being applied.
 
-#### 3a. Security advisory check
+#### 2a. Security advisory check
 
 For **GitHub Actions**, check:
 - GitHub Security Advisories for the action's repository
@@ -87,7 +87,7 @@ gh api repos/{owner}/{repo}/security-advisories --jq '.[].summary'
 
 For **Nix flake inputs**, check the upstream project's security advisories.
 
-#### 3b. Supply chain attack indicators
+#### 2b. Supply chain attack indicators
 
 Before adopting any new version, look for these red flags:
 
@@ -108,7 +108,7 @@ Before adopting any new version, look for these red flags:
 **For all categories:**
 - If anything looks off, **stop and report to the user** rather than proceeding.
 
-#### 3c. Release maturity check
+#### 2c. Release maturity check
 
 Avoid bleeding-edge releases. Apply these minimum age thresholds:
 
@@ -128,7 +128,7 @@ gh api repos/{owner}/{repo}/releases/latest --jq '.published_at'
 If a release is younger than the threshold, flag it and suggest waiting or pinning
 to the previous stable version.
 
-### 4. Present findings and get approval
+### 3. Present findings and get approval
 
 Show the user a comprehensive summary table:
 
@@ -149,7 +149,7 @@ Risk levels:
 Suggest a default scope (typically all low+medium with clean security and sufficient
 age, holding anything flagged), but **do not apply anything yet** — proceed to Gate A.
 
-### 4.5. Gate A — Confirmation before applying changes (HARD STOP)
+### 3.5. Gate A — Confirmation before applying changes (HARD STOP)
 
 **This is a mandatory stop. Do not proceed past this gate without explicit user
 approval, even when running under Auto Mode.** Auto Mode's "execute immediately"
@@ -158,7 +158,7 @@ work" and require human review.
 
 What to do at this gate:
 
-1. After presenting the table from §4, **stop and wait** for the user to say which
+1. After presenting the table from §3, **stop and wait** for the user to say which
    candidates to apply. Acceptable approval signals are explicit phrases like
    "apply", "go ahead", "approve", "proceed", or an enumerated subset of candidates.
    Silence or ambiguity is **not** approval.
@@ -169,9 +169,9 @@ What to do at this gate:
 4. Do **not** edit `lean/lean-toolchain`, `mise.toml`, workflow files, or `flake.lock`,
    or create a branch, until approval is given.
 
-Once approval is received, proceed to §5.
+Once approval is received, proceed to §4.
 
-### 5. Apply upgrades
+### 4. Apply upgrades
 
 #### Lean toolchain
 
@@ -199,7 +199,7 @@ run `mise install`, then run the golden sweep named in the pin's comment.
 nix flake update
 ```
 
-### 6. Verify
+### 5. Verify
 
 Run the project's standard verification:
 
@@ -212,7 +212,7 @@ If tests fail:
 - Check for API changes in upgraded packages
 - Report failures to the user before proceeding
 
-### 6.5. Gate B — Confirmation before pushing & creating the PR (HARD STOP)
+### 5.5. Gate B — Confirmation before pushing & creating the PR (HARD STOP)
 
 **This is a second mandatory stop. Do not push the branch or create a PR without
 explicit user approval, even when running under Auto Mode.** Pushing and opening
@@ -232,7 +232,7 @@ What to do at this gate:
    them and re-confirm before proceeding.
 5. Only after approval, run `git push -u origin <branch>` and `gh pr create`.
 
-### 7. Create PR
+### 6. Create PR
 
 Create a branch and PR using `gh`:
 
@@ -249,8 +249,8 @@ Follow the project's Conventional Commits format.
 
 ## Important notes
 
-- **Always stop for explicit user approval at the two gates** (Gate A in §4.5
-  before applying changes, Gate B in §6.5 before pushing & creating the PR).
+- **Always stop for explicit user approval at the two gates** (Gate A in §3.5
+  before applying changes, Gate B in §5.5 before pushing & creating the PR).
   These gates are mandatory **even under Auto Mode** — the "execute immediately"
   default does not extend to dependency upgrades or PR creation. Treat silence,
   vague acknowledgement ("ok", "thanks"), or implicit consent as **not approved**

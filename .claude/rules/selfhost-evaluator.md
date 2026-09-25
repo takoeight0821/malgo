@@ -115,8 +115,9 @@ Level 1 では通る変更が、Level 2（Malgo → Malgo → Malgo）では失�
 ことがある。評価意味論が異なるため、自己ホスト型コンパイラを変更したら
 必ず Level 2 を手動確認する。
 
-Level 1/2 は既定では Zig バックエンド経由で走る。`Main.mlg` を
-`malgo compile` でネイティブバイナリにし、そのバイナリが評価器になる。
+Level 1 は常に Zig バックエンド経由で走り、Level 2 も既定では Zig バックエンド
+経由で走る。`Main.mlg` を `malgo compile` でネイティブバイナリにし、そのバイナリが
+評価器になる。`scripts/selfhost-golden.sh` にはバックエンドを切り替える手段が無い。
 `scripts/selfhost-level2.sh` は `TARGET=scheme` も受け付け、評価器を Chez で
 動かす。これは手動で実装間を比較するための経路であり、CI では使わない。
 perf tier `l2-ratio` は `scripts/perf-baseline.sh` の中で Chez 用の評価器を

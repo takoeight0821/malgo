@@ -110,20 +110,24 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
   `MALGO-STATS: total_allocs=<N> reuse_hits=<N> dispatches=<N> force_depth_max=<N>`
   to stderr.
 - Perf baseline (#399): `mise run perf-baseline` compares those counters against
-  `bench/perf-baseline.json` over the tiers `fib-shallow`, `fib-deep`,
-  `selfhost-l1`, `selfhost-l2` and `l2-ratio` (Zig-vs-Chez wall clock on Level 2);
-  `-- --tier=all --update` reseeds it, and that diff
-  is the before/after claim #385 requires. The counters are deterministic and
-  machine-independent; wall clock is recorded only via `--timing` and never gated.
-  Gates are a **ratchet**: `total_allocs` and `dispatches` may not rise,
+  `bench/perf-baseline.json` over the counter tiers `fib-shallow`, `fib-deep`,
+  `selfhost-l1` and `selfhost-l2`, plus the `l2-ratio` tier. `-- --tier=all --update`
+  reseeds the baseline; `all` includes `l2-ratio`, so it needs Chez (`scheme`)
+  on PATH. A performance claim in a PR carries that reseeded JSON diff as its
+  before/after evidence. The counters are deterministic and machine-independent.
+  Counter gates are a **ratchet**: `total_allocs` and `dispatches` may not rise,
   `force_depth_max` may not change at all (#382 rests on it being 1), and
   `reuse_hits` is reported rather than gated — it falls whenever an optimization
-  removes allocations, so it is not a standalone signal. `fib-deep` and
+  removes allocations, so it is not a standalone signal. `l2-ratio` is the
+  Zig/Chez wall-clock ratio on Level 2 and runs locally only, never in CI: it
+  fails when the ratio grows more than 15% over a baseline recorded on the same
+  OS and architecture, and skips the comparison on any other machine. Wall
+  clock from `--timing` is informational and never gated. `fib-deep` and
   `selfhost-l1` are gated inside `zig-deep-recursion.sh` and `selfhost-golden.sh`,
   which already run those binaries, so CI pays ~1s rather than a new job.
 - Small `int32`s (`-128..1024`) are interned as `IMMORTAL` statics by `rt.mkInt32`,
   so they cost no allocation and no RC traffic; and RC tracing is compiled out of
-  `release-fast` entirely. Both are #385 work — see `docs/perceus-gc.md`.
+  `release-fast` entirely. `docs/perceus-gc.md` describes both.
 - Calling convention is guaranteed tail calls: every call a generated function
   makes is `@call(.always_tail, ...)`, which Zig compiles to a jump or rejects
   at compile time, so the native stack stays flat. This requires a shared
@@ -133,7 +137,7 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
 - Golden parity harness: `bash scripts/zig-golden.sh` (CI job `lean-zig-golden`)
   compiles every golden testcase and diffs stdout byte-for-byte against the
   interpreter's goldens, failing on any leak.
-- Deep-recursion gate: `bash scripts/zig-deep-recursion.sh` (same CI jobs)
+- Deep-recursion gate: `bash scripts/zig-deep-recursion.sh` (same CI job)
   compiles `bench/fixtures/BenchFibDeep.mlg` release-fast and runs it — 18.8M
   dispatches, which pre-#360 would have needed ~1.85 GB of native stack. Every
   golden-sweep case is shallow, so this is still the only thing that catches an
@@ -262,10 +266,11 @@ built where AVX-512 exists dies with `SIGILL` where it does not. Nothing else in
 the repo moves a compiled program between machines, so nothing else pays for a
 portable binary.
 
-Both levels run on the **Zig backend** by default: `Main.mlg` is compiled to a native
-binary with `malgo compile --opt release-fast` and that binary is the evaluator.
-`selfhost-level2.sh` also accepts `TARGET=scheme` (runs the evaluator under Chez)
-as a manual cross-implementation reference; CI does not use it. The `l2-ratio`
+Level 1 always runs on the **Zig backend**, and Level 2 does by default:
+`Main.mlg` is compiled to a native binary with `malgo compile --opt release-fast`
+and that binary is the evaluator. `selfhost-golden.sh` has no target switch.
+`selfhost-level2.sh` also accepts `TARGET=scheme` (runs the evaluator under
+Chez) as a manual cross-implementation reference; CI does not use it. The `l2-ratio`
 perf tier builds its own Chez evaluator in `perf-baseline.sh` and does not call
 this script.
 

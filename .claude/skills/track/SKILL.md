@@ -40,7 +40,7 @@ If there is no commit yet (recording before committing), use the date only.
 When the user says "create a task list" or "I want to plan changes":
 
 1. **Interview**: Confirm the purpose, scope, and constraints of the change through dialogue with the user
-2. **Codebase investigation**: Read related files with Grep/Glob/Read to identify necessary tasks
+2. **Codebase investigation**: Read related files to identify necessary tasks
 3. **Present draft**: Show the task list draft in the conversation and gather feedback
 4. **Save file**: Once agreed upon, write to `todos/<description>.md`
 

@@ -300,8 +300,8 @@ EVAL_BIN=.malgo-work/malgoc L2_CASES=Fib bash scripts/selfhost-level2.sh
 ## Testing
 
 - One executable: `lean/Test/Main.lean`, run by `mise run test`.
-- Golden tests under `.golden/`, in hspec-golden's directory layout
-  (`<Group>/<Case>/golden`). `mise run test -- --update` rewrites them;
+- Golden tests under `.golden/`, as
+  `<Group>/<Case>/golden`. `mise run test -- --update` rewrites them;
   a mismatch also drops an `actual` next to the `golden`.
 - Filter with `-- --match PATTERN` (matches `Group/Case`).
 

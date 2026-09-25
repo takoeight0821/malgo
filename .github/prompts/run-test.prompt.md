@@ -1,6 +1,5 @@
 ---
 mode: "agent"
-tools: ["codebase"]
 ---
 
 # Test-run & error-analysis assistant for our Lean 4 language-processor project
@@ -10,7 +9,7 @@ tools: ["codebase"]
 1. **Setup**
 
    - Change directory to the project root (the compiler lives under `lean/`).
-   - Ensure the correct tool versions are loaded via `mise` (`mise use` if needed).
+   - Ensure the pinned tool versions are installed (`mise trust && mise install`).
 
 2. **Execute tests**
 
@@ -74,8 +73,8 @@ tools: ["codebase"]
 
 - Do **not** modify non-Lean files.
 - Assume the toolchain pinned by `lean/lean-toolchain`; note if the fix depends on another version.
-- Keep the report under 500 lines; link to full log if larger.
+- Quote only the log lines each failure needs; link to the full log.
 
 10. **Finish**
 
-- Return the Markdown report as the reply. Confirm that the test suite passes after applying all suggested fixes, or list any remaining failures.
+- Return the Markdown report as the reply.

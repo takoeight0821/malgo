@@ -2,23 +2,22 @@
 name: dep-upgrade
 description: >
   Detect outdated dependencies, upgrade them safely, verify the build, and create a PR.
-  Covers Haskell (cabal/package.yaml/freeze file), GitHub Actions (pinned SHA versions),
-  mise toolchain versions, and Nix flake inputs. Includes security advisory checks,
-  release maturity verification (avoid bleeding-edge releases), supply chain attack
-  detection, and unnecessary dependency removal.
+  Covers the Lean toolchain (lean/lean-toolchain), GitHub Actions (pinned SHA versions),
+  mise toolchain versions (zig/go/chezscheme pins), and Nix flake inputs. Includes security advisory checks,
+  release maturity verification (avoid bleeding-edge releases), and supply chain attack
+  detection.
   This skill enforces explicit user-approval gates before modifying files and before
   creating PRs — these gates are mandatory even under Auto Mode.
   Use this skill whenever the user mentions upgrading, updating, or bumping dependencies,
   packages, actions, toolchains, or flake inputs — even if they say something casual like
   "update deps" or "are my packages outdated?". Also trigger when the user asks about
-  Dependabot-like workflows, version pinning, freeze file maintenance, dependency auditing,
-  security scanning, or trimming unused packages.
+  Renovate/Dependabot-like workflows, version pinning, dependency auditing, or
+  security scanning.
 ---
 
 # Dependency Upgrade Skill
 
-Detect outdated dependencies, verify security and maturity, remove unnecessary packages,
-upgrade safely, and create a PR.
+Detect outdated dependencies, verify security and maturity, upgrade safely, and create a PR.
 
 ## Overview
 
@@ -26,86 +25,27 @@ The malgo project has four categories of dependencies:
 
 | Category | Files | How to check | How to update |
 |----------|-------|--------------|---------------|
-| Haskell packages | `package.yaml`, `cabal.project.freeze` | `cabal outdated --freeze-file` | Edit freeze / regenerate |
+| Lean toolchain | `lean/lean-toolchain` (Lake has no package dependencies) | Lean 4 releases on GitHub | Edit the pin, then `mise run build && mise run test` |
 | GitHub Actions | `.github/workflows/*.yml` | `gh api` to check latest releases | Update SHA + version comment |
 | mise toolchain | `mise.toml` | `mise outdated` | `mise use <tool>@<version>` |
-| Nix flake inputs | `flake.lock` (if present at root) | `nix flake update --dry-run` | `nix flake update` |
+| Nix flake inputs | `flake.lock` | `nix flake update --dry-run` | `nix flake update` |
 
 ## Prerequisites
 
-Before starting any dependency work, run these setup commands:
-
-```bash
-mise trust    # Approve mise permissions (required in fresh environments / subagents)
-cabal update  # Refresh the Hackage index — this updates the local index-state
-```
-
-`cabal update` is essential because `cabal outdated` compares against the local index.
-Without it, you're comparing against a stale snapshot and will miss available updates.
+Before starting any dependency work, run `mise trust` (required in fresh environments /
+subagents). Renovate (`renovate.json`) already opens routine update PRs; this skill is
+for audited, batched upgrades beyond those.
 
 ## Step-by-step workflow
-
-### 1. Audit unnecessary dependencies
-
-Before upgrading anything, check whether each dependency in `package.yaml` is actually
-used. Removing unneeded dependencies shrinks the attack surface and reduces build time.
-
-#### How to detect unused Haskell dependencies
-
-Check all dependency sections in `package.yaml`:
-- Top-level `dependencies:` (library deps)
-- `tests:` section `dependencies:` (test-only deps)
-- `build-tools:` (build tools like `happy`, `ormolu`)
-
-For each package, search the source code for imports from that package. Use these heuristics:
-
-| Package | Expected import pattern |
-|---------|----------------------|
-| `aeson` | `import Data.Aeson` |
-| `lens` | `import Control.Lens` |
-| `megaparsec` | `import Text.Megaparsec` |
-| `effectful` | `import Effectful` |
-| (etc.) | Check Hackage for the package's module names |
-
-```bash
-grep -r "import.*ModuleName" src/ app/ test/
-```
-
-If zero hits are found for a dependency, it is a removal candidate. Some packages are
-trickier — they may be used only as build-tool plugins (like `effectful-plugin`) or
-provide orphan instances loaded implicitly. Flag these for the user to confirm.
-
-For build-tools, check if the tool is actually invoked. For example, `happy` processes
-`.y` files — if no `.y` files exist in the repo, it's likely unused. Similarly, check
-test-only dependencies by searching only in `test/`.
-
-#### Removal process
-
-1. Remove the package from `package.yaml` `dependencies:` (or move to test-only if
-   only used in tests)
-2. Run `hpack && cabal build` to verify compilation
-3. If build fails, check which modules need the package and decide:
-   - If few usages exist, consider replacing with standard library equivalents
-   - If heavily used, keep the dependency
-4. Run `mise run test` to verify no runtime breakage
-
-Present removal candidates to the user with a brief rationale before removing.
 
 ### 2. Detect outdated dependencies
 
 Run detection for each category. Present results as a consolidated table.
 
-#### Haskell
+#### Lean toolchain
 
-```bash
-cabal outdated --freeze-file
-```
-
-This compares `cabal.project.freeze` against the Hackage index. Also check if the
-`index-state` in `cabal.project.freeze` is stale (more than ~2 weeks old).
-
-If `cabal outdated` is not available or errors, fall back to manually comparing
-key packages in `package.yaml` against Hackage.
+Compare `lean/lean-toolchain` against the latest `leanprover/lean4` release
+(`gh api repos/leanprover/lean4/releases/latest --jq .tag_name`).
 
 #### GitHub Actions
 
@@ -121,31 +61,21 @@ For each `uses:` line in `.github/workflows/*.yml` that pins to a SHA:
 mise outdated
 ```
 
-Pay attention to GHC version changes — major GHC upgrades (e.g., 9.12 → 9.14) are
-breaking and should be flagged separately from patch updates.
+`zig`, `go` and `chezscheme` are pinned deliberately; the comment above each pin in
+`mise.toml` names the golden sweep to re-run after bumping it. Flag Zig minor bumps
+separately — they break `std`.
 
 #### Nix flake
 
-Only if a `flake.nix` exists at the project root:
 ```bash
 nix flake update --dry-run
 ```
 
 ### 3. Security and maturity verification
 
-This is the most critical step. Do not skip it. Every upgrade candidate must pass
-these checks before being applied.
+Every upgrade candidate must pass these checks before being applied.
 
 #### 3a. Security advisory check
-
-For **Haskell packages**, check:
-- Haskell Security Advisory Database: search https://github.com/haskell/security-advisories
-  for the package name using `gh api` or `gh search issues`
-- Hackage package page changelog and metadata for security-related notes
-
-```bash
-gh search issues --repo haskell/security-advisories "<package-name>" --json title,url,state
-```
 
 For **GitHub Actions**, check:
 - GitHub Security Advisories for the action's repository
@@ -160,20 +90,6 @@ For **Nix flake inputs**, check the upstream project's security advisories.
 #### 3b. Supply chain attack indicators
 
 Before adopting any new version, look for these red flags:
-
-**For Haskell packages:**
-- **Maintainer change**: Compare the `maintainer` field between the current and new
-  version on Hackage. A sudden change in maintainer is a yellow flag — investigate.
-  ```
-  curl -s https://hackage.haskell.org/package/<pkg>-<old-ver>/<pkg>.cabal | grep -i maintainer
-  curl -s https://hackage.haskell.org/package/<pkg>-<new-ver>/<pkg>.cabal | grep -i maintainer
-  ```
-- **Unusual dependency additions**: If the new version adds dependencies that seem
-  unrelated to the package's purpose (e.g., a parser library suddenly depending on
-  `network` or `process`), flag it.
-- **Upload timing**: A release published in the last 48 hours with no prior beta/RC
-  and no changelog entry is suspicious. Prefer versions that have been on Hackage for
-  at least 1-2 weeks.
 
 **For GitHub Actions:**
 - **Repository transfer**: Check if the action's repository was recently transferred
@@ -204,12 +120,6 @@ Avoid bleeding-edge releases. Apply these minimum age thresholds:
 
 To check release age:
 
-**Hackage:**
-```bash
-curl -s "https://hackage.haskell.org/package/<pkg>/preferred.json"
-```
-Or check the upload timestamp on the Hackage package page.
-
 **GitHub Actions:**
 ```bash
 gh api repos/{owner}/{repo}/releases/latest --jq '.published_at'
@@ -225,11 +135,10 @@ Show the user a comprehensive summary table:
 ```
 Category        | Package/Action          | Current   | Latest    | Risk   | Security | Age     | Action
 ----------------|-------------------------|-----------|-----------|--------|----------|---------|--------
-Haskell         | lens                    | 5.3.4     | 5.3.5     | low    | clean    | 3 weeks | upgrade
-Haskell         | effectful               | 2.6.1.0   | 2.7.0.0   | medium | clean    | 2 weeks | upgrade
-Haskell         | some-pkg                | 1.0.0     | 1.0.1     | low    | ⚠ new maintainer | 2 days | HOLD
-GitHub Actions  | actions/checkout        | v6.0.1    | v6.0.2    | low    | clean    | 1 month | upgrade
-Haskell         | unused-pkg              | 0.5.0     | -         | -      | -        | -       | REMOVE
+Lean            | leanprover/lean4        | v4.32.0   | v4.33.0   | medium | clean    | 2 weeks | upgrade
+mise            | zig                     | 0.16.0    | 0.16.1    | low    | clean    | 3 weeks | upgrade
+GitHub Actions  | actions/checkout        | v7.0.1    | v7.0.2    | low    | clean    | 1 month | upgrade
+GitHub Actions  | some/action             | v1.2.0    | v1.2.1    | low    | ⚠ tag moved | 2 days | HOLD
 ```
 
 Risk levels:
@@ -255,24 +164,18 @@ What to do at this gate:
    Silence or ambiguity is **not** approval.
 2. If the user's intent is unclear (e.g., they say "looks good" without specifying
    scope), use `AskUserQuestion` to confirm the exact set to apply.
-3. Confirm the scope before any file modification: which removals, which version
-   bumps, which Action SHA updates, and whether to also push / open a PR later.
-4. Do **not** run `cabal freeze`, edit `package.yaml`, edit workflow files, or
-   create a branch until approval is given.
+3. Confirm the scope before any file modification: which version bumps, which
+   Action SHA updates, and whether to also push / open a PR later.
+4. Do **not** edit `lean/lean-toolchain`, `mise.toml`, workflow files, or `flake.lock`,
+   or create a branch, until approval is given.
 
 Once approval is received, proceed to §5.
 
 ### 5. Apply upgrades
 
-#### Haskell freeze file update
+#### Lean toolchain
 
-1. Run `cabal update` (this refreshes the local Hackage index to the latest state)
-2. Delete the old `index-state` line from `cabal.project.freeze`
-3. Run `cabal freeze` to regenerate the freeze file (it will use the latest index-state)
-4. If the freeze fails due to version conflicts, try relaxing constraints in
-   `cabal.project` and report to the user
-
-Important: after freezing, run `hpack && cabal build` to verify the build works.
+Edit `lean/lean-toolchain`, then `mise run build` (elan fetches the new toolchain).
 
 #### GitHub Actions
 
@@ -287,9 +190,8 @@ Format: `uses: owner/repo@<full-sha> # v<tag>`
 #### mise
 
 Update `mise.toml` directly. For tools pinned to `"latest"`, no change is needed —
-they auto-resolve. For tools with explicit versions (like GHC), update the version string.
-
-After updating, run `mise install` to verify.
+they auto-resolve. For pinned tools (`zig`, `go`, `chezscheme`), update the version string,
+run `mise install`, then run the golden sweep named in the pin's comment.
 
 #### Nix flake
 
@@ -306,7 +208,7 @@ mise run build && mise run test
 ```
 
 If tests fail:
-- Check if golden test outputs need resetting (`mise run reset` then re-run tests)
+- Check whether golden outputs legitimately changed (`mise run test -- --update`, then review the diff)
 - Check for API changes in upgraded packages
 - Report failures to the user before proceeding
 
@@ -336,17 +238,14 @@ Create a branch and PR using `gh`:
 
 - Branch name: `chore/deps-upgrade-YYYY-MM-DD`
 - Commit message format (Conventional Commits):
-  - Removals: `refactor(deps): remove unused <pkg>`
   - Upgrades: `chore(deps): upgrade dependencies`
   - Security fixes: `fix(deps): upgrade <pkg> to fix <advisory>`
 - PR body should list:
-  - Dependencies removed (with rationale)
   - Dependencies upgraded (with version changes)
   - Security notes (any advisories addressed, any flags encountered)
   - Verification results
 
-Use separate commits for removals vs upgrades. Follow the project's Conventional
-Commits format.
+Follow the project's Conventional Commits format.
 
 ## Important notes
 
@@ -356,12 +255,6 @@ Commits format.
   default does not extend to dependency upgrades or PR creation. Treat silence,
   vague acknowledgement ("ok", "thanks"), or implicit consent as **not approved**
   and ask again with `AskUserQuestion`.
-- **Never upgrade GHC major version without explicit user approval** — this can break
-  the entire build and requires careful migration.
-- **The `allow-newer` field in `cabal.project`** may need adjustment when upgrading.
-  Currently it has `allow-newer: text`. Check if this is still needed after upgrading.
-- **The existing CI workflow** (`haskell-deps-update.yml`) handles lower bound bumps
-  automatically. This skill is for comprehensive upgrades beyond what that workflow covers.
 - **Always verify SHA hashes** for GitHub Actions — don't just trust tag names, as tags
   can be moved. Use `gh api` to resolve the actual commit SHA for a tag.
 - **When in doubt, hold** — it is always safer to skip a suspicious upgrade and report

@@ -6,11 +6,15 @@ description: 'Review pull request comments, apply fixes, and respond as needed i
 Follow **Review** → **Implement**.
 
 ### Review
-1. Fetch unresolved review comments for pull request `${pr_number}`:
+1. Fetch the review threads for pull request `${pr_number}` with their
+   resolution state (`gh pr view --comments` does not show it):
    ```bash
-   gh pr view ${pr_number} --comments
+   gh api graphql -F owner=takoeight0821 -F repo=malgo -F pr=${pr_number} -f query='
+     query($owner:String!,$repo:String!,$pr:Int!){repository(owner:$owner,name:$repo){
+       pullRequest(number:$pr){reviewThreads(first:100){nodes{isResolved path line
+         comments(first:20){nodes{databaseId author{login} body}}}}}}}'
    ```
-2. Ignore comments already marked as resolved.
+2. Skip threads with `isResolved: true`.
 3. Prioritize comments from core maintainers if multiple comments target the same line.
 4. For each comment:
    - If no change is needed, reply via:

@@ -20,8 +20,6 @@ The project is a language processor (parser, type checker, IR transforms, code g
    - `panic!`/`!` indexing and other partial operations on untrusted input
    - `Option`/`Except` cases silently discarded (`getD`, `toOption`, a `catch`
      that swallows a real error)
-   - Strictness: Lean's `match` is strict where the Haskell original relied on
-     laziness to short-circuit
 3. **Performance & Memory**
    - Unnecessary traversals or list construction in large IR passes
    - Quadratic re-scans in recursive traversals over nested IR nodes
@@ -47,7 +45,7 @@ For each **category**, use a heading `### <Category>` and list issues with:
 
 1. **Title** (short)
 2. **File / Line** (if known)
-3. **Description** (≤ 4 lines)
+3. **Description** (short)
 4. **Recommended Fix** (bullets allowed)
 
 ## Constraints
@@ -55,7 +53,7 @@ For each **category**, use a heading `### <Category>` and list issues with:
 - **Analyze only files whose names end with `.lean`.**
 - Skip generated or external dirs: `lean/.lake`, `.git`, `vendor`, `result`, etc.
 - Mark uncertain findings with phrases like “might be”.
-- Cap the list at **100 items**, ordered by severity (Critical → Low).
+- Order issues by severity (Critical → Low).
 - Finish with a `## Summary` section that re-lists the **top 5 issues to address first**.
 
 Start with a concise overall summary, then provide the detailed list.

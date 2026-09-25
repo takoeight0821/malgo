@@ -7,8 +7,6 @@ description: "Create a design document before implementation. Use when the user 
 
 Create a design document that captures architectural decisions and implementation plans before writing any code. The document serves as a blueprint for agent teams to execute in parallel.
 
-After writing the design document, stop: implementation starts only when the user asks for it.
-
 ## Arguments
 
 `/design <topic description>` — If omitted, infer the topic from conversation context.
@@ -77,4 +75,4 @@ How to verify everything works after all tasks are merged. Test commands, expect
 
 ### 4. Stop
 
-Tell the user the path of the created design document. Do not ask "shall I start implementing?" — just stop and wait.
+Tell the user the path of the created design document, then stop. Implementation starts only when the user asks for it; do not ask "shall I start implementing?"

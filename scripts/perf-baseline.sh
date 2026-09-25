@@ -42,8 +42,8 @@
 #   --tier=LIST   comma-separated: fib-shallow,fib-deep,selfhost-l1,selfhost-l2,
 #                 l2-ratio, or `all`. Default: fib-shallow,fib-deep (the cheap
 #                 tiers). `l2-ratio` is the Zig-vs-Chez wall-clock ratio on Level
-#                 2 -- #385's actual success metric -- and needs the Scheme
-#                 backend, so it only works before #400 lands. Local only.
+#                 2 -- #385's actual success metric -- and needs Chez Scheme
+#                 (`$SCHEME`) on PATH as the control. Local only.
 #   --update      rewrite the baseline JSON from this run instead of comparing.
 #   --timing      also measure wall clock with hyperfine (local only; never CI).
 #
@@ -53,6 +53,7 @@
 #   BASELINE          baseline JSON path (default: bench/perf-baseline.json)
 #   COMPILE_TIMEOUT   seconds for `malgo compile` (default: 600)
 #   CASE_TIMEOUT      seconds for running a compiled binary (default: 900)
+#   SCHEME            Chez Scheme executable for l2-ratio (default: scheme)
 set -u
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -73,7 +74,7 @@ for arg in "$@"; do
     --tier=*)  TIERS="${arg#--tier=}" ;;
     --update)  UPDATE=1 ;;
     --timing)  TIMING=1 ;;
-    -h|--help) sed -n '2,48p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,56p' "$0"; exit 0 ;;
     *) echo "unknown argument '$arg' (see --help)" >&2; exit 2 ;;
   esac
 done
@@ -206,7 +207,7 @@ ensure_selfhost_scheme() {
   echo "  emitting Main.mlg through the Scheme backend" >&2
   if ! timeout "$COMPILE_TIMEOUT" "$MALGO" eval --target scheme \
         runtime/malgo/compiler/Main.mlg >"$WORK/main.scm"; then
-    echo "FAIL: 'malgo eval --target scheme' failed (needs the Scheme backend; see #400)." >&2
+    echo "FAIL: 'malgo eval --target scheme' failed." >&2
     return 1
   fi
 }
@@ -235,8 +236,7 @@ time_l2_case() {
 # This is the quantity #385 is actually about, and the only one that survives
 # moving between machines: absolute wall clock does not compare across hardware
 # or CI runner generations, but Chez and Zig measured back-to-back in one run on
-# one machine do. That is what the retained Scheme backend is for -- it is the
-# control, not nostalgia (see #400).
+# one machine do. The Scheme backend is the control.
 #
 # Serial and single-case on purpose. selfhost-level2.sh runs five cases as
 # unbounded parallel jobs, so its per-case seconds are contended and cannot be
@@ -333,7 +333,7 @@ record_ratio() {
      --arg machine "$(uname -s) $(uname -m)" \
      --arg commit "$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" '
      .l2_ratio = {
-       "$comment": "#385'"'"'s success metric: Level 2 wall clock through Zig over Chez, one serial case each, back-to-back on one machine. Absolute seconds are not comparable across machines; the ratio is. Needs the Scheme backend as the control (#400). Local only -- never gated in CI, since running L2 there is the 16 minutes #385 exists to remove.",
+       "$comment": "#385'"'"'s success metric: Level 2 wall clock through Zig over Chez, one serial case each, back-to-back on one machine. Absolute seconds are not comparable across machines; the ratio is. The Scheme backend is the control. Local only -- never gated in CI, since running L2 there is the 16 minutes #385 exists to remove.",
        chez_s: $chez, zig_s: $zig, ratio: $ratio,
        machine: $machine, commit: $commit
      }' "$BASELINE" >"$WORK/ratio.json" || return 1

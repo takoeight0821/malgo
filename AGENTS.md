@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Malgo?
 
-Malgo is a statically typed functional programming language with an interpreter and a native (Zig) backend, written in Lean 4. Source files use the `.mlg` extension.
+Malgo is a statically typed functional programming language with an interpreter and Zig, Go and Chez Scheme backends, written in Lean 4. Source files use the `.mlg` extension.
 
 ## Build, Test, and Development Commands
 
@@ -28,6 +28,7 @@ The compiler lands at `lean/.lake/build/bin/malgo`.
   reuse-specialize, parser-surface, panic-gate, primitive-coverage)
 - `runtime/malgo/` - Malgo runtime/stdlib (`Builtin.mlg`, `Prelude.mlg`)
 - `runtime/zig/runtime.zig` - the Zig backend's runtime
+- `runtime/go/runtime.go` - the Go backend's runtime
 - `examples/malgo/` - Sample `.mlg` programs
 - `test/testcases/` - Test input files; `.golden/` - golden test outputs
 
@@ -54,43 +55,31 @@ conversion: it inlines a fully(-or-over-)saturated call of a data constructor
 (`Cons x xs`, or `Cons (f x) (mapList f xs)` — arguments need not be
 immediate) directly into `Fun.Construct`, instead of invoking the
 constructor's own curried closure. This is shared by every backend
-(Eval/Scheme/Zig) and every direct caller of `toCore`, not Zig-specific.
+(Eval/Scheme/Zig/Go) and every direct caller of `toCore`, not Zig-specific.
 
 ### Chez Scheme Backend
 
 `malgo eval --target scheme SOURCE` lowers Join IR directly to Chez Scheme
 source text (`lean/Malgo/Backend/Scheme.lean`, `Driver.compileScheme`) — no
 closure-conversion/RC pass in between, since Scheme has native closures and
-GC. This backend has been added and removed twice before (see `lean/README.md`'s
-M4 entry and the git history around #386/#401/#404) as a disposable
-performance-comparison tool; it is being kept this time because
-[nix-config](https://github.com/takoeight0821/nix-config) is a standing
-consumer, compiling `.mlg` task scripts to `.scm` and running them with
-`chez-scheme` — faster and more stable than the Zig backend for this kind of
-workload (`docs/plans/2026-08-11-chez-scheme-backend-and-nix-config-scripting.md`
-has the full rationale). Unlike its two prior lives, it now has a real
-correctness gate: `bash scripts/scheme-golden.sh` (73/73, mirroring
-`zig-golden.sh`'s structure).
+GC. [nix-config](https://github.com/takoeight0821/nix-config) is a standing
+consumer: it compiles `.mlg` task scripts to `.scm` and runs them with
+`chez-scheme` (`docs/plans/2026-08-11-chez-scheme-backend-and-nix-config-scripting.md`
+has the rationale). Correctness gate: `bash scripts/scheme-golden.sh`,
+mirroring `zig-golden.sh`'s structure.
 
-Two bugs found while adding that gate, both in `schemeRuntime`'s
-`malgo-print-value` and `compileStatement`'s `.cut` case (present since the
-Haskell-era original, not introduced by this restoration):
+Two invariants in `lean/Malgo/Backend/Scheme.lean`:
 
-- **Constructor/tuple printing used S-expression syntax** (`(Name arg1 arg2)`)
-  instead of matching `Eval.lean`'s `valueToText` (`Name(arg1, arg2)` for
-  tagged constructors, `{arg1, arg2}` for tuples — tuples and constructors
-  share the same `(list 'tag arg...)` Scheme representation, keyed off the
-  reserved tag string `"tuple"` from `compileTag`, so the printer must special-
-  case it).
-- **`cut (mu a. c) b` compiled backwards.** A `mu`-bound producer (what
-  `label`/`goto` desugar to) compiles to a Scheme closure awaiting its
-  consumer as an argument, but the generic `.cut` case handed that closure
-  *to* the consumer as a value instead of applying it *with* the consumer —
-  the classic mu-reduction (`c[a := b]`) needs direct substitution
-  (`(let ((a b)) c)`), not the generic case's `(b producer)`. This is why
-  `label`/`goto` (and *only* that construct) broke: every other `Producer`
-  variant compiles to a plain first-order value, for which the generic case
-  is correct.
+- `schemeRuntime`'s `malgo-print-value` must match `Eval.lean`'s
+  `valueToText`: `Name(arg1, arg2)` for tagged constructors, `{arg1, arg2}`
+  for tuples. Tuples and constructors share the `(list 'tag arg...)`
+  representation, so the printer special-cases the reserved tag `"tuple"`
+  from `compileTag`.
+- `compileStatement`'s `.cut` case compiles `cut (mu a. c) b` by direct
+  substitution, `(let ((a b)) c)`, not the generic `(b producer)`: a
+  `mu`-bound producer (what `label`/`goto` desugar to) is a closure awaiting
+  its consumer. Every other `Producer` variant is a first-order value, for
+  which the generic case is correct.
 
 ### Zig Backend (native executables)
 
@@ -121,34 +110,34 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
   `MALGO-STATS: total_allocs=<N> reuse_hits=<N> dispatches=<N> force_depth_max=<N>`
   to stderr.
 - Perf baseline (#399): `mise run perf-baseline` compares those counters against
-  `bench/perf-baseline.json` over four tiers (`fib-shallow`, `fib-deep`,
-  `selfhost-l1`, `selfhost-l2`); `-- --tier=all --update` reseeds it, and that diff
-  is the before/after claim #385 requires. The counters are deterministic and
-  machine-independent; wall clock is recorded only via `--timing` and never gated.
-  Gates are a **ratchet**: `total_allocs` and `dispatches` may not rise,
+  `bench/perf-baseline.json` over the counter tiers `fib-shallow`, `fib-deep`,
+  `selfhost-l1` and `selfhost-l2`, plus the `l2-ratio` tier. `-- --tier=all --update`
+  reseeds the baseline; `all` includes `l2-ratio`, so it needs Chez (`scheme`)
+  on PATH. A performance claim in a PR carries that reseeded JSON diff as its
+  before/after evidence. The counters are deterministic and machine-independent.
+  Counter gates are a **ratchet**: `total_allocs` and `dispatches` may not rise,
   `force_depth_max` may not change at all (#382 rests on it being 1), and
   `reuse_hits` is reported rather than gated — it falls whenever an optimization
-  removes allocations, so it is not a standalone signal. `fib-deep` and
+  removes allocations, so it is not a standalone signal. `l2-ratio` is the
+  Zig/Chez wall-clock ratio on Level 2 and runs locally only, never in CI: it
+  fails when the ratio grows more than 15% over a baseline recorded on the same
+  OS and architecture, and skips the comparison on any other machine. Wall
+  clock from `--timing` is informational and never gated. `fib-deep` and
   `selfhost-l1` are gated inside `zig-deep-recursion.sh` and `selfhost-golden.sh`,
   which already run those binaries, so CI pays ~1s rather than a new job.
 - Small `int32`s (`-128..1024`) are interned as `IMMORTAL` statics by `rt.mkInt32`,
   so they cost no allocation and no RC traffic; and RC tracing is compiled out of
-  `release-fast` entirely. Both are #385 work — see `docs/perceus-gc.md`.
+  `release-fast` entirely. `docs/perceus-gc.md` describes both.
 - Calling convention is guaranteed tail calls: every call a generated function
   makes is `@call(.always_tail, ...)`, which Zig compiles to a jump or rejects
-  at compile time, so the native stack stays flat. Emitting them as plain
-  `return f(..)` grew the stack by one frame per reduction step and SIGSEGV'd
-  past ~150k steps (#360); a trampoline (`rt.Action` + `rt.run`) held the line
-  until the two constraints on `.always_tail` were addressed — a shared
-  prototype for every handler, with the non-matching helpers as `inline fn`,
-  and arguments in by-value parameters rather than a slice into the caller's
-  frame. Worth 1.33x on `BenchFibDeep`, 1.22x on Level 1 and 1.25x on Level 2 (271.5s
-  -> 217.7s), with every counter unchanged. The IR and the RC passes are unaffected: a tail call moves
-  exactly the references an Action did. See `docs/zig-backend.md`.
-- Golden parity harness: `bash scripts/zig-golden.sh` (CI job `zig-golden`)
+  at compile time, so the native stack stays flat. This requires a shared
+  prototype for every handler (non-matching helpers are `inline fn`) and
+  arguments in by-value parameters rather than a slice into the caller's
+  frame. See `docs/zig-backend.md` for the design and measurements.
+- Golden parity harness: `bash scripts/zig-golden.sh` (CI job `lean-zig-golden`)
   compiles every golden testcase and diffs stdout byte-for-byte against the
   interpreter's goldens, failing on any leak.
-- Deep-recursion gate: `bash scripts/zig-deep-recursion.sh` (same CI jobs)
+- Deep-recursion gate: `bash scripts/zig-deep-recursion.sh` (same CI job)
   compiles `bench/fixtures/BenchFibDeep.mlg` release-fast and runs it — 18.8M
   dispatches, which pre-#360 would have needed ~1.85 GB of native stack. Every
   golden-sweep case is shallow, so this is still the only thing that catches an
@@ -169,7 +158,7 @@ Join IR (already saturated — see SaturateCtor above) → Normalize (Mu/Label e
 ### Go Backend (native executables)
 
 `malgo compile --target go SOURCE [-o OUT] [--opt ...]` compiles via Go to a
-native executable (Go 0.26 era, pinned in `mise.toml`). There is no
+native executable (Go pinned in `mise.toml`). There is no
 intermediate IR and no closure conversion: `Malgo.Backend.Go.compileToGo`
 lowers Join IR straight to Go text, which is the whole backend.
 
@@ -211,7 +200,7 @@ pick a calling convention, so this CPS IR's tail calls stay real calls.
   the standard library, so nothing is fetched. Both matter because the
   development sandbox has no egress. The generated source is left at `OUT.go`
   for inspection, as the Zig backend leaves `OUT.zig`.
-- Gates: `bash scripts/go-golden.sh` (86/86 plus a 3/3 panic gate) and
+- Gates: `bash scripts/go-golden.sh` (every interpreter golden case, plus a panic gate) and
   `bash scripts/go-deep-recursion.sh`. The latter's failure signature differs
   from the Zig gate's — Go prints `fatal error: goroutine stack exceeds ...`
   and exits 2 where Zig gets SIGSEGV.
@@ -222,33 +211,13 @@ pick a calling convention, so this CPS IR's tail calls stay real calls.
   the test suite rather than only a golden diff. This works because the Go
   runtime names each function after the `foreign import` it serves.
 
-Measured 2026-09-13 on Darwin arm64, `--opt release-fast`, `hyperfine` over 20
-runs, from the repo root with a *relative* source path — path length changes
-the self-hosted evaluator's work by up to 3x, so measurements are only
-comparable at equal path length.
-
-| | selfhost Level 1 | `BenchFibDeep` | Level 1 `dispatches` |
-|---|---|---|---|
-| Zig | 0.21s | 0.24s | 9,028,449 |
-| Go | 0.27s | 0.30s | 9,028,448 |
-| Chez | 0.68s | 0.16s | — |
-
-Dispatch counts are at parity with Zig. The remaining 1.3x on wall clock is
-per-dispatch cost, which the paragraph below identifies as Go's floor.
-
-Chez's column needs splitting to be read correctly: it compiles the script on
-every run, which is 0.12s for `BenchFibDeep` and 0.58s for the Level 1
-evaluator. Its *execution* is therefore 0.04s and 0.10s — 2.6x to 7.8x faster
-than Go's. That gap is structural and cannot be closed: Go's trampoline alone
-costs 0.068s on `BenchFibDeep`, more than Chez spends running the whole
-program. Only the number of dispatches can fall, and it is already at Zig's.
-
-End to end, which is what a script run pays, Go wins everywhere except long
-pure computation: 2.5x on Level 1 and ~15x on the short programs in
-`examples/malgo/` (0.01s against Chez's 0.16s of startup).
-`wiki/2026-09-12-go-backend-performance-investigation.md` records what else
-was tried and measured (interface boxing, `[]rune` caching, generics,
-reflection, reshaping the trampoline — all rejected on measurement).
+When comparing backends' wall clock, run from the repo root with a *relative*
+source path: path length changes the self-hosted evaluator's work by up to 3x.
+Go's dispatch count is at parity with Zig's; the remaining gap is per-dispatch
+cost. Chez recompiles the script on every run, so it loses end to end on short
+programs but executes long pure computation fastest.
+`wiki/2026-09-12-go-backend-performance-investigation.md` has the measurements
+and what was tried and rejected.
 
 ### Intermediate Representations
 
@@ -286,11 +255,9 @@ Malgo has two self-hosting levels:
 `runtime/malgo/`, the L2 harness, or `lean.yml`** — the inputs Level 2 has that
 Level 1 does not. `LEAN_SELFHOST_L2=1` in `lean/ci-gates.env` is the kill switch;
 the `l2` step of the `gates` job decides the rest and publishes it as
-`l2Run`/`l2Cases`. It was off entirely for a while (#385) because a single job
-running all five cases took ~16-27 minutes against a target of keeping any one CI
-job under 10. #385 closed by splitting it: `l2-build` compiles the evaluator once
-(~3 min) and uploads it as an artifact; `l2-case` runs one case per job from that
-artifact (no contention between cases since each gets its own runner).
+`l2Run`/`l2Cases`. To keep every CI job under 10 minutes, `l2-build` compiles
+the evaluator once (~3 min) and uploads it as an artifact, and `l2-case` runs
+one case per job from that artifact, each on its own runner.
 
 `l2-build` sets `MALGO_ZIG_MCPU=baseline`, and it is the only thing that does.
 The evaluator it uploads runs on a *different* runner, GitHub's x86_64 fleet is
@@ -299,12 +266,13 @@ built where AVX-512 exists dies with `SIGILL` where it does not. Nothing else in
 the repo moves a compiled program between machines, so nothing else pays for a
 portable binary.
 
-Both levels run on the **Zig backend**: `Main.mlg` is compiled to a native binary with
-`malgo compile --opt release-fast` and that binary is the evaluator. A Scheme backend
-existed briefly as a Chez-based cross-implementation performance reference for #385
-(so the "how much faster is Zig" claim had a control to measure against) and was
-removed again once #385 closed (#400) — see the git history around #385/#400/#404
-if that measurement ever needs to be redone from scratch.
+Level 1 always runs on the **Zig backend**, and Level 2 does by default:
+`Main.mlg` is compiled to a native binary with `malgo compile --opt release-fast`
+and that binary is the evaluator. `selfhost-golden.sh` has no target switch.
+`selfhost-level2.sh` also accepts `TARGET=scheme` (runs the evaluator under
+Chez) as a manual cross-implementation reference; CI does not use it. The `l2-ratio`
+perf tier builds its own Chez evaluator in `perf-baseline.sh` and does not call
+this script.
 
 ```bash
 # Level 1: ./malgoc <testcase.mlg>
@@ -337,8 +305,8 @@ EVAL_BIN=.malgo-work/malgoc L2_CASES=Fib bash scripts/selfhost-level2.sh
 ## Testing
 
 - One executable: `lean/Test/Main.lean`, run by `mise run test`.
-- Golden tests under `.golden/`, in hspec-golden's directory layout
-  (`<Group>/<Case>/golden`). `mise run test -- --update` rewrites them;
+- Golden tests under `.golden/`, as
+  `<Group>/<Case>/golden`. `mise run test -- --update` rewrites them;
   a mismatch also drops an `actual` next to the `golden`.
 - Filter with `-- --match PATTERN` (matches `Group/Case`).
 
@@ -353,9 +321,15 @@ EVAL_BIN=.malgo-work/malgoc L2_CASES=Fib bash scripts/selfhost-level2.sh
 Malgo was written in Haskell until 2026-07, and that implementation was the
 semantic oracle while the Lean 4 port was built against it. It has been
 removed; `PORTING.md` records the module-by-module mapping and why the
-retirement criteria were overridden. Documents under `docs/plans/`,
-`docs/reports/`, `bench/` and `wiki/` describe that period and are left as
-written — do not "correct" them to the current layout.
+retirement criteria were overridden.
+
+These documents record the state at the time they were written, and some
+describe the Haskell period: the dated files under `docs/plans/`,
+`docs/reports/` and `wiki/`, the measurement notes under `bench/` (everything
+except `perf-baseline.json` and `fixtures/`), and the milestone tables in
+`PORTING.md` and `lean/README.md`. Leave existing ones as written — do not
+"correct" them to the current layout. New plans go in `docs/plans/` as new
+dated files (see the `design` skill).
 
 ## Agent skills
 

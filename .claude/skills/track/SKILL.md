@@ -1,7 +1,7 @@
 ---
 name: track
 description: Task list management skill for tracking large-scale changes across multiple sessions. Use when the user says "create a task list", "plan changes", "follow todos/xxx.md", "continue from the track list", or "/track".
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash(git log:*), Bash(git rev-parse:*), Bash(date:*), Bash(ls:*), Bash(mkdir:*)
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(git log:*), Bash(git rev-parse:*), Bash(date:*), Bash(ls:*)
 ---
 
 # Track - Persistent Task List Skill
@@ -40,10 +40,9 @@ If there is no commit yet (recording before committing), use the date only.
 When the user says "create a task list" or "I want to plan changes":
 
 1. **Interview**: Confirm the purpose, scope, and constraints of the change through dialogue with the user
-2. **Codebase investigation**: Read related files with Grep/Glob/Read to identify necessary tasks
+2. **Codebase investigation**: Read related files to identify necessary tasks
 3. **Present draft**: Show the task list draft in the conversation and gather feedback
 4. **Save file**: Once agreed upon, write to `todos/<description>.md`
-   - If the `todos/` directory does not exist, create it with `mkdir -p todos`
 
 ## Flow 2: Implement from an Existing List
 
@@ -64,7 +63,6 @@ When the user says "follow todos/xxx.md" or "continue from the track list":
 
 ## Important Rules
 
-- Always use the Edit tool for task list changes to avoid breaking other parts of the file
 - Work through tasks one at a time, updating checkmarks after each completion
 - Break large tasks into subtasks before starting
 - Skip tasks the user asks to skip and move to the next one

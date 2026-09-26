@@ -9,9 +9,9 @@
 #   TARGET=zig    (default) `malgo compile --opt release-fast` -> native binary
 #   TARGET=scheme           `malgo eval --target scheme` -> main.scm, run under Chez
 #
-# The Scheme path is retained as the cross-implementation performance reference
-# for #385: it is the only baseline the Zig backend's numbers can be read
-# against. Do not delete it until #385 closes -- see #400.
+# The Scheme path is a manual cross-implementation reference; CI does not use
+# it. The l2-ratio tier in scripts/perf-baseline.sh builds its own Chez
+# evaluator and does not call this script.
 #
 # Building the evaluator and running the cases can be separated, which is how CI
 # keeps any one job under 10 minutes:

@@ -1,13 +1,11 @@
 ---
 name: design
-description: "Create a design document before implementation. Use when the user says /design, 'planして', '設計して', '計画を立てて', 'アーキテクチャを考えて', '設計文書を書いて', 'design this', or when a complex task clearly needs architectural decisions before coding. Always use this skill when the user requests planning or design work, even if they don't explicitly say 'design'. After writing the document, STOP — never proceed to implementation."
+description: "Create a design document before implementation. Use when the user says /design, 'planして', '設計して', '計画を立てて', 'アーキテクチャを考えて', '設計文書を書いて', 'design this', or when a complex task clearly needs architectural decisions before coding. Always use this skill when the user requests planning or design work, even if they don't explicitly say 'design'."
 ---
 
 # Design
 
 Create a design document that captures architectural decisions and implementation plans before writing any code. The document serves as a blueprint for agent teams to execute in parallel.
-
-**Critical rule**: After writing the design document, STOP. Do not begin implementation until the user explicitly asks for it.
 
 ## Arguments
 
@@ -19,10 +17,7 @@ Create a design document that captures architectural decisions and implementatio
 
 Understand the current state of the code relevant to the design topic.
 
-- Use Explore agents to survey related files, modules, types, and data flow
-- Identify existing architecture, dependencies, and constraints
-- Launch multiple Explore agents in parallel when investigating independent areas
-- If external research is needed (best practices, prior art), use WebSearch/WebFetch
+Identify the existing architecture, modules, types, data flow, dependencies, and constraints the design must fit. For large, independent areas, parallel Explore agents keep file dumps out of the main context.
 
 ### 2. Create the design document
 
@@ -80,4 +75,4 @@ How to verify everything works after all tasks are merged. Test commands, expect
 
 ### 4. Stop
 
-Tell the user the path of the created design document. Do not ask "shall I start implementing?" — just stop and wait.
+Tell the user the path of the created design document, then stop. Implementation starts only when the user asks for it; do not ask "shall I start implementing?"

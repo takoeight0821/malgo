@@ -28,13 +28,14 @@ The malgo project has four categories of dependencies:
 | Lean toolchain | `lean/lean-toolchain` (Lake has no package dependencies); `flake.nix` builds it through `lean4-nix` | Lean 4 releases on GitHub | Edit the pin, check `lean4-nix`, then `mise run build && mise run test` |
 | GitHub Actions | `.github/workflows/*.yml`, `.github/actions/*/action.yml` | `gh api` to check latest releases | Update SHA + version comment |
 | mise toolchain | `mise.toml`; Zig also in `.github/workflows/lean.yml` and `flake.nix` | `mise outdated` | Edit the pin and every place listed in §4 |
-| Nix flake inputs | `flake.lock` | `nix flake update --dry-run` | `nix flake update` |
+| Nix flake inputs | `flake.lock` | `nix flake update --output-lock-file` to a temp file, then diff | `nix flake update` |
 
 ## Prerequisites
 
 Before starting any dependency work, run `mise trust` (required in fresh environments /
-subagents). Renovate (`renovate.json`) already opens routine update PRs; this skill is
-for audited, batched upgrades beyond those.
+subagents). Renovate (`renovate.json`) and Dependabot (`.github/dependabot.yml`, for
+the `github-actions` and `docker` ecosystems) already open routine update PRs; this skill
+is for audited, batched upgrades beyond those.
 
 ## Step-by-step workflow
 
@@ -71,8 +72,13 @@ separately — they break `std`.
 
 #### Nix flake
 
+Nix has no dry-run flag for `nix flake update`. Write the updated lock file to a
+temporary path instead, leaving `flake.lock` untouched, and compare the locked revisions:
+
 ```bash
-nix flake update --dry-run
+nix flake update --output-lock-file "$TMPDIR/flake.lock"
+diff <(jq '.nodes | map_values(.locked.rev)' flake.lock) \
+     <(jq '.nodes | map_values(.locked.rev)' "$TMPDIR/flake.lock")
 ```
 
 ### 2. Security and maturity verification
@@ -264,9 +270,14 @@ commit:
   On a patch bump the attribute name stays the same, but nixpkgs may still ship
   the old patch; if the command above prints the old version, run
   `nix flake update nixpkgs` or report the mismatch.
-- `README.md` and `AGENTS.md`: the stated Zig version
+- `README.md`, `AGENTS.md`, `conductor/tech-stack.md` and `docs/zig-backend.md`:
+  the stated Zig version
 
-Finish with `rg -F '<old version>'` to catch anything this list misses.
+Finish with `rg -F` to catch anything this list misses. Search for the full old
+version (`rg -F '0.16.0'`), and on a minor bump also for the major.minor form
+(`rg -F '0.16'`): the prose in the files above and the comment above the pin in
+`mise.toml` write only the major.minor form. Leave historical records (plans,
+wiki entries, benchmark baselines) as they are.
 
 #### Nix flake
 

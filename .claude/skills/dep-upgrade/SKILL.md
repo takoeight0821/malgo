@@ -255,6 +255,8 @@ Format: `uses: owner/repo@<full-sha> # v<tag>`
 Update `mise.toml` directly. For tools pinned to `"latest"`, no change is needed —
 they auto-resolve. For pinned tools (`zig`, `go`, `chezscheme`), update the version string,
 run `mise install`, then run the golden sweep named in the pin's comment.
+`docs/claude-code-web.md` repeats the `zig` and `chezscheme` pins in its
+`mise use -g` setup lines; update those in the same commit.
 
 Zig is pinned in more places than `mise.toml`. Update all of them in the same
 commit:
